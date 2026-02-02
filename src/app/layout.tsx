@@ -14,6 +14,7 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "API Checklist Fácil",
+  favicon: "/favicon.ico"
   description: "API de conexão com o Checklist Fácil",
 };
 
