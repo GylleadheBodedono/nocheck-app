@@ -1,7 +1,6 @@
 'use client'
 
 import { useState } from 'react'
-import { useRouter } from 'next/navigation'
 import Image from 'next/image'
 import { createClient } from '@/lib/supabase'
 import { APP_CONFIG } from '@/lib/config'
@@ -14,7 +13,6 @@ export default function LoginPage() {
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [status, setStatus] = useState<string>('')
-  const router = useRouter()
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -46,7 +44,6 @@ export default function LoginPage() {
 
       if (session?.session) {
         // Faz precache COMPLETO da aplicacao para funcionamento offline
-        // Isso e CRITICO - o usuario deve esperar o cache completar
         setStatus('Preparando modo offline...')
 
         try {
@@ -59,8 +56,9 @@ export default function LoginPage() {
         }
 
         setStatus('Redirecionando...')
-        router.refresh()
-        router.push(APP_CONFIG.routes.dashboard)
+        // Usar window.location para garantir reload completo da página
+        // router.push() não funciona bem após login no Next.js App Router
+        window.location.href = APP_CONFIG.routes.dashboard
       } else {
         // Fallback - ainda tenta precache
         setStatus('Preparando modo offline...')
@@ -69,8 +67,7 @@ export default function LoginPage() {
         } catch {
           // Ignora erros
         }
-        router.refresh()
-        router.push(APP_CONFIG.routes.dashboard)
+        window.location.href = APP_CONFIG.routes.dashboard
       }
     } catch {
       setError(APP_CONFIG.messages.loginErrorGeneric)
