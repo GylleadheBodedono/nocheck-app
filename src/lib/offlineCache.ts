@@ -571,3 +571,114 @@ export async function hasCachedData(): Promise<boolean> {
     return false
   }
 }
+
+// ============================================
+// CACHE ALL DATA FOR OFFLINE (chamado após login)
+// ============================================
+
+import { createClient } from './supabase'
+
+/**
+ * Cacheia todos os dados necessários para funcionamento offline
+ * Deve ser chamado após login bem-sucedido
+ */
+export async function cacheAllDataForOffline(userId: string): Promise<void> {
+  console.log('[OfflineCache] Iniciando cache de dados para offline...')
+
+  try {
+    const supabase = createClient()
+
+    // 1. Salva auth
+    const { data: { session } } = await supabase.auth.getSession()
+    if (session) {
+      await saveAuthCache({
+        userId: session.user.id,
+        email: session.user.email || '',
+        accessToken: session.access_token,
+        refreshToken: session.refresh_token || '',
+        expiresAt: session.expires_at || 0,
+      })
+      console.log('[OfflineCache] Auth salvo')
+    }
+
+    // 2. Busca e salva perfil do usuário
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: userData } = await (supabase as any)
+      .from('users')
+      .select('*')
+      .eq('id', userId)
+      .single()
+
+    if (userData) {
+      await saveUserCache(userData as User)
+      console.log('[OfflineCache] Usuário salvo')
+    }
+
+    // 3. Busca e salva lojas
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: storesData } = await (supabase as any)
+      .from('stores')
+      .select('*')
+      .eq('is_active', true)
+
+    if (storesData && storesData.length > 0) {
+      await saveStoresCache(storesData as Store[])
+      console.log('[OfflineCache] Lojas salvas:', storesData.length)
+    }
+
+    // 4. Busca e salva templates
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: templatesData } = await (supabase as any)
+      .from('checklist_templates')
+      .select('*')
+      .eq('is_active', true)
+
+    if (templatesData && templatesData.length > 0) {
+      await saveTemplatesCache(templatesData as ChecklistTemplate[])
+      console.log('[OfflineCache] Templates salvos:', templatesData.length)
+    }
+
+    // 5. Busca e salva campos dos templates
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: fieldsData } = await (supabase as any)
+      .from('template_fields')
+      .select('*')
+      .order('sort_order')
+
+    if (fieldsData && fieldsData.length > 0) {
+      await saveTemplateFieldsCache(fieldsData as TemplateField[])
+      console.log('[OfflineCache] Campos salvos:', fieldsData.length)
+    }
+
+    // 6. Busca e salva roles do usuário
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: rolesData } = await (supabase as any)
+      .from('user_store_roles')
+      .select('*')
+      .eq('user_id', userId)
+
+    if (rolesData && rolesData.length > 0) {
+      await saveUserRolesCache(rolesData as UserStoreRole[])
+      console.log('[OfflineCache] Roles salvos:', rolesData.length)
+    }
+
+    // 7. Busca e salva setores
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: sectorsData } = await (supabase as any)
+      .from('sectors')
+      .select('*')
+
+    if (sectorsData && sectorsData.length > 0) {
+      await saveSectorsCache(sectorsData as Sector[])
+      console.log('[OfflineCache] Setores salvos:', sectorsData.length)
+    }
+
+    // Salva metadata de sync
+    await saveSyncMetadata('full_sync', 'success')
+
+    console.log('[OfflineCache] Cache completo!')
+  } catch (error) {
+    console.error('[OfflineCache] Erro ao cachear dados:', error)
+    await saveSyncMetadata('full_sync', 'failed')
+  }
+}

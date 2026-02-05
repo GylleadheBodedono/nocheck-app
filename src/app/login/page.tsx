@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase'
 import { APP_CONFIG } from '@/lib/config'
 import { ThemeToggle, LoadingInline } from '@/components/ui'
 import { triggerPrecache } from '@/hooks/usePrecache'
+import { cacheAllDataForOffline } from '@/lib/offlineCache'
 
 export default function LoginPage() {
   const [email, setEmail] = useState('')
@@ -43,8 +44,19 @@ export default function LoginPage() {
       const { data: session } = await supabase.auth.getSession()
 
       if (session?.session) {
-        // Faz precache COMPLETO da aplicacao para funcionamento offline
-        setStatus('Preparando modo offline...')
+        // Faz cache dos DADOS para funcionamento offline
+        setStatus('Salvando dados para modo offline...')
+
+        try {
+          // Salva todos os dados no IndexedDB
+          await cacheAllDataForOffline(session.session.user.id)
+          console.log('[Login] Dados cacheados com sucesso')
+        } catch (err) {
+          console.error('[Login] Erro ao cachear dados:', err)
+        }
+
+        // Faz precache das PÁGINAS para funcionamento offline
+        setStatus('Preparando aplicação offline...')
 
         try {
           // Aguarda o precache completar (com timeout de 30s)
@@ -60,13 +72,7 @@ export default function LoginPage() {
         // router.push() não funciona bem após login no Next.js App Router
         window.location.href = APP_CONFIG.routes.dashboard
       } else {
-        // Fallback - ainda tenta precache
-        setStatus('Preparando modo offline...')
-        try {
-          await triggerPrecache()
-        } catch {
-          // Ignora erros
-        }
+        // Fallback - redireciona direto
         window.location.href = APP_CONFIG.routes.dashboard
       }
     } catch {
