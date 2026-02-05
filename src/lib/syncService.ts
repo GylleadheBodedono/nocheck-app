@@ -45,41 +45,52 @@ async function processResponsesWithImages(
   responses: PendingChecklist['responses']
 ): Promise<PendingChecklist['responses']> {
   const processedResponses = []
+  console.log('[Sync] Processando', responses.length, 'respostas')
 
   for (const response of responses) {
     // Verifica se é um campo de foto com dados base64
     if (response.valueJson && typeof response.valueJson === 'object') {
       const json = response.valueJson as { photos?: string[]; uploadedToDrive?: boolean }
+      console.log('[Sync] Campo com valueJson:', Object.keys(json))
 
       if (json.photos && Array.isArray(json.photos)) {
+        console.log('[Sync] Encontrado campo de foto com', json.photos.length, 'fotos')
         const uploadedUrls: string[] = []
         let hasUploaded = false
 
         for (let i = 0; i < json.photos.length; i++) {
           const photo = json.photos[i]
+          const isUrl = photo.startsWith('http')
+          const isBase64 = photo.startsWith('data:') || photo.length > 1000
+          console.log('[Sync] Foto', i + 1, '- URL:', isUrl, '- Base64:', isBase64, '- Tamanho:', photo.length)
 
           // Se já é uma URL (já foi uploaded), mantém
-          if (photo.startsWith('http')) {
+          if (isUrl) {
             uploadedUrls.push(photo)
             hasUploaded = true
-          } else if (photo.startsWith('data:') || photo.length > 1000) {
+          } else if (isBase64) {
             // É base64, faz upload
             const timestamp = Date.now()
             const fileName = `sync_${timestamp}_foto_${i + 1}.jpg`
+            console.log('[Sync] Tentando upload:', fileName)
             const url = await uploadImageToStorage(photo, fileName)
 
             if (url) {
+              console.log('[Sync] Upload OK:', url.substring(0, 60))
               uploadedUrls.push(url)
               hasUploaded = true
             } else {
               // Mantém base64 se falhar (será tentado novamente depois)
+              console.log('[Sync] Upload FALHOU, mantendo base64')
               uploadedUrls.push(photo)
             }
           } else {
+            console.log('[Sync] Foto ignorada (formato desconhecido)')
             uploadedUrls.push(photo)
           }
         }
 
+        console.log('[Sync] Resultado: uploaded=', hasUploaded, 'urls=', uploadedUrls.length)
         processedResponses.push({
           ...response,
           valueJson: { photos: uploadedUrls, uploadedToDrive: hasUploaded },

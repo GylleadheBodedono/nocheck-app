@@ -391,7 +391,11 @@ function ChecklistForm() {
 
             if (field.field_type === 'number' || field.field_type === 'calculated') {
               valueNumber = value as number
-            } else if (['photo', 'checkbox_multiple', 'gps', 'signature'].includes(field.field_type)) {
+            } else if (field.field_type === 'photo') {
+              // Formata fotos corretamente para o sync processar depois
+              const photos = value as string[]
+              valueJson = { photos: photos || [], uploadedToDrive: false }
+            } else if (['checkbox_multiple', 'gps', 'signature'].includes(field.field_type)) {
               valueJson = value
             } else {
               valueText = value as string

@@ -53,15 +53,19 @@ export async function POST(request: NextRequest) {
     const filePath = `uploads/${uniqueFileName}`
 
     // Upload to Supabase Storage
+    console.log('[Upload] Tentando upload para bucket checklist-images, path:', filePath)
     const { data, error } = await supabase.storage
       .from('checklist-images')
       .upload(filePath, buffer, {
         contentType: 'image/jpeg',
-        upsert: false,
+        upsert: true, // Permite sobrescrever se já existir
       })
 
     if (error) {
-      console.error('[Upload] Erro Supabase:', error)
+      console.error('[Upload] Erro Supabase Storage:', error.message, error)
+      // Tenta verificar se o bucket existe
+      const { data: buckets } = await supabase.storage.listBuckets()
+      console.log('[Upload] Buckets disponíveis:', buckets?.map(b => b.name))
       throw new Error(error.message)
     }
 
