@@ -1,11 +1,10 @@
 /**
- * Google API Integration (Sheets + Drive)
+ * Google Drive Integration
  * Server-side only - uses service account credentials
  */
 
-const GOOGLE_SERVICE_ACCOUNT_EMAIL = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL || ''
+const GOOGLE_CLIENT_EMAIL = process.env.GOOGLE_CLIENT_EMAIL || ''
 const GOOGLE_PRIVATE_KEY = process.env.GOOGLE_PRIVATE_KEY || ''
-const SHEETS_ID = process.env.GOOGLE_SHEETS_ID || ''
 const DRIVE_FOLDER_ID = process.env.GOOGLE_DRIVE_FOLDER_ID || ''
 
 // Cache token to avoid generating new ones every request
@@ -20,9 +19,9 @@ export async function getGoogleAccessToken(): Promise<string | null> {
     return cachedToken.token
   }
 
-  if (!GOOGLE_SERVICE_ACCOUNT_EMAIL || !GOOGLE_PRIVATE_KEY) {
+  if (!GOOGLE_CLIENT_EMAIL || !GOOGLE_PRIVATE_KEY) {
     console.error('[Google] Credenciais não configuradas')
-    console.error('[Google] GOOGLE_SERVICE_ACCOUNT_EMAIL:', GOOGLE_SERVICE_ACCOUNT_EMAIL ? 'SET' : 'NOT SET')
+    console.error('[Google] GOOGLE_CLIENT_EMAIL:', GOOGLE_CLIENT_EMAIL ? 'SET' : 'NOT SET')
     console.error('[Google] GOOGLE_PRIVATE_KEY:', GOOGLE_PRIVATE_KEY ? 'SET' : 'NOT SET')
     return null
   }
@@ -33,9 +32,8 @@ export async function getGoogleAccessToken(): Promise<string | null> {
 
     const header = { alg: 'RS256', typ: 'JWT' }
     const payload = {
-      iss: GOOGLE_SERVICE_ACCOUNT_EMAIL,
-      // Scopes for both Sheets and Drive
-      scope: 'https://www.googleapis.com/auth/spreadsheets https://www.googleapis.com/auth/drive.file',
+      iss: GOOGLE_CLIENT_EMAIL,
+      scope: 'https://www.googleapis.com/auth/drive.file',
       aud: 'https://oauth2.googleapis.com/token',
       iat: now,
       exp: expiry,
@@ -86,140 +84,6 @@ export async function getGoogleAccessToken(): Promise<string | null> {
   } catch (err) {
     console.error('[Google] Erro ao obter token:', err)
     return null
-  }
-}
-
-/**
- * Ensure sheet exists, create if not
- */
-export async function ensureSheetExists(sheetName: string): Promise<boolean> {
-  const token = await getGoogleAccessToken()
-  if (!token || !SHEETS_ID) return false
-
-  try {
-    // Get spreadsheet info
-    const infoUrl = `https://sheets.googleapis.com/v4/spreadsheets/${SHEETS_ID}?fields=sheets.properties.title`
-    const infoRes = await fetch(infoUrl, {
-      headers: { Authorization: `Bearer ${token}` },
-    })
-
-    if (!infoRes.ok) {
-      console.error('[Sheets] Erro ao obter info da planilha:', await infoRes.text())
-      return false
-    }
-
-    const info = await infoRes.json()
-    const sheets = info.sheets?.map((s: { properties: { title: string } }) => s.properties.title) || []
-
-    // Check if sheet exists
-    if (sheets.includes(sheetName)) {
-      return true
-    }
-
-    // Create sheet
-    const createUrl = `https://sheets.googleapis.com/v4/spreadsheets/${SHEETS_ID}:batchUpdate`
-    const createRes = await fetch(createUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify({
-        requests: [
-          {
-            addSheet: {
-              properties: { title: sheetName },
-            },
-          },
-        ],
-      }),
-    })
-
-    if (!createRes.ok) {
-      console.error('[Sheets] Erro ao criar aba:', await createRes.text())
-      return false
-    }
-
-    console.log(`[Sheets] Aba "${sheetName}" criada com sucesso`)
-    return true
-  } catch (err) {
-    console.error('[Sheets] Erro ao verificar/criar aba:', err)
-    return false
-  }
-}
-
-/**
- * Add row to Google Sheets
- */
-export async function addRowToSheet(
-  sheetName: string,
-  values: (string | number)[],
-  createHeaderIfEmpty?: string[]
-): Promise<{ success: boolean; error?: string }> {
-  const token = await getGoogleAccessToken()
-  if (!token) {
-    return { success: false, error: 'Não foi possível obter token do Google' }
-  }
-
-  if (!SHEETS_ID) {
-    return { success: false, error: 'GOOGLE_SHEETS_ID não configurado' }
-  }
-
-  try {
-    // Ensure sheet exists
-    await ensureSheetExists(sheetName)
-
-    // If header provided, check if sheet is empty and add header first
-    if (createHeaderIfEmpty) {
-      const checkUrl = `https://sheets.googleapis.com/v4/spreadsheets/${SHEETS_ID}/values/${sheetName}!A1:A1`
-      const checkRes = await fetch(checkUrl, {
-        headers: { Authorization: `Bearer ${token}` },
-      })
-
-      if (checkRes.ok) {
-        const checkData = await checkRes.json()
-        if (!checkData.values || checkData.values.length === 0) {
-          // Add header
-          const headerUrl = `https://sheets.googleapis.com/v4/spreadsheets/${SHEETS_ID}/values/${sheetName}!A1?valueInputOption=USER_ENTERED`
-          await fetch(headerUrl, {
-            method: 'PUT',
-            headers: {
-              'Content-Type': 'application/json',
-              Authorization: `Bearer ${token}`,
-            },
-            body: JSON.stringify({ values: [createHeaderIfEmpty] }),
-          })
-          console.log('[Sheets] Cabeçalho adicionado')
-        }
-      }
-    }
-
-    // Append row
-    const url = `https://sheets.googleapis.com/v4/spreadsheets/${SHEETS_ID}/values/${sheetName}!A:Z:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`
-
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify({ values: [values] }),
-    })
-
-    if (!response.ok) {
-      const errorText = await response.text()
-      console.error('[Sheets] Erro ao adicionar linha:', response.status, errorText)
-      throw new Error(`Sheets API error: ${response.status} - ${errorText}`)
-    }
-
-    console.log('[Sheets] Linha adicionada com sucesso')
-    return { success: true }
-  } catch (err) {
-    console.error('[Sheets] Erro:', err)
-    return {
-      success: false,
-      error: err instanceof Error ? err.message : 'Erro desconhecido',
-    }
   }
 }
 
@@ -391,105 +255,11 @@ export async function uploadImageToDrive(
 }
 
 /**
- * Add checklist data to Sheets
- */
-export async function addChecklistToSheet(data: {
-  checklistId: number
-  templateName: string
-  storeName: string
-  userName: string
-  completedAt: string
-  responses: Array<{ fieldName: string; value: string }>
-  imageUrls?: string[]
-}): Promise<{ success: boolean; error?: string }> {
-  const sheetName = 'Checklists'
-  const header = [
-    'ID',
-    'Data/Hora',
-    'Checklist',
-    'Loja',
-    'Usuário',
-    'Respostas',
-    'Imagens',
-  ]
-
-  // Format responses as string
-  const responsesStr = data.responses
-    .map(r => `${r.fieldName}: ${r.value}`)
-    .join(' | ')
-
-  const imagesStr = data.imageUrls?.join(', ') || ''
-
-  const values = [
-    data.checklistId,
-    data.completedAt,
-    data.templateName,
-    data.storeName,
-    data.userName,
-    responsesStr,
-    imagesStr,
-  ]
-
-  return addRowToSheet(sheetName, values, header)
-}
-
-/**
- * Add validation data to Sheets
- */
-export async function addValidationToSheet(data: {
-  id: number
-  dataHora: string
-  loja: string
-  numeroNota: string
-  valorEstoquista: number | null
-  valorAprendiz: number | null
-  diferenca: number | null
-  status: string
-}): Promise<{ success: boolean; error?: string }> {
-  const sheetName = 'Validacoes'
-  const header = [
-    'ID',
-    'Data/Hora',
-    'Loja',
-    'Nº Nota',
-    'Valor Estoquista',
-    'Valor Aprendiz',
-    'Diferença',
-    'Status',
-  ]
-
-  const formatCurrency = (value: number | null) => {
-    if (value === null) return ''
-    return `R$ ${value.toFixed(2).replace('.', ',')}`
-  }
-
-  const statusEmoji: Record<string, string> = {
-    pendente: '⏳',
-    sucesso: '✅',
-    falhou: '❌',
-  }
-
-  const values = [
-    data.id,
-    data.dataHora,
-    data.loja,
-    data.numeroNota,
-    formatCurrency(data.valorEstoquista),
-    formatCurrency(data.valorAprendiz),
-    formatCurrency(data.diferenca),
-    `${statusEmoji[data.status] || ''} ${data.status.toUpperCase()}`,
-  ]
-
-  return addRowToSheet(sheetName, values, header)
-}
-
-/**
- * Test Google connection
+ * Test Google Drive connection
  */
 export async function testGoogleConnection(): Promise<{
   success: boolean
   token?: boolean
-  sheets?: boolean
   drive?: boolean
   error?: string
 }> {
@@ -499,34 +269,19 @@ export async function testGoogleConnection(): Promise<{
       return { success: false, token: false, error: 'Falha ao obter token' }
     }
 
-    // Test Sheets access
-    let sheetsOk = false
-    if (SHEETS_ID) {
-      const sheetsUrl = `https://sheets.googleapis.com/v4/spreadsheets/${SHEETS_ID}?fields=properties.title`
-      const sheetsRes = await fetch(sheetsUrl, {
-        headers: { Authorization: `Bearer ${token}` },
-      })
-      sheetsOk = sheetsRes.ok
-      if (!sheetsOk) {
-        console.error('[Test] Sheets error:', await sheetsRes.text())
-      }
-    }
-
     // Test Drive access
-    let driveOk = false
     const driveUrl = 'https://www.googleapis.com/drive/v3/about?fields=user'
     const driveRes = await fetch(driveUrl, {
       headers: { Authorization: `Bearer ${token}` },
     })
-    driveOk = driveRes.ok
+    const driveOk = driveRes.ok
     if (!driveOk) {
       console.error('[Test] Drive error:', await driveRes.text())
     }
 
     return {
-      success: sheetsOk || driveOk,
+      success: driveOk,
       token: true,
-      sheets: sheetsOk,
       drive: driveOk,
     }
   } catch (err) {

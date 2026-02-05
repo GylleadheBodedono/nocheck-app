@@ -68,18 +68,5 @@ export const APP_CONFIG = {
   ],
 } as const
 
-// ============================================
-// CONFIGURACOES LEGADAS (para compatibilidade)
-// ============================================
-
-export const CHECKLIST_API = {
-  baseURL: process.env.CHECKLIST_API_BASE || 'https://integration.checklistfacil.com.br',
-  token: process.env.CHECKLIST_API_TOKEN || '',
-}
-
-export const SHEETS_ID = process.env.GOOGLE_SHEETS_ID || ''
-export const TEAMS_WEBHOOK = process.env.TEAMS_WEBHOOK_URL || ''
-
-
 // Tipos para autocomplete
 export type AppConfig = typeof APP_CONFIG

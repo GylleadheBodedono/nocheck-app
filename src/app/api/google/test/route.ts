@@ -1,36 +1,25 @@
 import { NextResponse } from 'next/server'
-import { testGoogleConnection, addRowToSheet } from '@/lib/google'
+import { testGoogleConnection } from '@/lib/google'
 
 /**
  * GET /api/google/test
- * Testa a conexão com Google APIs
+ * Testa a conexão com Google Drive API
  */
 export async function GET() {
   try {
     const result = await testGoogleConnection()
 
-    // If connection works, try adding a test row
-    if (result.sheets) {
-      const testResult = await addRowToSheet(
-        'Teste',
-        [
-          new Date().toISOString(),
-          'Teste de conexão',
-          'Se você vê isso, a integração está funcionando!',
-        ],
-        ['Data', 'Tipo', 'Mensagem']
-      )
-
-      return NextResponse.json({
-        ...result,
-        testRow: testResult,
-        message: testResult.success
-          ? 'Conexão OK! Uma linha de teste foi adicionada na aba "Teste" da planilha.'
-          : 'Conexão parcial - não foi possível adicionar linha de teste.',
-      })
-    }
-
-    return NextResponse.json(result)
+    return NextResponse.json({
+      ...result,
+      message: result.success
+        ? 'Conexão com Google Drive OK!'
+        : 'Falha na conexão com Google Drive. Verifique as credenciais.',
+      credentials: {
+        GOOGLE_CLIENT_EMAIL: process.env.GOOGLE_CLIENT_EMAIL ? 'SET' : 'NOT SET',
+        GOOGLE_PRIVATE_KEY: process.env.GOOGLE_PRIVATE_KEY ? 'SET' : 'NOT SET',
+        GOOGLE_DRIVE_FOLDER_ID: process.env.GOOGLE_DRIVE_FOLDER_ID || '(auto-create)',
+      },
+    })
   } catch (error) {
     console.error('[API] Erro no teste:', error)
     return NextResponse.json(

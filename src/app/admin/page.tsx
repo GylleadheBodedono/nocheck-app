@@ -285,7 +285,17 @@ export default function AdminPage() {
 
         {/* Quick Actions */}
         <h2 className="text-lg font-semibold text-main mt-8 mb-4">Ações Rápidas</h2>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+          <Link
+            href={APP_CONFIG.routes.checklistNew}
+            className="flex items-center gap-3 card card-hover p-4 border-2 border-primary/30 bg-primary/5"
+          >
+            <div className="w-10 h-10 rounded-lg bg-primary flex items-center justify-center">
+              <FiCheckCircle className="w-5 h-5 text-primary-foreground" />
+            </div>
+            <span className="text-primary font-medium">Testar Checklist</span>
+          </Link>
+
           <Link
             href={APP_CONFIG.routes.adminUsersNew}
             className="flex items-center gap-3 card card-hover p-4"
@@ -303,7 +313,7 @@ export default function AdminPage() {
             <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
               <FiPlus className="w-5 h-5 text-primary" />
             </div>
-            <span className="text-secondary font-medium">Novo Checklist</span>
+            <span className="text-secondary font-medium">Novo Template</span>
           </Link>
 
           <Link

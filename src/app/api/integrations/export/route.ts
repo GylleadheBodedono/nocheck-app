@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
-import { exportarValidacoesSheet } from '@/lib/integrations/sheets'
 import { enviarResumoDiarioTeams } from '@/lib/integrations/teams'
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
@@ -8,17 +7,16 @@ const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
 
 /**
  * POST /api/integrations/export
- * Exporta validações para Google Sheets e envia resumo para Teams
+ * Envia resumo de validações para Teams
  *
  * Body:
- * - sheets: boolean (exportar para Sheets)
  * - teams: boolean (enviar resumo para Teams)
  * - days: number (quantos dias de dados, default 7)
  */
 export async function POST(request: Request) {
   try {
     const body = await request.json()
-    const { sheets = true, teams = true, days = 7 } = body
+    const { teams = true, days = 7 } = body
 
     // Criar cliente Supabase com service role (bypass RLS)
     const supabase = createClient(supabaseUrl, supabaseServiceKey)
@@ -43,23 +41,6 @@ export async function POST(request: Request) {
 
     const results: Record<string, unknown> = {
       validationsCount: validations?.length || 0,
-    }
-
-    // Exportar para Google Sheets
-    if (sheets && validations && validations.length > 0) {
-      const rows = validations.map(v => ({
-        id: v.id,
-        data: new Date(v.created_at).toLocaleString('pt-BR'),
-        loja: v.store?.name || `Loja ${v.store_id}`,
-        numeroNota: v.numero_nota,
-        valorEstoquista: v.valor_estoquista,
-        valorAprendiz: v.valor_aprendiz,
-        diferenca: v.diferenca,
-        status: v.status as 'pendente' | 'sucesso' | 'falhou',
-      }))
-
-      const sheetsResult = await exportarValidacoesSheet(rows)
-      results.sheets = sheetsResult
     }
 
     // Enviar resumo para Teams
@@ -97,14 +78,13 @@ export async function POST(request: Request) {
  * Retorna status das integrações
  */
 export async function GET() {
-  const sheetsConfigured = !!process.env.GOOGLE_SHEETS_ID
   const teamsConfigured = !!process.env.TEAMS_WEBHOOK_URL
+  const driveConfigured = !!process.env.GOOGLE_CLIENT_EMAIL && !!process.env.GOOGLE_PRIVATE_KEY
 
   return NextResponse.json({
     integrations: {
-      sheets: {
-        configured: sheetsConfigured,
-        sheetId: sheetsConfigured ? process.env.GOOGLE_SHEETS_ID?.slice(0, 10) + '...' : null,
+      drive: {
+        configured: driveConfigured,
       },
       teams: {
         configured: teamsConfigured,
