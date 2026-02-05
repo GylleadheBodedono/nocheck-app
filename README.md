@@ -1,51 +1,58 @@
-# Recebimento Backend
+# NoCheck
 
-API para validação de recebimento de mercadorias do **Grupo Do Nô**.
+Sistema de checklists para validação de recebimento de mercadorias - **Grupo Do Nô**.
 
-Compara valores lançados pelo **estoquista** (recebimento físico) e **aprendiz** (lançamento no Teknisa), alertando divergências via Microsoft Teams.
-
----
-
-## Fluxo
-
-```
-┌─────────────┐     webhook     ┌─────────────────┐
-│  Estoquista │ ──────────────► │                 │
-│  (recebe)   │                 │                 │
-└─────────────┘                 │     Backend     │
-                                │                 │
-┌─────────────┐     webhook     │  ┌───────────┐  │     ┌──────────────┐
-│   Aprendiz  │ ──────────────► │  │  Compara  │──┼────►│ Google Sheets│
-│  (lança)    │                 │  │  valores  │  │     └──────────────┘
-└─────────────┘                 │  └───────────┘  │
-                                │        │        │
-                                └────────┼────────┘
-                                         │ erro?
-                                         ▼
-                                ┌──────────────┐
-                                │ Teams Alert  │
-                                └──────────────┘
-```
+PWA completo com suporte offline, validação cruzada entre estoquista e aprendiz, e integração com Google Drive e Microsoft Teams.
 
 ---
 
-## Endpoints
+## Funcionalidades
 
-| Método | Rota | Descrição |
-|--------|------|-----------|
-| `GET` | `/api/health` | Health check |
-| `POST` | `/api/webhook/estoquista` | Webhook Checklist Fácil (estoquista) |
-| `POST` | `/api/webhook/aprendiz` | Webhook Checklist Fácil (aprendiz) |
+- **PWA Offline-First** - Funciona 100% offline após primeiro acesso
+- **Checklists Dinâmicos** - Templates configuráveis com diversos tipos de campos
+- **Validação Cruzada** - Compara valores do estoquista vs aprendiz automaticamente
+- **Matching Inteligente** - Vincula notas fiscais diferentes por proximidade temporal
+- **Upload Google Drive** - Fotos enviadas automaticamente para pasta organizada
+- **Alertas Teams** - Notificações de divergências via Microsoft Teams
+- **Multi-loja** - Suporte a 8 unidades do grupo
 
 ---
 
 ## Stack
 
-- **Next.js 16** (API Routes)
+- **Next.js 15** (App Router)
 - **TypeScript**
-- **Google Sheets API** (armazenamento)
-- **Microsoft Teams** (alertas)
-- **Checklist Fácil** (origem dos dados)
+- **Supabase** (Auth + PostgreSQL)
+- **Tailwind CSS**
+- **IndexedDB** (cache offline)
+- **Service Worker** (PWA)
+- **Google Drive API**
+- **Microsoft Teams Webhooks**
+
+---
+
+## Estrutura
+
+```
+src/
+├── app/
+│   ├── admin/           # Painel administrativo
+│   ├── api/             # API Routes
+│   ├── checklist/       # Preenchimento de checklists
+│   ├── dashboard/       # Dashboard principal
+│   ├── login/           # Autenticação
+│   └── offline/         # Página offline
+├── components/          # Componentes React
+├── hooks/               # Custom hooks
+├── lib/                 # Utilitários e serviços
+│   ├── crossValidation.ts
+│   ├── google.ts
+│   ├── offlineCache.ts
+│   ├── offlineStorage.ts
+│   ├── supabase.ts
+│   └── syncService.ts
+└── types/               # TypeScript definitions
+```
 
 ---
 
@@ -54,37 +61,34 @@ Compara valores lançados pelo **estoquista** (recebimento físico) e **aprendiz
 ### 1. Instalar dependências
 
 ```bash
-bun install
+npm install
 ```
 
 ### 2. Configurar variáveis de ambiente
 
-Copie `.env.example` para `.env` e preencha:
-
-```bash
-cp .env.example .env
-```
-
 ```env
-# API Checklist Fácil
-CHECKLIST_API_TOKEN=seu_token
-CHECKLIST_API_BASE=https://integration.checklistfacil.com.br
+# Supabase
+NEXT_PUBLIC_SUPABASE_URL=https://xxx.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=xxx
+SUPABASE_SERVICE_ROLE_KEY=xxx
 
-# Google Sheets
-GOOGLE_SHEETS_ID=id_da_planilha
+# Google Drive
+GOOGLE_CLIENT_EMAIL=xxx@xxx.iam.gserviceaccount.com
+GOOGLE_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n..."
+GOOGLE_DRIVE_FOLDER_ID=xxx
 
-# Microsoft Teams
-TEAMS_WEBHOOK_URL=url_do_webhook
+# Microsoft Teams (opcional)
+TEAMS_WEBHOOK_URL=https://xxx.webhook.office.com/...
 ```
 
-### 3. Credenciais Google
+### 3. Executar migrations no Supabase
 
-Coloque o arquivo JSON da conta de serviço na raiz do projeto.
+Execute os arquivos em `supabase/migrations/` no SQL Editor do Supabase.
 
 ### 4. Rodar
 
 ```bash
-bun dev
+npm run dev
 ```
 
 ---
@@ -99,29 +103,8 @@ bun dev
 | 4 | BDN Tacaruna |
 | 5 | BDN Olinda |
 | 6 | BRDN Boa Viagem |
-| 7 | BRDN Riomar |
-| 8 | BRDN Guararapes |
-
----
-
-## Planilha
-
-Colunas geradas automaticamente:
-
-| Coluna | Descrição |
-|--------|-----------|
-| Data/Hora | Timestamp do recebimento |
-| Loja | Nome da unidade |
-| Nota Fiscal | Número da NF |
-| Fornecedor | Nome do fornecedor |
-| Estoquista | Quem recebeu |
-| Valor Estoquista | R$ informado pelo estoquista |
-| Aprendiz | Quem lançou |
-| Valor Aprendiz | R$ lançado no Teknisa |
-| Status | `OK` ou `ERRO` |
-| Diferença | Valor da divergência |
-| Foto | URL da foto da NF |
-| Lançamento | Código Teknisa |
+| 7 | BRG Riomar |
+| 8 | BRG Guararapes |
 
 ---
 

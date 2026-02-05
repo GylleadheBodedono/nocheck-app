@@ -1,23 +1,85 @@
-// Configurações da API Checklist Fácil
+// ============================================
+// CONFIGURACAO CENTRALIZADA DO APP
+// Altere aqui para mudar em todo o projeto
+// ============================================
+
+export const APP_CONFIG = {
+  // Informacoes do App
+  name: 'NoCheck',
+  fullName: 'NoCheck - Sistema de Checklists',
+  description: 'Sistema de checklists do Grupo Do No',
+  version: '2.0.0',
+  company: 'Grupo Do No',
+  year: new Date().getFullYear(),
+
+  // Rotas
+  routes: {
+    home: '/',
+    login: '/login',
+    dashboard: '/dashboard',
+    admin: '/admin',
+    adminUsers: '/admin/usuarios',
+    adminUsersNew: '/admin/usuarios/novo',
+    adminTemplates: '/admin/templates',
+    adminTemplatesNew: '/admin/templates/novo',
+    adminStores: '/admin/lojas',
+    adminSectors: '/admin/setores',
+    adminManagers: '/admin/gerentes',
+    adminReports: '/admin/relatorios',
+    adminValidations: '/admin/validacoes',
+    adminChecklists: '/admin/checklists',
+    checklistNew: '/checklist/novo',
+  },
+
+  // Mensagens padrao
+  messages: {
+    loading: 'Carregando...',
+    error: 'Ocorreu um erro. Tente novamente.',
+    noStores: 'Nenhuma loja atribuida',
+    noStoresHint: 'Entre em contato com o administrador para ter acesso a uma loja.',
+    noChecklists: 'Nenhum checklist disponivel para seu cargo nesta loja.',
+    loginRequired: 'Voce precisa estar logado',
+    checklistSent: 'Checklist Enviado!',
+    redirecting: 'Redirecionando...',
+    loginError: 'Email ou senha incorretos',
+    loginErrorGeneric: 'Erro ao fazer login. Tente novamente.',
+  },
+
+  // Configuracoes de storage
+  storage: {
+    themeKey: 'nocheck-theme',
+  },
+
+  // Categorias de templates
+  templateCategories: [
+    { value: 'recebimento', label: 'Recebimento' },
+    { value: 'limpeza', label: 'Limpeza' },
+    { value: 'abertura', label: 'Abertura' },
+    { value: 'fechamento', label: 'Fechamento' },
+    { value: 'outros', label: 'Outros' },
+  ],
+
+  // Roles de usuarios
+  userRoles: [
+    { value: 'estoquista', label: 'Estoquista' },
+    { value: 'aprendiz', label: 'Aprendiz' },
+    { value: 'supervisor', label: 'Supervisor' },
+    { value: 'gerente', label: 'Gerente' },
+  ],
+} as const
+
+// ============================================
+// CONFIGURACOES LEGADAS (para compatibilidade)
+// ============================================
+
 export const CHECKLIST_API = {
   baseURL: process.env.CHECKLIST_API_BASE || 'https://integration.checklistfacil.com.br',
   token: process.env.CHECKLIST_API_TOKEN || '',
-};
+}
 
-// ID da planilha Google Sheets
-export const SHEETS_ID = process.env.GOOGLE_SHEETS_ID || '';
+export const SHEETS_ID = process.env.GOOGLE_SHEETS_ID || ''
+export const TEAMS_WEBHOOK = process.env.TEAMS_WEBHOOK_URL || ''
 
-// URL do webhook Teams
-export const TEAMS_WEBHOOK = process.env.TEAMS_WEBHOOK_URL || '';
 
-// Mapeamento lojas (unitId → nome)
-export const LOJAS: Record<number, string> = {
-  1: process.env.UNIT_1 || 'BDN Boa Viagem',
-  2: process.env.UNIT_2 || 'BDN Guararapes',
-  3: process.env.UNIT_3 || 'BDN Afogados',
-  4: process.env.UNIT_4 || 'BDN Tacaruna',
-  5: process.env.UNIT_5 || 'BDN Olinda',
-  6: process.env.UNIT_6 || 'BRG Boa Viagem',
-  7: process.env.UNIT_7 || 'BRG Riomar',
-  8: process.env.UNIT_8 || 'BRG Guararapes',
-};
+// Tipos para autocomplete
+export type AppConfig = typeof APP_CONFIG

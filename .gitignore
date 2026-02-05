@@ -44,3 +44,9 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Documentação interna/local
+CHECKLISTS_CONFIGURACAO.md
+GUIA_RAPIDO_ESTAGIARIO.md
+ROADMAP.md
+SETUP_V2.md
