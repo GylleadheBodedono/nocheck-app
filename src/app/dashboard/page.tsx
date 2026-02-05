@@ -494,6 +494,16 @@ export default function DashboardPage() {
     const legacyRole = getLegacyRoleInStore(selectedStore)
 
     templates.forEach(template => {
+      // ADMIN: pode ver e preencher TODOS os templates, independente de visibilidade
+      if (profile?.is_admin) {
+        result.push({
+          template,
+          canFill: true,
+          sectorName: undefined,
+        })
+        return
+      }
+
       const visibilities = template.template_visibility?.filter(v => v.store_id === selectedStore) || []
 
       // If no specific visibility rules for this store, but user has legacy role, show all templates
@@ -507,15 +517,6 @@ export default function DashboardPage() {
       }
 
       visibilities.forEach(visibility => {
-        // Admin can see and fill all
-        if (profile?.is_admin) {
-          result.push({
-            template,
-            canFill: true,
-            sectorName: visibility.sector?.name,
-          })
-          return
-        }
 
         // Manager can see all but not fill
         if (isManagerOfStore(selectedStore)) {
