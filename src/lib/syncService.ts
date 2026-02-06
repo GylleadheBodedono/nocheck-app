@@ -10,47 +10,76 @@ import {
 import { processarValidacaoCruzada } from './crossValidation'
 
 /**
+ * Aguarda um tempo antes de continuar
+ */
+function delay(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms))
+}
+
+/**
  * Faz upload de uma imagem base64 para o Supabase Storage
+ * Tenta até 3 vezes com intervalo de 2s entre tentativas
  */
 async function uploadImageToStorage(base64Image: string, fileName: string): Promise<string | null> {
-  try {
-    console.log('[Sync] uploadImageToStorage - Iniciando upload de', fileName)
-    console.log('[Sync] uploadImageToStorage - Tamanho do base64:', base64Image.length, 'chars')
-    console.log('[Sync] uploadImageToStorage - Começa com data:?', base64Image.substring(0, 30))
+  const MAX_RETRIES = 3
+  const RETRY_DELAY = 2000
 
-    const response = await fetch('/api/upload', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        image: base64Image,
-        fileName,
-      }),
-    })
+  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+    try {
+      console.log(`[Sync] uploadImageToStorage - Tentativa ${attempt}/${MAX_RETRIES} de`, fileName)
+      console.log('[Sync] uploadImageToStorage - Tamanho do base64:', base64Image.length, 'chars')
 
-    console.log('[Sync] uploadImageToStorage - Response status:', response.status)
-    const result = await response.json()
-    console.log('[Sync] uploadImageToStorage - Response body:', JSON.stringify(result).substring(0, 200))
+      const response = await fetch('/api/upload', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          image: base64Image,
+          fileName,
+        }),
+      })
 
-    if (response.ok && result.success && result.url) {
-      console.log('[Sync] Upload de imagem OK:', fileName, '->', result.url.substring(0, 60))
-      return result.url
+      console.log('[Sync] uploadImageToStorage - Response status:', response.status)
+      const result = await response.json()
+      console.log('[Sync] uploadImageToStorage - Response body:', JSON.stringify(result).substring(0, 200))
+
+      if (response.ok && result.success && result.url) {
+        console.log('[Sync] Upload de imagem OK:', fileName, '->', result.url.substring(0, 60))
+        return result.url
+      }
+
+      console.error(`[Sync] Falha no upload (tentativa ${attempt}):`, result.error || 'Resposta inválida')
+    } catch (err) {
+      console.error(`[Sync] Erro de rede no upload (tentativa ${attempt}):`, err)
     }
 
-    console.error('[Sync] Falha no upload:', result.error || 'Resposta inválida')
-    return null
-  } catch (err) {
-    console.error('[Sync] Erro de rede no upload:', err)
-    return null
+    // Aguarda antes de tentar novamente (exceto na última tentativa)
+    if (attempt < MAX_RETRIES) {
+      console.log(`[Sync] Aguardando ${RETRY_DELAY}ms antes de tentar novamente...`)
+      await delay(RETRY_DELAY)
+    }
   }
+
+  console.error('[Sync] Upload falhou após', MAX_RETRIES, 'tentativas:', fileName)
+  return null
+}
+
+/**
+ * Resultado do processamento de imagens
+ */
+type ProcessedResult = {
+  responses: PendingChecklist['responses']
+  allImagesUploaded: boolean
 }
 
 /**
  * Processa as respostas do checklist, fazendo upload das imagens base64
+ * Retorna as respostas processadas e um flag indicando se TODAS as imagens foram enviadas
  */
 async function processResponsesWithImages(
   responses: PendingChecklist['responses']
-): Promise<PendingChecklist['responses']> {
+): Promise<ProcessedResult> {
   const processedResponses = []
+  let allImagesUploaded = true
   console.log('[Sync] Processando', responses.length, 'respostas')
 
   for (const response of responses) {
@@ -110,9 +139,10 @@ async function processResponsesWithImages(
               uploadedUrls.push(url)
               hasUploaded = true
             } else {
-              // Mantém base64 se falhar (será tentado novamente depois)
-              console.log('[Sync] Upload FALHOU, mantendo base64')
+              // Upload falhou mesmo após retries - marca como falha
+              console.error('[Sync] Upload FALHOU definitivamente para foto', i + 1)
               uploadedUrls.push(photo)
+              allImagesUploaded = false
             }
           } else {
             console.log('[Sync] Foto ignorada (formato desconhecido)')
@@ -120,7 +150,7 @@ async function processResponsesWithImages(
           }
         }
 
-        console.log('[Sync] Resultado: uploaded=', hasUploaded, 'urls=', uploadedUrls.length)
+        console.log('[Sync] Resultado: uploaded=', hasUploaded, 'allOk=', allImagesUploaded, 'urls=', uploadedUrls.length)
         processedResponses.push({
           ...response,
           valueJson: { photos: uploadedUrls, uploadedToDrive: hasUploaded },
@@ -132,7 +162,7 @@ async function processResponsesWithImages(
     processedResponses.push(response)
   }
 
-  return processedResponses
+  return { responses: processedResponses, allImagesUploaded }
 }
 
 let isSyncing = false
@@ -188,9 +218,13 @@ async function syncChecklist(checklist: PendingChecklist): Promise<boolean> {
   try {
     await updateChecklistStatus(checklist.id, 'syncing')
 
-    // 0. Processa as respostas fazendo upload das imagens
+    // 0. Processa as respostas fazendo upload das imagens ANTES de criar o checklist
     console.log('[Sync] Processando imagens do checklist:', checklist.id)
-    const processedResponses = await processResponsesWithImages(checklist.responses)
+    const { responses: processedResponses, allImagesUploaded } = await processResponsesWithImages(checklist.responses)
+
+    if (!allImagesUploaded) {
+      console.warn('[Sync] Algumas imagens falharam no upload, mas o checklist será sincronizado mesmo assim.')
+    }
 
     // 1. Create the checklist record
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -209,7 +243,7 @@ async function syncChecklist(checklist: PendingChecklist): Promise<boolean> {
 
     if (checklistError) throw checklistError
 
-    // 2. Create responses (usando as respostas processadas com imagens)
+    // 2. Create responses (imagens podem ser URLs ou base64 se upload falhou)
     const responseRows = processedResponses.map(r => ({
       checklist_id: newChecklist.id,
       field_id: r.fieldId,
@@ -325,10 +359,27 @@ export async function syncAll(): Promise<{ synced: number; failed: number }> {
  * Initialize sync service - sets up online listener
  */
 export function initSyncService(): () => void {
-  // Sync when coming back online
+  let syncTimeout: ReturnType<typeof setTimeout> | null = null
+  let retryTimeout: ReturnType<typeof setTimeout> | null = null
+
+  // Sync when coming back online (com delay para rede estabilizar)
   const handleOnline = () => {
-    console.log('[Sync] Back online, starting sync...')
-    syncAll()
+    console.log('[Sync] Back online, aguardando 3s para rede estabilizar...')
+    if (syncTimeout) clearTimeout(syncTimeout)
+    syncTimeout = setTimeout(async () => {
+      console.log('[Sync] Iniciando sync após delay...')
+      const result = await syncAll()
+
+      // Se algum falhou (provavelmente imagens), tenta novamente após 15s
+      if (result.failed > 0) {
+        console.log('[Sync] Alguns falharam, agendando retry em 15s...')
+        if (retryTimeout) clearTimeout(retryTimeout)
+        retryTimeout = setTimeout(() => {
+          console.log('[Sync] Retry automático...')
+          syncAll()
+        }, 15000)
+      }
+    }, 3000)
   }
 
   window.addEventListener('online', handleOnline)
@@ -338,9 +389,21 @@ export function initSyncService(): () => void {
     updateStatus({ pendingCount: pending.length })
   })
 
+  // Se já está online e tem pendentes, tenta sincronizar
+  if (navigator.onLine) {
+    getPendingChecklists().then(pending => {
+      if (pending.length > 0) {
+        console.log('[Sync] Online com', pending.length, 'pendentes, sincronizando...')
+        syncAll()
+      }
+    })
+  }
+
   // Return cleanup function
   return () => {
     window.removeEventListener('online', handleOnline)
+    if (syncTimeout) clearTimeout(syncTimeout)
+    if (retryTimeout) clearTimeout(retryTimeout)
   }
 }
 

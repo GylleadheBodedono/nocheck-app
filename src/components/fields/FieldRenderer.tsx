@@ -263,6 +263,12 @@ function SignatureField({ field: _field, value, onChange }: { field: TemplateFie
     ctx.moveTo(x, y)
   }
 
+  const getStrokeColor = (): string => {
+    if (typeof window === 'undefined') return '#000000'
+    const isDark = document.documentElement.classList.contains('dark')
+    return isDark ? '#ffffff' : '#000000'
+  }
+
   const draw = (e: React.TouchEvent | React.MouseEvent) => {
     if (!isDrawing) return
     const canvas = canvasRef.current
@@ -277,7 +283,7 @@ function SignatureField({ field: _field, value, onChange }: { field: TemplateFie
 
     ctx.lineWidth = 2
     ctx.lineCap = 'round'
-    ctx.strokeStyle = 'var(--color-primary)'
+    ctx.strokeStyle = getStrokeColor()
     ctx.lineTo(x, y)
     ctx.stroke()
     setHasSignature(true)
