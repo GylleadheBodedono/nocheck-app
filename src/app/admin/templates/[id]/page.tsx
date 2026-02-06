@@ -382,7 +382,10 @@ export default function EditTemplatePage() {
       router.push(APP_CONFIG.routes.adminTemplates)
     } catch (err) {
       console.error('Error updating template:', err)
-      setError(err instanceof Error ? err.message : 'Erro ao atualizar checklist')
+      // Supabase errors are plain objects with message/details, not Error instances
+      const supaErr = err as { message?: string; details?: string; code?: string }
+      const msg = supaErr?.message || supaErr?.details || 'Erro ao atualizar checklist'
+      setError(msg)
       setSaving(false)
     }
   }

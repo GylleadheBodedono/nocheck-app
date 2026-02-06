@@ -269,7 +269,9 @@ export default function NovoTemplatePage() {
       router.push(APP_CONFIG.routes.adminTemplates)
     } catch (err) {
       console.error('Error creating template:', err)
-      setError(err instanceof Error ? err.message : 'Erro ao criar checklist')
+      const supaErr = err as { message?: string; details?: string; code?: string }
+      const msg = supaErr?.message || supaErr?.details || 'Erro ao criar checklist'
+      setError(msg)
       setLoading(false)
     }
   }
