@@ -18,6 +18,18 @@ function LoginForm() {
   const [loading, setLoading] = useState(false)
   const [status, setStatus] = useState<string>('')
 
+  // Detecta confirmacao de email via hash fragment (#access_token=...&type=signup)
+  // O Supabase retorna tokens no hash que so o browser consegue ler
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const hash = window.location.hash
+      if (hash && (hash.includes('type=signup') || hash.includes('type=invite'))) {
+        window.location.href = '/auth/confirmed'
+        return
+      }
+    }
+  }, [])
+
   // Mostra erro ou sucesso vindo da URL (ex: confirmação de email)
   useEffect(() => {
     const errorParam = searchParams.get('error')

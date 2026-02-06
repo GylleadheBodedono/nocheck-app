@@ -1,11 +1,22 @@
 'use client'
 
+import { useEffect } from 'react'
 import Link from 'next/link'
 import { APP_CONFIG } from '@/lib/config'
 import Image from 'next/image'
 import { ThemeToggle } from '@/components/ui'
 
 export default function Home() {
+  // Detecta confirmacao de email via hash fragment do Supabase
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const hash = window.location.hash
+      if (hash && (hash.includes('type=signup') || hash.includes('type=invite'))) {
+        window.location.href = '/auth/confirmed'
+      }
+    }
+  }, [])
+
   return (
     <div className="min-h-screen flex items-center justify-center bg-page p-4">
       {/* Theme Toggle no canto superior direito */}
