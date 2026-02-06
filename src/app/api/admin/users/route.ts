@@ -68,12 +68,15 @@ export async function GET() {
       return NextResponse.json({ error: usersError.message }, { status: 500 })
     }
 
-    return NextResponse.json({ users, synced: missing.length })
+    return NextResponse.json(
+      { users, synced: missing.length },
+      { headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate' } }
+    )
   } catch (error) {
     console.error('[API Users] Erro:', error)
     return NextResponse.json(
       { error: error instanceof Error ? error.message : 'Erro desconhecido' },
-      { status: 500 }
+      { status: 500, headers: { 'Cache-Control': 'no-store' } }
     )
   }
 }

@@ -40,7 +40,6 @@ export default function UsuariosPage() {
   const fetchUsers = async () => {
     let userId: string | null = null
     let isAdmin = false
-    const online = typeof navigator !== 'undefined' ? navigator.onLine : true
 
     // Tenta verificar acesso online
     try {
@@ -59,7 +58,7 @@ export default function UsuariosPage() {
       console.log('[Usuarios] Falha ao verificar online, tentando cache...')
     }
 
-    // Fallback para cache se offline
+    // Fallback para cache se nao conseguiu autenticar
     if (!userId) {
       try {
         const cachedAuth = await getAuthCache()
@@ -83,10 +82,14 @@ export default function UsuariosPage() {
       return
     }
 
-    // Tenta buscar usuarios online (API sincroniza auth.users com public.users)
+    // === BUSCAR USUARIOS ===
+    // Camada 1: Tenta API server-side (sincroniza auth.users + public.users)
     try {
-      const res = await fetch('/api/admin/users')
-      if (!res.ok) throw new Error('Falha ao buscar usuarios')
+      const res = await fetch('/api/admin/users', {
+        cache: 'no-store',
+        headers: { 'Cache-Control': 'no-cache' },
+      })
+      if (!res.ok) throw new Error('API falhou')
       const { users: data, synced } = await res.json()
 
       if (synced > 0) {
@@ -95,37 +98,60 @@ export default function UsuariosPage() {
 
       setUsers(data as UserWithRoles[])
       setIsOffline(false)
+      setLoading(false)
+      return
     } catch (err) {
-      console.error('[Usuarios] Erro ao buscar online:', err)
+      console.warn('[Usuarios] API falhou, tentando Supabase direto...', err)
+    }
 
-      // Fallback para cache offline
-      try {
-        const [cachedUsers, cachedStores] = await Promise.all([
-          getAllUsersCache(),
-          getStoresCache(),
-        ])
+    // Camada 2: Tenta Supabase direto (sem sync, mas dados frescos)
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data, error } = await (supabase as any)
+        .from('users')
+        .select(`
+          *,
+          roles:user_store_roles!user_store_roles_user_id_fkey(
+            *,
+            store:stores(*)
+          )
+        `)
+        .order('created_at', { ascending: false })
 
-        // Monta os dados offline
-        const usersWithRoles: UserWithRoles[] = []
-        for (const user of cachedUsers) {
-          const userRoles = await getUserRolesCache(user.id)
-          const rolesWithStores = userRoles.map(role => ({
-            ...role,
-            store: cachedStores.find(s => s.id === role.store_id) || { id: role.store_id, name: 'Loja', is_active: true, created_at: '' },
-          }))
-          usersWithRoles.push({
-            ...user,
-            roles: rolesWithStores as (UserStoreRole & { store: Store })[],
-          })
-        }
+      if (error) throw error
 
-        setUsers(usersWithRoles)
-        // So mostra offline se realmente nao tem rede
-        setIsOffline(!online)
-        console.log('[Usuarios] Carregado do cache offline')
-      } catch (cacheErr) {
-        console.error('[Usuarios] Erro ao buscar cache:', cacheErr)
+      setUsers(data as UserWithRoles[])
+      setIsOffline(false)
+      setLoading(false)
+      return
+    } catch (err) {
+      console.warn('[Usuarios] Supabase direto falhou, usando cache...', err)
+    }
+
+    // Camada 3: Cache offline (ultimo recurso)
+    try {
+      const [cachedUsers, cachedStores] = await Promise.all([
+        getAllUsersCache(),
+        getStoresCache(),
+      ])
+
+      const usersWithRoles: UserWithRoles[] = []
+      for (const user of cachedUsers) {
+        const userRoles = await getUserRolesCache(user.id)
+        const rolesWithStores = userRoles.map(role => ({
+          ...role,
+          store: cachedStores.find(s => s.id === role.store_id) || { id: role.store_id, name: 'Loja', is_active: true, created_at: '' },
+        }))
+        usersWithRoles.push({
+          ...user,
+          roles: rolesWithStores as (UserStoreRole & { store: Store })[],
+        })
       }
+
+      setUsers(usersWithRoles)
+      setIsOffline(true)
+    } catch (cacheErr) {
+      console.error('[Usuarios] Cache tambem falhou:', cacheErr)
     }
 
     setLoading(false)
@@ -143,24 +169,43 @@ export default function UsuariosPage() {
       return
     }
 
-    fetchUsers()
+    // Atualiza estado local imediatamente
+    setUsers(prev => prev.map(u =>
+      u.id === userId ? { ...u, is_active: !currentStatus } : u
+    ))
   }
 
   const deleteUser = async (userId: string) => {
     if (!confirm('Tem certeza que deseja excluir este usuário?')) return
 
+    // Remove da tela imediatamente (otimista)
+    const previousUsers = users
+    setUsers(prev => prev.filter(u => u.id !== userId))
+
     try {
+      // Tenta API server-side (deleta de auth.users + CASCADE)
       const res = await fetch(`/api/admin/users/${userId}`, { method: 'DELETE' })
       const data = await res.json()
 
       if (!res.ok) {
         throw new Error(data.error || 'Erro ao excluir usuario')
       }
-
-      fetchUsers()
     } catch (err) {
-      console.error('Error deleting user:', err)
-      alert(err instanceof Error ? err.message : 'Erro ao excluir usuário')
+      console.warn('[Usuarios] API delete falhou, tentando Supabase direto...', err)
+
+      // Fallback: deleta direto do public.users
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { error } = await (supabase as any)
+        .from('users')
+        .delete()
+        .eq('id', userId)
+
+      if (error) {
+        console.error('Erro ao deletar usuario:', error)
+        alert('Erro ao excluir usuario. Tente novamente.')
+        // Reverte a remoçao otimista
+        setUsers(previousUsers)
+      }
     }
   }
 
