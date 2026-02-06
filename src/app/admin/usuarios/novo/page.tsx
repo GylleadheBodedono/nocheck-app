@@ -84,108 +84,26 @@ export default function NovoUsuarioPage() {
     setLoading(true)
 
     try {
-      // 1. Create auth user
-      const { data: authData, error: authError } = await supabase.auth.admin.createUser({
-        email,
-        password,
-        email_confirm: true,
-        user_metadata: {
-          full_name: fullName,
-        },
-      })
-
-      if (authError) {
-        // Try with signUp if admin API not available
-        const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
+      const res = await fetch('/api/admin/users', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
           email,
           password,
-          options: {
-            data: {
-              full_name: fullName,
-            },
-            emailRedirectTo: `${window.location.origin}/auth/callback`,
-          },
-        })
+          fullName,
+          phone: phone || undefined,
+          isAdmin,
+          roles: isAdmin ? [] : roles,
+        }),
+      })
 
-        if (signUpError) {
-          throw signUpError
-        }
+      const data = await res.json()
 
-        if (!signUpData.user) {
-          throw new Error('Erro ao criar usuário')
-        }
-
-        // Update user profile
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const { error: profileError } = await (supabase as any)
-          .from('users')
-          .update({
-            full_name: fullName,
-            phone: phone || null,
-            is_admin: isAdmin,
-          })
-          .eq('id', signUpData.user.id)
-
-        if (profileError) throw profileError
-
-        // Insert roles
-        if (roles.length > 0) {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const { error: rolesError } = await (supabase as any)
-            .from('user_store_roles')
-            .insert(
-              roles.map(r => ({
-                user_id: signUpData.user!.id,
-                store_id: r.store_id,
-                role: r.role,
-              }))
-            )
-
-          if (rolesError) throw rolesError
-        }
-
-        // signUp envia email de confirmação
-        setCreatedEmail(email)
-        setNeedsConfirmation(true)
-        setSuccess(true)
-        setLoading(false)
-        return
+      if (!res.ok) {
+        throw new Error(data.error || 'Erro ao criar usuario')
       }
 
-      if (!authData.user) {
-        throw new Error('Erro ao criar usuário')
-      }
-
-      // 2. Update user profile
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { error: profileError } = await (supabase as any)
-        .from('users')
-        .update({
-          full_name: fullName,
-          phone: phone || null,
-          is_admin: isAdmin,
-        })
-        .eq('id', authData.user.id)
-
-      if (profileError) throw profileError
-
-      // 3. Insert roles
-      if (roles.length > 0) {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const { error: rolesError } = await (supabase as any)
-          .from('user_store_roles')
-          .insert(
-            roles.map(r => ({
-              user_id: authData.user!.id,
-              store_id: r.store_id,
-              role: r.role,
-            }))
-          )
-
-        if (rolesError) throw rolesError
-      }
-
-      // admin.createUser com email_confirm: true não precisa de confirmação
+      // Criado via admin API - email ja confirmado, sem necessidade de confirmacao
       setCreatedEmail(email)
       setNeedsConfirmation(false)
       setSuccess(true)

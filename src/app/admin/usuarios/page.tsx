@@ -153,19 +153,19 @@ export default function UsuariosPage() {
   const deleteUser = async (userId: string) => {
     if (!confirm('Tem certeza que deseja excluir este usuário?')) return
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { error } = await (supabase as any)
-      .from('users')
-      .delete()
-      .eq('id', userId)
+    try {
+      const res = await fetch(`/api/admin/users/${userId}`, { method: 'DELETE' })
+      const data = await res.json()
 
-    if (error) {
-      console.error('Error deleting user:', error)
-      alert('Erro ao excluir usuário')
-      return
+      if (!res.ok) {
+        throw new Error(data.error || 'Erro ao excluir usuario')
+      }
+
+      fetchUsers()
+    } catch (err) {
+      console.error('Error deleting user:', err)
+      alert(err instanceof Error ? err.message : 'Erro ao excluir usuário')
     }
-
-    fetchUsers()
   }
 
   const filteredUsers = users.filter(user => {

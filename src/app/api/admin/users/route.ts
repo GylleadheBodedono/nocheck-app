@@ -1,0 +1,106 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { createClient } from '@supabase/supabase-js'
+
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
+
+/**
+ * POST /api/admin/users
+ * Cria usuario no auth.users (trigger cria em public.users automaticamente)
+ * Depois atualiza o perfil e insere os roles
+ */
+export async function POST(request: NextRequest) {
+  try {
+    const body = await request.json()
+    const { email, password, fullName, phone, isAdmin, roles } = body as {
+      email: string
+      password: string
+      fullName: string
+      phone?: string
+      isAdmin: boolean
+      roles: { store_id: number; role: string }[]
+    }
+
+    if (!email || !password || !fullName) {
+      return NextResponse.json(
+        { error: 'Email, senha e nome sao obrigatorios' },
+        { status: 400 }
+      )
+    }
+
+    const supabase = createClient(supabaseUrl, supabaseServiceKey, {
+      auth: { autoRefreshToken: false, persistSession: false }
+    })
+
+    // 1. Cria usuario via admin API (email ja confirmado, sem envio de email)
+    const { data: authData, error: authError } = await supabase.auth.admin.createUser({
+      email,
+      password,
+      email_confirm: true,
+      user_metadata: { full_name: fullName },
+    })
+
+    if (authError) {
+      console.error('[API Users] Erro ao criar auth user:', authError)
+      return NextResponse.json(
+        { error: authError.message },
+        { status: 400 }
+      )
+    }
+
+    if (!authData.user) {
+      return NextResponse.json(
+        { error: 'Erro ao criar usuario' },
+        { status: 500 }
+      )
+    }
+
+    const userId = authData.user.id
+
+    // 2. Atualiza perfil em public.users (trigger ja criou o registro)
+    const { error: profileError } = await supabase
+      .from('users')
+      .update({
+        full_name: fullName,
+        phone: phone || null,
+        is_admin: isAdmin,
+      })
+      .eq('id', userId)
+
+    if (profileError) {
+      console.error('[API Users] Erro ao atualizar perfil:', profileError)
+      // Nao falha aqui, o usuario ja foi criado
+    }
+
+    // 3. Insere roles
+    if (roles && roles.length > 0) {
+      const { error: rolesError } = await supabase
+        .from('user_store_roles')
+        .insert(
+          roles.map(r => ({
+            user_id: userId,
+            store_id: r.store_id,
+            role: r.role,
+          }))
+        )
+
+      if (rolesError) {
+        console.error('[API Users] Erro ao inserir roles:', rolesError)
+      }
+    }
+
+    return NextResponse.json({
+      success: true,
+      user: {
+        id: userId,
+        email: authData.user.email,
+      },
+    })
+  } catch (error) {
+    console.error('[API Users] Erro:', error)
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : 'Erro desconhecido' },
+      { status: 500 }
+    )
+  }
+}
