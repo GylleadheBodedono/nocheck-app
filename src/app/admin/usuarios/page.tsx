@@ -82,21 +82,15 @@ export default function UsuariosPage() {
       return
     }
 
-    // Tenta buscar usuarios online
+    // Tenta buscar usuarios online (API sincroniza auth.users com public.users)
     try {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data, error } = await (supabase as any)
-        .from('users')
-        .select(`
-          *,
-          roles:user_store_roles!user_store_roles_user_id_fkey(
-            *,
-            store:stores(*)
-          )
-        `)
-        .order('created_at', { ascending: false })
+      const res = await fetch('/api/admin/users')
+      if (!res.ok) throw new Error('Falha ao buscar usuarios')
+      const { users: data, synced } = await res.json()
 
-      if (error) throw error
+      if (synced > 0) {
+        console.log(`[Usuarios] ${synced} usuario(s) sincronizado(s) do auth`)
+      }
 
       setUsers(data as UserWithRoles[])
       setIsOffline(false)
