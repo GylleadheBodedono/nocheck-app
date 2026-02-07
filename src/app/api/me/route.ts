@@ -1,11 +1,30 @@
 import { createClient } from '@supabase/supabase-js'
-import { NextRequest, NextResponse } from 'next/server'
+import { NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 import { createServerClient } from '@supabase/ssr'
 
+// Tipos para os dados do Supabase
+interface UserSectorAssignment {
+    role: string
+    sector_id: number
+    sector?: {
+        name: string
+        store?: {
+            id: number
+            name: string
+        }
+    }
+}
+
+interface RoleData {
+    slug: string
+    name: string
+    permissions: Record<string, boolean>
+}
+
 // Esta rota busca o perfil do usuário autenticado
 // Usa service role key para evitar problemas de RLS
-export async function GET(request: NextRequest) {
+export async function GET() {
     try {
         const cookieStore = await cookies()
 
@@ -63,8 +82,8 @@ export async function GET(request: NextRequest) {
             .eq('user_id', user.id)
 
         // Busca roles
-        const roleSlugs = [...new Set((assignments || []).map((a: any) => a.role))]
-        let rolesMap: Record<string, any> = {}
+        const roleSlugs = [...new Set((assignments || []).map((a: UserSectorAssignment) => a.role))]
+        let rolesMap: Record<string, RoleData> = {}
 
         if (roleSlugs.length > 0) {
             const { data: rolesData } = await supabaseAdmin
@@ -73,12 +92,12 @@ export async function GET(request: NextRequest) {
                 .in('slug', roleSlugs)
 
             if (rolesData) {
-                rolesMap = rolesData.reduce((acc: any, r: any) => ({ ...acc, [r.slug]: r }), {})
+                rolesMap = (rolesData as RoleData[]).reduce((acc, r) => ({ ...acc, [r.slug]: r }), {})
             }
         }
 
         // Monta access
-        const access = (assignments || []).map((a: any) => {
+        const access = (assignments || []).map((a: UserSectorAssignment) => {
             const role = rolesMap[a.role]
             return {
                 storeId: a.sector?.store?.id,
@@ -87,9 +106,9 @@ export async function GET(request: NextRequest) {
                 sectorName: a.sector?.name || 'Setor',
                 roleSlug: a.role,
                 roleName: role?.name || a.role,
-                permissions: (role?.permissions as Record<string, boolean>) || {}
+                permissions: role?.permissions || {}
             }
-        }).filter((a: any) => a.storeId)
+        }).filter((a) => a.storeId)
 
         const profile = { ...userRes, access }
 

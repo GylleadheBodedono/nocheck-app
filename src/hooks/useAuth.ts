@@ -51,7 +51,8 @@ export function useAuth() {
   }, [])
 
   // Busca perfil via API route (mais confiável que consulta direta)
-  const fetchUserProfile = useCallback(async (userId: string): Promise<UserWithRoles | null> => {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const fetchUserProfile = useCallback(async (_userId: string): Promise<UserWithRoles | null> => {
     try {
       console.log('[useAuth] Buscando perfil via API /api/me...')
 
