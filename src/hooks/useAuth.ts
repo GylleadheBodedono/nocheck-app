@@ -50,32 +50,46 @@ export function useAuth() {
     }
   }, [])
 
+  // Busca perfil via API route (mais confiável que consulta direta)
   const fetchUserProfile = useCallback(async (userId: string): Promise<UserWithRoles | null> => {
     try {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data, error } = await (supabase as any)
-        .from('users')
-        .select(`
-          *,
-          roles:user_store_roles(
-            *,
-            store:stores(*)
-          )
-        `)
-        .eq('id', userId)
-        .single()
+      console.log('[useAuth] Buscando perfil via API /api/me...')
 
-      if (error) {
-        console.error('Error fetching user profile:', error)
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), 8000) // 8s timeout
+
+      const response = await fetch('/api/me', {
+        method: 'GET',
+        credentials: 'include',
+        signal: controller.signal,
+      })
+
+      clearTimeout(timeoutId)
+
+      if (!response.ok) {
+        console.error('[useAuth] API retornou erro:', response.status)
         return null
       }
 
-      return data as UserWithRoles
+      const profile = await response.json()
+      console.log('[useAuth] Perfil recebido:', { id: profile.id, is_admin: profile.is_admin })
+
+      // Converte formato da API para formato esperado pelo hook
+      const userWithRoles: UserWithRoles = {
+        ...profile,
+        roles: [] // Compatibilidade - a API retorna "access" em vez de "roles"
+      }
+
+      return userWithRoles
     } catch (error) {
-      console.error('Error fetching user profile:', error)
+      if (error instanceof Error && error.name === 'AbortError') {
+        console.error('[useAuth] Timeout ao buscar perfil')
+      } else {
+        console.error('[useAuth] Erro ao buscar perfil via API:', error)
+      }
       return null
     }
-  }, [supabase])
+  }, [])
 
   // Carrega perfil do cache (modo offline)
   const loadFromCache = useCallback(async () => {
