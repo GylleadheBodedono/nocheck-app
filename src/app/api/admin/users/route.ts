@@ -53,14 +53,23 @@ export async function GET() {
       }
     }
 
-    // 4. Retorna lista completa de public.users com loja/funcao/setor
+    // 4. Retorna lista completa de public.users com loja/funcao/setor + multi-lojas
     const { data: users, error: usersError } = await supabase
       .from('users')
       .select(`
         *,
         store:stores!users_store_id_fkey(*),
         function_ref:functions!users_function_id_fkey(*),
-        sector:sectors!users_sector_id_fkey(*)
+        sector:sectors!users_sector_id_fkey(*),
+        user_stores(
+          id,
+          store_id,
+          sector_id,
+          is_primary,
+          created_at,
+          store:stores(*),
+          sector:sectors(*)
+        )
       `)
       .order('created_at', { ascending: false })
 
@@ -89,7 +98,7 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { email, password, fullName, phone, isAdmin, isManager, storeId, functionId, sectorId, redirectTo } = body as {
+    const { email, password, fullName, phone, isAdmin, isManager, storeId, functionId, sectorId, storeAssignments, redirectTo } = body as {
       email: string
       password: string
       fullName: string
@@ -99,6 +108,7 @@ export async function POST(request: NextRequest) {
       storeId?: number
       functionId?: number
       sectorId?: number
+      storeAssignments?: { store_id: number; sector_id: number | null; is_primary: boolean }[]
       redirectTo?: string
     }
 
@@ -145,6 +155,17 @@ export async function POST(request: NextRequest) {
       auth: { autoRefreshToken: false, persistSession: false }
     })
 
+    // Monta lista de lojas: novo formato (storeAssignments) ou legado (storeId/sectorId)
+    let assignments: { store_id: number; sector_id: number | null; is_primary: boolean }[] = []
+    if (storeAssignments && storeAssignments.length > 0) {
+      assignments = storeAssignments
+    } else if (storeId) {
+      assignments = [{ store_id: storeId, sector_id: sectorId || null, is_primary: true }]
+    }
+
+    // Loja primária para manter users.store_id sincronizado
+    const primary = assignments.find(a => a.is_primary) || assignments[0] || null
+
     // Atualiza perfil em public.users (trigger ja criou o registro)
     const { error: profileError } = await supabase
       .from('users')
@@ -153,14 +174,32 @@ export async function POST(request: NextRequest) {
         phone: phone || null,
         is_admin: isAdmin,
         is_manager: isManager || false,
-        store_id: storeId || null,
-        function_id: functionId || null,
-        sector_id: sectorId || null,
+        store_id: isAdmin ? null : (primary?.store_id || null),
+        function_id: isAdmin ? null : (functionId || null),
+        sector_id: isAdmin ? null : (primary?.sector_id || null),
       })
       .eq('id', userId)
 
     if (profileError) {
       console.error('[API Users] Erro ao atualizar perfil:', profileError)
+    }
+
+    // Insere vínculos em user_stores
+    if (assignments.length > 0 && !isAdmin) {
+      const rows = assignments.map(a => ({
+        user_id: userId,
+        store_id: a.store_id,
+        sector_id: a.sector_id,
+        is_primary: a.is_primary,
+      }))
+
+      const { error: storesError } = await supabase
+        .from('user_stores')
+        .insert(rows)
+
+      if (storesError) {
+        console.error('[API Users] Erro ao inserir user_stores:', storesError)
+      }
     }
 
     return NextResponse.json({

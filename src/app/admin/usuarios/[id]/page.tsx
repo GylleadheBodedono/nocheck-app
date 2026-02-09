@@ -5,7 +5,7 @@ import { useRouter, useParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import Link from 'next/link'
 import { FiSave, FiUserCheck } from 'react-icons/fi'
-import type { User, Store, Sector, FunctionRow } from '@/types/database'
+import type { User, Store, Sector, FunctionRow, UserStoreWithDetails } from '@/types/database'
 import { APP_CONFIG } from '@/lib/config'
 import { LoadingPage, Header } from '@/components/ui'
 
@@ -13,6 +13,13 @@ type UserWithAssignment = User & {
   store: Store | null
   function_ref: FunctionRow | null
   sector: Sector | null
+  user_stores?: UserStoreWithDetails[]
+}
+
+type StoreAssignment = {
+  store_id: number
+  sector_id: number | null
+  is_primary: boolean
 }
 
 export default function EditarUsuarioPage() {
@@ -37,9 +44,8 @@ export default function EditarUsuarioPage() {
   const [isAdmin, setIsAdmin] = useState(false)
   const [isActive, setIsActive] = useState(true)
   const [isManager, setIsManager] = useState(false)
-  const [storeId, setStoreId] = useState<number | null>(null)
   const [functionId, setFunctionId] = useState<number | null>(null)
-  const [sectorId, setSectorId] = useState<number | null>(null)
+  const [storeAssignments, setStoreAssignments] = useState<StoreAssignment[]>([])
 
   useEffect(() => {
     fetchData()
@@ -49,7 +55,7 @@ export default function EditarUsuarioPage() {
   const fetchData = async () => {
     if (!userId) return
 
-    // Fetch user with assignments
+    // Fetch user with assignments + user_stores
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data: userData, error: userError } = await (supabase as any)
       .from('users')
@@ -57,7 +63,16 @@ export default function EditarUsuarioPage() {
         *,
         store:stores!users_store_id_fkey(*),
         function_ref:functions!users_function_id_fkey(*),
-        sector:sectors!users_sector_id_fkey(*)
+        sector:sectors!users_sector_id_fkey(*),
+        user_stores(
+          id,
+          store_id,
+          sector_id,
+          is_primary,
+          created_at,
+          store:stores(*),
+          sector:sectors(*)
+        )
       `)
       .eq('id', userId)
       .single()
@@ -76,9 +91,24 @@ export default function EditarUsuarioPage() {
     setIsAdmin(typedUser.is_admin)
     setIsActive(typedUser.is_active)
     setIsManager(typedUser.is_manager || false)
-    setStoreId(typedUser.store_id || null)
     setFunctionId(typedUser.function_id || null)
-    setSectorId(typedUser.sector_id || null)
+
+    // Inicializar storeAssignments de user_stores ou fallback legado
+    if (typedUser.user_stores && typedUser.user_stores.length > 0) {
+      setStoreAssignments(typedUser.user_stores.map(us => ({
+        store_id: us.store_id,
+        sector_id: us.sector_id,
+        is_primary: us.is_primary,
+      })))
+    } else if (typedUser.store_id) {
+      setStoreAssignments([{
+        store_id: typedUser.store_id,
+        sector_id: typedUser.sector_id,
+        is_primary: true,
+      }])
+    } else {
+      setStoreAssignments([])
+    }
 
     // Fetch stores, functions, sectors in parallel
     /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -96,24 +126,45 @@ export default function EditarUsuarioPage() {
     setLoading(false)
   }
 
-  // Filter sectors by selected store
-  const filteredSectors = useMemo(() => {
-    if (!storeId) return []
-    return sectors.filter(s => s.store_id === storeId)
-  }, [sectors, storeId])
-
-  // When store changes, reset sector if it doesn't belong to new store
-  const handleStoreChange = (newStoreId: number | null) => {
-    setStoreId(newStoreId)
-    if (newStoreId && sectorId) {
-      const sectorBelongsToStore = sectors.some(s => s.id === sectorId && s.store_id === newStoreId)
-      if (!sectorBelongsToStore) {
-        setSectorId(null)
+  // Helpers para multi-loja
+  const toggleStore = (storeId: number) => {
+    setStoreAssignments(prev => {
+      const exists = prev.find(a => a.store_id === storeId)
+      if (exists) {
+        const filtered = prev.filter(a => a.store_id !== storeId)
+        if (exists.is_primary && filtered.length > 0) {
+          filtered[0] = { ...filtered[0], is_primary: true }
+        }
+        return filtered
+      } else {
+        const newAssignment: StoreAssignment = { store_id: storeId, sector_id: null, is_primary: prev.length === 0 }
+        return [...prev, newAssignment]
       }
+    })
+  }
+
+  const toggleAllStores = () => {
+    if (storeAssignments.length === stores.length) {
+      setStoreAssignments([])
+    } else {
+      setStoreAssignments(stores.map((s, i) => ({
+        store_id: s.id,
+        sector_id: storeAssignments.find(a => a.store_id === s.id)?.sector_id || null,
+        is_primary: i === 0,
+      })))
     }
-    if (!newStoreId) {
-      setSectorId(null)
-    }
+  }
+
+  const setSectorForStore = (storeId: number, sectorId: number | null) => {
+    setStoreAssignments(prev =>
+      prev.map(a => a.store_id === storeId ? { ...a, sector_id: sectorId } : a)
+    )
+  }
+
+  const setPrimaryStore = (storeId: number) => {
+    setStoreAssignments(prev =>
+      prev.map(a => ({ ...a, is_primary: a.store_id === storeId }))
+    )
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -123,22 +174,25 @@ export default function EditarUsuarioPage() {
     setSaving(true)
 
     try {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { error: profileError } = await (supabase as any)
-        .from('users')
-        .update({
-          full_name: fullName,
+      const res = await fetch(`/api/admin/users/${userId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          fullName,
           phone: phone || null,
-          is_admin: isAdmin,
-          is_active: isActive,
-          is_manager: isAdmin ? false : isManager,
-          store_id: isAdmin ? null : (storeId || null),
-          function_id: isAdmin ? null : (functionId || null),
-          sector_id: isAdmin ? null : (sectorId || null),
-        })
-        .eq('id', userId)
+          isAdmin,
+          isActive,
+          isManager: isAdmin ? false : isManager,
+          functionId: isAdmin ? null : (functionId || null),
+          storeAssignments: isAdmin ? [] : storeAssignments,
+        }),
+      })
 
-      if (profileError) throw profileError
+      const data = await res.json()
+
+      if (!res.ok) {
+        throw new Error(data.error || 'Erro ao atualizar usuario')
+      }
 
       setSuccess('Usuario atualizado com sucesso!')
       fetchData()
@@ -253,12 +307,12 @@ export default function EditarUsuarioPage() {
             </div>
           </div>
 
-          {/* Assignment - Loja, Setor, Funcao */}
+          {/* Assignment - Lojas, Setor, Funcao */}
           {!isAdmin && (
             <div className="card p-6">
               <h2 className="text-lg font-semibold text-main mb-4">Atribuicao</h2>
               <p className="text-sm text-muted mb-4">
-                Defina a loja, setor e funcao do usuario.
+                Selecione as lojas, setores e funcao do usuario.
               </p>
 
               <div className="space-y-4">
@@ -277,43 +331,72 @@ export default function EditarUsuarioPage() {
                   </label>
                 </div>
 
-                {/* Store */}
+                {/* Lojas (multi-select) */}
                 <div>
                   <label className="block text-sm font-medium text-secondary mb-2">
-                    Loja
+                    Lojas
                   </label>
-                  <select
-                    value={storeId || ''}
-                    onChange={(e) => handleStoreChange(e.target.value ? Number(e.target.value) : null)}
-                    className="input"
-                  >
-                    <option value="">Selecione a loja</option>
-                    {stores.map(store => (
-                      <option key={store.id} value={store.id}>
-                        {store.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+                  <div className="space-y-2 max-h-64 overflow-y-auto border border-subtle rounded-xl p-3">
+                    <button
+                      type="button"
+                      onClick={toggleAllStores}
+                      className="text-xs text-primary hover:underline mb-1"
+                    >
+                      {storeAssignments.length === stores.length ? 'Desmarcar todas' : 'Selecionar todas'}
+                    </button>
+                    {stores.map(store => {
+                      const assignment = storeAssignments.find(a => a.store_id === store.id)
+                      const isSelected = !!assignment
+                      const storeSectors = sectors.filter(s => s.store_id === store.id)
 
-                {/* Sector (filtered by store) */}
-                <div>
-                  <label className="block text-sm font-medium text-secondary mb-2">
-                    Setor
-                  </label>
-                  <select
-                    value={sectorId || ''}
-                    onChange={(e) => setSectorId(e.target.value ? Number(e.target.value) : null)}
-                    className="input"
-                    disabled={!storeId}
-                  >
-                    <option value="">{storeId ? 'Selecione o setor' : 'Selecione uma loja primeiro'}</option>
-                    {filteredSectors.map(sector => (
-                      <option key={sector.id} value={sector.id}>
-                        {sector.name}
-                      </option>
-                    ))}
-                  </select>
+                      return (
+                        <div key={store.id} className={`rounded-lg p-2 transition-colors ${isSelected ? 'bg-primary/5' : 'hover:bg-surface-hover'}`}>
+                          <div className="flex items-center gap-3">
+                            <input
+                              type="checkbox"
+                              checked={isSelected}
+                              onChange={() => toggleStore(store.id)}
+                              className="w-5 h-5 rounded border-default bg-surface text-primary flex-shrink-0"
+                            />
+                            <span className="text-sm text-main flex-1">{store.name}</span>
+                            {isSelected && storeAssignments.length > 1 && (
+                              <label className="flex items-center gap-1 cursor-pointer flex-shrink-0">
+                                <input
+                                  type="radio"
+                                  name="primaryStore"
+                                  checked={assignment.is_primary}
+                                  onChange={() => setPrimaryStore(store.id)}
+                                  className="w-4 h-4 text-primary"
+                                />
+                                <span className="text-xs text-muted">Principal</span>
+                              </label>
+                            )}
+                          </div>
+                          {isSelected && storeSectors.length > 0 && (
+                            <div className="mt-2 ml-8">
+                              <select
+                                value={assignment.sector_id || ''}
+                                onChange={(e) => setSectorForStore(store.id, e.target.value ? Number(e.target.value) : null)}
+                                className="input text-sm py-1"
+                              >
+                                <option value="">Setor (opcional)</option>
+                                {storeSectors.map(sector => (
+                                  <option key={sector.id} value={sector.id}>
+                                    {sector.name}
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+                          )}
+                        </div>
+                      )
+                    })}
+                  </div>
+                  {storeAssignments.length > 0 && (
+                    <p className="text-xs text-muted mt-1">
+                      {storeAssignments.length} {storeAssignments.length === 1 ? 'loja selecionada' : 'lojas selecionadas'}
+                    </p>
+                  )}
                 </div>
 
                 {/* Function */}

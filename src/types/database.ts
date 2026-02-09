@@ -508,6 +508,35 @@ export type Database = {
           assigned_at?: string
         }
       }
+      // ============================================
+      // TABELA DE JUNÇÃO - USUÁRIO ↔ LOJAS
+      // ============================================
+      user_stores: {
+        Row: {
+          id: number
+          user_id: string
+          store_id: number
+          sector_id: number | null
+          is_primary: boolean
+          created_at: string
+        }
+        Insert: {
+          id?: number
+          user_id: string
+          store_id: number
+          sector_id?: number | null
+          is_primary?: boolean
+          created_at?: string
+        }
+        Update: {
+          id?: number
+          user_id?: string
+          store_id?: number
+          sector_id?: number | null
+          is_primary?: boolean
+          created_at?: string
+        }
+      }
       store_managers: {
         Row: {
           id: number
@@ -637,6 +666,16 @@ export type StoreManager = Database['public']['Tables']['store_managers']['Row']
 export type StoreManagerInsert = Database['public']['Tables']['store_managers']['Insert']
 export type StoreManagerUpdate = Database['public']['Tables']['store_managers']['Update']
 
+// User Stores (junção usuário ↔ lojas)
+export type UserStore = Database['public']['Tables']['user_stores']['Row']
+export type UserStoreInsert = Database['public']['Tables']['user_stores']['Insert']
+export type UserStoreUpdate = Database['public']['Tables']['user_stores']['Update']
+
+export type UserStoreWithDetails = UserStore & {
+  store: Store
+  sector: Sector | null
+}
+
 // Extended types with relations
 export type UserWithRoles = User & {
   roles: (UserStoreRole & { store: Store })[]
@@ -647,6 +686,7 @@ export type UserWithAssignment = User & {
   store: Store | null
   function_ref: FunctionRow | null
   sector: Sector | null
+  user_stores?: UserStoreWithDetails[]
 }
 
 // Nova estrutura de usuário com setores (legado, manter compatibilidade)

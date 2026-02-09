@@ -26,9 +26,8 @@ export default function NovoUsuarioPage() {
   const [phone, setPhone] = useState('')
   const [isAdmin, setIsAdmin] = useState(false)
   const [isManager, setIsManager] = useState(false)
-  const [storeId, setStoreId] = useState<number | null>(null)
   const [functionId, setFunctionId] = useState<number | null>(null)
-  const [sectorId, setSectorId] = useState<number | null>(null)
+  const [storeAssignments, setStoreAssignments] = useState<{ store_id: number; sector_id: number | null; is_primary: boolean }[]>([])
 
   useEffect(() => {
     const fetchData = async () => {
@@ -48,23 +47,46 @@ export default function NovoUsuarioPage() {
     fetchData()
   }, [supabase])
 
-  // Filter sectors by selected store
-  const filteredSectors = useMemo(() => {
-    if (!storeId) return []
-    return sectors.filter(s => s.store_id === storeId)
-  }, [sectors, storeId])
-
-  const handleStoreChange = (newStoreId: number | null) => {
-    setStoreId(newStoreId)
-    if (newStoreId && sectorId) {
-      const sectorBelongsToStore = sectors.some(s => s.id === sectorId && s.store_id === newStoreId)
-      if (!sectorBelongsToStore) {
-        setSectorId(null)
+  // Helpers para multi-loja
+  const toggleStore = (storeId: number) => {
+    setStoreAssignments(prev => {
+      const exists = prev.find(a => a.store_id === storeId)
+      if (exists) {
+        const filtered = prev.filter(a => a.store_id !== storeId)
+        // Se removeu a primária, promover a primeira restante
+        if (exists.is_primary && filtered.length > 0) {
+          filtered[0] = { ...filtered[0], is_primary: true }
+        }
+        return filtered
+      } else {
+        const newAssignment = { store_id: storeId, sector_id: null as number | null, is_primary: prev.length === 0 }
+        return [...prev, newAssignment]
       }
+    })
+  }
+
+  const toggleAllStores = () => {
+    if (storeAssignments.length === stores.length) {
+      setStoreAssignments([])
+    } else {
+      setStoreAssignments(stores.map((s, i) => ({
+        store_id: s.id,
+        sector_id: null,
+        is_primary: i === 0,
+      })))
     }
-    if (!newStoreId) {
-      setSectorId(null)
-    }
+  }
+
+  const setSectorForStore = (storeId: number, sectorId: number | null) => {
+    setStoreAssignments(prev =>
+      prev.map(a => a.store_id === storeId ? { ...a, sector_id: sectorId } : a)
+    )
+  }
+
+  const setPrimaryStore = (storeId: number) => {
+    setStoreAssignments(prev =>
+      prev.map(a => ({ ...a, is_primary: a.store_id === storeId }))
+    )
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -83,9 +105,8 @@ export default function NovoUsuarioPage() {
           phone: phone || undefined,
           isAdmin,
           isManager: isAdmin ? false : isManager,
-          storeId: isAdmin ? undefined : (storeId || undefined),
           functionId: isAdmin ? undefined : (functionId || undefined),
-          sectorId: isAdmin ? undefined : (sectorId || undefined),
+          storeAssignments: isAdmin ? [] : storeAssignments,
           redirectTo: `${window.location.origin}/auth/callback`,
         }),
       })
@@ -115,9 +136,8 @@ export default function NovoUsuarioPage() {
     setPhone('')
     setIsAdmin(false)
     setIsManager(false)
-    setStoreId(null)
     setFunctionId(null)
-    setSectorId(null)
+    setStoreAssignments([])
   }
 
   return (
@@ -247,7 +267,7 @@ export default function NovoUsuarioPage() {
               <div className="card p-6">
                 <h2 className="text-lg font-semibold text-main mb-4">Atribuicao</h2>
                 <p className="text-sm text-muted mb-4">
-                  Defina a loja, setor e funcao do usuario.
+                  Selecione as lojas, setores e funcao do usuario.
                 </p>
 
                 <div className="space-y-4">
@@ -266,43 +286,72 @@ export default function NovoUsuarioPage() {
                     </label>
                   </div>
 
-                  {/* Store */}
+                  {/* Lojas (multi-select) */}
                   <div>
                     <label className="block text-sm font-medium text-secondary mb-2">
-                      Loja
+                      Lojas
                     </label>
-                    <select
-                      value={storeId || ''}
-                      onChange={(e) => handleStoreChange(e.target.value ? Number(e.target.value) : null)}
-                      className="input"
-                    >
-                      <option value="">Selecione a loja</option>
-                      {stores.map(store => (
-                        <option key={store.id} value={store.id}>
-                          {store.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
+                    <div className="space-y-2 max-h-64 overflow-y-auto border border-subtle rounded-xl p-3">
+                      <button
+                        type="button"
+                        onClick={toggleAllStores}
+                        className="text-xs text-primary hover:underline mb-1"
+                      >
+                        {storeAssignments.length === stores.length ? 'Desmarcar todas' : 'Selecionar todas'}
+                      </button>
+                      {stores.map(store => {
+                        const assignment = storeAssignments.find(a => a.store_id === store.id)
+                        const isSelected = !!assignment
+                        const storeSectors = sectors.filter(s => s.store_id === store.id)
 
-                  {/* Sector (filtered by store) */}
-                  <div>
-                    <label className="block text-sm font-medium text-secondary mb-2">
-                      Setor
-                    </label>
-                    <select
-                      value={sectorId || ''}
-                      onChange={(e) => setSectorId(e.target.value ? Number(e.target.value) : null)}
-                      className="input"
-                      disabled={!storeId}
-                    >
-                      <option value="">{storeId ? 'Selecione o setor' : 'Selecione uma loja primeiro'}</option>
-                      {filteredSectors.map(sector => (
-                        <option key={sector.id} value={sector.id}>
-                          {sector.name}
-                        </option>
-                      ))}
-                    </select>
+                        return (
+                          <div key={store.id} className={`rounded-lg p-2 transition-colors ${isSelected ? 'bg-primary/5' : 'hover:bg-surface-hover'}`}>
+                            <div className="flex items-center gap-3">
+                              <input
+                                type="checkbox"
+                                checked={isSelected}
+                                onChange={() => toggleStore(store.id)}
+                                className="w-5 h-5 rounded border-default bg-surface text-primary flex-shrink-0"
+                              />
+                              <span className="text-sm text-main flex-1">{store.name}</span>
+                              {isSelected && storeAssignments.length > 1 && (
+                                <label className="flex items-center gap-1 cursor-pointer flex-shrink-0">
+                                  <input
+                                    type="radio"
+                                    name="primaryStore"
+                                    checked={assignment.is_primary}
+                                    onChange={() => setPrimaryStore(store.id)}
+                                    className="w-4 h-4 text-primary"
+                                  />
+                                  <span className="text-xs text-muted">Principal</span>
+                                </label>
+                              )}
+                            </div>
+                            {isSelected && storeSectors.length > 0 && (
+                              <div className="mt-2 ml-8">
+                                <select
+                                  value={assignment.sector_id || ''}
+                                  onChange={(e) => setSectorForStore(store.id, e.target.value ? Number(e.target.value) : null)}
+                                  className="input text-sm py-1"
+                                >
+                                  <option value="">Setor (opcional)</option>
+                                  {storeSectors.map(sector => (
+                                    <option key={sector.id} value={sector.id}>
+                                      {sector.name}
+                                    </option>
+                                  ))}
+                                </select>
+                              </div>
+                            )}
+                          </div>
+                        )
+                      })}
+                    </div>
+                    {storeAssignments.length > 0 && (
+                      <p className="text-xs text-muted mt-1">
+                        {storeAssignments.length} {storeAssignments.length === 1 ? 'loja selecionada' : 'lojas selecionadas'}
+                      </p>
+                    )}
                   </div>
 
                   {/* Function */}

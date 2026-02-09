@@ -30,6 +30,15 @@ type TemplateWithVisibility = ChecklistTemplate & {
   }>
 }
 
+type UserStoreEntry = {
+  id: number
+  store_id: number
+  sector_id: number | null
+  is_primary: boolean
+  store: Store
+  sector: Sector | null
+}
+
 type UserProfile = {
   id: string
   email: string
@@ -42,6 +51,7 @@ type UserProfile = {
   store: Store | null
   function_ref: FunctionRow | null
   sector: Sector | null
+  user_stores?: UserStoreEntry[]
 }
 
 type ChecklistWithDetails = Checklist & {
@@ -176,7 +186,7 @@ export default function DashboardPage() {
     }
     setUser(user)
 
-    // Fetch user profile with store, function, sector joins
+    // Fetch user profile with store, function, sector joins + multi-lojas
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data: profileData } = await (supabase as any)
       .from('users')
@@ -184,7 +194,15 @@ export default function DashboardPage() {
         *,
         store:stores!users_store_id_fkey(*),
         function_ref:functions!users_function_id_fkey(*),
-        sector:sectors!users_sector_id_fkey(*)
+        sector:sectors!users_sector_id_fkey(*),
+        user_stores(
+          id,
+          store_id,
+          sector_id,
+          is_primary,
+          store:stores(*),
+          sector:sectors(*)
+        )
       `)
       .eq('id', user.id)
       .single()
@@ -207,8 +225,16 @@ export default function DashboardPage() {
         setAllStores(storesData as Store[])
         setSelectedStore((storesData[0] as Store).id)
       }
+    } else if (profileData?.user_stores && profileData.user_stores.length > 0) {
+      // Employee/Manager: multiple stores via user_stores
+      const userStores = (profileData.user_stores as UserStoreEntry[])
+        .map(us => us.store)
+        .filter(Boolean) as Store[]
+      setAllStores(userStores)
+      const primary = (profileData.user_stores as UserStoreEntry[]).find(us => us.is_primary)
+      setSelectedStore(primary ? primary.store_id : userStores[0]?.id || null)
     } else if (profileData?.store) {
-      // Employee/Manager: single store
+      // Fallback legado: single store
       setAllStores([profileData.store as Store])
       setSelectedStore((profileData.store as Store).id)
     }
@@ -463,8 +489,12 @@ export default function DashboardPage() {
   const getUserStores = (): Store[] => {
     if (!profile) return []
     if (profile.is_admin) return allStores
+    // Multi-loja: user_stores
+    if (profile.user_stores && profile.user_stores.length > 0) {
+      return profile.user_stores.map(us => us.store).filter(Boolean)
+    }
+    // Fallback legado: single store
     if (profile.store) return [profile.store]
-    // Fallback for offline mode when store object isn't available
     if (profile.store_id) {
       const store = allStores.find(s => s.id === profile.store_id)
       if (store) return [store]
@@ -476,6 +506,11 @@ export default function DashboardPage() {
   const getAvailableTemplates = (): { template: TemplateWithVisibility; canFill: boolean }[] => {
     if (!selectedStore || !profile) return []
 
+    // Setor do usuario na loja selecionada (multi-loja)
+    const userSectorForStore = profile.user_stores?.find(
+      us => us.store_id === selectedStore
+    )?.sector_id || profile.sector_id
+
     return templates
       .filter(template => {
         // Filter by selected store visibility
@@ -485,9 +520,9 @@ export default function DashboardPage() {
         // Admin/Manager: see all templates that have visibility for this store
         if (profile.is_admin || profile.is_manager) return true
 
-        // Employee: check sector + function match
+        // Employee: check sector + function match (usando setor da loja selecionada)
         return visibilities.some(v => {
-          const sectorMatch = !v.sector_id || v.sector_id === profile.sector_id
+          const sectorMatch = !v.sector_id || v.sector_id === userSectorForStore
           const functionMatch = !v.function_id || v.function_id === profile.function_id
           return sectorMatch && functionMatch
         })

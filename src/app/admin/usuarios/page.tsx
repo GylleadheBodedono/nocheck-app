@@ -14,7 +14,7 @@ import {
   FiUsers,
   FiWifiOff,
 } from 'react-icons/fi'
-import type { User, Store, Sector, FunctionRow } from '@/types/database'
+import type { User, Store, Sector, FunctionRow, UserStoreWithDetails } from '@/types/database'
 import { APP_CONFIG } from '@/lib/config'
 import { LoadingPage, Header } from '@/components/ui'
 import { getAuthCache, getUserCache, getAllUsersCache } from '@/lib/offlineCache'
@@ -23,6 +23,7 @@ type UserWithAssignment = User & {
   store: Store | null
   function_ref: FunctionRow | null
   sector: Sector | null
+  user_stores?: UserStoreWithDetails[]
 }
 
 export default function UsuariosPage() {
@@ -115,7 +116,16 @@ export default function UsuariosPage() {
           *,
           store:stores!users_store_id_fkey(*),
           function_ref:functions!users_function_id_fkey(*),
-          sector:sectors!users_sector_id_fkey(*)
+          sector:sectors!users_sector_id_fkey(*),
+          user_stores(
+            id,
+            store_id,
+            sector_id,
+            is_primary,
+            created_at,
+            store:stores(*),
+            sector:sectors(*)
+          )
         `)
         .order('created_at', { ascending: false })
 
@@ -322,7 +332,22 @@ export default function UsuariosPage() {
                         </div>
                       </td>
                       <td className="px-6 py-4">
-                        {user.store ? (
+                        {user.user_stores && user.user_stores.length > 0 ? (
+                          <div className="flex flex-wrap gap-1">
+                            {user.user_stores.map((us) => (
+                              <span
+                                key={us.store_id}
+                                className={`text-xs px-2 py-0.5 rounded-lg ${
+                                  us.is_primary
+                                    ? 'bg-primary/20 text-primary font-medium'
+                                    : 'bg-surface-hover text-muted'
+                                }`}
+                              >
+                                {us.store?.name || `Loja ${us.store_id}`}
+                              </span>
+                            ))}
+                          </div>
+                        ) : user.store ? (
                           <span className="text-sm text-main">{user.store.name}</span>
                         ) : (
                           <span className="text-sm text-muted">-</span>
@@ -341,16 +366,27 @@ export default function UsuariosPage() {
                         )}
                       </td>
                       <td className="px-6 py-4">
-                        {user.sector ? (
-                          <span
-                            className="px-2 py-1 text-xs rounded-lg"
-                            style={{ backgroundColor: user.sector.color + '20', color: user.sector.color }}
-                          >
-                            {user.sector.name}
-                          </span>
-                        ) : (
-                          <span className="text-sm text-muted">-</span>
-                        )}
+                        {(() => {
+                          const primaryUs = user.user_stores?.find(us => us.is_primary)
+                          const sectorToShow = primaryUs?.sector || user.sector
+                          const otherSectors = user.user_stores?.filter(us => !us.is_primary && us.sector).length || 0
+                          if (sectorToShow) {
+                            return (
+                              <div className="flex items-center gap-1">
+                                <span
+                                  className="px-2 py-1 text-xs rounded-lg"
+                                  style={{ backgroundColor: sectorToShow.color + '20', color: sectorToShow.color }}
+                                >
+                                  {sectorToShow.name}
+                                </span>
+                                {otherSectors > 0 && (
+                                  <span className="text-xs text-muted">+{otherSectors}</span>
+                                )}
+                              </div>
+                            )
+                          }
+                          return <span className="text-sm text-muted">-</span>
+                        })()}
                       </td>
                       <td className="px-6 py-4">
                         {user.is_admin ? (
