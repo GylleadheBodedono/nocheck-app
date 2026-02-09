@@ -112,6 +112,7 @@ export default function NovoTemplatePage() {
     { value: 'barcode', label: 'Codigo de Barras', icon: '▮▯▮' },
     { value: 'calculated', label: 'Calculado', icon: '∑' },
     { value: 'yes_no', label: 'Sim/Nao', icon: '?!' },
+    { value: 'rating', label: 'Avaliacao', icon: '😊' },
   ]
 
   // Get sectors for a specific store

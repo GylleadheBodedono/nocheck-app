@@ -239,7 +239,16 @@ function ChecklistForm() {
           let valueNumber = null
           let valueJson = null
 
-          if (field.field_type === 'number' || field.field_type === 'calculated') {
+          if (field.field_type === 'number') {
+            // Number field now returns { subtype, number }
+            if (typeof value === 'object' && value !== null && 'number' in (value as Record<string, unknown>)) {
+              const numObj = value as { subtype: string; number: number }
+              valueNumber = numObj.number
+              valueJson = { subtype: numObj.subtype }
+            } else {
+              valueNumber = value as number
+            }
+          } else if (field.field_type === 'calculated') {
             valueNumber = value as number
           } else if (field.field_type === 'photo') {
             const photos = value as string[]
@@ -399,7 +408,15 @@ function ChecklistForm() {
             let valueNumber = null
             let valueJson = null
 
-            if (field.field_type === 'number' || field.field_type === 'calculated') {
+            if (field.field_type === 'number') {
+              if (typeof value === 'object' && value !== null && 'number' in (value as Record<string, unknown>)) {
+                const numObj = value as { subtype: string; number: number }
+                valueNumber = numObj.number
+                valueJson = { subtype: numObj.subtype }
+              } else {
+                valueNumber = value as number
+              }
+            } else if (field.field_type === 'calculated') {
               valueNumber = value as number
             } else if (field.field_type === 'photo') {
               // Formata fotos corretamente para o sync processar depois

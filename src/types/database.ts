@@ -569,6 +569,7 @@ export type FieldType =
   | 'barcode'
   | 'calculated'
   | 'yes_no'
+  | 'rating'
 export type ChecklistStatus = 'rascunho' | 'em_andamento' | 'concluido' | 'validado'
 export type SyncStatus = 'pending' | 'syncing' | 'synced' | 'conflict'
 export type StorageProvider = 'google_drive' | 'supabase'

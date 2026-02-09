@@ -40,6 +40,8 @@ export function FieldRenderer({ field, value, onChange, error }: FieldRendererPr
         return <CalculatedField field={field} value={value as number} />
       case 'yes_no':
         return <YesNoField field={field} value={value as string} onChange={onChange} />
+      case 'rating':
+        return <RatingField field={field} value={value as string} onChange={onChange} />
       default:
         return <p className="text-red-400">Campo não suportado: {field.field_type}</p>
     }
@@ -73,26 +75,106 @@ function TextField({ field, value, onChange }: { field: TemplateField; value: st
   )
 }
 
-// Number Field
-function NumberField({ field, value, onChange }: { field: TemplateField; value: number; onChange: (v: number) => void }) {
-  const [displayValue, setDisplayValue] = useState(value ? value.toString() : '')
+// Number Field with subtype (monetary, quantity, decimal, percentage)
+type NumberSubtype = 'monetario' | 'quantidade' | 'decimal' | 'porcentagem'
+
+const NUMBER_SUBTYPES: { value: NumberSubtype; label: string; prefix: string; suffix: string; placeholder: string }[] = [
+  { value: 'monetario', label: 'Monetario (R$)', prefix: 'R$ ', suffix: '', placeholder: '0,00' },
+  { value: 'quantidade', label: 'Quantidade', prefix: '', suffix: ' un', placeholder: '0' },
+  { value: 'decimal', label: 'Decimal', prefix: '', suffix: '', placeholder: '0,00' },
+  { value: 'porcentagem', label: 'Porcentagem (%)', prefix: '', suffix: '%', placeholder: '0' },
+]
+
+function NumberField({ field, value, onChange }: { field: TemplateField; value: number; onChange: (v: unknown) => void }) {
+  const savedSubtype = (typeof value === 'object' && value !== null && 'subtype' in (value as Record<string, unknown>))
+    ? (value as Record<string, unknown>).subtype as NumberSubtype
+    : null
+  const savedNumber = (typeof value === 'object' && value !== null && 'number' in (value as Record<string, unknown>))
+    ? (value as Record<string, unknown>).number as number
+    : (typeof value === 'number' ? value : 0)
+
+  const [subtype, setSubtype] = useState<NumberSubtype | null>(savedSubtype)
+  const [displayValue, setDisplayValue] = useState(savedNumber ? savedNumber.toString().replace('.', ',') : '')
+
+  const subtypeConfig = NUMBER_SUBTYPES.find(s => s.value === subtype)
+
+  const handleSubtypeChange = (newSubtype: NumberSubtype) => {
+    setSubtype(newSubtype)
+    setDisplayValue('')
+    onChange({ subtype: newSubtype, number: 0 })
+  }
+
+  const formatDisplay = (raw: string, st: NumberSubtype): string => {
+    if (st === 'quantidade') {
+      return raw.replace(/[^\d]/g, '')
+    }
+    if (st === 'porcentagem') {
+      return raw.replace(/[^\d.,]/g, '')
+    }
+    // monetario e decimal: permite vírgula como separador
+    return raw.replace(/[^\d.,]/g, '')
+  }
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const raw = e.target.value.replace(/[^\d.,]/g, '')
+    if (!subtype) return
+    const raw = formatDisplay(e.target.value, subtype)
     setDisplayValue(raw)
     const numValue = parseFloat(raw.replace(',', '.')) || 0
-    onChange(numValue)
+    onChange({ subtype, number: numValue })
   }
 
   return (
-    <input
-      type="text"
-      inputMode="decimal"
-      value={displayValue}
-      onChange={handleChange}
-      placeholder={field.placeholder || '0,00'}
-      className="input w-full px-4 py-3 rounded-xl"
-    />
+    <div className="space-y-3">
+      {/* Subtype selector */}
+      <div className="grid grid-cols-2 gap-2">
+        {NUMBER_SUBTYPES.map(st => (
+          <button
+            key={st.value}
+            type="button"
+            onClick={() => handleSubtypeChange(st.value)}
+            className={`px-3 py-2.5 rounded-xl text-sm font-medium transition-all border-2 ${
+              subtype === st.value
+                ? 'bg-primary/15 border-primary text-primary'
+                : 'bg-surface border-subtle text-muted hover:border-primary/40 hover:text-secondary'
+            }`}
+          >
+            {st.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Number input */}
+      {subtype && (
+        <div className="relative">
+          {subtypeConfig?.prefix && (
+            <span className="absolute left-4 top-1/2 -translate-y-1/2 text-muted font-medium">
+              {subtypeConfig.prefix}
+            </span>
+          )}
+          <input
+            type="text"
+            inputMode={subtype === 'quantidade' ? 'numeric' : 'decimal'}
+            value={displayValue}
+            onChange={handleChange}
+            placeholder={field.placeholder || subtypeConfig?.placeholder || '0'}
+            className="input w-full py-3 rounded-xl"
+            style={{
+              paddingLeft: subtypeConfig?.prefix ? `${subtypeConfig.prefix.length * 12 + 16}px` : '16px',
+              paddingRight: subtypeConfig?.suffix ? `${subtypeConfig.suffix.length * 10 + 16}px` : '16px',
+            }}
+          />
+          {subtypeConfig?.suffix && (
+            <span className="absolute right-4 top-1/2 -translate-y-1/2 text-muted font-medium">
+              {subtypeConfig.suffix}
+            </span>
+          )}
+        </div>
+      )}
+
+      {!subtype && (
+        <p className="text-sm text-muted text-center py-2">Selecione o tipo de numero acima</p>
+      )}
+    </div>
   )
 }
 
@@ -548,6 +630,55 @@ function YesNoField({ field: _field, value, onChange }: { field: TemplateField; 
       >
         Nao
       </button>
+    </div>
+  )
+}
+
+// Rating Field (intensity/satisfaction with face emojis)
+const RATING_OPTIONS = [
+  { value: 'pessimo', label: 'Pessimo', face: '😡', color: 'rgb(239, 68, 68)', bgColor: 'rgba(239, 68, 68, 0.15)', borderColor: 'rgb(239, 68, 68)' },
+  { value: 'ruim', label: 'Ruim', face: '😟', color: 'rgb(249, 115, 22)', bgColor: 'rgba(249, 115, 22, 0.15)', borderColor: 'rgb(249, 115, 22)' },
+  { value: 'regular', label: 'Regular', face: '😐', color: 'rgb(234, 179, 8)', bgColor: 'rgba(234, 179, 8, 0.15)', borderColor: 'rgb(234, 179, 8)' },
+  { value: 'bom', label: 'Bom', face: '😊', color: 'rgb(34, 197, 94)', bgColor: 'rgba(34, 197, 94, 0.15)', borderColor: 'rgb(34, 197, 94)' },
+]
+
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+function RatingField({ field: _field, value, onChange }: { field: TemplateField; value: string; onChange: (v: string) => void }) {
+  return (
+    <div className="space-y-2">
+      <div className="flex gap-3 justify-center">
+        {RATING_OPTIONS.map(option => {
+          const isSelected = value === option.value
+          return (
+            <button
+              key={option.value}
+              type="button"
+              onClick={() => onChange(option.value)}
+              className="flex flex-col items-center gap-1.5 transition-all"
+              style={{ transform: isSelected ? 'scale(1.15)' : 'scale(1)' }}
+            >
+              <div
+                className="w-16 h-16 rounded-2xl flex items-center justify-center text-3xl transition-all border-2"
+                style={{
+                  backgroundColor: isSelected ? option.bgColor : 'transparent',
+                  borderColor: isSelected ? option.borderColor : 'var(--border-subtle)',
+                  boxShadow: isSelected ? `0 0 12px ${option.bgColor}` : 'none',
+                }}
+              >
+                <span style={{ filter: isSelected ? 'none' : 'grayscale(0.6) opacity(0.5)' }}>
+                  {option.face}
+                </span>
+              </div>
+              <span
+                className="text-xs font-medium transition-colors"
+                style={{ color: isSelected ? option.color : 'var(--text-muted)' }}
+              >
+                {option.label}
+              </span>
+            </button>
+          )
+        })}
+      </div>
     </div>
   )
 }
