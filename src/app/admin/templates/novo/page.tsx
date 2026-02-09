@@ -24,7 +24,8 @@ type FieldConfig = {
   field_type: FieldType
   is_required: boolean
   sort_order: number
-  options: string[] | null
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  options: any
   validation: Record<string, unknown> | null
   placeholder: string
   help_text: string
@@ -127,7 +128,7 @@ export default function NovoTemplatePage() {
       field_type: type,
       is_required: true,
       sort_order: fields.length + 1,
-      options: type === 'dropdown' || type === 'checkbox_multiple' ? [] : null,
+      options: type === 'dropdown' || type === 'checkbox_multiple' ? [] : type === 'number' ? { numberSubtype: 'decimal' } : null,
       validation: null,
       placeholder: '',
       help_text: '',
@@ -518,12 +519,42 @@ export default function NovoTemplatePage() {
                           </div>
                         </div>
 
+                        {/* Number subtype selector */}
+                        {field.field_type === 'number' && (
+                          <div>
+                            <label className="block text-xs text-muted mb-1">Tipo de numero</label>
+                            <div className="grid grid-cols-2 gap-2">
+                              {[
+                                { value: 'monetario', label: 'Monetario (R$)' },
+                                { value: 'quantidade', label: 'Quantidade (un)' },
+                                { value: 'decimal', label: 'Decimal' },
+                                { value: 'porcentagem', label: 'Porcentagem (%)' },
+                              ].map(st => (
+                                <button
+                                  key={st.value}
+                                  type="button"
+                                  onClick={() => updateField(field.id, {
+                                    options: { numberSubtype: st.value }
+                                  })}
+                                  className={`px-3 py-2 rounded-lg text-sm font-medium transition-all border ${
+                                    (field.options as { numberSubtype?: string } | null)?.numberSubtype === st.value
+                                      ? 'bg-primary/15 border-primary text-primary'
+                                      : 'bg-surface border-subtle text-muted hover:border-primary/40'
+                                  }`}
+                                >
+                                  {st.label}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
                         {/* Options for dropdown/checkbox */}
                         {(field.field_type === 'dropdown' || field.field_type === 'checkbox_multiple') && (
                           <div>
                             <label className="block text-xs text-muted mb-1">Opcoes (uma por linha)</label>
                             <textarea
-                              value={field.options?.join('\n') || ''}
+                              value={Array.isArray(field.options) ? field.options.join('\n') : ''}
                               onChange={(e) => updateField(field.id, {
                                 options: e.target.value.split('\n').filter(o => o.trim())
                               })}

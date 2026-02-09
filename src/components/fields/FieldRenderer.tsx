@@ -75,104 +75,65 @@ function TextField({ field, value, onChange }: { field: TemplateField; value: st
   )
 }
 
-// Number Field with subtype (monetary, quantity, decimal, percentage)
+// Number Field with subtype defined by admin (monetary, quantity, decimal, percentage)
 type NumberSubtype = 'monetario' | 'quantidade' | 'decimal' | 'porcentagem'
 
-const NUMBER_SUBTYPES: { value: NumberSubtype; label: string; prefix: string; suffix: string; placeholder: string }[] = [
-  { value: 'monetario', label: 'Monetario (R$)', prefix: 'R$ ', suffix: '', placeholder: '0,00' },
-  { value: 'quantidade', label: 'Quantidade', prefix: '', suffix: ' un', placeholder: '0' },
-  { value: 'decimal', label: 'Decimal', prefix: '', suffix: '', placeholder: '0,00' },
-  { value: 'porcentagem', label: 'Porcentagem (%)', prefix: '', suffix: '%', placeholder: '0' },
-]
+const NUMBER_SUBTYPES: Record<NumberSubtype, { label: string; prefix: string; suffix: string; placeholder: string; inputMode: 'numeric' | 'decimal' }> = {
+  monetario: { label: 'Monetario (R$)', prefix: 'R$ ', suffix: '', placeholder: '0,00', inputMode: 'decimal' },
+  quantidade: { label: 'Quantidade', prefix: '', suffix: ' un', placeholder: '0', inputMode: 'numeric' },
+  decimal: { label: 'Decimal', prefix: '', suffix: '', placeholder: '0,00', inputMode: 'decimal' },
+  porcentagem: { label: 'Porcentagem (%)', prefix: '', suffix: '%', placeholder: '0', inputMode: 'decimal' },
+}
+
+export { NUMBER_SUBTYPES }
+export type { NumberSubtype }
 
 function NumberField({ field, value, onChange }: { field: TemplateField; value: number; onChange: (v: unknown) => void }) {
-  const savedSubtype = (typeof value === 'object' && value !== null && 'subtype' in (value as Record<string, unknown>))
-    ? (value as Record<string, unknown>).subtype as NumberSubtype
-    : null
+  // Subtype is defined by admin in field.options
+  const subtype: NumberSubtype = (field.options as { numberSubtype?: NumberSubtype } | null)?.numberSubtype || 'decimal'
+  const config = NUMBER_SUBTYPES[subtype]
+
   const savedNumber = (typeof value === 'object' && value !== null && 'number' in (value as Record<string, unknown>))
     ? (value as Record<string, unknown>).number as number
     : (typeof value === 'number' ? value : 0)
 
-  const [subtype, setSubtype] = useState<NumberSubtype | null>(savedSubtype)
   const [displayValue, setDisplayValue] = useState(savedNumber ? savedNumber.toString().replace('.', ',') : '')
 
-  const subtypeConfig = NUMBER_SUBTYPES.find(s => s.value === subtype)
-
-  const handleSubtypeChange = (newSubtype: NumberSubtype) => {
-    setSubtype(newSubtype)
-    setDisplayValue('')
-    onChange({ subtype: newSubtype, number: 0 })
-  }
-
-  const formatDisplay = (raw: string, st: NumberSubtype): string => {
-    if (st === 'quantidade') {
-      return raw.replace(/[^\d]/g, '')
-    }
-    if (st === 'porcentagem') {
-      return raw.replace(/[^\d.,]/g, '')
-    }
-    // monetario e decimal: permite vírgula como separador
-    return raw.replace(/[^\d.,]/g, '')
-  }
-
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (!subtype) return
-    const raw = formatDisplay(e.target.value, subtype)
+    let raw = e.target.value
+    if (subtype === 'quantidade') {
+      raw = raw.replace(/[^\d]/g, '')
+    } else {
+      raw = raw.replace(/[^\d.,]/g, '')
+    }
     setDisplayValue(raw)
     const numValue = parseFloat(raw.replace(',', '.')) || 0
     onChange({ subtype, number: numValue })
   }
 
   return (
-    <div className="space-y-3">
-      {/* Subtype selector */}
-      <div className="grid grid-cols-2 gap-2">
-        {NUMBER_SUBTYPES.map(st => (
-          <button
-            key={st.value}
-            type="button"
-            onClick={() => handleSubtypeChange(st.value)}
-            className={`px-3 py-2.5 rounded-xl text-sm font-medium transition-all border-2 ${
-              subtype === st.value
-                ? 'bg-primary/15 border-primary text-primary'
-                : 'bg-surface border-subtle text-muted hover:border-primary/40 hover:text-secondary'
-            }`}
-          >
-            {st.label}
-          </button>
-        ))}
-      </div>
-
-      {/* Number input */}
-      {subtype && (
-        <div className="relative">
-          {subtypeConfig?.prefix && (
-            <span className="absolute left-4 top-1/2 -translate-y-1/2 text-muted font-medium">
-              {subtypeConfig.prefix}
-            </span>
-          )}
-          <input
-            type="text"
-            inputMode={subtype === 'quantidade' ? 'numeric' : 'decimal'}
-            value={displayValue}
-            onChange={handleChange}
-            placeholder={field.placeholder || subtypeConfig?.placeholder || '0'}
-            className="input w-full py-3 rounded-xl"
-            style={{
-              paddingLeft: subtypeConfig?.prefix ? `${subtypeConfig.prefix.length * 12 + 16}px` : '16px',
-              paddingRight: subtypeConfig?.suffix ? `${subtypeConfig.suffix.length * 10 + 16}px` : '16px',
-            }}
-          />
-          {subtypeConfig?.suffix && (
-            <span className="absolute right-4 top-1/2 -translate-y-1/2 text-muted font-medium">
-              {subtypeConfig.suffix}
-            </span>
-          )}
-        </div>
+    <div className="relative">
+      {config.prefix && (
+        <span className="absolute left-4 top-1/2 -translate-y-1/2 text-muted font-medium">
+          {config.prefix}
+        </span>
       )}
-
-      {!subtype && (
-        <p className="text-sm text-muted text-center py-2">Selecione o tipo de numero acima</p>
+      <input
+        type="text"
+        inputMode={config.inputMode}
+        value={displayValue}
+        onChange={handleChange}
+        placeholder={field.placeholder || config.placeholder}
+        className="input w-full py-3 rounded-xl"
+        style={{
+          paddingLeft: config.prefix ? `${config.prefix.length * 12 + 16}px` : '16px',
+          paddingRight: config.suffix ? `${config.suffix.length * 10 + 16}px` : '16px',
+        }}
+      />
+      {config.suffix && (
+        <span className="absolute right-4 top-1/2 -translate-y-1/2 text-muted font-medium">
+          {config.suffix}
+        </span>
       )}
     </div>
   )
