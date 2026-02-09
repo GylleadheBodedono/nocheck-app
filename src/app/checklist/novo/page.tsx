@@ -11,7 +11,6 @@ import {
   FiCheckCircle,
   FiAlertCircle,
   FiCloudOff,
-  FiMapPin,
 } from 'react-icons/fi'
 import type { ChecklistTemplate, TemplateField, Store } from '@/types/database'
 import { APP_CONFIG } from '@/lib/config'
@@ -72,31 +71,8 @@ function ChecklistForm() {
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
   const [success, setSuccess] = useState(false)
-  const [autoGps, setAutoGps] = useState<{ latitude: number; longitude: number; accuracy: number; timestamp: string } | null>(null)
   const router = useRouter()
   const supabase = useMemo(() => createClient(), [])
-
-  // Coleta GPS automaticamente ao abrir o checklist
-  useEffect(() => {
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          const gpsData = {
-            latitude: position.coords.latitude,
-            longitude: position.coords.longitude,
-            accuracy: position.coords.accuracy,
-            timestamp: new Date().toISOString(),
-          }
-          setAutoGps(gpsData)
-          console.log('[Checklist] GPS coletado automaticamente:', gpsData.latitude, gpsData.longitude)
-        },
-        (err) => {
-          console.warn('[Checklist] Não foi possível coletar GPS automaticamente:', err.message)
-        },
-        { enableHighAccuracy: true, timeout: 15000, maximumAge: 60000 }
-      )
-    }
-  }, [])
 
   useEffect(() => {
     const fetchData = async () => {
@@ -199,9 +175,6 @@ function ChecklistForm() {
     const newErrors: Record<number, string> = {}
 
     template?.fields.forEach(field => {
-      // GPS é coletado automaticamente, não precisa validar
-      if (field.field_type === 'gps') return
-
       if (field.is_required) {
         const value = responses[field.id]
         if (value === undefined || value === null || value === '' ||
@@ -261,8 +234,6 @@ function ChecklistForm() {
         const promises = Object.entries(responses).map(async ([fieldId, value]) => {
           const field = template?.fields.find(f => f.id === Number(fieldId))
           if (!field) return null
-          // GPS é preenchido automaticamente, pula aqui
-          if (field.field_type === 'gps') return null
 
           let valueText = null
           let valueNumber = null
@@ -308,7 +279,8 @@ function ChecklistForm() {
             }
           } else if (
             field.field_type === 'checkbox_multiple' ||
-            field.field_type === 'signature'
+            field.field_type === 'signature' ||
+            field.field_type === 'gps'
           ) {
             valueJson = value
           } else {
@@ -323,16 +295,7 @@ function ChecklistForm() {
           }
         })
 
-        // Injeta GPS automaticamente em todos os campos GPS do template
-        const gpsFields = template?.fields.filter(f => f.field_type === 'gps') || []
-        const gpsPromises = gpsFields.map(async (field) => ({
-          fieldId: field.id,
-          valueText: null,
-          valueNumber: null,
-          valueJson: autoGps || null,
-        }))
-
-        return [...promises, ...gpsPromises]
+        return promises
       }
 
       // Se offline, salva localmente SEM tentar upload de fotos
@@ -431,8 +394,6 @@ function ChecklistForm() {
           const responseData = Object.entries(responses).map(([fieldId, value]) => {
             const field = template?.fields.find(f => f.id === Number(fieldId))
             if (!field) return null
-            // GPS é preenchido automaticamente
-            if (field.field_type === 'gps') return null
 
             let valueText = null
             let valueNumber = null
@@ -444,7 +405,7 @@ function ChecklistForm() {
               // Formata fotos corretamente para o sync processar depois
               const photos = value as string[]
               valueJson = { photos: photos || [], uploadedToDrive: false }
-            } else if (['checkbox_multiple', 'signature'].includes(field.field_type)) {
+            } else if (['checkbox_multiple', 'signature', 'gps'].includes(field.field_type)) {
               valueJson = value
             } else {
               valueText = value as string
@@ -452,12 +413,6 @@ function ChecklistForm() {
 
             return { fieldId: Number(fieldId), valueText, valueNumber, valueJson }
           }).filter(Boolean) as Array<{ fieldId: number; valueText: string | null; valueNumber: number | null; valueJson: unknown }>
-
-          // Injeta GPS automaticamente
-          const gpsFields = template?.fields.filter(f => f.field_type === 'gps') || []
-          for (const gpsField of gpsFields) {
-            responseData.push({ fieldId: gpsField.id, valueText: null, valueNumber: null, valueJson: autoGps || null })
-          }
 
           await saveOfflineChecklist({
             templateId: Number(templateId),
@@ -523,8 +478,7 @@ function ChecklistForm() {
     )
   }
 
-  // Campos visíveis (sem GPS, que é automático)
-  const visibleFields = template.fields.filter(f => f.field_type !== 'gps')
+  const visibleFields = template.fields
 
   const progress = visibleFields.length > 0
     ? Math.round((Object.keys(responses).filter(k => {
@@ -575,19 +529,6 @@ function ChecklistForm() {
       {/* Form */}
       <main className="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <form onSubmit={handleSubmit} className="space-y-6">
-          {/* GPS coletado automaticamente - mostra indicador */}
-          {autoGps && template.fields.some(f => f.field_type === 'gps') && (
-            <div className="card p-4 flex items-center gap-3 bg-primary/5 border-primary/20">
-              <FiMapPin className="w-5 h-5 text-primary flex-shrink-0" />
-              <div>
-                <p className="text-sm font-medium text-main">Localização coletada</p>
-                <p className="text-xs text-muted">
-                  {autoGps.latitude.toFixed(6)}, {autoGps.longitude.toFixed(6)} (precisão: {autoGps.accuracy.toFixed(0)}m)
-                </p>
-              </div>
-            </div>
-          )}
-
           {visibleFields.map((field, index) => (
             <div
               key={field.id}
