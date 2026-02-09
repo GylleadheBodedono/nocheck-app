@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { FiMapPin, FiCrosshair } from 'react-icons/fi'
+import { FiMapPin, FiCrosshair, FiSearch } from 'react-icons/fi'
 
 interface LocationPickerProps {
   value: { lat: number; lng: number } | null
@@ -18,6 +18,28 @@ function ensureLeafletCSS() {
   document.head.appendChild(link)
 }
 
+// Geocoding via Nominatim (OpenStreetMap) - gratuito, sem API key
+async function searchAddress(query: string): Promise<{ lat: number; lng: number; display: string } | null> {
+  try {
+    const encoded = encodeURIComponent(query)
+    const res = await fetch(
+      `https://nominatim.openstreetmap.org/search?q=${encoded}&format=json&limit=1&countrycodes=br`,
+      { headers: { 'Accept-Language': 'pt-BR' } }
+    )
+    const data = await res.json()
+    if (data && data.length > 0) {
+      return {
+        lat: parseFloat(data[0].lat),
+        lng: parseFloat(data[0].lon),
+        display: data[0].display_name,
+      }
+    }
+    return null
+  } catch {
+    return null
+  }
+}
+
 export function LocationPicker({ value, onChange }: LocationPickerProps) {
   const mapRef = useRef<HTMLDivElement>(null)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -26,6 +48,9 @@ export function LocationPicker({ value, onChange }: LocationPickerProps) {
   const markerRef = useRef<any>(null)
   const [locating, setLocating] = useState(false)
   const [ready, setReady] = useState(false)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [searching, setSearching] = useState(false)
+  const [searchError, setSearchError] = useState('')
 
   useEffect(() => {
     if (!mapRef.current || mapInstanceRef.current) return
@@ -57,8 +82,14 @@ export function LocationPicker({ value, onChange }: LocationPickerProps) {
         zoomControl: true,
       })
 
-      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '&copy; OpenStreetMap',
+      // Detect theme for tile style
+      const theme = document.documentElement.getAttribute('data-theme')
+      const tileUrl = theme === 'dark'
+        ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
+        : 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png'
+
+      L.tileLayer(tileUrl, {
+        attribution: '&copy; OpenStreetMap &copy; CARTO',
         maxZoom: 19,
       }).addTo(map)
 
@@ -120,6 +151,47 @@ export function LocationPicker({ value, onChange }: LocationPickerProps) {
       markerRef.current = null
     }
   }, [value, ready])
+
+  const handleSearch = async () => {
+    if (!searchQuery.trim()) return
+
+    setSearching(true)
+    setSearchError('')
+
+    const result = await searchAddress(searchQuery.trim())
+
+    if (result) {
+      const map = mapInstanceRef.current
+      if (map) {
+        map.setView([result.lat, result.lng], 17)
+
+        if (markerRef.current) {
+          markerRef.current.setLatLng([result.lat, result.lng])
+        } else {
+          import('leaflet').then((L) => {
+            if (!map) return
+            markerRef.current = L.marker(
+              [result.lat, result.lng],
+              { icon: map._defaultIcon }
+            ).addTo(map)
+          })
+        }
+
+        onChange({ lat: result.lat, lng: result.lng })
+      }
+    } else {
+      setSearchError('Endereco nao encontrado')
+    }
+
+    setSearching(false)
+  }
+
+  const handleSearchKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      e.preventDefault()
+      handleSearch()
+    }
+  }
 
   const handleLocateMe = () => {
     if (!navigator.geolocation) return
@@ -192,6 +264,32 @@ export function LocationPicker({ value, onChange }: LocationPickerProps) {
         </div>
       </div>
 
+      {/* Search bar */}
+      <div className="flex gap-2">
+        <div className="flex-1 relative">
+          <FiSearch className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted" />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => { setSearchQuery(e.target.value); setSearchError('') }}
+            onKeyDown={handleSearchKeyDown}
+            className="input pl-9 text-sm"
+            placeholder="Rua, numero, bairro, CEP..."
+          />
+        </div>
+        <button
+          type="button"
+          onClick={handleSearch}
+          disabled={searching || !searchQuery.trim()}
+          className="btn-primary px-4 text-sm disabled:opacity-50"
+        >
+          {searching ? 'Buscando...' : 'Buscar'}
+        </button>
+      </div>
+      {searchError && (
+        <p className="text-xs text-error">{searchError}</p>
+      )}
+
       <div
         ref={mapRef}
         className="w-full h-[300px] rounded-xl border border-subtle overflow-hidden"
@@ -205,7 +303,7 @@ export function LocationPicker({ value, onChange }: LocationPickerProps) {
         </div>
       ) : (
         <p className="text-xs text-muted">
-          Clique no mapa para marcar a localizacao da loja
+          Busque um endereco ou clique no mapa para marcar a localizacao da loja
         </p>
       )}
     </div>
