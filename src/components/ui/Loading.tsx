@@ -1,5 +1,7 @@
 'use client'
 
+/* eslint-disable @next/next/no-img-element */
+
 interface LoadingProps {
   size?: 'sm' | 'md' | 'lg'
   fullScreen?: boolean
@@ -35,12 +37,35 @@ export function Loading({ size = 'md', fullScreen = false, text }: LoadingProps)
 
 export function LoadingPage() {
   return (
-    <div className="min-h-screen flex items-center justify-center bg-page">
-      <div className="flex flex-col items-center gap-4 animate-fade-in">
-        <div className="relative">
-          <div className="h-14 w-14 rounded-full border-[3px] border-primary/20 border-t-primary animate-spin" />
+    <div className="min-h-screen flex flex-col items-center justify-center bg-page">
+      <div className="flex flex-col items-center gap-6 animate-fade-in px-8">
+        {/* Logo theme-aware */}
+        <div className="mb-2">
+          <img
+            src="/Logo-dark.png"
+            alt="NoCheck"
+            width={280}
+            height={90}
+            className="logo-for-light"
+          />
+          <img
+            src="/Logo.png"
+            alt="NoCheck"
+            width={280}
+            height={90}
+            className="logo-for-dark"
+          />
         </div>
-        <p className="text-muted text-sm animate-pulse">Carregando...</p>
+
+        {/* Slogan */}
+        <p className="text-muted text-sm text-center max-w-[260px] leading-relaxed">
+          Checklists com praticidade e facilidade total
+        </p>
+
+        {/* Spinner */}
+        <div className="mt-2">
+          <div className="h-8 w-8 rounded-full border-[2.5px] border-primary/20 border-t-primary animate-spin" />
+        </div>
       </div>
     </div>
   )
