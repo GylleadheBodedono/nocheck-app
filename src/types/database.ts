@@ -15,6 +15,8 @@ export type Database = {
           name: string
           cnpj: string | null
           address: string | null
+          latitude: number | null
+          longitude: number | null
           is_active: boolean
           created_at: string
         }
@@ -23,6 +25,8 @@ export type Database = {
           name: string
           cnpj?: string | null
           address?: string | null
+          latitude?: number | null
+          longitude?: number | null
           is_active?: boolean
           created_at?: string
         }
@@ -31,6 +35,8 @@ export type Database = {
           name?: string
           cnpj?: string | null
           address?: string | null
+          latitude?: number | null
+          longitude?: number | null
           is_active?: boolean
           created_at?: string
         }
@@ -228,6 +234,9 @@ export type Database = {
           completed_at: string | null
           validated_by: string | null
           validated_at: string | null
+          latitude: number | null
+          longitude: number | null
+          accuracy: number | null
           sync_status: SyncStatus
           local_id: string | null
           created_at: string
@@ -244,6 +253,9 @@ export type Database = {
           completed_at?: string | null
           validated_by?: string | null
           validated_at?: string | null
+          latitude?: number | null
+          longitude?: number | null
+          accuracy?: number | null
           sync_status?: SyncStatus
           local_id?: string | null
           created_at?: string
@@ -260,6 +272,9 @@ export type Database = {
           completed_at?: string | null
           validated_by?: string | null
           validated_at?: string | null
+          latitude?: number | null
+          longitude?: number | null
+          accuracy?: number | null
           sync_status?: SyncStatus
           local_id?: string | null
           created_at?: string

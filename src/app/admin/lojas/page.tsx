@@ -17,6 +17,7 @@ import {
 import type { Store } from '@/types/database'
 import { APP_CONFIG } from '@/lib/config'
 import { LoadingPage, Header } from '@/components/ui'
+import { LocationPicker } from '@/components/ui/LocationPickerDynamic'
 import { getAuthCache, getUserCache, getStoresCache } from '@/lib/offlineCache'
 
 type StoreWithStats = Store & {
@@ -31,7 +32,7 @@ export default function LojasPage() {
   const [filterActive, setFilterActive] = useState<boolean | null>(null)
   const [editingStore, setEditingStore] = useState<Store | null>(null)
   const [showModal, setShowModal] = useState(false)
-  const [formData, setFormData] = useState({ name: '', is_active: true })
+  const [formData, setFormData] = useState({ name: '', is_active: true, latitude: null as number | null, longitude: null as number | null })
   const [saving, setSaving] = useState(false)
   const [isOffline, setIsOffline] = useState(false)
   const router = useRouter()
@@ -152,10 +153,10 @@ export default function LojasPage() {
   const openModal = (store?: Store) => {
     if (store) {
       setEditingStore(store)
-      setFormData({ name: store.name, is_active: store.is_active })
+      setFormData({ name: store.name, is_active: store.is_active, latitude: store.latitude ?? null, longitude: store.longitude ?? null })
     } else {
       setEditingStore(null)
-      setFormData({ name: '', is_active: true })
+      setFormData({ name: '', is_active: true, latitude: null, longitude: null })
     }
     setShowModal(true)
   }
@@ -163,7 +164,7 @@ export default function LojasPage() {
   const closeModal = () => {
     setShowModal(false)
     setEditingStore(null)
-    setFormData({ name: '', is_active: true })
+    setFormData({ name: '', is_active: true, latitude: null, longitude: null })
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -181,6 +182,8 @@ export default function LojasPage() {
           .update({
             name: formData.name,
             is_active: formData.is_active,
+            latitude: formData.latitude,
+            longitude: formData.longitude,
           })
           .eq('id', editingStore.id)
 
@@ -193,6 +196,8 @@ export default function LojasPage() {
           .insert({
             name: formData.name,
             is_active: formData.is_active,
+            latitude: formData.latitude,
+            longitude: formData.longitude,
           })
 
         if (error) throw error
@@ -363,6 +368,12 @@ export default function LojasPage() {
                     <FiCheckCircle className="w-4 h-4" />
                     <span>{store.checklist_count} checklists</span>
                   </div>
+                  {store.latitude && store.longitude && (
+                    <div className="flex items-center gap-1 text-primary">
+                      <FiMapPin className="w-4 h-4" />
+                      <span>GPS</span>
+                    </div>
+                  )}
                 </div>
 
                 <div className="flex items-center gap-2 pt-4 border-t border-subtle">
@@ -414,8 +425,9 @@ export default function LojasPage() {
 
       {/* Modal */}
       {showModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="card w-full max-w-md mx-4 p-6">
+        <div className="fixed inset-0 z-50 bg-black/50 overflow-y-auto">
+          <div className="min-h-full flex items-center justify-center py-8 px-4">
+          <div className="card w-full max-w-lg p-6">
             <h2 className="text-xl font-bold text-main mb-6">
               {editingStore ? 'Editar Loja' : 'Nova Loja'}
             </h2>
@@ -447,6 +459,11 @@ export default function LojasPage() {
                 </label>
               </div>
 
+              <LocationPicker
+                value={formData.latitude && formData.longitude ? { lat: formData.latitude, lng: formData.longitude } : null}
+                onChange={(coords) => setFormData({ ...formData, latitude: coords?.lat ?? null, longitude: coords?.lng ?? null })}
+              />
+
               <div className="flex gap-3 pt-4">
                 <button
                   type="button"
@@ -465,6 +482,7 @@ export default function LojasPage() {
                 </button>
               </div>
             </form>
+          </div>
           </div>
         </div>
       )}

@@ -11,6 +11,7 @@ import {
   FiCheckCircle,
   FiAlertCircle,
   FiCloudOff,
+  FiMapPin,
 } from 'react-icons/fi'
 import type { ChecklistTemplate, TemplateField, Store } from '@/types/database'
 import { APP_CONFIG } from '@/lib/config'
@@ -59,6 +60,21 @@ async function uploadPhoto(base64Image: string, fileName: string): Promise<strin
   }
 }
 
+// Haversine formula - distance in meters between two coordinates
+function getDistanceMeters(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const R = 6371000 // Earth radius in meters
+  const dLat = (lat2 - lat1) * Math.PI / 180
+  const dLng = (lng2 - lng1) * Math.PI / 180
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+    Math.sin(dLng / 2) * Math.sin(dLng / 2)
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
+  return R * c
+}
+
+type GpsStatus = 'loading' | 'granted' | 'denied' | 'too_far'
+
 function ChecklistForm() {
   const searchParams = useSearchParams()
   const templateId = searchParams.get('template')
@@ -71,6 +87,9 @@ function ChecklistForm() {
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
   const [success, setSuccess] = useState(false)
+  const [gpsStatus, setGpsStatus] = useState<GpsStatus>('loading')
+  const [userLocation, setUserLocation] = useState<{ lat: number; lng: number; accuracy: number } | null>(null)
+  const [distanceToStore, setDistanceToStore] = useState<number | null>(null)
   const router = useRouter()
   const supabase = useMemo(() => createClient(), [])
 
@@ -159,6 +178,42 @@ function ChecklistForm() {
     fetchData()
   }, [templateId, storeId, supabase, router])
 
+  // GPS auto-collection: request location as soon as store is loaded
+  useEffect(() => {
+    if (!store || loading) return
+
+    if (!navigator.geolocation) {
+      setGpsStatus('denied')
+      return
+    }
+
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const { latitude, longitude, accuracy } = position.coords
+        setUserLocation({ lat: latitude, lng: longitude, accuracy })
+
+        // Validate distance if store has location configured
+        if (store.latitude && store.longitude) {
+          const distance = getDistanceMeters(latitude, longitude, store.latitude, store.longitude)
+          setDistanceToStore(Math.round(distance))
+
+          if (distance > 100) {
+            setGpsStatus('too_far')
+          } else {
+            setGpsStatus('granted')
+          }
+        } else {
+          // Store has no location configured - skip distance validation
+          setGpsStatus('granted')
+        }
+      },
+      () => {
+        setGpsStatus('denied')
+      },
+      { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
+    )
+  }, [store, loading])
+
   const updateResponse = (fieldId: number, value: unknown) => {
     setResponses(prev => ({ ...prev, [fieldId]: value }))
     // Clear error when user fills the field
@@ -175,6 +230,9 @@ function ChecklistForm() {
     const newErrors: Record<number, string> = {}
 
     template?.fields.forEach(field => {
+      // Skip GPS fields - GPS is now automatic
+      if (field.field_type === 'gps') return
+
       if (field.is_required) {
         const value = responses[field.id]
         if (value === undefined || value === null || value === '' ||
@@ -343,6 +401,9 @@ function ChecklistForm() {
           created_by: userId,
           started_at: new Date().toISOString(),
           completed_at: new Date().toISOString(),
+          latitude: userLocation?.lat ?? null,
+          longitude: userLocation?.lng ?? null,
+          accuracy: userLocation?.accuracy ?? null,
         })
         .select()
         .single()
@@ -495,7 +556,73 @@ function ChecklistForm() {
     )
   }
 
-  const visibleFields = template.fields
+  // GPS blocking screens
+  if (gpsStatus === 'loading') {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-page">
+        <div className="text-center px-8">
+          <div className="w-20 h-20 rounded-full bg-primary/20 flex items-center justify-center mx-auto mb-4">
+            <FiMapPin className="w-10 h-10 text-primary animate-pulse" />
+          </div>
+          <h2 className="text-xl font-bold text-main mb-2">Obtendo localizacao...</h2>
+          <p className="text-muted text-sm">Permita o acesso a localizacao para continuar</p>
+        </div>
+      </div>
+    )
+  }
+
+  if (gpsStatus === 'denied') {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-page">
+        <div className="text-center px-8">
+          <div className="w-20 h-20 rounded-full bg-error/20 flex items-center justify-center mx-auto mb-4">
+            <FiMapPin className="w-10 h-10 text-error" />
+          </div>
+          <h2 className="text-xl font-bold text-main mb-2">Localizacao necessaria</h2>
+          <p className="text-muted text-sm mb-6">
+            A localizacao e necessaria para enviar o checklist.
+            Ative a permissao de GPS nas configuracoes do seu navegador e tente novamente.
+          </p>
+          <Link
+            href={APP_CONFIG.routes.dashboard}
+            className="btn-primary inline-flex items-center gap-2 px-6 py-3"
+          >
+            <FiArrowLeft className="w-4 h-4" />
+            Voltar ao Dashboard
+          </Link>
+        </div>
+      </div>
+    )
+  }
+
+  if (gpsStatus === 'too_far') {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-page">
+        <div className="text-center px-8">
+          <div className="w-20 h-20 rounded-full bg-warning/20 flex items-center justify-center mx-auto mb-4">
+            <FiMapPin className="w-10 h-10 text-warning" />
+          </div>
+          <h2 className="text-xl font-bold text-main mb-2">Voce esta longe da loja</h2>
+          <p className="text-muted text-sm mb-2">
+            Voce precisa estar proximo da loja para preencher o checklist.
+          </p>
+          <p className="text-muted text-xs mb-6">
+            Distancia atual: {distanceToStore}m (maximo: 100m)
+          </p>
+          <Link
+            href={APP_CONFIG.routes.dashboard}
+            className="btn-primary inline-flex items-center gap-2 px-6 py-3"
+          >
+            <FiArrowLeft className="w-4 h-4" />
+            Voltar ao Dashboard
+          </Link>
+        </div>
+      </div>
+    )
+  }
+
+  // Filter out GPS fields - GPS is now collected automatically
+  const visibleFields = template.fields.filter(f => f.field_type !== 'gps')
 
   const progress = visibleFields.length > 0
     ? Math.round((Object.keys(responses).filter(k => {

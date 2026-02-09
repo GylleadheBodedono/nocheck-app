@@ -109,7 +109,6 @@ export default function NovoTemplatePage() {
     { value: 'signature', label: 'Assinatura', icon: '✍️' },
     { value: 'datetime', label: 'Data/Hora', icon: '📅' },
     { value: 'checkbox_multiple', label: 'Multipla Escolha', icon: '☑️' },
-    { value: 'gps', label: 'GPS', icon: '📍' },
     { value: 'barcode', label: 'Codigo de Barras', icon: '▮▯▮' },
     { value: 'calculated', label: 'Calculado', icon: '∑' },
     { value: 'yes_no', label: 'Sim/Nao', icon: '?!' },
