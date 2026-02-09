@@ -200,21 +200,30 @@ export default function TemplatesPage() {
   }
 
   const deleteTemplate = async (templateId: number) => {
-    if (!confirm('Tem certeza que deseja excluir este checklist? Esta ação não pode ser desfeita.')) return
+    if (!confirm('Tem certeza que deseja excluir este checklist e todos os dados preenchidos? Esta ação não pode ser desfeita.')) return
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { error } = await (supabase as any)
-      .from('checklist_templates')
-      .delete()
-      .eq('id', templateId)
+    try {
+      // Exclui checklists vinculados primeiro (responses são CASCADE)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await (supabase as any)
+        .from('checklists')
+        .delete()
+        .eq('template_id', templateId)
 
-    if (error) {
+      // Agora exclui o template (fields e visibility são CASCADE)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { error } = await (supabase as any)
+        .from('checklist_templates')
+        .delete()
+        .eq('id', templateId)
+
+      if (error) throw error
+
+      fetchTemplates()
+    } catch (error) {
       console.error('Error deleting template:', error)
       alert('Erro ao excluir checklist')
-      return
     }
-
-    fetchTemplates()
   }
 
   const filteredTemplates = templates.filter(template => {
