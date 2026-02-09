@@ -399,6 +399,7 @@ export type Database = {
           linked_validation_id: number | null
           match_reason: string | null
           is_primary: boolean
+          sector_id: number | null
         }
         Insert: {
           id?: number
@@ -415,6 +416,7 @@ export type Database = {
           linked_validation_id?: number | null
           match_reason?: string | null
           is_primary?: boolean
+          sector_id?: number | null
         }
         Update: {
           id?: number
@@ -431,6 +433,7 @@ export type Database = {
           linked_validation_id?: number | null
           match_reason?: string | null
           is_primary?: boolean
+          sector_id?: number | null
         }
       }
       // ============================================
@@ -620,7 +623,7 @@ export type FieldType =
 export type ChecklistStatus = 'rascunho' | 'em_andamento' | 'concluido' | 'validado'
 export type SyncStatus = 'pending' | 'syncing' | 'synced' | 'conflict'
 export type StorageProvider = 'google_drive' | 'supabase'
-export type ValidationStatus = 'pendente' | 'sucesso' | 'falhou' | 'notas_diferentes'
+export type ValidationStatus = 'pendente' | 'sucesso' | 'falhou' | 'notas_diferentes' | 'expirado'
 
 // Helper types for easier usage
 export type Store = Database['public']['Tables']['stores']['Row']

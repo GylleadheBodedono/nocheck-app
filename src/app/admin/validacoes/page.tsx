@@ -30,10 +30,12 @@ type CrossValidation = {
   valor_estoquista: number | null
   valor_aprendiz: number | null
   diferenca: number | null
-  status: 'pendente' | 'sucesso' | 'falhou' | 'notas_diferentes'
+  status: 'pendente' | 'sucesso' | 'falhou' | 'notas_diferentes' | 'expirado'
   validated_at: string | null
   created_at: string
   store: Store
+  sector_id: number | null
+  sector?: { name: string } | null
   linked_validation_id: number | null
   match_reason: string | null
   is_primary: boolean
@@ -61,7 +63,9 @@ export default function ValidacoesPage() {
   const [loading, setLoading] = useState(true)
   const [filterStatus, setFilterStatus] = useState<string | null>(null)
   const [filterStore, setFilterStore] = useState<number | null>(null)
+  const [filterSector, setFilterSector] = useState<number | null>(null)
   const [stores, setStores] = useState<Store[]>([])
+  const [sectors, setSectors] = useState<{ id: number; name: string; store_id: number }[]>([])
   const [exporting, setExporting] = useState(false)
   const [exportMessage, setExportMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
   const [deleting, setDeleting] = useState<number | null>(null)
@@ -190,13 +194,24 @@ export default function ValidacoesPage() {
       if (storesError) throw storesError
       if (storesData) setStores(storesData)
 
+      // Fetch sectors
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data: sectorsData } = await (supabase as any)
+        .from('sectors')
+        .select('id, name, store_id')
+        .eq('is_active', true)
+        .order('name')
+
+      if (sectorsData) setSectors(sectorsData)
+
       // Fetch validations with related data
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { data: validationsData, error } = await (supabase as any)
         .from('cross_validations')
         .select(`
           *,
-          store:stores(*)
+          store:stores(*),
+          sector:sectors(name)
         `)
         .order('created_at', { ascending: false })
         .limit(100)
@@ -269,6 +284,7 @@ export default function ValidacoesPage() {
   const filteredValidations = validations.filter(v => {
     if (filterStatus && v.status !== filterStatus) return false
     if (filterStore && v.store_id !== filterStore) return false
+    if (filterSector && v.sector_id !== filterSector) return false
     return true
   })
 
@@ -280,6 +296,7 @@ export default function ValidacoesPage() {
     sucesso: validations.filter(v => v.status === 'sucesso').length,
     falhou: validations.filter(v => v.status === 'falhou').length,
     notas_diferentes: validations.filter(v => v.status === 'notas_diferentes' && v.is_primary).length,
+    expirado: validations.filter(v => v.status === 'expirado').length,
   }
 
   const getStatusBadge = (status: string) => {
@@ -303,6 +320,11 @@ export default function ValidacoesPage() {
         label: 'Notas Diferentes',
         class: 'bg-orange-500/20 text-orange-500',
         icon: <FiLink className="w-4 h-4" />,
+      },
+      expirado: {
+        label: 'Expirado',
+        class: 'bg-purple-500/20 text-purple-500',
+        icon: <FiAlertTriangle className="w-4 h-4" />,
       },
     }
     return badges[status] || badges.pendente
@@ -351,7 +373,7 @@ export default function ValidacoesPage() {
         )}
 
         {/* Stats */}
-        <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-8">
+        <div className="grid grid-cols-2 lg:grid-cols-6 gap-4 mb-8">
           <div className="card p-4">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-lg bg-primary/20 flex items-center justify-center">
@@ -411,6 +433,18 @@ export default function ValidacoesPage() {
               </div>
             </div>
           </div>
+
+          <div className="card p-4 cursor-pointer hover:bg-surface-hover" onClick={() => setFilterStatus(filterStatus === 'expirado' ? null : 'expirado')}>
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-lg bg-purple-500/20 flex items-center justify-center">
+                <FiAlertTriangle className="w-5 h-5 text-purple-500" />
+              </div>
+              <div>
+                <p className="text-2xl font-bold text-main">{stats.expirado}</p>
+                <p className="text-xs text-muted">Expirados</p>
+              </div>
+            </div>
+          </div>
         </div>
 
         {/* Filters */}
@@ -428,8 +462,24 @@ export default function ValidacoesPage() {
             ))}
           </select>
 
+          <select
+            value={filterSector || ''}
+            onChange={(e) => setFilterSector(e.target.value ? Number(e.target.value) : null)}
+            className="input px-4 py-2"
+          >
+            <option value="">Todos os setores</option>
+            {sectors
+              .filter(s => !filterStore || s.store_id === filterStore)
+              .map(sector => (
+                <option key={sector.id} value={sector.id}>
+                  {sector.name}
+                </option>
+              ))
+            }
+          </select>
+
           <button
-            onClick={() => { setFilterStatus(null); setFilterStore(null); }}
+            onClick={() => { setFilterStatus(null); setFilterStore(null); setFilterSector(null); }}
             className="btn-ghost flex items-center gap-2"
           >
             <FiRefreshCw className="w-4 h-4" />
@@ -465,10 +515,11 @@ export default function ValidacoesPage() {
             <div>
               <p className="font-medium text-main">Como funciona a validacao cruzada</p>
               <p className="text-sm text-muted mt-1">
-                O sistema compara automaticamente os checklists de recebimento preenchidos pelo
-                <strong className="text-main"> estoquista</strong> e pelo <strong className="text-main">aprendiz</strong>.
+                O sistema compara automaticamente os checklists preenchidos pelo
+                <strong className="text-main"> funcionario</strong> e pelo <strong className="text-main">aprendiz</strong> do mesmo setor.
                 Quando os valores ou notas divergem, o sistema tenta vincular notas &quot;irmãs&quot; baseado em:
-                mesma loja, horário próximo (até 30 min) e prefixo similar.
+                mesma loja, mesmo setor, horário próximo (até 30 min) e prefixo similar.
+                Notas sem par após 1 hora são marcadas como <strong className="text-purple-500">expiradas</strong>.
               </p>
             </div>
           </div>
@@ -496,7 +547,8 @@ export default function ValidacoesPage() {
                   key={primary.id}
                   className={`card overflow-hidden ${
                     primary.status === 'falhou' ? 'border-error/30' :
-                    primary.status === 'notas_diferentes' ? 'border-orange-500/30' : ''
+                    primary.status === 'notas_diferentes' ? 'border-orange-500/30' :
+                    primary.status === 'expirado' ? 'border-purple-500/30' : ''
                   }`}
                 >
                   {/* Header com status e loja */}
@@ -509,6 +561,11 @@ export default function ValidacoesPage() {
                       <span className="text-sm text-muted">
                         {primary.store.name.split(' ').slice(1).join(' ') || primary.store.name}
                       </span>
+                      {primary.sector?.name && (
+                        <span className="text-xs px-2 py-0.5 rounded-lg bg-primary/10 text-primary">
+                          {primary.sector.name}
+                        </span>
+                      )}
                       <span className="text-xs text-muted ml-auto">
                         {formatDate(primary.created_at)}
                       </span>
@@ -546,9 +603,9 @@ export default function ValidacoesPage() {
 
                         {/* Comparação lado a lado */}
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          {/* Lado Estoquista */}
+                          {/* Lado Funcionario */}
                           <div className="p-4 rounded-lg bg-surface-hover">
-                            <p className="text-xs text-muted mb-2 font-medium">ESTOQUISTA</p>
+                            <p className="text-xs text-muted mb-2 font-medium">FUNCIONARIO</p>
                             <p className="text-lg font-bold text-main mb-1">
                               Nota: {primary.valor_estoquista !== null ? primary.numero_nota : linked.numero_nota}
                             </p>
@@ -594,7 +651,7 @@ export default function ValidacoesPage() {
                         {/* Right - Values Comparison */}
                         <div className="flex items-center gap-6">
                           <div className="text-center">
-                            <p className="text-xs text-muted mb-1">Estoquista</p>
+                            <p className="text-xs text-muted mb-1">Funcionario</p>
                             <p className="text-lg font-bold text-main">
                               {formatCurrency(primary.valor_estoquista)}
                             </p>

@@ -19,10 +19,11 @@ async function notificarIntegracoes(data: {
   numeroNota: string
   numeroNotaVinculada?: string
   loja: string
+  setor?: string
   valorEstoquista: number | null
   valorAprendiz: number | null
   diferenca: number | null
-  status: 'pendente' | 'sucesso' | 'falhou' | 'notas_diferentes'
+  status: 'pendente' | 'sucesso' | 'falhou' | 'notas_diferentes' | 'expirado'
   dataHora: string
   matchReason?: string
 }): Promise<void> {
@@ -95,8 +96,84 @@ function verificarNotasIrmas(
 }
 
 /**
- * Processa validacao cruzada apos um checklist de recebimento ser concluido
- * Compara valores entre estoquista e aprendiz para a mesma nota fiscal
+ * Busca o sector_id do usuario na loja especifica
+ * Prioriza user_stores.sector_id, fallback para users.sector_id
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function getUserSectorId(supabase: any, userId: string, storeId: number): Promise<number | null> {
+  // Tentar user_stores primeiro (setor por loja)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: userStore } = await (supabase as any)
+    .from('user_stores')
+    .select('sector_id')
+    .eq('user_id', userId)
+    .eq('store_id', storeId)
+    .not('sector_id', 'is', null)
+    .limit(1)
+    .single()
+
+  if (userStore?.sector_id) return userStore.sector_id
+
+  // Fallback: users.sector_id
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: user } = await (supabase as any)
+    .from('users')
+    .select('sector_id')
+    .eq('id', userId)
+    .single()
+
+  return user?.sector_id || null
+}
+
+/**
+ * Verifica validacoes pendentes com mais de 1 hora e marca como expiradas
+ * Envia alerta para cada uma
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function verificarValidacoesExpiradas(supabase: any): Promise<void> {
+  try {
+    const umaHoraAtras = new Date(Date.now() - 60 * 60 * 1000).toISOString()
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: expiradas } = await (supabase as any)
+      .from('cross_validations')
+      .select('*, stores:store_id(name), sectors:sector_id(name)')
+      .eq('status', 'pendente')
+      .lt('created_at', umaHoraAtras)
+
+    if (!expiradas || expiradas.length === 0) return
+
+    for (const val of expiradas) {
+      // Marcar como expirado
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await (supabase as any)
+        .from('cross_validations')
+        .update({ status: 'expirado', validated_at: new Date().toISOString() })
+        .eq('id', val.id)
+
+      // Notificar
+      await notificarIntegracoes({
+        id: val.id,
+        numeroNota: val.numero_nota,
+        loja: val.stores?.name || `Loja ${val.store_id}`,
+        setor: val.sectors?.name || undefined,
+        valorEstoquista: val.valor_estoquista,
+        valorAprendiz: val.valor_aprendiz,
+        diferenca: null,
+        status: 'expirado',
+        dataHora: new Date(val.created_at).toLocaleString('pt-BR'),
+      })
+
+      console.log(`[CrossValidation] Validacao expirada: nota ${val.numero_nota} (id ${val.id})`)
+    }
+  } catch (err) {
+    console.error('[CrossValidation] Erro ao verificar validacoes expiradas:', err)
+  }
+}
+
+/**
+ * Processa validacao cruzada apos um checklist ser concluido
+ * Funciona para qualquer setor - compara Aprendiz vs funcionario do mesmo setor
  * Também detecta notas "irmãs" quando os números são diferentes
  */
 export async function processarValidacaoCruzada(
@@ -110,20 +187,7 @@ export async function processarValidacaoCruzada(
   fields: TemplateField[]
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    // 1. Verificar se o template é de recebimento
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: template } = await (supabase as any)
-      .from('checklist_templates')
-      .select('category')
-      .eq('id', templateId)
-      .single()
-
-    if (!template || template.category !== 'recebimento') {
-      // Nao é recebimento, nao precisa validar
-      return { success: true }
-    }
-
-    // 2. Encontrar campos de "numero da nota" e "valor"
+    // 1. Encontrar campos de "numero da nota" e "valor"
     const campoNota = fields.find(f =>
       f.name.toLowerCase().includes('nota') ||
       f.name.toLowerCase().includes('nf') ||
@@ -137,10 +201,12 @@ export async function processarValidacaoCruzada(
     )
 
     if (!campoNota) {
+      // Template nao tem campo de nota - verificar expiradas e sair
+      await verificarValidacoesExpiradas(supabase)
       return { success: true }
     }
 
-    // 3. Obter valores das respostas
+    // 2. Obter valores das respostas
     const respostaNota = responses.find(r => r.field_id === campoNota.id)
     const respostaValor = campoValor ? responses.find(r => r.field_id === campoValor.id) : null
 
@@ -148,10 +214,11 @@ export async function processarValidacaoCruzada(
     const valor = respostaValor?.value_number || parseFloat(respostaValor?.value_text || '0') || null
 
     if (!numeroNota) {
+      await verificarValidacoesExpiradas(supabase)
       return { success: true }
     }
 
-    // 4. Verificar o cargo do usuario via function_id no perfil
+    // 3. Verificar o cargo do usuario via function_id
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data: userProfile } = await (supabase as any)
       .from('users')
@@ -162,36 +229,56 @@ export async function processarValidacaoCruzada(
       .eq('id', userId)
       .single()
 
-    let isEstoquista = false
     let isAprendiz = false
 
     if (userProfile?.function_ref?.name) {
       const functionName = userProfile.function_ref.name.toLowerCase()
-      isEstoquista = functionName.includes('estoque') || functionName.includes('estoquista')
       isAprendiz = functionName.includes('aprendiz')
     }
 
-    if (!isEstoquista && !isAprendiz) {
-      // Usuario nao é nem estoquista nem aprendiz
+    // Qualquer usuario com funcao definida pode participar da validacao
+    // Aprendiz = lado aprendiz, qualquer outro = lado referencia (estoquista)
+    if (!userProfile?.function_id) {
+      await verificarValidacoesExpiradas(supabase)
       return { success: true }
     }
 
+    // 4. Buscar setor do usuario nesta loja
+    const sectorId = await getUserSectorId(supabase, userId, storeId)
+
     // 5. Verificar se ja existe validacao para esta nota (match exato)
+    // Filtra por loja e setor (se disponivel)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: existingValidation } = await (supabase as any)
+    let query = (supabase as any)
       .from('cross_validations')
       .select('*')
       .eq('store_id', storeId)
       .eq('numero_nota', numeroNota)
-      .single()
 
-    // Buscar nome da loja para notificações
+    if (sectorId) {
+      query = query.eq('sector_id', sectorId)
+    }
+
+    const { data: existingValidation } = await query.single()
+
+    // Buscar nome da loja e setor para notificações
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data: store } = await (supabase as any)
       .from('stores')
       .select('name')
       .eq('id', storeId)
       .single()
+
+    let setorNome: string | undefined
+    if (sectorId) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data: sector } = await (supabase as any)
+        .from('sectors')
+        .select('name')
+        .eq('id', sectorId)
+        .single()
+      setorNome = sector?.name
+    }
 
     const lojaNome = store?.name || `Loja ${storeId}`
     const dataHora = new Date().toLocaleString('pt-BR')
@@ -200,7 +287,7 @@ export async function processarValidacaoCruzada(
       // Atualizar validacao existente (match exato de número de nota)
       const updateData: Record<string, unknown> = {}
 
-      if (isEstoquista && !existingValidation.estoquista_checklist_id) {
+      if (!isAprendiz && !existingValidation.estoquista_checklist_id) {
         updateData.estoquista_checklist_id = checklistId
         updateData.valor_estoquista = valor
       } else if (isAprendiz && !existingValidation.aprendiz_checklist_id) {
@@ -208,6 +295,7 @@ export async function processarValidacaoCruzada(
         updateData.valor_aprendiz = valor
       } else {
         // Ja tem os dois preenchidos ou é duplicado
+        await verificarValidacoesExpiradas(supabase)
         return { success: true }
       }
 
@@ -241,6 +329,7 @@ export async function processarValidacaoCruzada(
           id: existingValidation.id,
           numeroNota,
           loja: lojaNome,
+          setor: setorNome,
           valorEstoquista: valorEstoquista as number | null,
           valorAprendiz: valorAprendiz as number | null,
           diferenca: updateData.diferenca as number | null,
@@ -257,13 +346,19 @@ export async function processarValidacaoCruzada(
       const trintaMinutosAtras = new Date(Date.now() - 30 * 60 * 1000).toISOString()
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data: pendingValidations } = await (supabase as any)
+      let sisterQuery = (supabase as any)
         .from('cross_validations')
         .select('*')
         .eq('store_id', storeId)
         .eq('status', 'pendente')
         .gte('created_at', trintaMinutosAtras)
-        .is(isEstoquista ? 'estoquista_checklist_id' : 'aprendiz_checklist_id', null)
+        .is(!isAprendiz ? 'estoquista_checklist_id' : 'aprendiz_checklist_id', null)
+
+      if (sectorId) {
+        sisterQuery = sisterQuery.eq('sector_id', sectorId)
+      }
+
+      const { data: pendingValidations } = await sisterQuery
 
       let foundSisterValidation = null
       let matchReason = ''
@@ -292,7 +387,7 @@ export async function processarValidacaoCruzada(
           match_reason: matchReason,
         }
 
-        if (isEstoquista) {
+        if (!isAprendiz) {
           updateData.estoquista_checklist_id = checklistId
           updateData.valor_estoquista = valor
         } else {
@@ -301,7 +396,7 @@ export async function processarValidacaoCruzada(
         }
 
         // Calcular diferença se temos os dois valores
-        const valorEstoquista = isEstoquista ? valor : foundSisterValidation.valor_estoquista
+        const valorEstoquista = !isAprendiz ? valor : foundSisterValidation.valor_estoquista
         const valorAprendiz = isAprendiz ? valor : foundSisterValidation.valor_aprendiz
 
         if (valorEstoquista !== null && valorAprendiz !== null) {
@@ -326,10 +421,11 @@ export async function processarValidacaoCruzada(
             .from('cross_validations')
             .insert({
               store_id: storeId,
+              sector_id: sectorId,
               numero_nota: numeroNota,
-              estoquista_checklist_id: isEstoquista ? checklistId : null,
+              estoquista_checklist_id: !isAprendiz ? checklistId : null,
               aprendiz_checklist_id: isAprendiz ? checklistId : null,
-              valor_estoquista: isEstoquista ? valor : null,
+              valor_estoquista: !isAprendiz ? valor : null,
               valor_aprendiz: isAprendiz ? valor : null,
               status: 'notas_diferentes',
               linked_validation_id: foundSisterValidation.id,
@@ -354,6 +450,7 @@ export async function processarValidacaoCruzada(
             numeroNota: foundSisterValidation.numero_nota,
             numeroNotaVinculada: numeroNota,
             loja: lojaNome,
+            setor: setorNome,
             valorEstoquista: valorEstoquista as number | null,
             valorAprendiz: valorAprendiz as number | null,
             diferenca: updateData.diferenca as number | null,
@@ -368,12 +465,13 @@ export async function processarValidacaoCruzada(
         // Criar nova validacao (sem match)
         const insertData: Record<string, unknown> = {
           store_id: storeId,
+          sector_id: sectorId,
           numero_nota: numeroNota,
           status: 'pendente',
           is_primary: true,
         }
 
-        if (isEstoquista) {
+        if (!isAprendiz) {
           insertData.estoquista_checklist_id = checklistId
           insertData.valor_estoquista = valor
         } else {
@@ -389,6 +487,9 @@ export async function processarValidacaoCruzada(
         if (error) throw error
       }
     }
+
+    // Verificar validacoes expiradas (piggyback)
+    await verificarValidacoesExpiradas(supabase)
 
     return { success: true }
   } catch (err) {

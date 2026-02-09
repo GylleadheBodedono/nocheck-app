@@ -10,9 +10,10 @@ type ValidationData = {
   valorEstoquista: number | null
   valorAprendiz: number | null
   diferenca: number | null
-  status: 'pendente' | 'sucesso' | 'falhou' | 'notas_diferentes'
+  status: 'pendente' | 'sucesso' | 'falhou' | 'notas_diferentes' | 'expirado'
   dataHora: string
   matchReason?: string
+  setor?: string
 }
 
 /**
@@ -24,8 +25,8 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
     const { data } = body as { action: string; data: ValidationData }
 
-    // Enviar para Teams se houver divergência OU notas diferentes
-    if (data.status === 'falhou' || data.status === 'notas_diferentes') {
+    // Enviar para Teams se houver divergência, notas diferentes ou expiração
+    if (data.status === 'falhou' || data.status === 'notas_diferentes' || data.status === 'expirado') {
       const result = await enviarParaTeams(data)
       console.log('[Notify] Teams result:', result)
       return NextResponse.json({ success: true, teams: result })
@@ -57,11 +58,20 @@ async function enviarParaTeams(data: ValidationData): Promise<{ success: boolean
 
   // Determinar título e cor baseado no status
   const isNotasDiferentes = data.status === 'notas_diferentes'
-  const titulo = isNotasDiferentes
-    ? '🔗 Notas Fiscais Diferentes Vinculadas'
-    : '⚠️ Divergência na Validação de Recebimento'
+  const isExpirado = data.status === 'expirado'
+  let titulo: string
+  let cor: string
 
-  const cor = isNotasDiferentes ? 'Warning' : 'Attention'
+  if (isExpirado) {
+    titulo = '🕐 Nota Fiscal Sem Par Após 1 Hora'
+    cor = 'Warning'
+  } else if (isNotasDiferentes) {
+    titulo = '🔗 Notas Fiscais Diferentes Vinculadas'
+    cor = 'Warning'
+  } else {
+    titulo = '⚠️ Divergência na Validação Cruzada'
+    cor = 'Attention'
+  }
 
   // Montar os fatos
   const facts = []
@@ -75,11 +85,26 @@ async function enviarParaTeams(data: ValidationData): Promise<{ success: boolean
     facts.push({ title: '📋 Nota Fiscal:', value: data.numeroNota })
   }
 
-  facts.push(
-    { title: '🏪 Loja:', value: data.loja },
-    { title: '👤 Estoquista:', value: formatCurrency(data.valorEstoquista) },
-    { title: '👤 Aprendiz:', value: formatCurrency(data.valorAprendiz) }
-  )
+  facts.push({ title: '🏪 Loja:', value: data.loja })
+
+  if (data.setor) {
+    facts.push({ title: '🏷️ Setor:', value: data.setor })
+  }
+
+  if (!isExpirado) {
+    facts.push(
+      { title: '👤 Funcionario:', value: formatCurrency(data.valorEstoquista) },
+      { title: '👤 Aprendiz:', value: formatCurrency(data.valorAprendiz) }
+    )
+  } else {
+    // Para expirado, mostrar apenas o valor disponivel
+    if (data.valorEstoquista !== null) {
+      facts.push({ title: '👤 Funcionario:', value: formatCurrency(data.valorEstoquista) })
+    }
+    if (data.valorAprendiz !== null) {
+      facts.push({ title: '👤 Aprendiz:', value: formatCurrency(data.valorAprendiz) })
+    }
+  }
 
   if (data.diferenca !== null) {
     facts.push({ title: '❌ Diferença:', value: formatCurrency(data.diferenca) })
@@ -89,7 +114,9 @@ async function enviarParaTeams(data: ValidationData): Promise<{ success: boolean
 
   // Texto explicativo
   let textoExplicativo = 'Por favor, verifique a nota fiscal e corrija a divergência.'
-  if (isNotasDiferentes && data.matchReason) {
+  if (isExpirado) {
+    textoExplicativo = 'Esta nota fiscal foi preenchida ha mais de 1 hora e nenhum par correspondente foi encontrado no mesmo setor. Verifique se o outro funcionario preencheu o checklist.'
+  } else if (isNotasDiferentes && data.matchReason) {
     textoExplicativo = `**Motivo do vínculo:** ${data.matchReason}\n\nAs notas fiscais são diferentes mas parecem estar relacionadas. Verifique se houve erro de digitação.`
   }
 
