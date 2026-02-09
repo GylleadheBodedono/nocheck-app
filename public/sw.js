@@ -33,6 +33,9 @@ self.addEventListener('install', (event) => {
         // Cache assets estaticos essenciais
         return cache.addAll([
           '/manifest.json',
+          '/web-app-manifest-192x192.png',
+          '/web-app-manifest-512x512.png',
+          '/apple-touch-icon.png',
           '/Logo.png',
           '/Logo-dark.png',
         ]).catch(err => {
