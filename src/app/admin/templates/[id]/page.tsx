@@ -60,7 +60,7 @@ type SectorWithStore = Sector & {
 
 function SortableSectionItem({ id, children }: { id: string; children: (dragHandleProps: Record<string, unknown>) => React.ReactNode }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id })
-  const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.5 : 1, position: 'relative' as const, zIndex: isDragging ? 50 : 'auto' as const }
+  const style = { transform: CSS.Translate.toString(transform), transition, opacity: isDragging ? 0.5 : 1, position: 'relative' as const, zIndex: isDragging ? 50 : 'auto' as const }
   return (
     <div ref={setNodeRef} style={style} className="border border-subtle rounded-xl overflow-hidden">
       {children({ ...attributes, ...listeners })}
@@ -70,9 +70,9 @@ function SortableSectionItem({ id, children }: { id: string; children: (dragHand
 
 function SortableFieldItem({ id, children, isEditing }: { id: string; isEditing: boolean; children: (dragHandleProps: Record<string, unknown>) => React.ReactNode }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id })
-  const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.5 : 1, position: 'relative' as const, zIndex: isDragging ? 50 : 'auto' as const }
+  const style = { transform: CSS.Translate.toString(transform), transition, opacity: isDragging ? 0.5 : 1, position: 'relative' as const, zIndex: isDragging ? 50 : 'auto' as const }
   return (
-    <div ref={setNodeRef} style={style} className={`border rounded-xl transition-all ${isEditing ? 'border-primary bg-surface-hover' : 'border-subtle bg-surface'}`}>
+    <div ref={setNodeRef} style={style} className={`border rounded-xl transition-colors ${isEditing ? 'border-primary bg-surface-hover' : 'border-subtle bg-surface'}`}>
       {children({ ...attributes, ...listeners })}
     </div>
   )
@@ -291,21 +291,26 @@ export default function EditTemplatePage() {
   const handleSectionDragEnd = (event: DragEndEvent) => {
     const { active, over } = event
     if (!over || active.id === over.id) return
-    const oldIndex = sections.findIndex(s => s.id === active.id)
-    const newIndex = sections.findIndex(s => s.id === over.id)
-    const moved = arrayMove(sections, oldIndex, newIndex)
-    setSections(moved.map((s, i) => ({ ...s, sort_order: i + 1 })))
+    setSections(prev => {
+      const oldIndex = prev.findIndex(s => s.id === active.id)
+      const newIndex = prev.findIndex(s => s.id === over.id)
+      if (oldIndex === -1 || newIndex === -1) return prev
+      return arrayMove(prev, oldIndex, newIndex).map((s, i) => ({ ...s, sort_order: i + 1 }))
+    })
   }
 
   const handleFieldDragEnd = (sectionId: string | null) => (event: DragEndEvent) => {
     const { active, over } = event
     if (!over || active.id === over.id) return
-    const groupFields = fields.filter(f => f.section_id === sectionId).sort((a, b) => a.sort_order - b.sort_order)
-    const oldIndex = groupFields.findIndex(f => f.id === active.id)
-    const newIndex = groupFields.findIndex(f => f.id === over.id)
-    const reordered = arrayMove(groupFields, oldIndex, newIndex)
-    const sortMap = new Map(reordered.map((f, i) => [f.id, i + 1]))
-    setFields(fields.map(f => sortMap.has(f.id) ? { ...f, sort_order: sortMap.get(f.id)! } : f))
+    setFields(prev => {
+      const group = prev.filter(f => f.section_id === sectionId).sort((a, b) => a.sort_order - b.sort_order)
+      const oldIndex = group.findIndex(f => f.id === active.id)
+      const newIndex = group.findIndex(f => f.id === over.id)
+      if (oldIndex === -1 || newIndex === -1) return prev
+      const reordered = arrayMove(group, oldIndex, newIndex)
+      const sortMap = new Map(reordered.map((f, i) => [f.id, i + 1]))
+      return prev.map(f => sortMap.has(f.id) ? { ...f, sort_order: sortMap.get(f.id)! } : f)
+    })
   }
 
   const addField = (type: FieldType, sectionId?: string | null) => {
