@@ -126,20 +126,47 @@ async function getUserSectorId(supabase: any, userId: string, storeId: number): 
 }
 
 /**
- * Verifica validacoes pendentes com mais de 1 hora e marca como expiradas
- * Envia alerta para cada uma
+ * Busca o tempo de expiracao configurado no app_settings
+ * Fallback: 60 minutos
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function getExpirationMs(supabase: any): Promise<number> {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data } = await (supabase as any)
+      .from('app_settings')
+      .select('value')
+      .eq('key', 'validation_expiration_minutes')
+      .single()
+
+    if (data?.value) {
+      const minutes = parseInt(data.value, 10)
+      if (!isNaN(minutes) && minutes > 0) {
+        return minutes * 60 * 1000
+      }
+    }
+  } catch {
+    console.warn('[CrossValidation] Erro ao buscar config de expiracao, usando padrao de 60min')
+  }
+  return 60 * 60 * 1000 // Fallback: 60 minutos
+}
+
+/**
+ * Verifica validacoes pendentes expiradas e marca como expiradas
+ * O tempo de expiracao e configuravel via app_settings
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function verificarValidacoesExpiradas(supabase: any): Promise<void> {
   try {
-    const umaHoraAtras = new Date(Date.now() - 60 * 60 * 1000).toISOString()
+    const expirationMs = await getExpirationMs(supabase)
+    const cutoff = new Date(Date.now() - expirationMs).toISOString()
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data: expiradas } = await (supabase as any)
       .from('cross_validations')
       .select('*, stores:store_id(name), sectors:sector_id(name)')
       .eq('status', 'pendente')
-      .lt('created_at', umaHoraAtras)
+      .lt('created_at', cutoff)
 
     if (!expiradas || expiradas.length === 0) return
 

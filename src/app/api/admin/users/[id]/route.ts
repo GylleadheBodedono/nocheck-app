@@ -3,6 +3,61 @@ import { createClient } from '@supabase/supabase-js'
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+
+/**
+ * Verifica o caller: retorna { isAdmin, isManager } ou null se nao autenticado
+ */
+async function getCallerRole(request: NextRequest): Promise<{ isAdmin: boolean; isManager: boolean } | null> {
+  const authHeader = request.headers.get('authorization')
+  const cookieHeader = request.headers.get('cookie')
+
+  // Try to get user from auth header or cookies
+  const userClient = createClient(supabaseUrl, supabaseAnonKey)
+
+  if (authHeader) {
+    const token = authHeader.replace('Bearer ', '')
+    const { data: { user } } = await userClient.auth.getUser(token)
+    if (user) {
+      const serviceClient = createClient(supabaseUrl, supabaseServiceKey)
+      const { data: profile } = await serviceClient
+        .from('users')
+        .select('is_admin, is_manager')
+        .eq('id', user.id)
+        .single()
+      return { isAdmin: profile?.is_admin || false, isManager: profile?.is_manager || false }
+    }
+  }
+
+  // If no auth header, try cookies (for browser requests)
+  if (cookieHeader) {
+    // Extract sb-*-auth-token from cookies
+    const tokenMatch = cookieHeader.match(/sb-[^-]+-auth-token=([^;]+)/)
+    if (tokenMatch) {
+      try {
+        const decoded = decodeURIComponent(tokenMatch[1])
+        const parsed = JSON.parse(decoded)
+        const accessToken = parsed?.[0] || parsed?.access_token
+        if (accessToken) {
+          const { data: { user } } = await userClient.auth.getUser(accessToken)
+          if (user) {
+            const serviceClient = createClient(supabaseUrl, supabaseServiceKey)
+            const { data: profile } = await serviceClient
+              .from('users')
+              .select('is_admin, is_manager')
+              .eq('id', user.id)
+              .single()
+            return { isAdmin: profile?.is_admin || false, isManager: profile?.is_manager || false }
+          }
+        }
+      } catch {
+        // ignore parse errors
+      }
+    }
+  }
+
+  return null
+}
 
 /**
  * PUT /api/admin/users/[id]
@@ -23,6 +78,19 @@ export async function PUT(
     }
 
     const body = await request.json()
+
+    // Verify caller
+    const caller = await getCallerRole(request)
+    if (caller && !caller.isAdmin && caller.isManager) {
+      // Manager cannot set isAdmin or isManager
+      if (body.isAdmin === true || body.isManager === true) {
+        return NextResponse.json(
+          { error: 'Gerentes nao podem promover usuarios a admin ou gerente' },
+          { status: 403 }
+        )
+      }
+    }
+
     const { fullName, phone, isAdmin, isActive, isManager, functionId, storeAssignments } = body as {
       fullName: string
       phone?: string | null
@@ -114,6 +182,15 @@ export async function DELETE(
       return NextResponse.json(
         { error: 'ID do usuario e obrigatorio' },
         { status: 400 }
+      )
+    }
+
+    // Only admins can delete users
+    const caller = await getCallerRole(request)
+    if (!caller?.isAdmin) {
+      return NextResponse.json(
+        { error: 'Apenas administradores podem excluir usuarios' },
+        { status: 403 }
       )
     }
 

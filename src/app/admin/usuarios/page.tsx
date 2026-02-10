@@ -32,6 +32,8 @@ export default function UsuariosPage() {
   const [searchTerm, setSearchTerm] = useState('')
   const [filterActive, setFilterActive] = useState<boolean | null>(null)
   const [isOffline, setIsOffline] = useState(false)
+  const [isManagerOnly, setIsManagerOnly] = useState(false)
+  const [managerStoreIds, setManagerStoreIds] = useState<number[]>([])
   const router = useRouter()
   const supabase = useMemo(() => createClient(), [])
 
@@ -43,6 +45,8 @@ export default function UsuariosPage() {
   const fetchUsers = async () => {
     let userId: string | null = null
     let isAdmin = false
+    let isManager = false
+    let storeIds: number[] = []
 
     // Tenta verificar acesso online
     try {
@@ -52,10 +56,37 @@ export default function UsuariosPage() {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const { data: profile } = await (supabase as any)
           .from('users')
-          .select('is_admin')
+          .select('is_admin, is_manager, store_id')
           .eq('id', user.id)
           .single()
-        isAdmin = profile && 'is_admin' in profile ? (profile as { is_admin: boolean }).is_admin : false
+        isAdmin = profile?.is_admin || false
+        isManager = profile?.is_manager || false
+
+        if (isManager && !isAdmin) {
+          // Buscar lojas do gerente
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const { data: managerStores } = await (supabase as any)
+            .from('store_managers')
+            .select('store_id')
+            .eq('user_id', user.id)
+
+          storeIds = (managerStores || []).map((s: { store_id: number }) => s.store_id)
+          // Tambem incluir loja primaria
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const { data: userStores } = await (supabase as any)
+            .from('user_stores')
+            .select('store_id')
+            .eq('user_id', user.id)
+
+          for (const us of (userStores || [])) {
+            if (!storeIds.includes(us.store_id)) storeIds.push(us.store_id)
+          }
+          if (profile?.store_id && !storeIds.includes(profile.store_id)) {
+            storeIds.push(profile.store_id)
+          }
+          setManagerStoreIds(storeIds)
+          setIsManagerOnly(true)
+        }
       }
     } catch {
       console.log('[Usuarios] Falha ao verificar online, tentando cache...')
@@ -69,6 +100,7 @@ export default function UsuariosPage() {
           userId = cachedAuth.userId
           const cachedUser = await getUserCache(cachedAuth.userId)
           isAdmin = cachedUser?.is_admin || false
+          isManager = cachedUser?.is_manager || false
         }
       } catch {
         console.log('[Usuarios] Falha ao buscar cache')
@@ -80,7 +112,7 @@ export default function UsuariosPage() {
       return
     }
 
-    if (!isAdmin) {
+    if (!isAdmin && !isManager) {
       router.push(APP_CONFIG.routes.dashboard)
       return
     }
@@ -217,6 +249,14 @@ export default function UsuariosPage() {
       user.email.toLowerCase().includes(searchTerm.toLowerCase())
 
     const matchesFilter = filterActive === null || user.is_active === filterActive
+
+    // Gerente: so ve usuarios das suas lojas
+    if (isManagerOnly && managerStoreIds.length > 0) {
+      const userStoreIds = (user.user_stores || []).map(us => us.store_id)
+      if (user.store_id) userStoreIds.push(user.store_id)
+      const hasCommonStore = userStoreIds.some(sid => managerStoreIds.includes(sid))
+      if (!hasCommonStore) return false
+    }
 
     return matchesSearch && matchesFilter
   })
@@ -430,14 +470,16 @@ export default function UsuariosPage() {
                               <FiUserCheck className="w-4 h-4" />
                             )}
                           </button>
-                          <button
-                            onClick={() => deleteUser(user.id)}
-                            className="p-2 text-error hover:bg-error/20 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                            title="Excluir"
-                            disabled={isOffline}
-                          >
-                            <FiTrash2 className="w-4 h-4" />
-                          </button>
+                          {!isManagerOnly && (
+                            <button
+                              onClick={() => deleteUser(user.id)}
+                              className="p-2 text-error hover:bg-error/20 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                              title="Excluir"
+                              disabled={isOffline}
+                            >
+                              <FiTrash2 className="w-4 h-4" />
+                            </button>
+                          )}
                         </div>
                       </td>
                     </tr>

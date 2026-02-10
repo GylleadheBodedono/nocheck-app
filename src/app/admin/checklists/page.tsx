@@ -16,7 +16,9 @@ import {
   FiChevronRight,
   FiX,
   FiWifiOff,
+  FiEye,
 } from 'react-icons/fi'
+import Link from 'next/link'
 import type { Store, ChecklistTemplate, User } from '@/types/database'
 import { getAuthCache, getUserCache } from '@/lib/offlineCache'
 
@@ -533,14 +535,23 @@ export default function AdminChecklistsPage() {
                           <p className="text-sm text-muted">{formatDate(checklist.created_at)}</p>
                         </td>
                         <td className="px-4 py-3 text-right">
-                          <button
-                            onClick={() => handleDelete(checklist.id)}
-                            disabled={deleting === checklist.id}
-                            className="p-2 text-red-400 hover:bg-red-500/20 rounded-lg transition-colors disabled:opacity-50"
-                            title="Excluir"
-                          >
-                            <FiTrash2 className="w-4 h-4" />
-                          </button>
+                          <div className="flex items-center justify-end gap-1">
+                            <Link
+                              href={`/checklist/${checklist.id}`}
+                              className="p-2 text-primary hover:bg-primary/20 rounded-lg transition-colors"
+                              title="Visualizar"
+                            >
+                              <FiEye className="w-4 h-4" />
+                            </Link>
+                            <button
+                              onClick={() => handleDelete(checklist.id)}
+                              disabled={deleting === checklist.id}
+                              className="p-2 text-red-400 hover:bg-red-500/20 rounded-lg transition-colors disabled:opacity-50"
+                              title="Excluir"
+                            >
+                              <FiTrash2 className="w-4 h-4" />
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     )

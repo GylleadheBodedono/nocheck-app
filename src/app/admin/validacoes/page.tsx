@@ -70,8 +70,36 @@ export default function ValidacoesPage() {
   const [exportMessage, setExportMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
   const [deleting, setDeleting] = useState<number | null>(null)
   const [isOffline, setIsOffline] = useState(false)
+  const [expirationMinutes, setExpirationMinutes] = useState<number>(60)
+  const [savingExpiration, setSavingExpiration] = useState(false)
   const router = useRouter()
   const supabase = useMemo(() => createClient(), [])
+
+  const handleExpirationChange = async (minutes: number) => {
+    setExpirationMinutes(minutes)
+    setSavingExpiration(true)
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      await fetch('/api/settings', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
+        },
+        body: JSON.stringify({ key: 'validation_expiration_minutes', value: String(minutes) }),
+      })
+    } catch (err) {
+      console.error('[Validacoes] Erro ao salvar configuracao:', err)
+    }
+    setSavingExpiration(false)
+  }
+
+  const formatExpirationLabel = (mins: number): string => {
+    if (mins < 60) return `${mins} min`
+    const h = Math.floor(mins / 60)
+    const m = mins % 60
+    return m > 0 ? `${h}h${m}min` : `${h}h`
+  }
 
   const handleDelete = async (validationId: number, linkedId?: number | null) => {
     if (!confirm('Tem certeza que deseja excluir esta validação?')) return
@@ -203,6 +231,19 @@ export default function ValidacoesPage() {
         .order('name')
 
       if (sectorsData) setSectors(sectorsData)
+
+      // Fetch expiration setting
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data: settingData } = await (supabase as any)
+        .from('app_settings')
+        .select('value')
+        .eq('key', 'validation_expiration_minutes')
+        .single()
+
+      if (settingData?.value) {
+        const mins = parseInt(settingData.value, 10)
+        if (!isNaN(mins) && mins > 0) setExpirationMinutes(mins)
+      }
 
       // Fetch validations with related data
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -486,6 +527,30 @@ export default function ValidacoesPage() {
             Limpar filtros
           </button>
 
+          {/* Expiration config */}
+          <div className="flex items-center gap-2">
+            <FiClock className="w-4 h-4 text-muted" />
+            <select
+              value={expirationMinutes}
+              onChange={(e) => handleExpirationChange(Number(e.target.value))}
+              disabled={savingExpiration}
+              className="input px-3 py-2 text-sm"
+              title="Tempo para expirar validacoes pendentes"
+            >
+              <option value={5}>Expira em 5 min</option>
+              <option value={15}>Expira em 15 min</option>
+              <option value={30}>Expira em 30 min</option>
+              <option value={60}>Expira em 1h</option>
+              <option value={120}>Expira em 2h</option>
+              <option value={240}>Expira em 4h</option>
+              <option value={720}>Expira em 12h</option>
+              <option value={1440}>Expira em 24h</option>
+            </select>
+            {savingExpiration && (
+              <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+            )}
+          </div>
+
           <div className="flex-1" />
 
           <button
@@ -519,7 +584,7 @@ export default function ValidacoesPage() {
                 <strong className="text-main"> funcionario</strong> e pelo <strong className="text-main">aprendiz</strong> do mesmo setor.
                 Quando os valores ou notas divergem, o sistema tenta vincular notas &quot;irmãs&quot; baseado em:
                 mesma loja, mesmo setor, horário próximo (até 30 min) e prefixo similar.
-                Notas sem par após 1 hora são marcadas como <strong className="text-purple-500">expiradas</strong>.
+                Notas sem par após <strong className="text-purple-500">{formatExpirationLabel(expirationMinutes)}</strong> são marcadas como <strong className="text-purple-500">expiradas</strong>.
               </p>
             </div>
           </div>

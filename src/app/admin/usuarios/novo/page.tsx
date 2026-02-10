@@ -17,6 +17,7 @@ export default function NovoUsuarioPage() {
   const [success, setSuccess] = useState(false)
   const [createdEmail, setCreatedEmail] = useState('')
   const [needsConfirmation, setNeedsConfirmation] = useState(false)
+  const [callerIsManager, setCallerIsManager] = useState(false)
   const supabase = useMemo(() => createClient(), [])
 
   // Form state
@@ -31,6 +32,20 @@ export default function NovoUsuarioPage() {
 
   useEffect(() => {
     const fetchData = async () => {
+      // Check caller permissions
+      const { data: { user: caller } } = await supabase.auth.getUser()
+      if (caller) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const { data: callerProfile } = await (supabase as any)
+          .from('users')
+          .select('is_admin, is_manager')
+          .eq('id', caller.id)
+          .single()
+        if (callerProfile?.is_manager && !callerProfile?.is_admin) {
+          setCallerIsManager(true)
+        }
+      }
+
       /* eslint-disable @typescript-eslint/no-explicit-any */
       const [storesRes, functionsRes, sectorsRes] = await Promise.all([
         (supabase as any).from('stores').select('*').eq('is_active', true).order('name'),
@@ -247,18 +262,20 @@ export default function NovoUsuarioPage() {
                   />
                 </div>
 
-                <div className="flex items-center gap-3 pt-2">
-                  <input
-                    type="checkbox"
-                    id="isAdmin"
-                    checked={isAdmin}
-                    onChange={(e) => setIsAdmin(e.target.checked)}
-                    className="w-5 h-5 rounded border-subtle bg-page text-primary focus:ring-primary"
-                  />
-                  <label htmlFor="isAdmin" className="text-secondary">
-                    Este usuario e <span className="text-amber-400 font-medium">Administrador</span>
-                  </label>
-                </div>
+                {!callerIsManager && (
+                  <div className="flex items-center gap-3 pt-2">
+                    <input
+                      type="checkbox"
+                      id="isAdmin"
+                      checked={isAdmin}
+                      onChange={(e) => setIsAdmin(e.target.checked)}
+                      className="w-5 h-5 rounded border-subtle bg-page text-primary focus:ring-primary"
+                    />
+                    <label htmlFor="isAdmin" className="text-secondary">
+                      Este usuario e <span className="text-amber-400 font-medium">Administrador</span>
+                    </label>
+                  </div>
+                )}
               </div>
             </div>
 
@@ -272,19 +289,21 @@ export default function NovoUsuarioPage() {
 
                 <div className="space-y-4">
                   {/* Is Manager */}
-                  <div>
-                    <label className="flex items-center gap-2 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={isManager}
-                        onChange={(e) => setIsManager(e.target.checked)}
-                        className="w-5 h-5 rounded border-default bg-surface text-primary"
-                      />
-                      <span className="text-sm text-secondary">
-                        Gerente <span className="text-muted">(ve todos os checklists da loja, nao preenche)</span>
-                      </span>
-                    </label>
-                  </div>
+                  {!callerIsManager && (
+                    <div>
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={isManager}
+                          onChange={(e) => setIsManager(e.target.checked)}
+                          className="w-5 h-5 rounded border-default bg-surface text-primary"
+                        />
+                        <span className="text-sm text-secondary">
+                          Gerente <span className="text-muted">(ve todos os checklists da loja, nao preenche)</span>
+                        </span>
+                      </label>
+                    </div>
+                  )}
 
                   {/* Lojas (multi-select) */}
                   <div>

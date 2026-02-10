@@ -309,34 +309,50 @@ export default function DashboardPage() {
     monthAgo.setDate(monthAgo.getDate() - 30)
     const monthAgoISO = new Date(monthAgo.getTime() - monthAgo.getTimezoneOffset() * 60000).toISOString()
 
+    // Stats queries: admin ve tudo, gerente ve da loja, usuario ve so dele
+    const isAdminUser = profileData?.is_admin === true
+    const isManagerUser = profileData?.is_manager === true && !isAdminUser
+
+    // Helper to apply the right filter based on role
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const applyStatsFilter = (query: any) => {
+      if (isAdminUser) return query // Admin: sem filtro
+      if (isManagerUser) {
+        // Gerente: filtrar por lojas gerenciadas
+        const managerStoreIds = (profileData?.user_stores as UserStoreEntry[] || []).map(us => us.store_id)
+        if (profileData?.store_id && !managerStoreIds.includes(profileData.store_id)) {
+          managerStoreIds.push(profileData.store_id)
+        }
+        if (managerStoreIds.length > 0) return query.in('store_id', managerStoreIds)
+        return query.eq('store_id', profileData?.store_id || 0)
+      }
+      return query.eq('created_by', user.id) // Usuario normal
+    }
+
     const [todayRes, weekRes, monthRes, inProgressRes] = await Promise.all([
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (supabase as any)
+      applyStatsFilter((supabase as any)
         .from('checklists')
         .select('id', { count: 'exact', head: true })
-        .eq('created_by', user.id)
         .eq('status', 'concluido')
-        .gte('created_at', todayISO),
+        .gte('created_at', todayISO)),
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (supabase as any)
+      applyStatsFilter((supabase as any)
         .from('checklists')
         .select('id', { count: 'exact', head: true })
-        .eq('created_by', user.id)
         .eq('status', 'concluido')
-        .gte('created_at', weekAgoISO),
+        .gte('created_at', weekAgoISO)),
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (supabase as any)
+      applyStatsFilter((supabase as any)
         .from('checklists')
         .select('id', { count: 'exact', head: true })
-        .eq('created_by', user.id)
         .eq('status', 'concluido')
-        .gte('created_at', monthAgoISO),
+        .gte('created_at', monthAgoISO)),
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (supabase as any)
+      applyStatsFilter((supabase as any)
         .from('checklists')
         .select('id', { count: 'exact', head: true })
-        .eq('created_by', user.id)
-        .eq('status', 'em_andamento'),
+        .eq('status', 'em_andamento')),
     ])
 
     let pendingSyncCount = 0
@@ -653,19 +669,33 @@ export default function DashboardPage() {
         {/* Manager Banner */}
         {isManager && !profile?.is_admin && (
           <div className="card p-4 mb-6 bg-info/10 border-info/20">
-            <div className="flex items-center gap-3">
-              <FiEye className="w-5 h-5 text-info" />
-              <div>
-                <p className="font-medium text-main">Modo Gerente</p>
-                <p className="text-sm text-muted">
-                  Voce esta visualizando como gerente. Pode ver todos os checklists mas nao pode preencher.
-                </p>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <FiEye className="w-5 h-5 text-info" />
+                <div>
+                  <p className="font-medium text-main">Modo Gerente</p>
+                  <p className="text-sm text-muted">
+                    Voce esta visualizando como gerente. Pode ver todos os checklists mas nao pode preencher.
+                  </p>
+                </div>
               </div>
+              <Link
+                href={APP_CONFIG.routes.adminUsers}
+                className="btn-secondary text-sm flex items-center gap-1.5 whitespace-nowrap"
+              >
+                <FiUser className="w-4 h-4" />
+                Usuarios
+              </Link>
             </div>
           </div>
         )}
 
         {/* Stats */}
+        <div className="flex items-center justify-between mb-3">
+          <p className="text-sm font-medium text-muted">
+            {profile?.is_admin ? 'Dados do sistema' : isManager ? 'Dados da loja' : 'Seus dados'}
+          </p>
+        </div>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
           <div className="card p-4">
             <div className="flex items-center gap-3">
@@ -982,9 +1012,10 @@ export default function DashboardPage() {
                 {recentChecklists.map(checklist => {
                   const statusBadge = getStatusBadge(checklist.status)
                   return (
-                    <div
+                    <Link
                       key={checklist.id}
-                      className="card p-4 hover:shadow-theme-md transition-shadow"
+                      href={`/checklist/${checklist.id}`}
+                      className="card p-4 hover:shadow-theme-md transition-shadow block"
                     >
                       <div className="flex items-start justify-between mb-2">
                         <h4 className="font-medium text-main text-sm">
@@ -1001,7 +1032,7 @@ export default function DashboardPage() {
                       <p className="text-xs text-muted">
                         {formatDate(checklist.created_at)}
                       </p>
-                    </div>
+                    </Link>
                   )
                 })}
               </div>

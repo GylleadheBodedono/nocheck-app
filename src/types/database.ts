@@ -383,6 +383,26 @@ export type Database = {
           created_at?: string
         }
       }
+      app_settings: {
+        Row: {
+          key: string
+          value: string
+          description: string | null
+          updated_at: string
+        }
+        Insert: {
+          key: string
+          value: string
+          description?: string | null
+          updated_at?: string
+        }
+        Update: {
+          key?: string
+          value?: string
+          description?: string | null
+          updated_at?: string
+        }
+      }
       cross_validations: {
         Row: {
           id: number
