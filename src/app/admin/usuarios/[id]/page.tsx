@@ -43,11 +43,8 @@ export default function EditarUsuarioPage() {
   const [phone, setPhone] = useState('')
   const [isAdmin, setIsAdmin] = useState(false)
   const [isActive, setIsActive] = useState(true)
-  const [isManager, setIsManager] = useState(false)
   const [functionId, setFunctionId] = useState<number | null>(null)
   const [storeAssignments, setStoreAssignments] = useState<StoreAssignment[]>([])
-  const [callerIsManager, setCallerIsManager] = useState(false)
-  const [callerStoreIds, setCallerStoreIds] = useState<number[]>([])
 
   useEffect(() => {
     fetchData()
@@ -57,31 +54,19 @@ export default function EditarUsuarioPage() {
   const fetchData = async () => {
     if (!userId) return
 
-    // Verify caller auth
+    // Verify caller is admin
     const { data: { user: caller } } = await supabase.auth.getUser()
     if (caller) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { data: callerProfile } = await (supabase as any)
         .from('users')
-        .select('is_admin, is_manager, store_id')
+        .select('is_admin')
         .eq('id', caller.id)
         .single()
 
-      if (!callerProfile?.is_admin && !callerProfile?.is_manager) {
+      if (!callerProfile?.is_admin) {
         router.push(APP_CONFIG.routes.dashboard)
         return
-      }
-
-      if (callerProfile?.is_manager && !callerProfile?.is_admin) {
-        setCallerIsManager(true)
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const { data: mgrStores } = await (supabase as any)
-          .from('user_stores')
-          .select('store_id')
-          .eq('user_id', caller.id)
-        const ids = (mgrStores || []).map((s: { store_id: number }) => s.store_id)
-        if (callerProfile?.store_id && !ids.includes(callerProfile.store_id)) ids.push(callerProfile.store_id)
-        setCallerStoreIds(ids)
       }
     }
 
@@ -120,7 +105,6 @@ export default function EditarUsuarioPage() {
     setPhone(typedUser.phone || '')
     setIsAdmin(typedUser.is_admin)
     setIsActive(typedUser.is_active)
-    setIsManager(typedUser.is_manager || false)
     setFunctionId(typedUser.function_id || null)
 
     // Inicializar storeAssignments de user_stores ou fallback legado
@@ -156,11 +140,6 @@ export default function EditarUsuarioPage() {
     setLoading(false)
   }
 
-  // Lojas visíveis: gerente só vê suas lojas
-  const visibleStores = callerIsManager && callerStoreIds.length > 0
-    ? stores.filter(s => callerStoreIds.includes(s.id))
-    : stores
-
   // Helpers para multi-loja
   const toggleStore = (storeId: number) => {
     setStoreAssignments(prev => {
@@ -179,10 +158,10 @@ export default function EditarUsuarioPage() {
   }
 
   const toggleAllStores = () => {
-    if (storeAssignments.length === visibleStores.length) {
+    if (storeAssignments.length === stores.length) {
       setStoreAssignments([])
     } else {
-      setStoreAssignments(visibleStores.map((s, i) => ({
+      setStoreAssignments(stores.map((s, i) => ({
         store_id: s.id,
         sector_id: storeAssignments.find(a => a.store_id === s.id)?.sector_id || null,
         is_primary: i === 0,
@@ -217,7 +196,6 @@ export default function EditarUsuarioPage() {
           phone: phone || null,
           isAdmin,
           isActive,
-          isManager: isAdmin ? false : isManager,
           functionId: isAdmin ? null : (functionId || null),
           storeAssignments: isAdmin ? [] : storeAssignments,
         }),
@@ -329,17 +307,15 @@ export default function EditarUsuarioPage() {
                   <span className="text-sm text-secondary">Usuario ativo</span>
                 </label>
 
-                {!callerIsManager && (
-                  <label className="flex items-center gap-2 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={isAdmin}
-                      onChange={(e) => setIsAdmin(e.target.checked)}
-                      className="w-5 h-5 rounded border-default bg-surface text-primary"
-                    />
-                    <span className="text-sm text-secondary">Administrador</span>
-                  </label>
-                )}
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={isAdmin}
+                    onChange={(e) => setIsAdmin(e.target.checked)}
+                    className="w-5 h-5 rounded border-default bg-surface text-primary"
+                  />
+                  <span className="text-sm text-secondary">Administrador</span>
+                </label>
               </div>
             </div>
           </div>
@@ -353,23 +329,6 @@ export default function EditarUsuarioPage() {
               </p>
 
               <div className="space-y-4">
-                {/* Is Manager */}
-                {!callerIsManager && (
-                  <div>
-                    <label className="flex items-center gap-2 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={isManager}
-                        onChange={(e) => setIsManager(e.target.checked)}
-                        className="w-5 h-5 rounded border-default bg-surface text-primary"
-                      />
-                      <span className="text-sm text-secondary">
-                        Gerente <span className="text-muted">(ve todos os checklists da loja, nao preenche)</span>
-                      </span>
-                    </label>
-                  </div>
-                )}
-
                 {/* Lojas (multi-select) */}
                 <div>
                   <label className="block text-sm font-medium text-secondary mb-2">
@@ -381,9 +340,9 @@ export default function EditarUsuarioPage() {
                       onClick={toggleAllStores}
                       className="text-xs text-primary hover:underline mb-1"
                     >
-                      {storeAssignments.length === visibleStores.length ? 'Desmarcar todas' : 'Selecionar todas'}
+                      {storeAssignments.length === stores.length ? 'Desmarcar todas' : 'Selecionar todas'}
                     </button>
-                    {visibleStores.map(store => {
+                    {stores.map(store => {
                       const assignment = storeAssignments.find(a => a.store_id === store.id)
                       const isSelected = !!assignment
                       const storeSectors = sectors.filter(s => s.store_id === store.id)

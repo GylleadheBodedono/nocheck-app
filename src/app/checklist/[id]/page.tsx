@@ -78,7 +78,7 @@ export default function ChecklistViewPage() {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { data: profile } = await (supabase as any)
         .from('users')
-        .select('is_admin, is_manager, store_id')
+        .select('is_admin')
         .eq('id', user.id)
         .single()
 
@@ -102,34 +102,14 @@ export default function ChecklistViewPage() {
         return
       }
 
-      // Auth check: admin, manager of the store, or creator
+      // Auth check: admin or creator
       const isAdmin = profile?.is_admin === true
-      const isManager = profile?.is_manager === true
       const isCreator = checklistData.created_by === user.id
 
       if (!isAdmin && !isCreator) {
-        if (isManager) {
-          // Check if manager is assigned to this store
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const { data: managerStores } = await (supabase as any)
-            .from('store_managers')
-            .select('store_id')
-            .eq('user_id', user.id)
-
-          const managerStoreIds = (managerStores || []).map((s: { store_id: number }) => s.store_id)
-          // Also check user's primary store
-          if (profile?.store_id) managerStoreIds.push(profile.store_id)
-
-          if (!managerStoreIds.includes(checklistData.store_id)) {
-            setError('Voce nao tem permissao para ver este checklist')
-            setLoading(false)
-            return
-          }
-        } else {
-          setError('Voce nao tem permissao para ver este checklist')
-          setLoading(false)
-          return
-        }
+        setError('Voce nao tem permissao para ver este checklist')
+        setLoading(false)
+        return
       }
 
       setChecklist(checklistData)

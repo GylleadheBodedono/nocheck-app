@@ -308,7 +308,6 @@ export function useAuth() {
   }
 
   const isAdmin = userProfile?.is_admin ?? false
-  const isManager = userProfile?.is_manager ?? false
 
   const getUserStores = () => {
     if (!userProfile) return []
@@ -323,7 +322,6 @@ export function useAuth() {
     session,
     loading,
     isAdmin,
-    isManager,
     isOffline,
     signIn,
     signOut,

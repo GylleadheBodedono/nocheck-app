@@ -56,7 +56,6 @@ export type Database = {
           store_id: number | null
           function_id: number | null
           sector_id: number | null
-          is_manager: boolean
           created_at: string
           updated_at: string
         }
@@ -71,7 +70,6 @@ export type Database = {
           store_id?: number | null
           function_id?: number | null
           sector_id?: number | null
-          is_manager?: boolean
           created_at?: string
           updated_at?: string
         }
@@ -86,7 +84,6 @@ export type Database = {
           store_id?: number | null
           function_id?: number | null
           sector_id?: number | null
-          is_manager?: boolean
           created_at?: string
           updated_at?: string
         }
@@ -578,38 +575,6 @@ export type Database = {
           created_at?: string
         }
       }
-      store_managers: {
-        Row: {
-          id: number
-          user_id: string
-          store_id: number
-          can_view_all_checklists: boolean
-          can_view_reports: boolean
-          can_manage_users: boolean
-          assigned_by: string | null
-          assigned_at: string
-        }
-        Insert: {
-          id?: number
-          user_id: string
-          store_id: number
-          can_view_all_checklists?: boolean
-          can_view_reports?: boolean
-          can_manage_users?: boolean
-          assigned_by?: string | null
-          assigned_at?: string
-        }
-        Update: {
-          id?: number
-          user_id?: string
-          store_id?: number
-          can_view_all_checklists?: boolean
-          can_view_reports?: boolean
-          can_manage_users?: boolean
-          assigned_by?: string | null
-          assigned_at?: string
-        }
-      }
     }
     Views: {
       [_ in never]: never
@@ -624,7 +589,7 @@ export type Database = {
 }
 
 // Enum types
-export type UserRole = 'estoquista' | 'aprendiz' | 'supervisor' | 'gerente'
+export type UserRole = 'estoquista' | 'aprendiz' | 'supervisor'
 export type SectorRole = 'member' | 'viewer' // member = pode preencher, viewer = só visualiza
 export type TemplateCategory = 'recebimento' | 'limpeza' | 'abertura' | 'fechamento' | 'outros'
 export type FieldType =
@@ -703,10 +668,6 @@ export type UserSector = Database['public']['Tables']['user_sectors']['Row']
 export type UserSectorInsert = Database['public']['Tables']['user_sectors']['Insert']
 export type UserSectorUpdate = Database['public']['Tables']['user_sectors']['Update']
 
-export type StoreManager = Database['public']['Tables']['store_managers']['Row']
-export type StoreManagerInsert = Database['public']['Tables']['store_managers']['Insert']
-export type StoreManagerUpdate = Database['public']['Tables']['store_managers']['Update']
-
 // User Stores (junção usuário ↔ lojas)
 export type UserStore = Database['public']['Tables']['user_stores']['Row']
 export type UserStoreInsert = Database['public']['Tables']['user_stores']['Insert']
@@ -728,12 +689,6 @@ export type UserWithAssignment = User & {
   function_ref: FunctionRow | null
   sector: Sector | null
   user_stores?: UserStoreWithDetails[]
-}
-
-// Nova estrutura de usuário com setores (legado, manter compatibilidade)
-export type UserWithSectors = User & {
-  sectors: (UserSector & { sector: Sector & { store: Store } })[]
-  managed_stores: (StoreManager & { store: Store })[]
 }
 
 // Setor com loja

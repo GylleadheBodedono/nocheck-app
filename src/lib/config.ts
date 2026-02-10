@@ -25,7 +25,6 @@ export const APP_CONFIG = {
     adminStores: '/admin/lojas',
     adminSectors: '/admin/setores',
     adminFunctions: '/admin/funcoes',
-    adminManagers: '/admin/gerentes',
     adminReports: '/admin/relatorios',
     adminValidations: '/admin/validacoes',
     adminChecklists: '/admin/checklists',
@@ -65,7 +64,6 @@ export const APP_CONFIG = {
     { value: 'estoquista', label: 'Estoquista' },
     { value: 'aprendiz', label: 'Aprendiz' },
     { value: 'supervisor', label: 'Supervisor' },
-    { value: 'gerente', label: 'Gerente' },
   ],
 } as const
 

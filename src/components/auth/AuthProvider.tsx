@@ -10,7 +10,6 @@ interface AuthContextType {
   session: Session | null
   loading: boolean
   isAdmin: boolean
-  isManager: boolean
   signIn: (email: string, password: string) => Promise<{ error?: unknown; data?: unknown }>
   signOut: () => Promise<{ error: unknown }>
   getUserStores: () => Array<{ id: number; name: string }>

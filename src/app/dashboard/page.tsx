@@ -7,7 +7,7 @@ import { APP_CONFIG } from '@/lib/config'
 import type { User } from '@supabase/supabase-js'
 import type { Store, ChecklistTemplate, Checklist, Sector, FunctionRow } from '@/types/database'
 import { LoadingPage, Header, OfflineIndicator } from '@/components/ui'
-import { FiClipboard, FiClock, FiCheckCircle, FiUser, FiCalendar, FiAlertCircle, FiEye, FiWifiOff, FiX, FiRefreshCw, FiAlertTriangle, FiUploadCloud } from 'react-icons/fi'
+import { FiClipboard, FiClock, FiCheckCircle, FiUser, FiCalendar, FiAlertCircle, FiWifiOff, FiX, FiRefreshCw, FiAlertTriangle, FiUploadCloud } from 'react-icons/fi'
 import Link from 'next/link'
 import {
   getAuthCache,
@@ -44,7 +44,6 @@ type UserProfile = {
   email: string
   full_name: string
   is_admin: boolean
-  is_manager: boolean
   store_id: number | null
   function_id: number | null
   sector_id: number | null
@@ -273,11 +272,8 @@ export default function DashboardPage() {
       .order('created_at', { ascending: false })
       .limit(10)
 
-    if (profileData?.is_manager && profileData?.store_id && !profileData?.is_admin) {
-      // Manager: all checklists from their store
-      checklistQuery = checklistQuery.eq('store_id', profileData.store_id)
-    } else if (!profileData?.is_admin) {
-      // Employee: only their own checklists
+    if (!profileData?.is_admin) {
+      // Usuario normal: apenas seus proprios checklists
       checklistQuery = checklistQuery.eq('created_by', user.id)
     }
 
@@ -309,23 +305,13 @@ export default function DashboardPage() {
     monthAgo.setDate(monthAgo.getDate() - 30)
     const monthAgoISO = new Date(monthAgo.getTime() - monthAgo.getTimezoneOffset() * 60000).toISOString()
 
-    // Stats queries: admin ve tudo, gerente ve da loja, usuario ve so dele
+    // Stats queries: admin ve tudo, usuario ve so dele
     const isAdminUser = profileData?.is_admin === true
-    const isManagerUser = profileData?.is_manager === true && !isAdminUser
 
     // Helper to apply the right filter based on role
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const applyStatsFilter = (query: any) => {
       if (isAdminUser) return query // Admin: sem filtro
-      if (isManagerUser) {
-        // Gerente: filtrar por lojas gerenciadas
-        const managerStoreIds = (profileData?.user_stores as UserStoreEntry[] || []).map(us => us.store_id)
-        if (profileData?.store_id && !managerStoreIds.includes(profileData.store_id)) {
-          managerStoreIds.push(profileData.store_id)
-        }
-        if (managerStoreIds.length > 0) return query.in('store_id', managerStoreIds)
-        return query.eq('store_id', profileData?.store_id || 0)
-      }
       return query.eq('created_by', user.id) // Usuario normal
     }
 
@@ -403,7 +389,6 @@ export default function DashboardPage() {
         email: cachedUser.email,
         full_name: cachedUser.full_name,
         is_admin: cachedUser.is_admin || false,
-        is_manager: cachedUser.is_manager || false,
         store_id: cachedUser.store_id || null,
         function_id: cachedUser.function_id || null,
         sector_id: cachedUser.sector_id || null,
@@ -533,8 +518,8 @@ export default function DashboardPage() {
         const visibilities = template.template_visibility?.filter(v => v.store_id === selectedStore) || []
         if (visibilities.length === 0) return false
 
-        // Admin/Manager: see all templates that have visibility for this store
-        if (profile.is_admin || profile.is_manager) return true
+        // Admin: see all templates that have visibility for this store
+        if (profile.is_admin) return true
 
         // Employee: check sector + function match (usando setor da loja selecionada)
         return visibilities.some(v => {
@@ -545,7 +530,7 @@ export default function DashboardPage() {
       })
       .map(template => ({
         template,
-        canFill: profile.is_admin ? true : !profile.is_manager,
+        canFill: true,
       }))
   }
 
@@ -572,8 +557,6 @@ export default function DashboardPage() {
 
   const stores = getUserStores()
   const availableTemplates = getAvailableTemplates()
-  const isManager = profile?.is_manager || false
-  const canFill = profile?.is_admin ? true : !isManager
 
   if (loading) {
     return <LoadingPage />
@@ -666,34 +649,10 @@ export default function DashboardPage() {
 
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Manager Banner */}
-        {isManager && !profile?.is_admin && (
-          <div className="card p-4 mb-6 bg-info/10 border-info/20">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <FiEye className="w-5 h-5 text-info" />
-                <div>
-                  <p className="font-medium text-main">Modo Gerente</p>
-                  <p className="text-sm text-muted">
-                    Voce esta visualizando como gerente. Pode ver todos os checklists mas nao pode preencher.
-                  </p>
-                </div>
-              </div>
-              <Link
-                href={APP_CONFIG.routes.adminUsers}
-                className="btn-secondary text-sm flex items-center gap-1.5 whitespace-nowrap"
-              >
-                <FiUser className="w-4 h-4" />
-                Usuarios
-              </Link>
-            </div>
-          </div>
-        )}
-
         {/* Stats */}
         <div className="flex items-center justify-between mb-3">
           <p className="text-sm font-medium text-muted">
-            {profile?.is_admin ? 'Dados do sistema' : isManager ? 'Dados da loja' : 'Seus dados'}
+            {profile?.is_admin ? 'Dados do sistema' : 'Seus dados'}
           </p>
         </div>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
@@ -810,12 +769,6 @@ export default function DashboardPage() {
                 <p className="text-sm text-muted">
                   Loja: <span className="font-medium text-main">{stores[0].name}</span>
                 </p>
-                {isManager && !profile?.is_admin && (
-                  <span className="badge-secondary text-xs flex items-center gap-1">
-                    <FiEye className="w-3 h-3" />
-                    Gerente
-                  </span>
-                )}
               </div>
             )}
 
@@ -840,12 +793,6 @@ export default function DashboardPage() {
                       {profile.sector.name}
                     </span>
                   )}
-                  {isManager && (
-                    <span className="badge-secondary text-xs flex items-center gap-1 bg-info/20 text-info">
-                      <FiEye className="w-3 h-3" />
-                      Gerente
-                    </span>
-                  )}
                 </div>
               </div>
             )}
@@ -853,7 +800,7 @@ export default function DashboardPage() {
             {/* Available Checklists */}
             <h2 className="text-lg font-semibold text-main mb-4 flex items-center gap-2">
               <FiClipboard className="w-5 h-5 text-primary" />
-              {canFill ? 'Iniciar Novo Checklist' : 'Checklists Disponiveis'}
+              Iniciar Novo Checklist
             </h2>
 
             {availableTemplates.length === 0 ? (
@@ -865,8 +812,7 @@ export default function DashboardPage() {
               </div>
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {availableTemplates.map(({ template, canFill: canFillTemplate }) => (
-                  canFillTemplate ? (
+                {availableTemplates.map(({ template }) => (
                     <Link
                       key={template.id}
                       href={`${APP_CONFIG.routes.checklistNew}?template=${template.id}&store=${selectedStore}`}
@@ -891,36 +837,6 @@ export default function DashboardPage() {
                         </p>
                       )}
                     </Link>
-                  ) : (
-                    <div
-                      key={template.id}
-                      className="card p-5 opacity-75"
-                    >
-                      <div className="flex items-start justify-between mb-3">
-                        <div className="w-10 h-10 rounded-xl bg-surface-hover flex items-center justify-center">
-                          <FiEye className="w-5 h-5 text-muted" />
-                        </div>
-                        <span className="badge-secondary capitalize text-xs">
-                          {template.category || 'Geral'}
-                        </span>
-                      </div>
-
-                      <h3 className="font-semibold text-main mb-1">
-                        {template.name}
-                      </h3>
-
-                      {template.description && (
-                        <p className="text-sm text-muted line-clamp-2">
-                          {template.description}
-                        </p>
-                      )}
-
-                      <p className="text-xs text-warning mt-3 flex items-center gap-1">
-                        <FiEye className="w-3 h-3" />
-                        Apenas visualizacao (gerente)
-                      </p>
-                    </div>
-                  )
                 ))}
               </div>
             )}

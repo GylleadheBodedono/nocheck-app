@@ -98,13 +98,12 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { email, password, fullName, phone, isAdmin, isManager, storeId, functionId, sectorId, storeAssignments, redirectTo } = body as {
+    const { email, password, fullName, phone, isAdmin, storeId, functionId, sectorId, storeAssignments, redirectTo } = body as {
       email: string
       password: string
       fullName: string
       phone?: string
       isAdmin: boolean
-      isManager?: boolean
       storeId?: number
       functionId?: number
       sectorId?: number
@@ -173,7 +172,6 @@ export async function POST(request: NextRequest) {
         full_name: fullName,
         phone: phone || null,
         is_admin: isAdmin,
-        is_manager: isManager || false,
         store_id: isAdmin ? null : (primary?.store_id || null),
         function_id: isAdmin ? null : (functionId || null),
         sector_id: isAdmin ? null : (primary?.sector_id || null),

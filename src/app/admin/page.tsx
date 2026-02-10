@@ -25,7 +25,6 @@ import {
   FiCheckCircle,
   FiAlertTriangle,
   FiGrid,
-  FiShield,
   FiBriefcase,
   FiGitMerge,
   FiTrash2,
@@ -37,7 +36,6 @@ type Stats = {
   totalStores: number
   totalSectors: number
   totalFunctions: number
-  totalManagers: number
   totalChecklists: number
   checklistsToday: number
   pendingValidations: number
@@ -50,7 +48,6 @@ export default function AdminPage() {
     totalStores: 0,
     totalSectors: 0,
     totalFunctions: 0,
-    totalManagers: 0,
     totalChecklists: 0,
     checklistsToday: 0,
     pendingValidations: 0,
@@ -112,13 +109,12 @@ export default function AdminPage() {
 
       // Tenta buscar stats online
       try {
-        const [usersRes, templatesRes, storesRes, sectorsRes, functionsRes, managersRes, checklistsRes, validationsRes] = await Promise.all([
+        const [usersRes, templatesRes, storesRes, sectorsRes, functionsRes, checklistsRes, validationsRes] = await Promise.all([
           supabase.from('users').select('id', { count: 'exact', head: true }),
           supabase.from('checklist_templates').select('id', { count: 'exact', head: true }).eq('is_active', true),
           supabase.from('stores').select('id', { count: 'exact', head: true }).eq('is_active', true),
           supabase.from('sectors').select('id', { count: 'exact', head: true }).eq('is_active', true),
           supabase.from('functions').select('id', { count: 'exact', head: true }).eq('is_active', true),
-          supabase.from('users').select('id', { count: 'exact', head: true }).eq('is_manager', true),
           supabase.from('checklists').select('id', { count: 'exact', head: true }),
           supabase.from('cross_validations').select('id', { count: 'exact', head: true }).eq('status', 'pendente'),
         ])
@@ -137,7 +133,6 @@ export default function AdminPage() {
           totalStores: storesRes.count || 0,
           totalSectors: sectorsRes.count || 0,
           totalFunctions: functionsRes.count || 0,
-          totalManagers: managersRes.count || 0,
           totalChecklists: checklistsRes.count || 0,
           checklistsToday: checklistsTodayCount || 0,
           pendingValidations: validationsRes.count || 0,
@@ -161,7 +156,6 @@ export default function AdminPage() {
             totalStores: cachedStores.filter(s => s.is_active).length,
             totalSectors: cachedSectors.filter(s => s.is_active).length,
             totalFunctions: cachedFunctions.filter(f => f.is_active).length,
-            totalManagers: 0,
             totalChecklists: 0,
             checklistsToday: 0,
             pendingValidations: 0,
@@ -224,13 +218,6 @@ export default function AdminPage() {
       icon: FiBriefcase,
       href: APP_CONFIG.routes.adminFunctions,
       stat: stats.totalFunctions,
-    },
-    {
-      title: 'Gerentes',
-      description: 'Subadmins de cada loja',
-      icon: FiShield,
-      href: APP_CONFIG.routes.adminManagers,
-      stat: stats.totalManagers,
     },
     {
       title: 'Validacoes',

@@ -577,7 +577,7 @@ export default function NovoTemplatePage() {
             <p className="text-sm text-muted mb-4">
               Selecione em quais setores este checklist estara disponivel.
               Apenas usuarios dos setores selecionados poderao preencher.
-              Gerentes de loja sempre podem visualizar todos os checklists.
+              Administradores sempre podem visualizar todos os checklists.
             </p>
 
             <div className="space-y-4">

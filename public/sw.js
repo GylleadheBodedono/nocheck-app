@@ -380,7 +380,6 @@ async function precacheApp() {
     '/admin/templates',
     '/admin/templates/novo',
     '/admin/setores',
-    '/admin/gerentes',
     '/admin/checklists',
     '/admin/validacoes',
     '/admin/relatorios',
