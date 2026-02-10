@@ -9,6 +9,7 @@ type TemplateField = {
   id: number
   name: string
   field_type: string
+  options: unknown
 }
 
 /**
@@ -215,13 +216,19 @@ export async function processarValidacaoCruzada(
 ): Promise<{ success: boolean; error?: string }> {
   try {
     // 1. Encontrar campos de "numero da nota" e "valor"
+    // Prioridade: campo marcado explicitamente pelo admin (validationRole)
+    // Fallback: deteccao por nome (palavras-chave)
     const campoNota = fields.find(f =>
+      (f.options as { validationRole?: string } | null)?.validationRole === 'nota'
+    ) || fields.find(f =>
       f.name.toLowerCase().includes('nota') ||
       f.name.toLowerCase().includes('nf') ||
       f.name.toLowerCase().includes('numero')
     )
 
     const campoValor = fields.find(f =>
+      (f.options as { validationRole?: string } | null)?.validationRole === 'valor'
+    ) || fields.find(f =>
       f.name.toLowerCase().includes('valor') ||
       f.name.toLowerCase().includes('total') ||
       f.name.toLowerCase().includes('quantia')

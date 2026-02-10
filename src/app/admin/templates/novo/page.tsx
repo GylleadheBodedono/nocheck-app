@@ -618,6 +618,7 @@ export default function NovoTemplatePage() {
                                         )}
                                       </div>
                                     )}
+                                    {!['dropdown', 'checkbox_multiple'].includes(field.field_type) && (<div><label className="block text-xs text-muted mb-1">Validacao cruzada</label><select value={(field.options as { validationRole?: string } | null)?.validationRole || ''} onChange={(e) => updateField(field.id, { options: { ...((field.options as Record<string, unknown>) || {}), validationRole: e.target.value || null } })} className="input text-sm"><option value="">Nenhum</option><option value="nota">Numero da nota</option><option value="valor">Valor</option></select></div>)}
                                   </div>
                                 )}
                               </div>
@@ -716,6 +717,7 @@ export default function NovoTemplatePage() {
                                   )}
                                 </div>
                               )}
+                              {!['dropdown', 'checkbox_multiple'].includes(field.field_type) && (<div><label className="block text-xs text-muted mb-1">Validacao cruzada</label><select value={(field.options as { validationRole?: string } | null)?.validationRole || ''} onChange={(e) => updateField(field.id, { options: { ...((field.options as Record<string, unknown>) || {}), validationRole: e.target.value || null } })} className="input text-sm"><option value="">Nenhum</option><option value="nota">Numero da nota</option><option value="valor">Valor</option></select></div>)}
                             </div>
                           )}
                         </div>
@@ -807,6 +809,7 @@ export default function NovoTemplatePage() {
                                 )}
                               </div>
                             )}
+                            {!['dropdown', 'checkbox_multiple'].includes(field.field_type) && (<div><label className="block text-xs text-muted mb-1">Validacao cruzada</label><select value={(field.options as { validationRole?: string } | null)?.validationRole || ''} onChange={(e) => updateField(field.id, { options: { ...((field.options as Record<string, unknown>) || {}), validationRole: e.target.value || null } })} className="input text-sm"><option value="">Nenhum</option><option value="nota">Numero da nota</option><option value="valor">Valor</option></select></div>)}
                           </div>
                         )}
                       </div>
