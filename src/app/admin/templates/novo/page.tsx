@@ -72,6 +72,7 @@ export default function NovoTemplatePage() {
   // Fields
   const [fields, setFields] = useState<FieldConfig[]>([])
   const [editingField, setEditingField] = useState<string | null>(null)
+  const [expandedSection, setExpandedSection] = useState<string | null>(null)
 
   // Visibility - now includes sector_id
   const [visibility, setVisibility] = useState<VisibilityConfig[]>([])
@@ -165,10 +166,10 @@ export default function NovoTemplatePage() {
     setSections(newSections)
   }
 
-  const addField = (type: FieldType) => {
+  const addField = (type: FieldType, sectionId?: string | null) => {
     const newField: FieldConfig = {
       id: `field_${Date.now()}`,
-      section_id: null,
+      section_id: sectionId || null,
       name: '',
       field_type: type,
       is_required: true,
@@ -192,21 +193,29 @@ export default function NovoTemplatePage() {
   }
 
   const moveField = (id: string, direction: 'up' | 'down') => {
-    const index = fields.findIndex(f => f.id === id)
+    const field = fields.find(f => f.id === id)
+    if (!field) return
+
+    // Scope movement within same section group
+    const groupFields = fields
+      .filter(f => f.section_id === field.section_id)
+      .sort((a, b) => a.sort_order - b.sort_order)
+    const idxInGroup = groupFields.findIndex(f => f.id === id)
+
     if (
-      (direction === 'up' && index === 0) ||
-      (direction === 'down' && index === fields.length - 1)
+      (direction === 'up' && idxInGroup === 0) ||
+      (direction === 'down' && idxInGroup === groupFields.length - 1)
     ) return
 
-    const newFields = [...fields]
-    const newIndex = direction === 'up' ? index - 1 : index + 1
-    const temp = newFields[index]
-    newFields[index] = newFields[newIndex]
-    newFields[newIndex] = temp
+    const neighbor = direction === 'up' ? groupFields[idxInGroup - 1] : groupFields[idxInGroup + 1]
+    const fieldSort = field.sort_order
+    const neighborSort = neighbor.sort_order
 
-    // Update sort order
-    newFields.forEach((f, i) => f.sort_order = i + 1)
-    setFields(newFields)
+    setFields(fields.map(f => {
+      if (f.id === id) return { ...f, sort_order: neighborSort }
+      if (f.id === neighbor.id) return { ...f, sort_order: fieldSort }
+      return f
+    }))
   }
 
   // Toggle a sector's visibility
@@ -455,261 +464,356 @@ export default function NovoTemplatePage() {
             </div>
           </div>
 
-          {/* Sections (optional) */}
+          {/* Etapas e Campos */}
           <div className="card p-6">
             <div className="flex items-center justify-between mb-2">
               <h2 className="text-lg font-semibold text-main flex items-center gap-2">
                 <FiLayers className="w-5 h-5 text-primary" />
-                Etapas / Secoes (Opcional)
+                Etapas e Campos
               </h2>
-              <button
-                type="button"
-                onClick={addSection}
-                className="btn-secondary flex items-center gap-2 px-3 py-2 text-sm"
-              >
-                <FiPlus className="w-4 h-4" />
-                Adicionar Etapa
-              </button>
+              <div className="flex items-center gap-3">
+                <span className="text-sm text-muted">{fields.length} campos</span>
+                <button
+                  type="button"
+                  onClick={addSection}
+                  className="btn-secondary flex items-center gap-2 px-3 py-2 text-sm"
+                >
+                  <FiPlus className="w-4 h-4" />
+                  Adicionar Etapa
+                </button>
+              </div>
             </div>
             <p className="text-sm text-muted mb-4">
               Divida o checklist em etapas para preenchimento em momentos diferentes do dia.
               Se nenhuma etapa for criada, o checklist sera preenchido de uma vez.
             </p>
 
-            {sections.length > 0 && (
-              <div className="space-y-2">
-                {sections.map((section, idx) => (
-                  <div key={section.id} className="flex items-center gap-3 p-3 border border-subtle rounded-xl bg-surface">
-                    <div className="flex flex-col gap-1">
-                      <button type="button" onClick={() => moveSectionOrder(section.id, 'up')} disabled={idx === 0} className="p-1 text-muted hover:text-main disabled:opacity-30">
-                        <FiChevronUp className="w-3 h-3" />
-                      </button>
-                      <button type="button" onClick={() => moveSectionOrder(section.id, 'down')} disabled={idx === sections.length - 1} className="p-1 text-muted hover:text-main disabled:opacity-30">
-                        <FiChevronDown className="w-3 h-3" />
-                      </button>
-                    </div>
-                    <span className="w-7 h-7 rounded-lg bg-primary/10 flex items-center justify-center text-xs font-bold text-primary">{idx + 1}</span>
-                    <input
-                      type="text"
-                      value={section.name}
-                      onChange={(e) => updateSection(section.id, { name: e.target.value })}
-                      placeholder="Nome da etapa"
-                      className="flex-1 bg-transparent border-none text-main placeholder:text-muted focus:outline-none font-medium"
-                    />
-                    <span className="text-xs text-muted">
-                      {fields.filter(f => f.section_id === section.id).length} campos
-                    </span>
-                    <button type="button" onClick={() => removeSection(section.id)} className="p-2 text-error hover:bg-error/20 rounded-lg transition-colors">
-                      <FiTrash2 className="w-4 h-4" />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
+            {sections.length > 0 ? (
+              <div className="space-y-4">
+                {/* Section accordions */}
+                {sections.map((section, idx) => {
+                  const sectionFields = fields
+                    .filter(f => f.section_id === section.id)
+                    .sort((a, b) => a.sort_order - b.sort_order)
+                  const isExpanded = expandedSection === section.id
 
-          {/* Fields Builder */}
-          <div className="card p-6">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-semibold text-main">Campos do Checklist</h2>
-              <span className="text-sm text-muted">{fields.length} campos</span>
-            </div>
-
-            {/* Add Field Buttons */}
-            <div className="flex flex-wrap gap-2 mb-6 p-4 bg-surface-hover rounded-xl border border-subtle">
-              <p className="w-full text-sm text-muted mb-2">Adicionar campo:</p>
-              {fieldTypes.map(type => (
-                <button
-                  key={type.value}
-                  type="button"
-                  onClick={() => addField(type.value)}
-                  className="btn-secondary flex items-center gap-2 px-3 py-2 text-sm"
-                >
-                  <span>{type.icon}</span>
-                  <span>{type.label}</span>
-                </button>
-              ))}
-            </div>
-
-            {/* Fields List */}
-            {fields.length === 0 ? (
-              <div className="text-center py-12 text-muted">
-                <p>Nenhum campo adicionado</p>
-                <p className="text-sm mt-1">Clique nos botoes acima para adicionar campos</p>
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {fields.map((field, index) => (
-                  <div
-                    key={field.id}
-                    className={`border rounded-xl transition-all ${
-                      editingField === field.id
-                        ? 'border-primary bg-surface-hover'
-                        : 'border-subtle bg-surface'
-                    }`}
-                  >
-                    {/* Field Header */}
-                    <div className="flex items-center gap-3 p-4">
-                      <div className="flex flex-col gap-1">
-                        <button
-                          type="button"
-                          onClick={() => moveField(field.id, 'up')}
-                          disabled={index === 0}
-                          className="p-1 text-muted hover:text-main disabled:opacity-30"
-                        >
-                          <FiChevronUp className="w-4 h-4" />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => moveField(field.id, 'down')}
-                          disabled={index === fields.length - 1}
-                          className="p-1 text-muted hover:text-main disabled:opacity-30"
-                        >
-                          <FiChevronDown className="w-4 h-4" />
-                        </button>
-                      </div>
-
-                      <div className="w-10 h-10 rounded-lg bg-surface-hover border border-subtle flex items-center justify-center text-lg">
-                        {getFieldTypeIcon(field.field_type)}
-                      </div>
-
-                      <div className="flex-1">
+                  return (
+                    <div key={section.id} className="border border-subtle rounded-xl overflow-hidden">
+                      {/* Section header */}
+                      <div
+                        className={`flex items-center gap-3 p-3 cursor-pointer transition-colors ${
+                          isExpanded ? 'bg-primary/10 border-b border-subtle' : 'bg-surface hover:bg-surface-hover'
+                        }`}
+                        onClick={() => setExpandedSection(isExpanded ? null : section.id)}
+                      >
+                        <div className="flex flex-col gap-1" onClick={e => e.stopPropagation()}>
+                          <button type="button" onClick={() => moveSectionOrder(section.id, 'up')} disabled={idx === 0} className="p-1 text-muted hover:text-main disabled:opacity-30">
+                            <FiChevronUp className="w-3 h-3" />
+                          </button>
+                          <button type="button" onClick={() => moveSectionOrder(section.id, 'down')} disabled={idx === sections.length - 1} className="p-1 text-muted hover:text-main disabled:opacity-30">
+                            <FiChevronDown className="w-3 h-3" />
+                          </button>
+                        </div>
+                        <span className="w-7 h-7 rounded-lg bg-primary/10 flex items-center justify-center text-xs font-bold text-primary">{idx + 1}</span>
                         <input
                           type="text"
-                          value={field.name}
-                          onChange={(e) => updateField(field.id, { name: e.target.value })}
-                          placeholder="Nome do campo"
-                          className="w-full bg-transparent border-none text-main placeholder:text-muted focus:outline-none font-medium"
+                          value={section.name}
+                          onChange={(e) => updateSection(section.id, { name: e.target.value })}
+                          onClick={e => e.stopPropagation()}
+                          placeholder="Nome da etapa"
+                          className="flex-1 bg-transparent border-none text-main placeholder:text-muted focus:outline-none font-medium"
                         />
-                        <p className="text-xs text-muted">{getFieldTypeLabel(field.field_type)}</p>
-                      </div>
-
-                      <div className="flex items-center gap-2">
-                        <label className="flex items-center gap-2 text-sm text-secondary">
-                          <input
-                            type="checkbox"
-                            checked={field.is_required}
-                            onChange={(e) => updateField(field.id, { is_required: e.target.checked })}
-                            className="rounded border-default bg-surface text-primary focus:ring-primary"
-                          />
-                          Obrigatorio
-                        </label>
-
-                        <button
-                          type="button"
-                          onClick={() => setEditingField(editingField === field.id ? null : field.id)}
-                          className={`p-2 rounded-lg transition-colors ${
-                            editingField === field.id
-                              ? 'bg-primary/20 text-primary'
-                              : 'text-muted hover:bg-surface-hover'
-                          }`}
-                        >
-                          <FiSettings className="w-4 h-4" />
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={() => removeField(field.id)}
-                          className="p-2 text-error hover:bg-error/20 rounded-lg transition-colors"
-                        >
+                        <span className="text-xs text-muted whitespace-nowrap">{sectionFields.length} campos</span>
+                        {isExpanded ? <FiChevronUp className="w-4 h-4 text-primary" /> : <FiChevronDown className="w-4 h-4 text-muted" />}
+                        <button type="button" onClick={(e) => { e.stopPropagation(); removeSection(section.id) }} className="p-2 text-error hover:bg-error/20 rounded-lg transition-colors">
                           <FiTrash2 className="w-4 h-4" />
                         </button>
                       </div>
-                    </div>
 
-                    {/* Field Options (expanded) */}
-                    {editingField === field.id && (
-                      <div className="px-4 pb-4 pt-2 border-t border-subtle space-y-4">
-                        <div className="grid grid-cols-2 gap-4">
-                          <div>
-                            <label className="block text-xs text-muted mb-1">Placeholder</label>
-                            <input
-                              type="text"
-                              value={field.placeholder}
-                              onChange={(e) => updateField(field.id, { placeholder: e.target.value })}
-                              className="input text-sm"
-                              placeholder="Texto de exemplo..."
-                            />
+                      {/* Section content */}
+                      {isExpanded && (
+                        <div className="p-4 space-y-3">
+                          <div className="flex flex-wrap gap-2 p-3 bg-surface-hover rounded-xl border border-subtle">
+                            <p className="w-full text-xs text-muted mb-1">Adicionar campo nesta etapa:</p>
+                            {fieldTypes.map(type => (
+                              <button key={type.value} type="button" onClick={() => addField(type.value, section.id)} className="btn-secondary flex items-center gap-1 px-2 py-1.5 text-xs">
+                                <span>{type.icon}</span>
+                                <span>{type.label}</span>
+                              </button>
+                            ))}
                           </div>
-                          <div>
-                            <label className="block text-xs text-muted mb-1">Texto de ajuda</label>
-                            <input
-                              type="text"
-                              value={field.help_text}
-                              onChange={(e) => updateField(field.id, { help_text: e.target.value })}
-                              className="input text-sm"
-                              placeholder="Instrucoes para o usuario..."
-                            />
-                          </div>
+
+                          {sectionFields.length === 0 ? (
+                            <p className="text-center text-muted text-sm py-4">Nenhum campo nesta etapa</p>
+                          ) : (
+                            sectionFields.map((field, fieldIdx) => (
+                              <div key={field.id} className={`border rounded-xl transition-all ${editingField === field.id ? 'border-primary bg-surface-hover' : 'border-subtle bg-surface'}`}>
+                                <div className="flex items-center gap-3 p-3">
+                                  <div className="flex flex-col gap-1">
+                                    <button type="button" onClick={() => moveField(field.id, 'up')} disabled={fieldIdx === 0} className="p-1 text-muted hover:text-main disabled:opacity-30"><FiChevronUp className="w-3 h-3" /></button>
+                                    <button type="button" onClick={() => moveField(field.id, 'down')} disabled={fieldIdx === sectionFields.length - 1} className="p-1 text-muted hover:text-main disabled:opacity-30"><FiChevronDown className="w-3 h-3" /></button>
+                                  </div>
+                                  <div className="w-8 h-8 rounded-lg bg-surface-hover border border-subtle flex items-center justify-center text-sm">{getFieldTypeIcon(field.field_type)}</div>
+                                  <div className="flex-1 min-w-0">
+                                    <input type="text" value={field.name} onChange={(e) => updateField(field.id, { name: e.target.value })} placeholder="Nome do campo" className="w-full bg-transparent border-none text-main placeholder:text-muted focus:outline-none font-medium text-sm" />
+                                    <p className="text-xs text-muted">{getFieldTypeLabel(field.field_type)}</p>
+                                  </div>
+                                  <div className="flex items-center gap-1">
+                                    <label className="flex items-center gap-1 text-xs text-secondary">
+                                      <input type="checkbox" checked={field.is_required} onChange={(e) => updateField(field.id, { is_required: e.target.checked })} className="rounded border-default bg-surface text-primary focus:ring-primary w-3.5 h-3.5" />
+                                      Obrig.
+                                    </label>
+                                    <button type="button" onClick={() => setEditingField(editingField === field.id ? null : field.id)} className={`p-1.5 rounded-lg transition-colors ${editingField === field.id ? 'bg-primary/20 text-primary' : 'text-muted hover:bg-surface-hover'}`}><FiSettings className="w-3.5 h-3.5" /></button>
+                                    <button type="button" onClick={() => removeField(field.id)} className="p-1.5 text-error hover:bg-error/20 rounded-lg transition-colors"><FiTrash2 className="w-3.5 h-3.5" /></button>
+                                  </div>
+                                </div>
+                                {editingField === field.id && (
+                                  <div className="px-3 pb-3 pt-2 border-t border-subtle space-y-3">
+                                    <div className="grid grid-cols-2 gap-3">
+                                      <div>
+                                        <label className="block text-xs text-muted mb-1">Placeholder</label>
+                                        <input type="text" value={field.placeholder} onChange={(e) => updateField(field.id, { placeholder: e.target.value })} className="input text-sm" placeholder="Texto de exemplo..." />
+                                      </div>
+                                      <div>
+                                        <label className="block text-xs text-muted mb-1">Texto de ajuda</label>
+                                        <input type="text" value={field.help_text} onChange={(e) => updateField(field.id, { help_text: e.target.value })} className="input text-sm" placeholder="Instrucoes para o usuario..." />
+                                      </div>
+                                    </div>
+                                    {sections.length > 0 && (
+                                      <div>
+                                        <label className="block text-xs text-muted mb-1">Mover para etapa</label>
+                                        <select value={field.section_id || ''} onChange={(e) => updateField(field.id, { section_id: e.target.value || null })} className="input text-sm">
+                                          <option value="">Sem etapa (geral)</option>
+                                          {sections.map(s => (<option key={s.id} value={s.id}>{s.name || '(sem nome)'}</option>))}
+                                        </select>
+                                      </div>
+                                    )}
+                                    {field.field_type === 'number' && (
+                                      <div>
+                                        <label className="block text-xs text-muted mb-1">Tipo de numero</label>
+                                        <div className="grid grid-cols-2 gap-2">
+                                          {[{ value: 'monetario', label: 'Monetario (R$)' }, { value: 'quantidade', label: 'Quantidade (un)' }, { value: 'decimal', label: 'Decimal' }, { value: 'porcentagem', label: 'Porcentagem (%)' }].map(st => (
+                                            <button key={st.value} type="button" onClick={() => updateField(field.id, { options: { numberSubtype: st.value } })} className={`px-3 py-2 rounded-lg text-sm font-medium transition-all border ${(field.options as { numberSubtype?: string } | null)?.numberSubtype === st.value ? 'bg-primary/15 border-primary text-primary' : 'bg-surface border-subtle text-muted hover:border-primary/40'}`}>{st.label}</button>
+                                          ))}
+                                        </div>
+                                      </div>
+                                    )}
+                                    {(field.field_type === 'dropdown' || field.field_type === 'checkbox_multiple') && (
+                                      <div>
+                                        <label className="block text-xs text-muted mb-1">Opcoes (uma por linha)</label>
+                                        <textarea value={Array.isArray(field.options) ? field.options.join('\n') : ''} onChange={(e) => updateField(field.id, { options: e.target.value.split('\n').filter((o: string) => o.trim()) })} rows={4} className="input text-sm resize-none" placeholder="Opcao 1&#10;Opcao 2&#10;Opcao 3" />
+                                      </div>
+                                    )}
+                                    {field.field_type === 'yes_no' && (
+                                      <div className="space-y-2">
+                                        <label className="flex items-center gap-2 text-sm text-secondary cursor-pointer">
+                                          <input type="checkbox" checked={(field.options as { allowPhoto?: boolean } | null)?.allowPhoto || false} onChange={(e) => updateField(field.id, { options: { ...((field.options as Record<string, unknown>) || {}), allowPhoto: e.target.checked, photoRequired: false } })} className="rounded border-default bg-surface text-primary focus:ring-primary" />
+                                          Permitir foto
+                                        </label>
+                                        {(field.options as { allowPhoto?: boolean } | null)?.allowPhoto && (
+                                          <select value={(field.options as { photoRequired?: boolean } | null)?.photoRequired ? 'required' : 'optional'} onChange={(e) => updateField(field.id, { options: { ...((field.options as Record<string, unknown>) || {}), photoRequired: e.target.value === 'required' } })} className="input text-sm">
+                                            <option value="optional">Foto opcional</option>
+                                            <option value="required">Foto obrigatoria</option>
+                                          </select>
+                                        )}
+                                      </div>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+                            ))
+                          )}
                         </div>
+                      )}
+                    </div>
+                  )
+                })}
 
-                        {/* Section selector */}
-                        {sections.length > 0 && (
-                          <div>
-                            <label className="block text-xs text-muted mb-1">Etapa / Secao</label>
-                            <select
-                              value={field.section_id || ''}
-                              onChange={(e) => updateField(field.id, { section_id: e.target.value || null })}
-                              className="input text-sm"
-                            >
-                              <option value="">Sem etapa</option>
-                              {sections.map(s => (
-                                <option key={s.id} value={s.id}>{s.name || '(sem nome)'}</option>
-                              ))}
-                            </select>
-                          </div>
-                        )}
-
-                        {/* Number subtype selector */}
-                        {field.field_type === 'number' && (
-                          <div>
-                            <label className="block text-xs text-muted mb-1">Tipo de numero</label>
-                            <div className="grid grid-cols-2 gap-2">
-                              {[
-                                { value: 'monetario', label: 'Monetario (R$)' },
-                                { value: 'quantidade', label: 'Quantidade (un)' },
-                                { value: 'decimal', label: 'Decimal' },
-                                { value: 'porcentagem', label: 'Porcentagem (%)' },
-                              ].map(st => (
-                                <button
-                                  key={st.value}
-                                  type="button"
-                                  onClick={() => updateField(field.id, {
-                                    options: { numberSubtype: st.value }
-                                  })}
-                                  className={`px-3 py-2 rounded-lg text-sm font-medium transition-all border ${
-                                    (field.options as { numberSubtype?: string } | null)?.numberSubtype === st.value
-                                      ? 'bg-primary/15 border-primary text-primary'
-                                      : 'bg-surface border-subtle text-muted hover:border-primary/40'
-                                  }`}
-                                >
-                                  {st.label}
-                                </button>
-                              ))}
+                {/* Campos Gerais (without section) */}
+                <div className="border border-dashed border-subtle rounded-xl p-4 space-y-3">
+                  <h3 className="text-sm font-medium text-muted">Campos Gerais (sem etapa)</h3>
+                  <div className="flex flex-wrap gap-2 p-3 bg-surface-hover rounded-xl border border-subtle">
+                    <p className="w-full text-xs text-muted mb-1">Adicionar campo geral:</p>
+                    {fieldTypes.map(type => (
+                      <button key={type.value} type="button" onClick={() => addField(type.value)} className="btn-secondary flex items-center gap-1 px-2 py-1.5 text-xs">
+                        <span>{type.icon}</span>
+                        <span>{type.label}</span>
+                      </button>
+                    ))}
+                  </div>
+                  {(() => {
+                    const generalFields = fields.filter(f => !f.section_id).sort((a, b) => a.sort_order - b.sort_order)
+                    return generalFields.length === 0 ? (
+                      <p className="text-center text-muted text-sm py-2">Nenhum campo geral</p>
+                    ) : (
+                      generalFields.map((field, fieldIdx) => (
+                        <div key={field.id} className={`border rounded-xl transition-all ${editingField === field.id ? 'border-primary bg-surface-hover' : 'border-subtle bg-surface'}`}>
+                          <div className="flex items-center gap-3 p-3">
+                            <div className="flex flex-col gap-1">
+                              <button type="button" onClick={() => moveField(field.id, 'up')} disabled={fieldIdx === 0} className="p-1 text-muted hover:text-main disabled:opacity-30"><FiChevronUp className="w-3 h-3" /></button>
+                              <button type="button" onClick={() => moveField(field.id, 'down')} disabled={fieldIdx === generalFields.length - 1} className="p-1 text-muted hover:text-main disabled:opacity-30"><FiChevronDown className="w-3 h-3" /></button>
+                            </div>
+                            <div className="w-8 h-8 rounded-lg bg-surface-hover border border-subtle flex items-center justify-center text-sm">{getFieldTypeIcon(field.field_type)}</div>
+                            <div className="flex-1 min-w-0">
+                              <input type="text" value={field.name} onChange={(e) => updateField(field.id, { name: e.target.value })} placeholder="Nome do campo" className="w-full bg-transparent border-none text-main placeholder:text-muted focus:outline-none font-medium text-sm" />
+                              <p className="text-xs text-muted">{getFieldTypeLabel(field.field_type)}</p>
+                            </div>
+                            <div className="flex items-center gap-1">
+                              <label className="flex items-center gap-1 text-xs text-secondary">
+                                <input type="checkbox" checked={field.is_required} onChange={(e) => updateField(field.id, { is_required: e.target.checked })} className="rounded border-default bg-surface text-primary focus:ring-primary w-3.5 h-3.5" />
+                                Obrig.
+                              </label>
+                              <button type="button" onClick={() => setEditingField(editingField === field.id ? null : field.id)} className={`p-1.5 rounded-lg transition-colors ${editingField === field.id ? 'bg-primary/20 text-primary' : 'text-muted hover:bg-surface-hover'}`}><FiSettings className="w-3.5 h-3.5" /></button>
+                              <button type="button" onClick={() => removeField(field.id)} className="p-1.5 text-error hover:bg-error/20 rounded-lg transition-colors"><FiTrash2 className="w-3.5 h-3.5" /></button>
                             </div>
                           </div>
-                        )}
+                          {editingField === field.id && (
+                            <div className="px-3 pb-3 pt-2 border-t border-subtle space-y-3">
+                              <div className="grid grid-cols-2 gap-3">
+                                <div>
+                                  <label className="block text-xs text-muted mb-1">Placeholder</label>
+                                  <input type="text" value={field.placeholder} onChange={(e) => updateField(field.id, { placeholder: e.target.value })} className="input text-sm" placeholder="Texto de exemplo..." />
+                                </div>
+                                <div>
+                                  <label className="block text-xs text-muted mb-1">Texto de ajuda</label>
+                                  <input type="text" value={field.help_text} onChange={(e) => updateField(field.id, { help_text: e.target.value })} className="input text-sm" placeholder="Instrucoes para o usuario..." />
+                                </div>
+                              </div>
+                              <div>
+                                <label className="block text-xs text-muted mb-1">Mover para etapa</label>
+                                <select value={field.section_id || ''} onChange={(e) => updateField(field.id, { section_id: e.target.value || null })} className="input text-sm">
+                                  <option value="">Sem etapa (geral)</option>
+                                  {sections.map(s => (<option key={s.id} value={s.id}>{s.name || '(sem nome)'}</option>))}
+                                </select>
+                              </div>
+                              {field.field_type === 'number' && (
+                                <div>
+                                  <label className="block text-xs text-muted mb-1">Tipo de numero</label>
+                                  <div className="grid grid-cols-2 gap-2">
+                                    {[{ value: 'monetario', label: 'Monetario (R$)' }, { value: 'quantidade', label: 'Quantidade (un)' }, { value: 'decimal', label: 'Decimal' }, { value: 'porcentagem', label: 'Porcentagem (%)' }].map(st => (
+                                      <button key={st.value} type="button" onClick={() => updateField(field.id, { options: { numberSubtype: st.value } })} className={`px-3 py-2 rounded-lg text-sm font-medium transition-all border ${(field.options as { numberSubtype?: string } | null)?.numberSubtype === st.value ? 'bg-primary/15 border-primary text-primary' : 'bg-surface border-subtle text-muted hover:border-primary/40'}`}>{st.label}</button>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+                              {(field.field_type === 'dropdown' || field.field_type === 'checkbox_multiple') && (
+                                <div>
+                                  <label className="block text-xs text-muted mb-1">Opcoes (uma por linha)</label>
+                                  <textarea value={Array.isArray(field.options) ? field.options.join('\n') : ''} onChange={(e) => updateField(field.id, { options: e.target.value.split('\n').filter((o: string) => o.trim()) })} rows={4} className="input text-sm resize-none" placeholder="Opcao 1&#10;Opcao 2&#10;Opcao 3" />
+                                </div>
+                              )}
+                              {field.field_type === 'yes_no' && (
+                                <div className="space-y-2">
+                                  <label className="flex items-center gap-2 text-sm text-secondary cursor-pointer">
+                                    <input type="checkbox" checked={(field.options as { allowPhoto?: boolean } | null)?.allowPhoto || false} onChange={(e) => updateField(field.id, { options: { ...((field.options as Record<string, unknown>) || {}), allowPhoto: e.target.checked, photoRequired: false } })} className="rounded border-default bg-surface text-primary focus:ring-primary" />
+                                    Permitir foto
+                                  </label>
+                                  {(field.options as { allowPhoto?: boolean } | null)?.allowPhoto && (
+                                    <select value={(field.options as { photoRequired?: boolean } | null)?.photoRequired ? 'required' : 'optional'} onChange={(e) => updateField(field.id, { options: { ...((field.options as Record<string, unknown>) || {}), photoRequired: e.target.value === 'required' } })} className="input text-sm">
+                                      <option value="optional">Foto opcional</option>
+                                      <option value="required">Foto obrigatoria</option>
+                                    </select>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      ))
+                    )
+                  })()}
+                </div>
+              </div>
+            ) : (
+              <>
+                {/* No sections: flat field list */}
+                <div className="flex flex-wrap gap-2 mb-6 p-4 bg-surface-hover rounded-xl border border-subtle">
+                  <p className="w-full text-sm text-muted mb-2">Adicionar campo:</p>
+                  {fieldTypes.map(type => (
+                    <button key={type.value} type="button" onClick={() => addField(type.value)} className="btn-secondary flex items-center gap-2 px-3 py-2 text-sm">
+                      <span>{type.icon}</span>
+                      <span>{type.label}</span>
+                    </button>
+                  ))}
+                </div>
 
-                        {/* Options for dropdown/checkbox */}
-                        {(field.field_type === 'dropdown' || field.field_type === 'checkbox_multiple') && (
-                          <div>
-                            <label className="block text-xs text-muted mb-1">Opcoes (uma por linha)</label>
-                            <textarea
-                              value={Array.isArray(field.options) ? field.options.join('\n') : ''}
-                              onChange={(e) => updateField(field.id, {
-                                options: e.target.value.split('\n').filter(o => o.trim())
-                              })}
-                              rows={4}
-                              className="input text-sm resize-none"
-                              placeholder="Opcao 1&#10;Opcao 2&#10;Opcao 3"
-                            />
+                {fields.length === 0 ? (
+                  <div className="text-center py-12 text-muted">
+                    <p>Nenhum campo adicionado</p>
+                    <p className="text-sm mt-1">Clique nos botoes acima para adicionar campos</p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {fields.map((field, index) => (
+                      <div key={field.id} className={`border rounded-xl transition-all ${editingField === field.id ? 'border-primary bg-surface-hover' : 'border-subtle bg-surface'}`}>
+                        <div className="flex items-center gap-3 p-4">
+                          <div className="flex flex-col gap-1">
+                            <button type="button" onClick={() => moveField(field.id, 'up')} disabled={index === 0} className="p-1 text-muted hover:text-main disabled:opacity-30"><FiChevronUp className="w-4 h-4" /></button>
+                            <button type="button" onClick={() => moveField(field.id, 'down')} disabled={index === fields.length - 1} className="p-1 text-muted hover:text-main disabled:opacity-30"><FiChevronDown className="w-4 h-4" /></button>
+                          </div>
+                          <div className="w-10 h-10 rounded-lg bg-surface-hover border border-subtle flex items-center justify-center text-lg">{getFieldTypeIcon(field.field_type)}</div>
+                          <div className="flex-1">
+                            <input type="text" value={field.name} onChange={(e) => updateField(field.id, { name: e.target.value })} placeholder="Nome do campo" className="w-full bg-transparent border-none text-main placeholder:text-muted focus:outline-none font-medium" />
+                            <p className="text-xs text-muted">{getFieldTypeLabel(field.field_type)}</p>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <label className="flex items-center gap-2 text-sm text-secondary">
+                              <input type="checkbox" checked={field.is_required} onChange={(e) => updateField(field.id, { is_required: e.target.checked })} className="rounded border-default bg-surface text-primary focus:ring-primary" />
+                              Obrigatorio
+                            </label>
+                            <button type="button" onClick={() => setEditingField(editingField === field.id ? null : field.id)} className={`p-2 rounded-lg transition-colors ${editingField === field.id ? 'bg-primary/20 text-primary' : 'text-muted hover:bg-surface-hover'}`}><FiSettings className="w-4 h-4" /></button>
+                            <button type="button" onClick={() => removeField(field.id)} className="p-2 text-error hover:bg-error/20 rounded-lg transition-colors"><FiTrash2 className="w-4 h-4" /></button>
+                          </div>
+                        </div>
+                        {editingField === field.id && (
+                          <div className="px-4 pb-4 pt-2 border-t border-subtle space-y-4">
+                            <div className="grid grid-cols-2 gap-4">
+                              <div>
+                                <label className="block text-xs text-muted mb-1">Placeholder</label>
+                                <input type="text" value={field.placeholder} onChange={(e) => updateField(field.id, { placeholder: e.target.value })} className="input text-sm" placeholder="Texto de exemplo..." />
+                              </div>
+                              <div>
+                                <label className="block text-xs text-muted mb-1">Texto de ajuda</label>
+                                <input type="text" value={field.help_text} onChange={(e) => updateField(field.id, { help_text: e.target.value })} className="input text-sm" placeholder="Instrucoes para o usuario..." />
+                              </div>
+                            </div>
+                            {field.field_type === 'number' && (
+                              <div>
+                                <label className="block text-xs text-muted mb-1">Tipo de numero</label>
+                                <div className="grid grid-cols-2 gap-2">
+                                  {[{ value: 'monetario', label: 'Monetario (R$)' }, { value: 'quantidade', label: 'Quantidade (un)' }, { value: 'decimal', label: 'Decimal' }, { value: 'porcentagem', label: 'Porcentagem (%)' }].map(st => (
+                                    <button key={st.value} type="button" onClick={() => updateField(field.id, { options: { numberSubtype: st.value } })} className={`px-3 py-2 rounded-lg text-sm font-medium transition-all border ${(field.options as { numberSubtype?: string } | null)?.numberSubtype === st.value ? 'bg-primary/15 border-primary text-primary' : 'bg-surface border-subtle text-muted hover:border-primary/40'}`}>{st.label}</button>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                            {(field.field_type === 'dropdown' || field.field_type === 'checkbox_multiple') && (
+                              <div>
+                                <label className="block text-xs text-muted mb-1">Opcoes (uma por linha)</label>
+                                <textarea value={Array.isArray(field.options) ? field.options.join('\n') : ''} onChange={(e) => updateField(field.id, { options: e.target.value.split('\n').filter((o: string) => o.trim()) })} rows={4} className="input text-sm resize-none" placeholder="Opcao 1&#10;Opcao 2&#10;Opcao 3" />
+                              </div>
+                            )}
+                            {field.field_type === 'yes_no' && (
+                              <div className="space-y-2">
+                                <label className="flex items-center gap-2 text-sm text-secondary cursor-pointer">
+                                  <input type="checkbox" checked={(field.options as { allowPhoto?: boolean } | null)?.allowPhoto || false} onChange={(e) => updateField(field.id, { options: { ...((field.options as Record<string, unknown>) || {}), allowPhoto: e.target.checked, photoRequired: false } })} className="rounded border-default bg-surface text-primary focus:ring-primary" />
+                                  Permitir foto
+                                </label>
+                                {(field.options as { allowPhoto?: boolean } | null)?.allowPhoto && (
+                                  <select value={(field.options as { photoRequired?: boolean } | null)?.photoRequired ? 'required' : 'optional'} onChange={(e) => updateField(field.id, { options: { ...((field.options as Record<string, unknown>) || {}), photoRequired: e.target.value === 'required' } })} className="input text-sm">
+                                    <option value="optional">Foto opcional</option>
+                                    <option value="required">Foto obrigatoria</option>
+                                  </select>
+                                )}
+                              </div>
+                            )}
                           </div>
                         )}
                       </div>
-                    )}
+                    ))}
                   </div>
-                ))}
-              </div>
+                )}
+              </>
             )}
           </div>
 

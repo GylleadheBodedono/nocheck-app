@@ -62,7 +62,7 @@ export function ReadOnlyFieldRenderer({ field, value }: ReadOnlyFieldRendererPro
         )
 
       case 'yes_no':
-        return <YesNoReadOnly value={String(value)} />
+        return <YesNoReadOnly value={value} />
 
       case 'rating':
         return <RatingReadOnly value={String(value)} />
@@ -197,18 +197,38 @@ function GPSReadOnly({ value }: { value: GPSValue }) {
   )
 }
 
-function YesNoReadOnly({ value }: { value: string }) {
-  const isSim = value === 'sim'
+function YesNoReadOnly({ value }: { value: unknown }) {
+  // Parse value - can be string (legacy) or { answer, photos }
+  const answer: string = typeof value === 'object' && value !== null && 'answer' in (value as Record<string, unknown>)
+    ? (value as Record<string, unknown>).answer as string
+    : (typeof value === 'string' ? String(value) : '')
+  const photos: string[] = typeof value === 'object' && value !== null && 'photos' in (value as Record<string, unknown>)
+    ? (value as Record<string, unknown>).photos as string[]
+    : []
+
+  const isSim = answer === 'sim'
   return (
-    <span
-      className={`inline-block px-4 py-2 rounded-xl font-semibold text-sm border-2 ${
-        isSim
-          ? 'bg-emerald-500/20 border-emerald-500 text-emerald-400'
-          : 'bg-red-500/20 border-red-500 text-red-400'
-      }`}
-    >
-      {isSim ? 'Sim' : 'Nao'}
-    </span>
+    <div className="space-y-2">
+      <span
+        className={`inline-block px-4 py-2 rounded-xl font-semibold text-sm border-2 ${
+          isSim
+            ? 'bg-emerald-500/20 border-emerald-500 text-emerald-400'
+            : 'bg-red-500/20 border-red-500 text-red-400'
+        }`}
+      >
+        {isSim ? 'Sim' : 'Nao'}
+      </span>
+      {photos.length > 0 && (
+        <div className="grid grid-cols-3 gap-2">
+          {photos.map((photo, index) => (
+            <div key={index} className="relative aspect-square rounded-lg overflow-hidden bg-surface border border-subtle">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={photo} alt={`Foto ${index + 1}`} className="w-full h-full object-cover" />
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
   )
 }
 

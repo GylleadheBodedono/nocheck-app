@@ -190,6 +190,13 @@ export default function ChecklistViewPage() {
         const json = response.value_json as { photos?: string[] } | null
         return json?.photos || []
       }
+      case 'yes_no': {
+        const yJson = response.value_json as { photos?: string[] } | null
+        if (yJson?.photos && yJson.photos.length > 0) {
+          return { answer: response.value_text || '', photos: yJson.photos }
+        }
+        return response.value_text
+      }
       case 'checkbox_multiple':
       case 'signature':
       case 'gps':

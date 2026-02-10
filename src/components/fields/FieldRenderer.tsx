@@ -39,7 +39,7 @@ export function FieldRenderer({ field, value, onChange, error }: FieldRendererPr
       case 'calculated':
         return <CalculatedField field={field} value={value as number} />
       case 'yes_no':
-        return <YesNoField field={field} value={value as string} onChange={onChange} />
+        return <YesNoField field={field} value={value} onChange={onChange} />
       case 'rating':
         return <RatingField field={field} value={value as string} onChange={onChange} />
       default:
@@ -139,6 +139,35 @@ function NumberField({ field, value, onChange }: { field: TemplateField; value: 
   )
 }
 
+// Shared image compression utility
+function compressImage(file: File, maxWidth = 1200, quality = 0.7): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.readAsDataURL(file)
+    reader.onload = (e) => {
+      const img = new Image()
+      img.src = e.target?.result as string
+      img.onload = () => {
+        const canvas = document.createElement('canvas')
+        let width = img.width
+        let height = img.height
+        if (width > maxWidth) {
+          height = (height * maxWidth) / width
+          width = maxWidth
+        }
+        canvas.width = width
+        canvas.height = height
+        const ctx = canvas.getContext('2d')
+        if (!ctx) { reject(new Error('Could not get canvas context')); return }
+        ctx.drawImage(img, 0, 0, width, height)
+        resolve(canvas.toDataURL('image/jpeg', quality))
+      }
+      img.onerror = reject
+    }
+    reader.onerror = reject
+  })
+}
+
 // Photo Field
 function PhotoField({ field, value, onChange }: { field: TemplateField; value: string[]; onChange: (v: string[]) => void }) {
   const inputRef = useRef<HTMLInputElement>(null)
@@ -171,43 +200,6 @@ function PhotoField({ field, value, onChange }: { field: TemplateField; value: s
 
   const removePhoto = (index: number) => {
     onChange(photos.filter((_, i) => i !== index))
-  }
-
-  const compressImage = (file: File, maxWidth = 1200, quality = 0.7): Promise<string> => {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader()
-      reader.readAsDataURL(file)
-      reader.onload = (e) => {
-        const img = new Image()
-        img.src = e.target?.result as string
-        img.onload = () => {
-          const canvas = document.createElement('canvas')
-          let width = img.width
-          let height = img.height
-
-          // Resize if too large
-          if (width > maxWidth) {
-            height = (height * maxWidth) / width
-            width = maxWidth
-          }
-
-          canvas.width = width
-          canvas.height = height
-
-          const ctx = canvas.getContext('2d')
-          if (!ctx) {
-            reject(new Error('Could not get canvas context'))
-            return
-          }
-
-          ctx.drawImage(img, 0, 0, width, height)
-          const compressed = canvas.toDataURL('image/jpeg', quality)
-          resolve(compressed)
-        }
-        img.onerror = reject
-      }
-      reader.onerror = reject
-    })
   }
 
   const maxPhotos = (field.options as { maxPhotos?: number } | null)?.maxPhotos || 3
@@ -564,33 +556,136 @@ function CalculatedField({ field: _field, value }: { field: TemplateField; value
   )
 }
 
-// Yes/No Field
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-function YesNoField({ field: _field, value, onChange }: { field: TemplateField; value: string; onChange: (v: string) => void }) {
+// Yes/No Field (with optional photo support)
+function YesNoField({ field, value, onChange }: { field: TemplateField; value: unknown; onChange: (v: unknown) => void }) {
+  const allowPhoto = (field.options as { allowPhoto?: boolean } | null)?.allowPhoto || false
+  const inputRef = useRef<HTMLInputElement>(null)
+  const [compressingPhoto, setCompressingPhoto] = useState(false)
+
+  // Parse value - can be string (legacy) or { answer, photos }
+  const answer: string = typeof value === 'object' && value !== null && 'answer' in (value as Record<string, unknown>)
+    ? (value as Record<string, unknown>).answer as string
+    : (typeof value === 'string' ? value : '')
+  const photos: string[] = typeof value === 'object' && value !== null && 'photos' in (value as Record<string, unknown>)
+    ? (value as Record<string, unknown>).photos as string[]
+    : []
+
+  const handleAnswer = (ans: string) => {
+    if (allowPhoto && photos.length > 0) {
+      onChange({ answer: ans, photos })
+    } else {
+      onChange(ans)
+    }
+  }
+
+  const handlePhotosChange = (newPhotos: string[]) => {
+    if (newPhotos.length > 0) {
+      onChange({ answer: answer || '', photos: newPhotos })
+    } else if (answer) {
+      onChange(answer)
+    } else {
+      onChange('')
+    }
+  }
+
+  const handleCapture = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files
+    if (!files) return
+    setCompressingPhoto(true)
+    const newPhotos: string[] = []
+    for (let i = 0; i < files.length; i++) {
+      try {
+        const compressed = await compressImage(files[i], 1200, 0.7)
+        newPhotos.push(compressed)
+      } catch (err) {
+        console.error('Error compressing image:', err)
+      }
+    }
+    handlePhotosChange([...photos, ...newPhotos])
+    setCompressingPhoto(false)
+    if (inputRef.current) inputRef.current.value = ''
+  }
+
+  const removePhoto = (index: number) => {
+    handlePhotosChange(photos.filter((_, i) => i !== index))
+  }
+
   return (
-    <div className="flex gap-3">
-      <button
-        type="button"
-        onClick={() => onChange('sim')}
-        className={`flex-1 py-4 rounded-xl font-semibold text-lg transition-all border-2 ${
-          value === 'sim'
-            ? 'bg-emerald-500/20 border-emerald-500 text-emerald-400'
-            : 'bg-surface border-subtle text-muted hover:border-emerald-500/50 hover:text-emerald-400'
-        }`}
-      >
-        Sim
-      </button>
-      <button
-        type="button"
-        onClick={() => onChange('nao')}
-        className={`flex-1 py-4 rounded-xl font-semibold text-lg transition-all border-2 ${
-          value === 'nao'
-            ? 'bg-red-500/20 border-red-500 text-red-400'
-            : 'bg-surface border-subtle text-muted hover:border-red-500/50 hover:text-red-400'
-        }`}
-      >
-        Nao
-      </button>
+    <div className="space-y-3">
+      <div className="flex gap-3">
+        <button
+          type="button"
+          onClick={() => handleAnswer('sim')}
+          className={`flex-1 py-4 rounded-xl font-semibold text-lg transition-all border-2 ${
+            answer === 'sim'
+              ? 'bg-emerald-500/20 border-emerald-500 text-emerald-400'
+              : 'bg-surface border-subtle text-muted hover:border-emerald-500/50 hover:text-emerald-400'
+          }`}
+        >
+          Sim
+        </button>
+        <button
+          type="button"
+          onClick={() => handleAnswer('nao')}
+          className={`flex-1 py-4 rounded-xl font-semibold text-lg transition-all border-2 ${
+            answer === 'nao'
+              ? 'bg-red-500/20 border-red-500 text-red-400'
+              : 'bg-surface border-subtle text-muted hover:border-red-500/50 hover:text-red-400'
+          }`}
+        >
+          Nao
+        </button>
+      </div>
+
+      {allowPhoto && (
+        <div className="space-y-2">
+          {photos.length > 0 && (
+            <div className="grid grid-cols-3 gap-2">
+              {photos.map((photo, index) => (
+                <div key={index} className="relative aspect-square rounded-lg overflow-hidden bg-surface">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={photo} alt={`Foto ${index + 1}`} className="w-full h-full object-cover" />
+                  <button
+                    type="button"
+                    onClick={() => removePhoto(index)}
+                    className="absolute top-1 right-1 p-1 bg-red-500 rounded-full text-white"
+                  >
+                    <FiX className="w-4 h-4" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+          {photos.length < 3 && (
+            <button
+              type="button"
+              onClick={() => inputRef.current?.click()}
+              disabled={compressingPhoto}
+              className="w-full py-3 border-2 border-dashed border-default hover:border-primary rounded-xl text-secondary hover:text-primary transition-colors flex items-center justify-center gap-2 disabled:opacity-50 text-sm"
+            >
+              {compressingPhoto ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-secondary border-t-transparent rounded-full animate-spin" />
+                  <span>Processando...</span>
+                </>
+              ) : (
+                <>
+                  <FiCamera className="w-4 h-4" />
+                  <span>Anexar Foto ({photos.length}/3)</span>
+                </>
+              )}
+            </button>
+          )}
+          <input
+            ref={inputRef}
+            type="file"
+            accept="image/*"
+            capture="environment"
+            onChange={handleCapture}
+            className="hidden"
+          />
+        </div>
+      )}
     </div>
   )
 }

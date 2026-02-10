@@ -317,6 +317,15 @@ function ChecklistForm() {
             restoredResponses[r.field_id] = json?.photos || []
             break
           }
+          case 'yes_no': {
+            const yJson = r.value_json as { photos?: string[] } | null
+            if (yJson?.photos && yJson.photos.length > 0) {
+              restoredResponses[r.field_id] = { answer: r.value_text || '', photos: yJson.photos }
+            } else {
+              restoredResponses[r.field_id] = r.value_text
+            }
+            break
+          }
           case 'checkbox_multiple':
           case 'signature':
           case 'gps':
@@ -396,6 +405,24 @@ function ChecklistForm() {
         } else {
           valueJson = { photos: photos || [], uploadedToDrive: false }
         }
+      } else if (field.field_type === 'yes_no') {
+        // yes_no can be string (legacy) or { answer, photos }
+        if (typeof value === 'object' && value !== null && 'answer' in (value as Record<string, unknown>)) {
+          const yesNoObj = value as { answer: string; photos?: string[] }
+          valueText = yesNoObj.answer
+          if (yesNoObj.photos && yesNoObj.photos.length > 0 && attemptUpload) {
+            const uploadedUrls: string[] = []
+            for (let i = 0; i < yesNoObj.photos.length; i++) {
+              const url = await uploadPhoto(yesNoObj.photos[i], `checklist_${Date.now()}_yesno_foto_${i + 1}.jpg`)
+              uploadedUrls.push(url || yesNoObj.photos[i])
+            }
+            valueJson = { photos: uploadedUrls }
+          } else if (yesNoObj.photos && yesNoObj.photos.length > 0) {
+            valueJson = { photos: yesNoObj.photos }
+          }
+        } else {
+          valueText = value as string
+        }
       } else if (['checkbox_multiple', 'signature', 'gps'].includes(field.field_type)) {
         valueJson = value
       } else {
@@ -418,6 +445,21 @@ function ChecklistForm() {
         const value = responses[fieldId]
         if (value === undefined || value === null || value === '' || (Array.isArray(value) && value.length === 0)) {
           newErrors[fieldId] = 'Este campo e obrigatorio'
+        }
+        // For yes_no with required answer: check answer exists
+        if (field.field_type === 'yes_no' && typeof value === 'object' && value !== null) {
+          const ans = (value as Record<string, unknown>).answer
+          if (!ans || ans === '') {
+            newErrors[fieldId] = 'Este campo e obrigatorio'
+          }
+        }
+      }
+      // Photo required validation for yes_no fields
+      if (field.field_type === 'yes_no' && (field.options as { photoRequired?: boolean } | null)?.photoRequired) {
+        const value = responses[fieldId]
+        const hasPhotos = typeof value === 'object' && value !== null && 'photos' in (value as Record<string, unknown>) && ((value as Record<string, unknown>).photos as string[]).length > 0
+        if (!hasPhotos) {
+          newErrors[fieldId] = 'Foto obrigatoria para este campo'
         }
       }
     }
