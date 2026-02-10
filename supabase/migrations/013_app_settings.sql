@@ -41,21 +41,28 @@ CREATE POLICY "Admins podem atualizar configuracoes"
 -- ============================================
 -- 2. REMOCAO DO PAPEL DE GERENTE
 -- O gerente agora e uma funcao normal na tabela functions.
+-- Ordem: dropar policies primeiro, depois funcoes e tabelas.
 -- ============================================
 
--- 2a. Dropar tabela store_managers e suas policies
+-- 2a. Dropar policies que dependem de user_is_manager()
+DROP POLICY IF EXISTS "checklists_select" ON public.checklists;
+DROP POLICY IF EXISTS "checklists_insert" ON public.checklists;
+DROP POLICY IF EXISTS "responses_select" ON public.checklist_responses;
+DROP POLICY IF EXISTS "attachments_select" ON public.attachments;
+
+-- 2b. Dropar tabela store_managers e suas policies
 DROP TABLE IF EXISTS public.store_managers CASCADE;
 
--- 2b. Dropar funcoes relacionadas ao gerente
+-- 2c. Dropar funcoes relacionadas ao gerente
 DROP FUNCTION IF EXISTS public.user_is_manager();
 DROP FUNCTION IF EXISTS public.is_store_manager(uuid, bigint);
 DROP FUNCTION IF EXISTS public.user_managed_store_ids(uuid);
 
--- 2c. Remover coluna is_manager da tabela users
+-- 2d. Remover coluna is_manager da tabela users
 ALTER TABLE public.users DROP COLUMN IF EXISTS is_manager;
 
 -- ============================================
--- 3. ATUALIZAR RLS POLICIES (remover referencia a user_is_manager)
+-- 3. RECRIAR RLS POLICIES (sem referencia a user_is_manager)
 -- ============================================
 
 -- Checklists: admin ve tudo, usuario ve so os seus
