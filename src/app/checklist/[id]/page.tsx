@@ -14,6 +14,9 @@ import {
   FiCheckCircle,
   FiClock,
   FiTag,
+  FiLayers,
+  FiChevronDown,
+  FiChevronUp,
 } from 'react-icons/fi'
 
 type ChecklistDetail = {
@@ -43,11 +46,30 @@ type ResponseRow = {
   value_json: unknown
 }
 
+type TemplateSection = {
+  id: number
+  template_id: number
+  name: string
+  description: string | null
+  sort_order: number
+}
+
+type ChecklistSectionRow = {
+  id: number
+  checklist_id: number
+  section_id: number
+  status: string
+  completed_at: string | null
+}
+
 export default function ChecklistViewPage() {
   const [loading, setLoading] = useState(true)
   const [checklist, setChecklist] = useState<ChecklistDetail | null>(null)
   const [fields, setFields] = useState<TemplateField[]>([])
   const [responses, setResponses] = useState<ResponseRow[]>([])
+  const [sections, setSections] = useState<TemplateSection[]>([])
+  const [checklistSections, setChecklistSections] = useState<ChecklistSectionRow[]>([])
+  const [collapsedSections, setCollapsedSections] = useState<Set<number>>(new Set())
   const [error, setError] = useState<string | null>(null)
 
   const router = useRouter()
@@ -114,24 +136,36 @@ export default function ChecklistViewPage() {
 
       setChecklist(checklistData)
 
-      // Fetch template fields
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data: fieldsData } = await (supabase as any)
-        .from('template_fields')
-        .select('*')
-        .eq('template_id', checklistData.template_id)
-        .order('display_order', { ascending: true })
+      // Fetch template fields + sections + checklist_sections in parallel
+      const [fieldsRes, sectionsRes, responsesRes, checklistSectionsRes] = await Promise.all([
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (supabase as any)
+          .from('template_fields')
+          .select('*')
+          .eq('template_id', checklistData.template_id)
+          .order('sort_order', { ascending: true }),
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (supabase as any)
+          .from('template_sections')
+          .select('*')
+          .eq('template_id', checklistData.template_id)
+          .order('sort_order', { ascending: true }),
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (supabase as any)
+          .from('checklist_responses')
+          .select('id, field_id, value_text, value_number, value_json')
+          .eq('checklist_id', Number(checklistId)),
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (supabase as any)
+          .from('checklist_sections')
+          .select('*')
+          .eq('checklist_id', Number(checklistId)),
+      ])
 
-      setFields(fieldsData || [])
-
-      // Fetch responses
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data: responsesData } = await (supabase as any)
-        .from('checklist_responses')
-        .select('id, field_id, value_text, value_number, value_json')
-        .eq('checklist_id', Number(checklistId))
-
-      setResponses(responsesData || [])
+      setFields(fieldsRes.data || [])
+      setSections(sectionsRes.data || [])
+      setResponses(responsesRes.data || [])
+      setChecklistSections(checklistSectionsRes.data || [])
     } catch (err) {
       console.error('[ChecklistView] Erro:', err)
       setError('Erro ao carregar checklist')
@@ -171,6 +205,33 @@ export default function ChecklistViewPage() {
       hour: '2-digit', minute: '2-digit',
     })
   }
+
+  const toggleSectionCollapse = (sectionId: number) => {
+    setCollapsedSections(prev => {
+      const next = new Set(prev)
+      if (next.has(sectionId)) {
+        next.delete(sectionId)
+      } else {
+        next.add(sectionId)
+      }
+      return next
+    })
+  }
+
+  const hasSections = sections.length > 0
+
+  // Group fields by section
+  const fieldsBySection = useMemo(() => {
+    if (!hasSections) return null
+    const map = new Map<number | null, TemplateField[]>()
+    for (const field of fields) {
+      const sectionId = (field as TemplateField & { section_id: number | null }).section_id
+      if (!map.has(sectionId)) map.set(sectionId, [])
+      map.get(sectionId)!.push(field)
+    }
+    return map
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fields, sections])
 
   const statusLabel: Record<string, { text: string; color: string }> = {
     concluido: { text: 'Concluido', color: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' },
@@ -274,27 +335,135 @@ export default function ChecklistViewPage() {
         <div className="space-y-4">
           <h3 className="font-semibold text-main">Respostas ({responses.length}/{fields.length})</h3>
 
-          {fields.map((field) => {
-            const value = getFieldValue(field)
-            const gpsVal = field.field_type === 'gps' ? value as GPSValue : null
+          {hasSections && fieldsBySection ? (
+            <>
+              {/* Render fields grouped by section */}
+              {sections.map(section => {
+                const sectionFields = fieldsBySection.get(section.id) || []
+                const sectionStatus = checklistSections.find(cs => cs.section_id === section.id)
+                const isCollapsed = collapsedSections.has(section.id)
+                const sectionResponses = sectionFields.filter(f => responses.some(r => r.field_id === f.id))
 
-            return (
-              <div key={field.id} className="card p-4">
-                <ReadOnlyFieldRenderer field={field} value={value} />
-                {/* Show GPS mini-map hint */}
-                {gpsVal?.latitude && gpsVal?.longitude && (
-                  <a
-                    href={`https://www.google.com/maps?q=${gpsVal.latitude},${gpsVal.longitude}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-xs text-primary hover:underline mt-2 inline-block"
-                  >
-                    Ver no Google Maps
-                  </a>
-                )}
-              </div>
-            )
-          })}
+                return (
+                  <div key={section.id} className="card overflow-hidden">
+                    {/* Section header */}
+                    <button
+                      onClick={() => toggleSectionCollapse(section.id)}
+                      className="w-full p-4 flex items-center justify-between bg-surface-hover/50 hover:bg-surface-hover transition-colors"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${
+                          sectionStatus?.status === 'concluido'
+                            ? 'bg-success/20'
+                            : 'bg-warning/20'
+                        }`}>
+                          {sectionStatus?.status === 'concluido' ? (
+                            <FiCheckCircle className="w-4 h-4 text-success" />
+                          ) : (
+                            <FiLayers className="w-4 h-4 text-warning" />
+                          )}
+                        </div>
+                        <div className="text-left">
+                          <h4 className="font-semibold text-main text-sm">{section.name}</h4>
+                          <p className="text-xs text-muted">
+                            {sectionResponses.length}/{sectionFields.length} campos preenchidos
+                            {sectionStatus?.completed_at && ` - Concluido ${formatDate(sectionStatus.completed_at)}`}
+                          </p>
+                        </div>
+                      </div>
+                      {isCollapsed ? (
+                        <FiChevronDown className="w-5 h-5 text-muted" />
+                      ) : (
+                        <FiChevronUp className="w-5 h-5 text-muted" />
+                      )}
+                    </button>
+
+                    {/* Section fields */}
+                    {!isCollapsed && (
+                      <div className="p-4 space-y-3">
+                        {sectionFields.map(field => {
+                          const value = getFieldValue(field)
+                          const gpsVal = field.field_type === 'gps' ? value as GPSValue : null
+                          return (
+                            <div key={field.id} className="p-3 bg-surface rounded-xl">
+                              <ReadOnlyFieldRenderer field={field} value={value} />
+                              {gpsVal?.latitude && gpsVal?.longitude && (
+                                <a
+                                  href={`https://www.google.com/maps?q=${gpsVal.latitude},${gpsVal.longitude}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-xs text-primary hover:underline mt-2 inline-block"
+                                >
+                                  Ver no Google Maps
+                                </a>
+                              )}
+                            </div>
+                          )
+                        })}
+                        {sectionFields.length === 0 && (
+                          <p className="text-sm text-muted text-center py-2">Nenhum campo nesta secao</p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+
+              {/* Fields without section (orphan fields) */}
+              {(() => {
+                const unsectionedFields = fieldsBySection.get(null) || []
+                if (unsectionedFields.length === 0) return null
+                return (
+                  <div className="space-y-3">
+                    <h4 className="font-medium text-secondary text-sm">Outros Campos</h4>
+                    {unsectionedFields.map(field => {
+                      const value = getFieldValue(field)
+                      const gpsVal = field.field_type === 'gps' ? value as GPSValue : null
+                      return (
+                        <div key={field.id} className="card p-4">
+                          <ReadOnlyFieldRenderer field={field} value={value} />
+                          {gpsVal?.latitude && gpsVal?.longitude && (
+                            <a
+                              href={`https://www.google.com/maps?q=${gpsVal.latitude},${gpsVal.longitude}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-xs text-primary hover:underline mt-2 inline-block"
+                            >
+                              Ver no Google Maps
+                            </a>
+                          )}
+                        </div>
+                      )
+                    })}
+                  </div>
+                )
+              })()}
+            </>
+          ) : (
+            /* Original flat rendering for templates without sections */
+            <>
+              {fields.map((field) => {
+                const value = getFieldValue(field)
+                const gpsVal = field.field_type === 'gps' ? value as GPSValue : null
+
+                return (
+                  <div key={field.id} className="card p-4">
+                    <ReadOnlyFieldRenderer field={field} value={value} />
+                    {gpsVal?.latitude && gpsVal?.longitude && (
+                      <a
+                        href={`https://www.google.com/maps?q=${gpsVal.latitude},${gpsVal.longitude}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-xs text-primary hover:underline mt-2 inline-block"
+                      >
+                        Ver no Google Maps
+                      </a>
+                    )}
+                  </div>
+                )
+              })}
+            </>
+          )}
 
           {fields.length === 0 && (
             <div className="card p-8 text-center text-muted">

@@ -15,11 +15,21 @@ import {
   FiClipboard,
   FiGrid,
   FiBriefcase,
+  FiPlus,
+  FiLayers,
 } from 'react-icons/fi'
 import type { Store, FieldType, TemplateCategory, Sector, FunctionRow } from '@/types/database'
 
+type SectionConfig = {
+  id: string
+  name: string
+  description: string
+  sort_order: number
+}
+
 type FieldConfig = {
   id: string
+  section_id: string | null // local section id
   name: string
   field_type: FieldType
   is_required: boolean
@@ -55,6 +65,9 @@ export default function NovoTemplatePage() {
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
   const [category, setCategory] = useState<TemplateCategory>('recebimento')
+
+  // Sections
+  const [sections, setSections] = useState<SectionConfig[]>([])
 
   // Fields
   const [fields, setFields] = useState<FieldConfig[]>([])
@@ -120,9 +133,42 @@ export default function NovoTemplatePage() {
     return sectors.filter(s => s.store_id === storeId)
   }
 
+  const addSection = () => {
+    const newSection: SectionConfig = {
+      id: `section_${Date.now()}`,
+      name: '',
+      description: '',
+      sort_order: sections.length + 1,
+    }
+    setSections([...sections, newSection])
+  }
+
+  const updateSection = (id: string, updates: Partial<SectionConfig>) => {
+    setSections(sections.map(s => s.id === id ? { ...s, ...updates } : s))
+  }
+
+  const removeSection = (id: string) => {
+    setSections(sections.filter(s => s.id !== id))
+    // Unassign fields from this section
+    setFields(fields.map(f => f.section_id === id ? { ...f, section_id: null } : f))
+  }
+
+  const moveSectionOrder = (id: string, direction: 'up' | 'down') => {
+    const index = sections.findIndex(s => s.id === id)
+    if ((direction === 'up' && index === 0) || (direction === 'down' && index === sections.length - 1)) return
+    const newSections = [...sections]
+    const newIndex = direction === 'up' ? index - 1 : index + 1
+    const temp = newSections[index]
+    newSections[index] = newSections[newIndex]
+    newSections[newIndex] = temp
+    newSections.forEach((s, i) => s.sort_order = i + 1)
+    setSections(newSections)
+  }
+
   const addField = (type: FieldType) => {
     const newField: FieldConfig = {
       id: `field_${Date.now()}`,
+      section_id: null,
       name: '',
       field_type: type,
       is_required: true,
@@ -245,13 +291,39 @@ export default function NovoTemplatePage() {
 
       if (templateError) throw templateError
 
-      // 2. Create fields
+      // 2. Create sections (if any)
+      const sectionIdMap: Record<string, number> = {} // local id → db id
+      if (sections.length > 0) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const { data: sectionsData, error: sectionsError } = await (supabase as any)
+          .from('template_sections')
+          .insert(
+            sections.map(s => ({
+              template_id: template.id,
+              name: s.name,
+              description: s.description || null,
+              sort_order: s.sort_order,
+            }))
+          )
+          .select()
+
+        if (sectionsError) throw sectionsError
+        // Map local section ids to database ids (inserted in same order)
+        if (sectionsData) {
+          sections.forEach((s, i) => {
+            sectionIdMap[s.id] = sectionsData[i].id
+          })
+        }
+      }
+
+      // 3. Create fields
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { error: fieldsError } = await (supabase as any)
         .from('template_fields')
         .insert(
           fields.map(f => ({
             template_id: template.id,
+            section_id: f.section_id ? sectionIdMap[f.section_id] || null : null,
             name: f.name,
             field_type: f.field_type,
             is_required: f.is_required,
@@ -381,6 +453,59 @@ export default function NovoTemplatePage() {
                 </select>
               </div>
             </div>
+          </div>
+
+          {/* Sections (optional) */}
+          <div className="card p-6">
+            <div className="flex items-center justify-between mb-2">
+              <h2 className="text-lg font-semibold text-main flex items-center gap-2">
+                <FiLayers className="w-5 h-5 text-primary" />
+                Etapas / Secoes (Opcional)
+              </h2>
+              <button
+                type="button"
+                onClick={addSection}
+                className="btn-secondary flex items-center gap-2 px-3 py-2 text-sm"
+              >
+                <FiPlus className="w-4 h-4" />
+                Adicionar Etapa
+              </button>
+            </div>
+            <p className="text-sm text-muted mb-4">
+              Divida o checklist em etapas para preenchimento em momentos diferentes do dia.
+              Se nenhuma etapa for criada, o checklist sera preenchido de uma vez.
+            </p>
+
+            {sections.length > 0 && (
+              <div className="space-y-2">
+                {sections.map((section, idx) => (
+                  <div key={section.id} className="flex items-center gap-3 p-3 border border-subtle rounded-xl bg-surface">
+                    <div className="flex flex-col gap-1">
+                      <button type="button" onClick={() => moveSectionOrder(section.id, 'up')} disabled={idx === 0} className="p-1 text-muted hover:text-main disabled:opacity-30">
+                        <FiChevronUp className="w-3 h-3" />
+                      </button>
+                      <button type="button" onClick={() => moveSectionOrder(section.id, 'down')} disabled={idx === sections.length - 1} className="p-1 text-muted hover:text-main disabled:opacity-30">
+                        <FiChevronDown className="w-3 h-3" />
+                      </button>
+                    </div>
+                    <span className="w-7 h-7 rounded-lg bg-primary/10 flex items-center justify-center text-xs font-bold text-primary">{idx + 1}</span>
+                    <input
+                      type="text"
+                      value={section.name}
+                      onChange={(e) => updateSection(section.id, { name: e.target.value })}
+                      placeholder="Nome da etapa"
+                      className="flex-1 bg-transparent border-none text-main placeholder:text-muted focus:outline-none font-medium"
+                    />
+                    <span className="text-xs text-muted">
+                      {fields.filter(f => f.section_id === section.id).length} campos
+                    </span>
+                    <button type="button" onClick={() => removeSection(section.id)} className="p-2 text-error hover:bg-error/20 rounded-lg transition-colors">
+                      <FiTrash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Fields Builder */}
@@ -517,6 +642,23 @@ export default function NovoTemplatePage() {
                             />
                           </div>
                         </div>
+
+                        {/* Section selector */}
+                        {sections.length > 0 && (
+                          <div>
+                            <label className="block text-xs text-muted mb-1">Etapa / Secao</label>
+                            <select
+                              value={field.section_id || ''}
+                              onChange={(e) => updateField(field.id, { section_id: e.target.value || null })}
+                              className="input text-sm"
+                            >
+                              <option value="">Sem etapa</option>
+                              {sections.map(s => (
+                                <option key={s.id} value={s.id}>{s.name || '(sem nome)'}</option>
+                              ))}
+                            </select>
+                          </div>
+                        )}
 
                         {/* Number subtype selector */}
                         {field.field_type === 'number' && (

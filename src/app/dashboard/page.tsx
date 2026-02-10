@@ -7,7 +7,7 @@ import { APP_CONFIG } from '@/lib/config'
 import type { User } from '@supabase/supabase-js'
 import type { Store, ChecklistTemplate, Checklist, Sector, FunctionRow } from '@/types/database'
 import { LoadingPage, Header, OfflineIndicator } from '@/components/ui'
-import { FiClipboard, FiClock, FiCheckCircle, FiUser, FiCalendar, FiAlertCircle, FiWifiOff, FiX, FiRefreshCw, FiAlertTriangle, FiUploadCloud } from 'react-icons/fi'
+import { FiClipboard, FiClock, FiCheckCircle, FiUser, FiCalendar, FiAlertCircle, FiWifiOff, FiX, FiRefreshCw, FiAlertTriangle, FiUploadCloud, FiLayers, FiPlay } from 'react-icons/fi'
 import Link from 'next/link'
 import {
   getAuthCache,
@@ -19,6 +19,14 @@ import {
 import { getPendingChecklists, type PendingChecklist } from '@/lib/offlineStorage'
 import { syncAll, subscribeSyncStatus } from '@/lib/syncService'
 
+type TemplateSection = {
+  id: number
+  template_id: number
+  name: string
+  description: string | null
+  sort_order: number
+}
+
 type TemplateWithVisibility = ChecklistTemplate & {
   template_visibility: Array<{
     store_id: number
@@ -28,6 +36,7 @@ type TemplateWithVisibility = ChecklistTemplate & {
     sector: Sector | null
     function_ref: FunctionRow | null
   }>
+  template_sections?: TemplateSection[]
 }
 
 type UserStoreEntry = {
@@ -59,6 +68,17 @@ type ChecklistWithDetails = Checklist & {
   sector: Sector | null
 }
 
+type InProgressChecklist = {
+  id: number
+  template_id: number
+  store_id: number
+  created_at: string
+  template: { id: number; name: string; category: string | null }
+  store: { id: number; name: string }
+  totalSections: number
+  completedSections: number
+}
+
 type UserStats = {
   completedToday: number
   completedThisWeek: number
@@ -76,6 +96,7 @@ export default function DashboardPage() {
   const [selectedStore, setSelectedStore] = useState<number | null>(null)
   const [recentChecklists, setRecentChecklists] = useState<ChecklistWithDetails[]>([])
   const [pendingChecklists, setPendingChecklists] = useState<PendingChecklist[]>([])
+  const [inProgressChecklists, setInProgressChecklists] = useState<InProgressChecklist[]>([])
   const [isSyncing, setIsSyncing] = useState(false)
   const [stats, setStats] = useState<UserStats>({
     completedToday: 0,
@@ -238,7 +259,7 @@ export default function DashboardPage() {
       setSelectedStore((profileData.store as Store).id)
     }
 
-    // Fetch templates with visibility info
+    // Fetch templates with visibility info + sections
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data: templatesData } = await (supabase as any)
       .from('checklist_templates')
@@ -251,7 +272,8 @@ export default function DashboardPage() {
           store:stores(*),
           sector:sectors(*),
           function_ref:functions(*)
-        )
+        ),
+        template_sections(id, template_id, name, description, sort_order)
       `)
       .eq('is_active', true)
 
@@ -281,6 +303,44 @@ export default function DashboardPage() {
 
     if (checklistsData) {
       setRecentChecklists(checklistsData as ChecklistWithDetails[])
+    }
+
+    // Fetch in-progress sectioned checklists for "Continuar Preenchimento"
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let inProgressQuery = (supabase as any)
+      .from('checklists')
+      .select(`
+        id, template_id, store_id, created_at,
+        template:checklist_templates(id, name, category),
+        store:stores(id, name),
+        checklist_sections(id, section_id, status)
+      `)
+      .eq('status', 'em_andamento')
+      .order('created_at', { ascending: false })
+
+    if (!profileData?.is_admin) {
+      inProgressQuery = inProgressQuery.eq('created_by', user.id)
+    }
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: inProgressData } = await inProgressQuery
+
+    if (inProgressData) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const withProgress = (inProgressData as any[])
+        .filter(c => c.checklist_sections && c.checklist_sections.length > 0)
+        .map(c => ({
+          id: c.id,
+          template_id: c.template_id,
+          store_id: c.store_id,
+          created_at: c.created_at,
+          template: c.template,
+          store: c.store,
+          totalSections: c.checklist_sections.length,
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          completedSections: c.checklist_sections.filter((s: any) => s.status === 'concluido').length,
+        }))
+      setInProgressChecklists(withProgress)
     }
 
     // Fetch pending offline checklists
@@ -797,6 +857,52 @@ export default function DashboardPage() {
               </div>
             )}
 
+            {/* In-Progress Sectioned Checklists */}
+            {inProgressChecklists.length > 0 && (
+              <div className="mb-8">
+                <h2 className="text-lg font-semibold text-main mb-4 flex items-center gap-2">
+                  <FiPlay className="w-5 h-5 text-warning" />
+                  Continuar Preenchimento
+                </h2>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {inProgressChecklists.map(item => {
+                    const pct = item.totalSections > 0
+                      ? Math.round((item.completedSections / item.totalSections) * 100)
+                      : 0
+                    return (
+                      <Link
+                        key={item.id}
+                        href={`${APP_CONFIG.routes.checklistNew}?template=${item.template_id}&store=${item.store_id}&resume=${item.id}`}
+                        className="group card-hover p-5 border-l-4 border-warning"
+                      >
+                        <div className="flex items-start justify-between mb-2">
+                          <div className="w-10 h-10 rounded-xl bg-warning/20 flex items-center justify-center">
+                            <FiLayers className="w-5 h-5 text-warning" />
+                          </div>
+                          <span className="badge-secondary text-xs bg-warning/20 text-warning">
+                            {item.completedSections}/{item.totalSections} etapas
+                          </span>
+                        </div>
+                        <h3 className="font-semibold text-main mb-1 group-hover:text-primary transition-colors">
+                          {item.template?.name}
+                        </h3>
+                        <p className="text-xs text-muted mb-2">
+                          {item.store?.name} - {formatDate(item.created_at)}
+                        </p>
+                        <div className="w-full bg-surface-hover rounded-full h-2">
+                          <div
+                            className="bg-warning h-2 rounded-full transition-all"
+                            style={{ width: `${pct}%` }}
+                          />
+                        </div>
+                        <p className="text-xs text-muted mt-1">{pct}% concluido</p>
+                      </Link>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
+
             {/* Available Checklists */}
             <h2 className="text-lg font-semibold text-main mb-4 flex items-center gap-2">
               <FiClipboard className="w-5 h-5 text-primary" />
@@ -812,7 +918,9 @@ export default function DashboardPage() {
               </div>
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {availableTemplates.map(({ template }) => (
+                {availableTemplates.map(({ template }) => {
+                  const sectionCount = template.template_sections?.length || 0
+                  return (
                     <Link
                       key={template.id}
                       href={`${APP_CONFIG.routes.checklistNew}?template=${template.id}&store=${selectedStore}`}
@@ -822,9 +930,17 @@ export default function DashboardPage() {
                         <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center group-hover:bg-primary/20 transition-colors">
                           <FiClipboard className="w-5 h-5 text-primary" />
                         </div>
-                        <span className="badge-secondary capitalize text-xs">
-                          {template.category || 'Geral'}
-                        </span>
+                        <div className="flex items-center gap-2">
+                          {sectionCount > 0 && (
+                            <span className="badge-secondary text-xs flex items-center gap-1 bg-info/20 text-info">
+                              <FiLayers className="w-3 h-3" />
+                              {sectionCount} etapas
+                            </span>
+                          )}
+                          <span className="badge-secondary capitalize text-xs">
+                            {template.category || 'Geral'}
+                          </span>
+                        </div>
                       </div>
 
                       <h3 className="font-semibold text-main mb-1 group-hover:text-primary transition-colors">
@@ -837,7 +953,8 @@ export default function DashboardPage() {
                         </p>
                       )}
                     </Link>
-                ))}
+                  )
+                })}
               </div>
             )}
           </div>

@@ -153,6 +153,7 @@ export type Database = {
         Row: {
           id: number
           template_id: number
+          section_id: number | null
           name: string
           field_type: FieldType
           is_required: boolean
@@ -166,6 +167,7 @@ export type Database = {
         Insert: {
           id?: number
           template_id: number
+          section_id?: number | null
           name: string
           field_type: FieldType
           is_required?: boolean
@@ -179,6 +181,7 @@ export type Database = {
         Update: {
           id?: number
           template_id?: number
+          section_id?: number | null
           name?: string
           field_type?: FieldType
           is_required?: boolean
@@ -575,6 +578,55 @@ export type Database = {
           created_at?: string
         }
       }
+      // ============================================
+      // TABELAS DE SEÇÕES DE TEMPLATES
+      // ============================================
+      template_sections: {
+        Row: {
+          id: number
+          template_id: number
+          name: string
+          description: string | null
+          sort_order: number
+        }
+        Insert: {
+          id?: number
+          template_id: number
+          name: string
+          description?: string | null
+          sort_order?: number
+        }
+        Update: {
+          id?: number
+          template_id?: number
+          name?: string
+          description?: string | null
+          sort_order?: number
+        }
+      }
+      checklist_sections: {
+        Row: {
+          id: number
+          checklist_id: number
+          section_id: number
+          status: string
+          completed_at: string | null
+        }
+        Insert: {
+          id?: number
+          checklist_id: number
+          section_id: number
+          status?: string
+          completed_at?: string | null
+        }
+        Update: {
+          id?: number
+          checklist_id?: number
+          section_id?: number
+          status?: string
+          completed_at?: string | null
+        }
+      }
     }
     Views: {
       [_ in never]: never
@@ -768,3 +820,13 @@ export type SignatureValue = {
   dataUrl: string // base64 image
   timestamp: string
 }
+
+// Template Sections
+export type TemplateSection = Database['public']['Tables']['template_sections']['Row']
+export type TemplateSectionInsert = Database['public']['Tables']['template_sections']['Insert']
+export type TemplateSectionUpdate = Database['public']['Tables']['template_sections']['Update']
+
+// Checklist Sections (progresso por secao)
+export type ChecklistSectionRow = Database['public']['Tables']['checklist_sections']['Row']
+export type ChecklistSectionInsert = Database['public']['Tables']['checklist_sections']['Insert']
+export type ChecklistSectionUpdate = Database['public']['Tables']['checklist_sections']['Update']

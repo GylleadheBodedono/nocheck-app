@@ -15,12 +15,23 @@ import {
   FiClipboard,
   FiGrid,
   FiBriefcase,
+  FiPlus,
+  FiLayers,
 } from 'react-icons/fi'
 import type { Store, FieldType, TemplateCategory, Sector, TemplateField, FunctionRow } from '@/types/database'
+
+type SectionConfig = {
+  id: string
+  dbId?: number
+  name: string
+  description: string
+  sort_order: number
+}
 
 type FieldConfig = {
   id: string
   dbId?: number // ID from database for existing fields
+  section_id: string | null // local section id
   name: string
   field_type: FieldType
   is_required: boolean
@@ -62,6 +73,10 @@ export default function EditTemplatePage() {
   const [description, setDescription] = useState('')
   const [category, setCategory] = useState<TemplateCategory>('recebimento')
   const [isActive, setIsActive] = useState(true)
+
+  // Sections
+  const [sections, setSections] = useState<SectionConfig[]>([])
+  const [deletedSectionIds, setDeletedSectionIds] = useState<number[]>([])
 
   // Fields
   const [fields, setFields] = useState<FieldConfig[]>([])
@@ -107,13 +122,14 @@ export default function EditTemplatePage() {
 
       if (functionsData) setFunctions(functionsData as FunctionRow[])
 
-      // Fetch template data
+      // Fetch template data with sections
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { data: templateData, error: templateError } = await (supabase as any)
         .from('checklist_templates')
         .select(`
           *,
           fields:template_fields(*),
+          sections:template_sections(*),
           visibility:template_visibility(*)
         `)
         .eq('id', templateId)
@@ -131,12 +147,33 @@ export default function EditTemplatePage() {
       setCategory(templateData.category || 'outros')
       setIsActive(templateData.is_active)
 
+      // Convert sections to SectionConfig format
+      type RawSection = { id: number; name: string; description: string | null; sort_order: number }
+      const existingSections: SectionConfig[] = (templateData.sections || [])
+        .sort((a: RawSection, b: RawSection) => (a.sort_order || 0) - (b.sort_order || 0))
+        .map((s: RawSection) => ({
+          id: `section_${s.id}`,
+          dbId: s.id,
+          name: s.name,
+          description: s.description || '',
+          sort_order: s.sort_order || 0,
+        }))
+      setSections(existingSections)
+
+      // Build db section id → local section id map
+      const dbSectionToLocalMap: Record<number, string> = {}
+      existingSections.forEach(s => {
+        if (s.dbId) dbSectionToLocalMap[s.dbId] = s.id
+      })
+
       // Convert fields to FieldConfig format
+      type RawField = TemplateField & { section_id: number | null }
       const existingFields: FieldConfig[] = (templateData.fields || [])
         .sort((a: TemplateField, b: TemplateField) => (a.sort_order || 0) - (b.sort_order || 0))
-        .map((f: TemplateField) => ({
+        .map((f: RawField) => ({
           id: `field_${f.id}`,
           dbId: f.id,
+          section_id: f.section_id ? dbSectionToLocalMap[f.section_id] || null : null,
           name: f.name,
           field_type: f.field_type,
           is_required: f.is_required,
@@ -199,9 +236,43 @@ export default function EditTemplatePage() {
     return sectors.filter(s => s.store_id === storeId)
   }
 
+  const addSection = () => {
+    const newSection: SectionConfig = {
+      id: `section_${Date.now()}`,
+      name: '',
+      description: '',
+      sort_order: sections.length + 1,
+    }
+    setSections([...sections, newSection])
+  }
+
+  const updateSection = (id: string, updates: Partial<SectionConfig>) => {
+    setSections(sections.map(s => s.id === id ? { ...s, ...updates } : s))
+  }
+
+  const removeSection = (id: string) => {
+    const section = sections.find(s => s.id === id)
+    if (section?.dbId) setDeletedSectionIds(prev => [...prev, section.dbId!])
+    setSections(sections.filter(s => s.id !== id))
+    setFields(fields.map(f => f.section_id === id ? { ...f, section_id: null } : f))
+  }
+
+  const moveSectionOrder = (id: string, direction: 'up' | 'down') => {
+    const index = sections.findIndex(s => s.id === id)
+    if ((direction === 'up' && index === 0) || (direction === 'down' && index === sections.length - 1)) return
+    const newSections = [...sections]
+    const newIndex = direction === 'up' ? index - 1 : index + 1
+    const temp = newSections[index]
+    newSections[index] = newSections[newIndex]
+    newSections[newIndex] = temp
+    newSections.forEach((s, i) => s.sort_order = i + 1)
+    setSections(newSections)
+  }
+
   const addField = (type: FieldType) => {
     const newField: FieldConfig = {
       id: `field_${Date.now()}`,
+      section_id: null,
       name: '',
       field_type: type,
       is_required: true,
@@ -328,7 +399,50 @@ export default function EditTemplatePage() {
 
       if (templateError) throw templateError
 
-      // 2. Delete removed fields
+      // 2. Handle sections: delete removed, update existing, insert new
+      if (deletedSectionIds.length > 0) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const { error: delSecErr } = await (supabase as any)
+          .from('template_sections')
+          .delete()
+          .in('id', deletedSectionIds)
+        if (delSecErr) throw delSecErr
+      }
+
+      // Build local section id → db section id map
+      const sectionIdMap: Record<string, number> = {}
+
+      // Update existing sections
+      for (const section of sections.filter(s => s.dbId)) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const { error: updSecErr } = await (supabase as any)
+          .from('template_sections')
+          .update({ name: section.name, description: section.description || null, sort_order: section.sort_order })
+          .eq('id', section.dbId)
+        if (updSecErr) throw updSecErr
+        sectionIdMap[section.id] = section.dbId!
+      }
+
+      // Insert new sections
+      const newSections = sections.filter(s => !s.dbId)
+      if (newSections.length > 0) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const { data: insertedSections, error: insSecErr } = await (supabase as any)
+          .from('template_sections')
+          .insert(newSections.map(s => ({
+            template_id: Number(templateId),
+            name: s.name,
+            description: s.description || null,
+            sort_order: s.sort_order,
+          })))
+          .select()
+        if (insSecErr) throw insSecErr
+        if (insertedSections) {
+          newSections.forEach((s, i) => { sectionIdMap[s.id] = insertedSections[i].id })
+        }
+      }
+
+      // 3. Delete removed fields
       if (deletedFieldIds.length > 0) {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const { error: deleteFieldsError } = await (supabase as any)
@@ -339,9 +453,15 @@ export default function EditTemplatePage() {
         if (deleteFieldsError) throw deleteFieldsError
       }
 
-      // 3. Update existing fields and insert new ones
+      // 4. Update existing fields and insert new ones
       const existingFields = fields.filter(f => f.dbId)
       const newFields = fields.filter(f => !f.dbId)
+
+      // Resolve section_id: local → db
+      const resolveSection = (localId: string | null): number | null => {
+        if (!localId) return null
+        return sectionIdMap[localId] || null
+      }
 
       // Update existing fields
       for (const field of existingFields) {
@@ -353,6 +473,7 @@ export default function EditTemplatePage() {
             field_type: field.field_type,
             is_required: field.is_required,
             sort_order: field.sort_order,
+            section_id: resolveSection(field.section_id),
             options: field.options,
             validation: field.validation,
             placeholder: field.placeholder || null,
@@ -371,6 +492,7 @@ export default function EditTemplatePage() {
           .insert(
             newFields.map(f => ({
               template_id: Number(templateId),
+              section_id: resolveSection(f.section_id),
               name: f.name,
               field_type: f.field_type,
               is_required: f.is_required,
@@ -550,6 +672,59 @@ export default function EditTemplatePage() {
             </div>
           </div>
 
+          {/* Sections (optional) */}
+          <div className="card p-6">
+            <div className="flex items-center justify-between mb-2">
+              <h2 className="text-lg font-semibold text-main flex items-center gap-2">
+                <FiLayers className="w-5 h-5 text-primary" />
+                Etapas / Secoes (Opcional)
+              </h2>
+              <button
+                type="button"
+                onClick={addSection}
+                className="btn-secondary flex items-center gap-2 px-3 py-2 text-sm"
+              >
+                <FiPlus className="w-4 h-4" />
+                Adicionar Etapa
+              </button>
+            </div>
+            <p className="text-sm text-muted mb-4">
+              Divida o checklist em etapas para preenchimento em momentos diferentes do dia.
+              Se nenhuma etapa for criada, o checklist sera preenchido de uma vez.
+            </p>
+
+            {sections.length > 0 && (
+              <div className="space-y-2">
+                {sections.map((section, idx) => (
+                  <div key={section.id} className="flex items-center gap-3 p-3 border border-subtle rounded-xl bg-surface">
+                    <div className="flex flex-col gap-1">
+                      <button type="button" onClick={() => moveSectionOrder(section.id, 'up')} disabled={idx === 0} className="p-1 text-muted hover:text-main disabled:opacity-30">
+                        <FiChevronUp className="w-3 h-3" />
+                      </button>
+                      <button type="button" onClick={() => moveSectionOrder(section.id, 'down')} disabled={idx === sections.length - 1} className="p-1 text-muted hover:text-main disabled:opacity-30">
+                        <FiChevronDown className="w-3 h-3" />
+                      </button>
+                    </div>
+                    <span className="w-7 h-7 rounded-lg bg-primary/10 flex items-center justify-center text-xs font-bold text-primary">{idx + 1}</span>
+                    <input
+                      type="text"
+                      value={section.name}
+                      onChange={(e) => updateSection(section.id, { name: e.target.value })}
+                      placeholder="Nome da etapa"
+                      className="flex-1 bg-transparent border-none text-main placeholder:text-muted focus:outline-none font-medium"
+                    />
+                    <span className="text-xs text-muted">
+                      {fields.filter(f => f.section_id === section.id).length} campos
+                    </span>
+                    <button type="button" onClick={() => removeSection(section.id)} className="p-2 text-error hover:bg-error/20 rounded-lg transition-colors">
+                      <FiTrash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
           {/* Fields Builder */}
           <div className="card p-6">
             <div className="flex items-center justify-between mb-4">
@@ -684,6 +859,23 @@ export default function EditTemplatePage() {
                             />
                           </div>
                         </div>
+
+                        {/* Section selector */}
+                        {sections.length > 0 && (
+                          <div>
+                            <label className="block text-xs text-muted mb-1">Etapa / Secao</label>
+                            <select
+                              value={field.section_id || ''}
+                              onChange={(e) => updateField(field.id, { section_id: e.target.value || null })}
+                              className="input text-sm"
+                            >
+                              <option value="">Sem etapa</option>
+                              {sections.map(s => (
+                                <option key={s.id} value={s.id}>{s.name || '(sem nome)'}</option>
+                              ))}
+                            </select>
+                          </div>
+                        )}
 
                         {/* Number subtype selector */}
                         {field.field_type === 'number' && (

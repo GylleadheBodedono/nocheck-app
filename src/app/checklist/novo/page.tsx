@@ -1,9 +1,10 @@
 'use client'
 
-import { useEffect, useState, Suspense, useMemo } from 'react'
+import { useEffect, useState, Suspense, useMemo, useCallback } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { FieldRenderer } from '@/components/fields/FieldRenderer'
+import { ReadOnlyFieldRenderer } from '@/components/fields/ReadOnlyFieldRenderer'
 import Link from 'next/link'
 import {
   FiArrowLeft,
@@ -12,57 +13,50 @@ import {
   FiAlertCircle,
   FiCloudOff,
   FiMapPin,
+  FiLayers,
+  FiChevronRight,
 } from 'react-icons/fi'
-import type { ChecklistTemplate, TemplateField, Store } from '@/types/database'
+import type { ChecklistTemplate, TemplateField, Store, TemplateSection } from '@/types/database'
 import { APP_CONFIG } from '@/lib/config'
 import { LoadingPage, ThemeToggle } from '@/components/ui'
 import { processarValidacaoCruzada } from '@/lib/crossValidation'
 import { saveOfflineChecklist } from '@/lib/offlineStorage'
 import { getTemplatesCache, getStoresCache, getTemplateFieldsCache, getAuthCache } from '@/lib/offlineCache'
 
+type FieldWithSection = TemplateField & { section_id: number | null }
+
 type TemplateWithFields = ChecklistTemplate & {
-  fields: TemplateField[]
+  fields: FieldWithSection[]
+  sections?: TemplateSection[]
 }
 
-// Função para fazer upload de imagem para o Supabase Storage
+type SectionProgress = {
+  section_id: number
+  status: 'pendente' | 'concluido'
+  completed_at: string | null
+  db_id?: number
+}
+
+// Upload photo helper
 async function uploadPhoto(base64Image: string, fileName: string): Promise<string | null> {
   try {
-    console.log('[Upload] Iniciando upload para Supabase:', fileName)
-    console.log('[Upload] Tamanho da imagem:', Math.round(base64Image.length / 1024), 'KB')
-
     const response = await fetch('/api/upload', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        image: base64Image,
-        fileName,
-      }),
+      body: JSON.stringify({ image: base64Image, fileName }),
     })
-
     const result = await response.json()
-    console.log('[Upload] Resposta da API:', result)
-
-    if (!response.ok) {
-      console.error('[Upload] Erro HTTP:', response.status, result)
-      return null
-    }
-
-    if (result.success && result.url) {
-      console.log('[Upload] Sucesso! URL:', result.url)
-      return result.url
-    }
-
-    console.error('[Upload] Falha no upload:', result.error || 'sem URL')
+    if (!response.ok) return null
+    if (result.success && result.url) return result.url
     return null
-  } catch (err) {
-    console.error('[Upload] Erro de rede:', err)
+  } catch {
     return null
   }
 }
 
-// Haversine formula - distance in meters between two coordinates
+// Haversine formula
 function getDistanceMeters(lat1: number, lng1: number, lat2: number, lng2: number): number {
-  const R = 6371000 // Earth radius in meters
+  const R = 6371000
   const dLat = (lat2 - lat1) * Math.PI / 180
   const dLng = (lng2 - lng1) * Math.PI / 180
   const a =
@@ -79,6 +73,7 @@ function ChecklistForm() {
   const searchParams = useSearchParams()
   const templateId = searchParams.get('template')
   const storeId = searchParams.get('store')
+  const resumeId = searchParams.get('resume') // checklist id to resume
 
   const [template, setTemplate] = useState<TemplateWithFields | null>(null)
   const [store, setStore] = useState<Store | null>(null)
@@ -93,6 +88,23 @@ function ChecklistForm() {
   const router = useRouter()
   const supabase = useMemo(() => createClient(), [])
 
+  // Section-specific state
+  const [hasSections, setHasSections] = useState(false)
+  const [sortedSections, setSortedSections] = useState<TemplateSection[]>([])
+  const [sectionProgress, setSectionProgress] = useState<SectionProgress[]>([])
+  const [activeSection, setActiveSection] = useState<number | null>(null) // section_id being filled
+  const [checklistId, setChecklistId] = useState<number | null>(null) // DB checklist id for sectioned mode
+
+  const [savedOffline, setSavedOffline] = useState(false)
+
+  // Get fields for a specific section
+  const getFieldsForSection = useCallback((sectionId: number): FieldWithSection[] => {
+    if (!template) return []
+    return template.fields
+      .filter(f => f.section_id === sectionId)
+      .sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0))
+  }, [template])
+
   useEffect(() => {
     const fetchData = async () => {
       if (!templateId || !storeId) {
@@ -100,31 +112,34 @@ function ChecklistForm() {
         return
       }
 
-      // Se offline, carrega do cache
       if (!navigator.onLine) {
-        console.log('[Checklist] Modo offline - carregando do cache')
         await loadFromCache()
         return
       }
 
-      // Fetch template
+      // Fetch template with sections
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { data: templateData } = await (supabase as any)
         .from('checklist_templates')
         .select(`
           *,
-          fields:template_fields(*)
+          fields:template_fields(*),
+          sections:template_sections(*)
         `)
         .eq('id', templateId)
         .single()
 
       if (templateData) {
-        // Sort fields by sort_order
         const tData = templateData as TemplateWithFields
-        tData.fields.sort((a: TemplateField, b: TemplateField) =>
-          (a.sort_order || 0) - (b.sort_order || 0)
-        )
+        tData.fields.sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0))
+        const sections = (tData.sections || []).sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0))
+        tData.sections = sections
         setTemplate(tData)
+
+        if (sections.length > 0) {
+          setHasSections(true)
+          setSortedSections(sections)
+        }
       }
 
       // Fetch store
@@ -135,39 +150,23 @@ function ChecklistForm() {
         .eq('id', storeId)
         .single()
 
-      if (storeData) {
-        setStore(storeData as Store)
-      }
+      if (storeData) setStore(storeData as Store)
 
       setLoading(false)
     }
 
-    // Carrega dados do cache quando offline
     const loadFromCache = async () => {
       try {
-        // Carrega templates do cache
         const cachedTemplates = await getTemplatesCache()
         const cachedTemplate = cachedTemplates.find(t => t.id === Number(templateId))
-
         if (cachedTemplate) {
-          // Carrega campos do template
           const cachedFields = await getTemplateFieldsCache(Number(templateId))
           cachedFields.sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0))
-
-          setTemplate({
-            ...cachedTemplate,
-            fields: cachedFields,
-          } as TemplateWithFields)
+          setTemplate({ ...cachedTemplate, fields: cachedFields as FieldWithSection[] } as TemplateWithFields)
         }
-
-        // Carrega lojas do cache
         const cachedStores = await getStoresCache()
         const cachedStore = cachedStores.find(s => s.id === Number(storeId))
-
-        if (cachedStore) {
-          setStore(cachedStore as Store)
-        }
-
+        if (cachedStore) setStore(cachedStore as Store)
         setLoading(false)
       } catch (error) {
         console.error('[Checklist] Erro ao carregar cache:', error)
@@ -178,87 +177,363 @@ function ChecklistForm() {
     fetchData()
   }, [templateId, storeId, supabase, router])
 
-  // GPS auto-collection: request location as soon as store is loaded
+  // After template loads with sections: check for existing in-progress checklist or create new one
+  useEffect(() => {
+    if (!hasSections || !template || loading || !store) return
+
+    const initSectionedChecklist = async () => {
+      let userId: string | null = null
+      try {
+        const { data: { user } } = await supabase.auth.getUser()
+        userId = user?.id || null
+      } catch { /* offline */ }
+      if (!userId) {
+        const cachedAuth = await getAuthCache()
+        userId = cachedAuth?.userId || null
+      }
+      if (!userId) return
+
+      // If resuming a specific checklist
+      if (resumeId) {
+        await loadExistingChecklist(Number(resumeId))
+        return
+      }
+
+      // Check for existing em_andamento checklist for this template+store+user today
+      const todayStart = new Date()
+      todayStart.setHours(0, 0, 0, 0)
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data: existing } = await (supabase as any)
+        .from('checklists')
+        .select('id')
+        .eq('template_id', Number(templateId))
+        .eq('store_id', Number(storeId))
+        .eq('created_by', userId)
+        .eq('status', 'em_andamento')
+        .gte('created_at', todayStart.toISOString())
+        .order('created_at', { ascending: false })
+        .limit(1)
+
+      if (existing && existing.length > 0) {
+        await loadExistingChecklist(existing[0].id)
+      } else {
+        // Create new checklist with em_andamento status
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const { data: newChecklist, error: createErr } = await (supabase as any)
+          .from('checklists')
+          .insert({
+            template_id: Number(templateId),
+            store_id: Number(storeId),
+            status: 'em_andamento',
+            created_by: userId,
+            started_at: new Date().toISOString(),
+            latitude: userLocation?.lat ?? null,
+            longitude: userLocation?.lng ?? null,
+            accuracy: userLocation?.accuracy ?? null,
+          })
+          .select()
+          .single()
+
+        if (createErr) {
+          console.error('[Checklist] Erro ao criar checklist:', createErr)
+          return
+        }
+
+        setChecklistId(newChecklist.id)
+
+        // Create checklist_sections entries (all pendente)
+        const sectionRows = sortedSections.map(s => ({
+          checklist_id: newChecklist.id,
+          section_id: s.id,
+          status: 'pendente',
+        }))
+
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const { data: sectionData } = await (supabase as any)
+          .from('checklist_sections')
+          .insert(sectionRows)
+          .select()
+
+        if (sectionData) {
+          setSectionProgress(sectionData.map((s: { id: number; section_id: number; status: string; completed_at: string | null }) => ({
+            section_id: s.section_id,
+            status: s.status as 'pendente' | 'concluido',
+            completed_at: s.completed_at,
+            db_id: s.id,
+          })))
+        }
+      }
+    }
+
+    initSectionedChecklist()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasSections, template, loading, store])
+
+  const loadExistingChecklist = async (clId: number) => {
+    setChecklistId(clId)
+
+    // Load checklist_sections progress
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: csData } = await (supabase as any)
+      .from('checklist_sections')
+      .select('*')
+      .eq('checklist_id', clId)
+
+    if (csData) {
+      setSectionProgress(csData.map((s: { id: number; section_id: number; status: string; completed_at: string | null }) => ({
+        section_id: s.section_id,
+        status: s.status as 'pendente' | 'concluido',
+        completed_at: s.completed_at,
+        db_id: s.id,
+      })))
+    }
+
+    // Load existing responses
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: respData } = await (supabase as any)
+      .from('checklist_responses')
+      .select('field_id, value_text, value_number, value_json')
+      .eq('checklist_id', clId)
+
+    if (respData) {
+      const restoredResponses: Record<number, unknown> = {}
+      for (const r of respData) {
+        const field = template?.fields.find(f => f.id === r.field_id)
+        if (!field) continue
+        switch (field.field_type) {
+          case 'number':
+            if (r.value_json && typeof r.value_json === 'object' && 'subtype' in (r.value_json as Record<string, unknown>)) {
+              restoredResponses[r.field_id] = { subtype: (r.value_json as Record<string, unknown>).subtype, number: r.value_number }
+            } else {
+              restoredResponses[r.field_id] = r.value_number
+            }
+            break
+          case 'calculated':
+            restoredResponses[r.field_id] = r.value_number
+            break
+          case 'photo': {
+            const json = r.value_json as { photos?: string[] } | null
+            restoredResponses[r.field_id] = json?.photos || []
+            break
+          }
+          case 'checkbox_multiple':
+          case 'signature':
+          case 'gps':
+            restoredResponses[r.field_id] = r.value_json
+            break
+          default:
+            restoredResponses[r.field_id] = r.value_text
+        }
+      }
+      setResponses(restoredResponses)
+    }
+  }
+
+  // GPS auto-collection
   useEffect(() => {
     if (!store || loading) return
-
-    // If store has GPS verification disabled, skip entirely
-    if (store.require_gps === false) {
-      setGpsStatus('granted')
-      return
-    }
-
-    if (!navigator.geolocation) {
-      setGpsStatus('denied')
-      return
-    }
+    if (store.require_gps === false) { setGpsStatus('granted'); return }
+    if (!navigator.geolocation) { setGpsStatus('denied'); return }
 
     navigator.geolocation.getCurrentPosition(
       (position) => {
         const { latitude, longitude, accuracy } = position.coords
         setUserLocation({ lat: latitude, lng: longitude, accuracy })
-
-        // Validate distance if store has location configured
         if (store.latitude && store.longitude) {
           const distance = getDistanceMeters(latitude, longitude, store.latitude, store.longitude)
           setDistanceToStore(Math.round(distance))
-
-          if (distance > 100) {
-            setGpsStatus('too_far')
-          } else {
-            setGpsStatus('granted')
-          }
+          setGpsStatus(distance > 100 ? 'too_far' : 'granted')
         } else {
-          // Store has no location configured - skip distance validation
           setGpsStatus('granted')
         }
       },
-      () => {
-        setGpsStatus('denied')
-      },
+      () => setGpsStatus('denied'),
       { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
     )
   }, [store, loading])
 
   const updateResponse = (fieldId: number, value: unknown) => {
     setResponses(prev => ({ ...prev, [fieldId]: value }))
-    // Clear error when user fills the field
     if (errors[fieldId]) {
-      setErrors(prev => {
-        const newErrors = { ...prev }
-        delete newErrors[fieldId]
-        return newErrors
-      })
+      setErrors(prev => { const n = { ...prev }; delete n[fieldId]; return n })
     }
   }
 
-  const validateForm = (): boolean => {
+  // Build response row data for a set of fields
+  const buildResponseRows = async (fieldIds: number[], attemptUpload: boolean) => {
+    const rows: Array<{ fieldId: number; valueText: string | null; valueNumber: number | null; valueJson: unknown }> = []
+
+    for (const fieldId of fieldIds) {
+      const value = responses[fieldId]
+      if (value === undefined || value === null) continue
+      const field = template?.fields.find(f => f.id === fieldId)
+      if (!field) continue
+
+      let valueText = null
+      let valueNumber = null
+      let valueJson = null
+
+      if (field.field_type === 'number') {
+        if (typeof value === 'object' && value !== null && 'number' in (value as Record<string, unknown>)) {
+          const numObj = value as { subtype: string; number: number }
+          valueNumber = numObj.number
+          valueJson = { subtype: numObj.subtype }
+        } else {
+          valueNumber = value as number
+        }
+      } else if (field.field_type === 'calculated') {
+        valueNumber = value as number
+      } else if (field.field_type === 'photo') {
+        const photos = value as string[]
+        if (photos && photos.length > 0 && attemptUpload) {
+          const uploadedUrls: string[] = []
+          for (let i = 0; i < photos.length; i++) {
+            const url = await uploadPhoto(photos[i], `checklist_${Date.now()}_foto_${i + 1}.jpg`)
+            uploadedUrls.push(url || photos[i])
+          }
+          valueJson = { photos: uploadedUrls, uploadedToDrive: uploadedUrls.some(u => u.startsWith('http')) }
+        } else {
+          valueJson = { photos: photos || [], uploadedToDrive: false }
+        }
+      } else if (['checkbox_multiple', 'signature', 'gps'].includes(field.field_type)) {
+        valueJson = value
+      } else {
+        valueText = value as string
+      }
+
+      rows.push({ fieldId, valueText, valueNumber, valueJson })
+    }
+
+    return rows
+  }
+
+  // Validate a set of fields
+  const validateFields = (fieldIds: number[]): boolean => {
     const newErrors: Record<number, string> = {}
-
-    template?.fields.forEach(field => {
-      // Skip GPS fields - GPS is now automatic
-      if (field.field_type === 'gps') return
-
+    for (const fieldId of fieldIds) {
+      const field = template?.fields.find(f => f.id === fieldId)
+      if (!field || field.field_type === 'gps') continue
       if (field.is_required) {
-        const value = responses[field.id]
-        if (value === undefined || value === null || value === '' ||
-            (Array.isArray(value) && value.length === 0)) {
-          newErrors[field.id] = 'Este campo é obrigatório'
+        const value = responses[fieldId]
+        if (value === undefined || value === null || value === '' || (Array.isArray(value) && value.length === 0)) {
+          newErrors[fieldId] = 'Este campo e obrigatorio'
         }
       }
-    })
-
-    setErrors(newErrors)
+    }
+    setErrors(prev => ({ ...prev, ...newErrors }))
     return Object.keys(newErrors).length === 0
   }
 
-  const [savedOffline, setSavedOffline] = useState(false)
+  // === SECTION SUBMIT ===
+  const handleSectionSubmit = async (sectionId: number) => {
+    const sectionFields = getFieldsForSection(sectionId)
+    const fieldIds = sectionFields.map(f => f.id)
 
-  const handleSubmit = async (e: React.FormEvent) => {
+    if (!validateFields(fieldIds)) {
+      const firstErrorId = fieldIds.find(id => errors[id])
+      if (firstErrorId) document.getElementById(`field-${firstErrorId}`)?.scrollIntoView({ behavior: 'smooth' })
+      return
+    }
+
+    setSubmitting(true)
+
+    try {
+      let userId: string | null = null
+      try {
+        const { data: { user } } = await supabase.auth.getUser()
+        userId = user?.id || null
+      } catch { /* offline */ }
+      if (!userId) {
+        const cachedAuth = await getAuthCache()
+        userId = cachedAuth?.userId || null
+      }
+
+      const responseData = await buildResponseRows(fieldIds, navigator.onLine)
+
+      if (checklistId && navigator.onLine) {
+        // Insert responses for this section
+        const responseRows = responseData.map(r => ({
+          checklist_id: checklistId,
+          field_id: r.fieldId,
+          value_text: r.valueText,
+          value_number: r.valueNumber,
+          value_json: r.valueJson,
+          answered_by: userId,
+        }))
+
+        if (responseRows.length > 0) {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const { error: respError } = await (supabase as any)
+            .from('checklist_responses')
+            .insert(responseRows)
+          if (respError) throw respError
+        }
+
+        // Update checklist_sections status
+        const sectionProg = sectionProgress.find(sp => sp.section_id === sectionId)
+        if (sectionProg?.db_id) {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          await (supabase as any)
+            .from('checklist_sections')
+            .update({ status: 'concluido', completed_at: new Date().toISOString() })
+            .eq('id', sectionProg.db_id)
+        }
+
+        // Update local progress
+        const newProgress = sectionProgress.map(sp =>
+          sp.section_id === sectionId
+            ? { ...sp, status: 'concluido' as const, completed_at: new Date().toISOString() }
+            : sp
+        )
+        setSectionProgress(newProgress)
+
+        // Check if all sections are complete
+        const allDone = newProgress.every(sp => sp.status === 'concluido')
+        if (allDone) {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          await (supabase as any)
+            .from('checklists')
+            .update({ status: 'concluido', completed_at: new Date().toISOString() })
+            .eq('id', checklistId)
+
+          // Process cross validation
+          if (template) {
+            const allFieldIds = template.fields.map(f => f.id)
+            const allResponseData = await buildResponseRows(allFieldIds, false)
+            await processarValidacaoCruzada(
+              supabase,
+              checklistId,
+              Number(templateId),
+              Number(storeId),
+              userId || '',
+              allResponseData.map(r => ({ field_id: r.fieldId, value_text: r.valueText, value_number: r.valueNumber, value_json: r.valueJson })),
+              template.fields
+            )
+          }
+
+          setSuccess(true)
+          setTimeout(() => router.push(APP_CONFIG.routes.dashboard), 2000)
+          return
+        }
+
+        // Go back to section list
+        setActiveSection(null)
+      }
+    } catch (err) {
+      console.error('[Checklist] Erro ao salvar secao:', err)
+      setErrors({ 0: err instanceof Error ? err.message : 'Erro ao salvar secao' })
+    }
+
+    setSubmitting(false)
+  }
+
+  // === FULL SUBMIT (non-sectioned templates) ===
+  const handleFullSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
-    if (!validateForm()) {
-      // Scroll to first error
+    const allFieldIds = (template?.fields || []).filter(f => f.field_type !== 'gps').map(f => f.id)
+    if (!validateFields(allFieldIds)) {
       const firstErrorId = Object.keys(errors)[0]
       document.getElementById(`field-${firstErrorId}`)?.scrollIntoView({ behavior: 'smooth' })
       return
@@ -266,137 +541,41 @@ function ChecklistForm() {
 
     setSubmitting(true)
 
-    // Get current user - tenta online primeiro, depois cache
     let userId: string | null = null
-
     try {
       const { data: { user } } = await supabase.auth.getUser()
       userId = user?.id || null
-    } catch {
-      // Se falhar (offline), tenta o cache
-      console.log('[Checklist] Falha ao obter user online, tentando cache...')
-    }
-
-    // Se não conseguiu online, tenta o cache
+    } catch { /* offline */ }
     if (!userId) {
       const cachedAuth = await getAuthCache()
       userId = cachedAuth?.userId || null
-      console.log('[Checklist] UserId do cache:', userId)
     }
 
     if (!userId) {
-      setErrors({ 0: 'Usuário não autenticado. Faça login novamente.' })
+      setErrors({ 0: 'Usuario nao autenticado. Faca login novamente.' })
       setSubmitting(false)
       return
     }
 
     try {
-
-      // Prepara os dados das respostas
-      const buildResponseData = (attemptUpload: boolean) => {
-        // Coleta todas as respostas dos campos preenchidos pelo usuário
-        const promises = Object.entries(responses).map(async ([fieldId, value]) => {
-          const field = template?.fields.find(f => f.id === Number(fieldId))
-          if (!field) return null
-
-          let valueText = null
-          let valueNumber = null
-          let valueJson = null
-
-          if (field.field_type === 'number') {
-            // Number field now returns { subtype, number }
-            if (typeof value === 'object' && value !== null && 'number' in (value as Record<string, unknown>)) {
-              const numObj = value as { subtype: string; number: number }
-              valueNumber = numObj.number
-              valueJson = { subtype: numObj.subtype }
-            } else {
-              valueNumber = value as number
-            }
-          } else if (field.field_type === 'calculated') {
-            valueNumber = value as number
-          } else if (field.field_type === 'photo') {
-            const photos = value as string[]
-            console.log('[Checklist] Campo foto encontrado:', field.name, '- Fotos:', photos?.length || 0)
-
-            if (photos && photos.length > 0) {
-              if (attemptUpload) {
-                // Online: tenta fazer upload para o Supabase Storage
-                const uploadedUrls: string[] = []
-                for (let i = 0; i < photos.length; i++) {
-                  const timestamp = Date.now()
-                  const fileName = `checklist_${timestamp}_foto_${i + 1}.jpg`
-                  console.log('[Checklist] Fazendo upload da foto', i + 1, 'de', photos.length)
-
-                  try {
-                    const url = await uploadPhoto(photos[i], fileName)
-                    if (url) {
-                      uploadedUrls.push(url)
-                      console.log('[Checklist] Upload OK:', url.substring(0, 50) + '...')
-                    } else {
-                      console.log('[Checklist] Upload falhou, salvando base64')
-                      uploadedUrls.push(photos[i])
-                    }
-                  } catch (uploadErr) {
-                    console.error('[Checklist] Erro no upload:', uploadErr)
-                    uploadedUrls.push(photos[i])
-                  }
-                }
-                valueJson = { photos: uploadedUrls, uploadedToDrive: uploadedUrls.some(u => u.startsWith('http')) }
-              } else {
-                // Offline: salva base64 direto, o sync fará o upload depois
-                console.log('[Checklist] Offline - salvando', photos.length, 'fotos como base64')
-                valueJson = { photos: photos, uploadedToDrive: false }
-              }
-            } else {
-              valueJson = { photos: value || [], uploadedToDrive: false }
-            }
-          } else if (
-            field.field_type === 'checkbox_multiple' ||
-            field.field_type === 'signature' ||
-            field.field_type === 'gps'
-          ) {
-            valueJson = value
-          } else {
-            valueText = value as string
-          }
-
-          return {
-            fieldId: Number(fieldId),
-            valueText,
-            valueNumber,
-            valueJson,
-          }
-        })
-
-        return promises
-      }
-
-      // Se offline, salva localmente SEM tentar upload de fotos
+      // Offline save
       if (!navigator.onLine) {
-        console.log('[Checklist] Offline - salvando checklist localmente')
-        const responseData = (await Promise.all(buildResponseData(false))).filter(Boolean) as Array<{ fieldId: number; valueText: string | null; valueNumber: number | null; valueJson: unknown }>
-
+        const responseData = await buildResponseRows(allFieldIds, false)
         await saveOfflineChecklist({
           templateId: Number(templateId),
           storeId: Number(storeId),
           sectorId: null,
-          userId: userId,
+          userId,
           responses: responseData,
         })
-
         setSavedOffline(true)
         setSuccess(true)
-
-        setTimeout(() => {
-          router.push(APP_CONFIG.routes.dashboard)
-        }, 2000)
+        setTimeout(() => router.push(APP_CONFIG.routes.dashboard), 2000)
         return
       }
 
-      // Online - prepara dados com upload de fotos
-      const responseData = (await Promise.all(buildResponseData(true))).filter(Boolean) as Array<{ fieldId: number; valueText: string | null; valueNumber: number | null; valueJson: unknown }>
+      const responseData = await buildResponseRows(allFieldIds, true)
 
-      // Online - submit normally
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { data: checklist, error: checklistError } = await (supabase as any)
         .from('checklists')
@@ -416,7 +595,6 @@ function ChecklistForm() {
 
       if (checklistError) throw checklistError
 
-      // Create responses for database
       const responseRows = responseData.map(r => ({
         checklist_id: checklist.id,
         field_id: r.fieldId,
@@ -430,10 +608,8 @@ function ChecklistForm() {
       const { error: responsesError } = await (supabase as any)
         .from('checklist_responses')
         .insert(responseRows)
-
       if (responsesError) throw responsesError
 
-      // Log activity
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       await (supabase as any).from('activity_logs').insert({
         store_id: Number(storeId),
@@ -443,7 +619,6 @@ function ChecklistForm() {
         details: { template_name: template?.name },
       })
 
-      // Processar validacao cruzada (se for checklist de recebimento)
       await processarValidacaoCruzada(
         supabase,
         checklist.id,
@@ -455,57 +630,21 @@ function ChecklistForm() {
       )
 
       setSuccess(true)
-
-      // Redirect after 2 seconds
-      setTimeout(() => {
-        router.push(APP_CONFIG.routes.dashboard)
-      }, 2000)
-
+      setTimeout(() => router.push(APP_CONFIG.routes.dashboard), 2000)
     } catch (err) {
       console.error('Error submitting checklist:', err)
 
-      // If error, try to save offline
+      // Try offline fallback
       try {
         if (userId) {
-          const responseData = Object.entries(responses).map(([fieldId, value]) => {
-            const field = template?.fields.find(f => f.id === Number(fieldId))
-            if (!field) return null
-
-            let valueText = null
-            let valueNumber = null
-            let valueJson = null
-
-            if (field.field_type === 'number') {
-              if (typeof value === 'object' && value !== null && 'number' in (value as Record<string, unknown>)) {
-                const numObj = value as { subtype: string; number: number }
-                valueNumber = numObj.number
-                valueJson = { subtype: numObj.subtype }
-              } else {
-                valueNumber = value as number
-              }
-            } else if (field.field_type === 'calculated') {
-              valueNumber = value as number
-            } else if (field.field_type === 'photo') {
-              // Formata fotos corretamente para o sync processar depois
-              const photos = value as string[]
-              valueJson = { photos: photos || [], uploadedToDrive: false }
-            } else if (['checkbox_multiple', 'signature', 'gps'].includes(field.field_type)) {
-              valueJson = value
-            } else {
-              valueText = value as string
-            }
-
-            return { fieldId: Number(fieldId), valueText, valueNumber, valueJson }
-          }).filter(Boolean) as Array<{ fieldId: number; valueText: string | null; valueNumber: number | null; valueJson: unknown }>
-
+          const responseData = await buildResponseRows(allFieldIds, false)
           await saveOfflineChecklist({
             templateId: Number(templateId),
             storeId: Number(storeId),
             sectorId: null,
-            userId: userId,
+            userId,
             responses: responseData,
           })
-
           setSavedOffline(true)
           setSuccess(true)
           setTimeout(() => router.push(APP_CONFIG.routes.dashboard), 2000)
@@ -520,16 +659,16 @@ function ChecklistForm() {
     }
   }
 
-  if (loading) {
-    return <LoadingPage />
-  }
+  // ========== RENDER ==========
+
+  if (loading) return <LoadingPage />
 
   if (!template || !store) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-page">
         <div className="text-center">
           <FiAlertCircle className="w-12 h-12 text-red-400 mx-auto mb-4" />
-          <p className="text-main">Checklist não encontrado</p>
+          <p className="text-main">Checklist nao encontrado</p>
           <Link href={APP_CONFIG.routes.dashboard} className="text-primary mt-4 inline-block hover:underline">
             Voltar ao Dashboard
           </Link>
@@ -539,23 +678,18 @@ function ChecklistForm() {
   }
 
   if (success) {
+    const allDone = !hasSections || sectionProgress.every(sp => sp.status === 'concluido')
     return (
       <div className="min-h-screen flex items-center justify-center bg-page">
         <div className="text-center">
           <div className={`w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-4 ${savedOffline ? 'bg-warning/20' : 'bg-primary/20'}`}>
-            {savedOffline ? (
-              <FiCloudOff className="w-10 h-10 text-warning" />
-            ) : (
-              <FiCheckCircle className="w-10 h-10 text-primary" />
-            )}
+            {savedOffline ? <FiCloudOff className="w-10 h-10 text-warning" /> : <FiCheckCircle className="w-10 h-10 text-primary" />}
           </div>
           <h2 className="text-2xl font-bold text-main mb-2">
-            {savedOffline ? 'Salvo Offline' : APP_CONFIG.messages.checklistSent}
+            {savedOffline ? 'Salvo Offline' : allDone ? APP_CONFIG.messages.checklistSent : 'Secao Salva'}
           </h2>
           <p className="text-muted">
-            {savedOffline
-              ? 'O checklist será enviado quando você estiver online.'
-              : APP_CONFIG.messages.redirecting}
+            {savedOffline ? 'O checklist sera enviado quando voce estiver online.' : APP_CONFIG.messages.redirecting}
           </p>
         </div>
       </div>
@@ -585,16 +719,9 @@ function ChecklistForm() {
             <FiMapPin className="w-10 h-10 text-error" />
           </div>
           <h2 className="text-xl font-bold text-main mb-2">Localizacao necessaria</h2>
-          <p className="text-muted text-sm mb-6">
-            A localizacao e necessaria para enviar o checklist.
-            Ative a permissao de GPS nas configuracoes do seu navegador e tente novamente.
-          </p>
-          <Link
-            href={APP_CONFIG.routes.dashboard}
-            className="btn-primary inline-flex items-center gap-2 px-6 py-3"
-          >
-            <FiArrowLeft className="w-4 h-4" />
-            Voltar ao Dashboard
+          <p className="text-muted text-sm mb-6">Ative a permissao de GPS nas configuracoes do navegador.</p>
+          <Link href={APP_CONFIG.routes.dashboard} className="btn-primary inline-flex items-center gap-2 px-6 py-3">
+            <FiArrowLeft className="w-4 h-4" /> Voltar ao Dashboard
           </Link>
         </div>
       </div>
@@ -609,46 +736,227 @@ function ChecklistForm() {
             <FiMapPin className="w-10 h-10 text-warning" />
           </div>
           <h2 className="text-xl font-bold text-main mb-2">Voce esta longe da loja</h2>
-          <p className="text-muted text-sm mb-2">
-            Voce precisa estar proximo da loja para preencher o checklist.
-          </p>
-          <p className="text-muted text-xs mb-6">
-            Distancia atual: {distanceToStore}m (maximo: 100m)
-          </p>
-          <Link
-            href={APP_CONFIG.routes.dashboard}
-            className="btn-primary inline-flex items-center gap-2 px-6 py-3"
-          >
-            <FiArrowLeft className="w-4 h-4" />
-            Voltar ao Dashboard
+          <p className="text-muted text-sm mb-2">Voce precisa estar proximo da loja para preencher o checklist.</p>
+          <p className="text-muted text-xs mb-6">Distancia atual: {distanceToStore}m (maximo: 100m)</p>
+          <Link href={APP_CONFIG.routes.dashboard} className="btn-primary inline-flex items-center gap-2 px-6 py-3">
+            <FiArrowLeft className="w-4 h-4" /> Voltar ao Dashboard
           </Link>
         </div>
       </div>
     )
   }
 
-  // Filter out GPS fields - GPS is now collected automatically
+  // ============ SECTIONED TEMPLATE: SECTION LIST VIEW ============
+  if (hasSections && activeSection === null) {
+    const completedCount = sectionProgress.filter(sp => sp.status === 'concluido').length
+    const totalCount = sortedSections.length
+    const progressPct = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0
+
+    return (
+      <div className="min-h-screen bg-page">
+        <header className="bg-surface border-b border-subtle sticky top-0 z-50">
+          <div className="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="flex items-center justify-between h-16">
+              <div className="flex items-center gap-4">
+                <Link href={APP_CONFIG.routes.dashboard} className="p-2 text-secondary hover:text-main hover:bg-surface-hover rounded-lg transition-colors">
+                  <FiArrowLeft className="w-5 h-5" />
+                </Link>
+                <div>
+                  <h1 className="text-lg font-bold text-main line-clamp-1">{template.name}</h1>
+                  <p className="text-xs text-muted">{store.name}</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-3">
+                <ThemeToggle />
+                <div className="text-right">
+                  <p className="text-sm font-medium text-primary">{completedCount}/{totalCount}</p>
+                  <p className="text-xs text-muted">etapas</p>
+                </div>
+              </div>
+            </div>
+            <div className="h-1 bg-surface-hover -mx-4 sm:-mx-6 lg:-mx-8">
+              <div className="h-full bg-primary transition-all duration-300" style={{ width: `${progressPct}%` }} />
+            </div>
+          </div>
+        </header>
+
+        <main className="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          <div className="flex items-center gap-2 mb-6">
+            <FiLayers className="w-5 h-5 text-primary" />
+            <h2 className="text-lg font-semibold text-main">Etapas do Checklist</h2>
+          </div>
+
+          <div className="space-y-3">
+            {sortedSections.map((section, idx) => {
+              const progress = sectionProgress.find(sp => sp.section_id === section.id)
+              const isDone = progress?.status === 'concluido'
+              const sectionFields = getFieldsForSection(section.id)
+
+              return (
+                <button
+                  key={section.id}
+                  type="button"
+                  onClick={() => !isDone && setActiveSection(section.id)}
+                  disabled={isDone}
+                  className={`w-full text-left card p-5 transition-all ${
+                    isDone
+                      ? 'opacity-75 border-success/30'
+                      : 'hover:shadow-theme-md cursor-pointer border-subtle hover:border-primary/30'
+                  }`}
+                >
+                  <div className="flex items-center gap-4">
+                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-sm font-bold ${
+                      isDone ? 'bg-success/20 text-success' : 'bg-primary/10 text-primary'
+                    }`}>
+                      {isDone ? <FiCheckCircle className="w-5 h-5" /> : idx + 1}
+                    </div>
+                    <div className="flex-1">
+                      <h3 className={`font-semibold ${isDone ? 'text-success' : 'text-main'}`}>
+                        {section.name}
+                      </h3>
+                      <p className="text-xs text-muted">
+                        {sectionFields.length} campo{sectionFields.length !== 1 ? 's' : ''}
+                        {isDone && progress?.completed_at && (
+                          <> &middot; Concluido as {new Date(progress.completed_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</>
+                        )}
+                      </p>
+                    </div>
+                    {!isDone && <FiChevronRight className="w-5 h-5 text-muted" />}
+                  </div>
+                </button>
+              )
+            })}
+          </div>
+
+          <div className="mt-8">
+            <Link href={APP_CONFIG.routes.dashboard} className="btn-ghost w-full py-3 text-center block">
+              Voltar ao Dashboard
+            </Link>
+          </div>
+        </main>
+      </div>
+    )
+  }
+
+  // ============ SECTIONED TEMPLATE: FILLING A SPECIFIC SECTION ============
+  if (hasSections && activeSection !== null) {
+    const section = sortedSections.find(s => s.id === activeSection)
+    const sectionFields = getFieldsForSection(activeSection).filter(f => f.field_type !== 'gps')
+    const progress = sectionProgress.find(sp => sp.section_id === activeSection)
+    const isDone = progress?.status === 'concluido'
+
+    const filledCount = sectionFields.filter(f => {
+      const v = responses[f.id]
+      return v !== undefined && v !== null && v !== '' && !(Array.isArray(v) && v.length === 0)
+    }).length
+    const progressPct = sectionFields.length > 0 ? Math.round((filledCount / sectionFields.length) * 100) : 0
+
+    return (
+      <div className="min-h-screen bg-page">
+        <header className="bg-surface border-b border-subtle sticky top-0 z-50">
+          <div className="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="flex items-center justify-between h-16">
+              <div className="flex items-center gap-4">
+                <button onClick={() => setActiveSection(null)} className="p-2 text-secondary hover:text-main hover:bg-surface-hover rounded-lg transition-colors">
+                  <FiArrowLeft className="w-5 h-5" />
+                </button>
+                <div>
+                  <h1 className="text-lg font-bold text-main line-clamp-1">{section?.name}</h1>
+                  <p className="text-xs text-muted">{template.name}</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-3">
+                <ThemeToggle />
+                <div className="text-right">
+                  <p className="text-sm font-medium text-primary">{progressPct}%</p>
+                  <p className="text-xs text-muted">completo</p>
+                </div>
+              </div>
+            </div>
+            <div className="h-1 bg-surface-hover -mx-4 sm:-mx-6 lg:-mx-8">
+              <div className="h-full bg-primary transition-all duration-300" style={{ width: `${progressPct}%` }} />
+            </div>
+          </div>
+        </header>
+
+        <main className="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          {isDone ? (
+            // Read-only view of completed section
+            <div className="space-y-4">
+              <div className="p-4 bg-success/10 border border-success/30 rounded-xl text-center">
+                <FiCheckCircle className="w-6 h-6 text-success mx-auto mb-2" />
+                <p className="text-sm font-medium text-success">Esta etapa ja foi concluida</p>
+              </div>
+              {sectionFields.map(field => (
+                <div key={field.id} className="card p-4">
+                  <ReadOnlyFieldRenderer field={field} value={responses[field.id] ?? null} />
+                </div>
+              ))}
+              <button onClick={() => setActiveSection(null)} className="btn-ghost w-full py-3">
+                Voltar as etapas
+              </button>
+            </div>
+          ) : (
+            // Editable form
+            <div className="space-y-6">
+              {sectionFields.map((field, index) => (
+                <div
+                  key={field.id}
+                  id={`field-${field.id}`}
+                  className={`card p-6 transition-all ${errors[field.id] ? 'border-red-500/50' : ''}`}
+                >
+                  <div className="flex items-center gap-2 mb-4 text-sm text-muted">
+                    <span className="w-6 h-6 rounded-full bg-surface-hover flex items-center justify-center text-xs">{index + 1}</span>
+                    <span>de {sectionFields.length}</span>
+                  </div>
+                  <FieldRenderer field={field} value={responses[field.id]} onChange={(value) => updateResponse(field.id, value)} error={errors[field.id]} />
+                </div>
+              ))}
+
+              {errors[0] && (
+                <div className="p-4 bg-red-500/10 border border-red-500/30 rounded-xl">
+                  <p className="text-red-400">{errors[0]}</p>
+                </div>
+              )}
+
+              <div className="sticky bottom-4">
+                <button
+                  type="button"
+                  onClick={() => handleSectionSubmit(activeSection)}
+                  disabled={submitting}
+                  className="btn-primary w-full py-4 text-base font-semibold rounded-2xl shadow-theme-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                >
+                  {submitting ? (
+                    <><div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" /> Salvando...</>
+                  ) : (
+                    <><FiSend className="w-5 h-5" /> Salvar Etapa</>
+                  )}
+                </button>
+              </div>
+            </div>
+          )}
+        </main>
+      </div>
+    )
+  }
+
+  // ============ NON-SECTIONED TEMPLATE: ORIGINAL LINEAR FORM ============
   const visibleFields = template.fields.filter(f => f.field_type !== 'gps')
 
   const progress = visibleFields.length > 0
     ? Math.round((Object.keys(responses).filter(k => {
         const v = responses[Number(k)]
-        return v !== undefined && v !== null && v !== '' &&
-          !(Array.isArray(v) && v.length === 0)
+        return v !== undefined && v !== null && v !== '' && !(Array.isArray(v) && v.length === 0)
       }).length / visibleFields.length) * 100)
     : 0
 
   return (
     <div className="min-h-screen bg-page">
-      {/* Header */}
       <header className="bg-surface border-b border-subtle sticky top-0 z-50">
         <div className="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
             <div className="flex items-center gap-4">
-              <Link
-                href={APP_CONFIG.routes.dashboard}
-                className="p-2 text-secondary hover:text-main hover:bg-surface-hover rounded-lg transition-colors"
-              >
+              <Link href={APP_CONFIG.routes.dashboard} className="p-2 text-secondary hover:text-main hover:bg-surface-hover rounded-lg transition-colors">
                 <FiArrowLeft className="w-5 h-5" />
               </Link>
               <div>
@@ -656,7 +964,6 @@ function ChecklistForm() {
                 <p className="text-xs text-muted">{store.name}</p>
               </div>
             </div>
-
             <div className="flex items-center gap-3">
               <ThemeToggle />
               <div className="text-right">
@@ -665,54 +972,34 @@ function ChecklistForm() {
               </div>
             </div>
           </div>
-
-          {/* Progress bar */}
           <div className="h-1 bg-surface-hover -mx-4 sm:-mx-6 lg:-mx-8">
-            <div
-              className="h-full bg-primary transition-all duration-300"
-              style={{ width: `${progress}%` }}
-            />
+            <div className="h-full bg-primary transition-all duration-300" style={{ width: `${progress}%` }} />
           </div>
         </div>
       </header>
 
-      {/* Form */}
       <main className="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <form onSubmit={handleSubmit} className="space-y-6">
+        <form onSubmit={handleFullSubmit} className="space-y-6">
           {visibleFields.map((field, index) => (
             <div
               key={field.id}
               id={`field-${field.id}`}
-              className={`card p-6 transition-all ${
-                errors[field.id]
-                  ? 'border-red-500/50'
-                  : ''
-              }`}
+              className={`card p-6 transition-all ${errors[field.id] ? 'border-red-500/50' : ''}`}
             >
               <div className="flex items-center gap-2 mb-4 text-sm text-muted">
-                <span className="w-6 h-6 rounded-full bg-surface-hover flex items-center justify-center text-xs">
-                  {index + 1}
-                </span>
+                <span className="w-6 h-6 rounded-full bg-surface-hover flex items-center justify-center text-xs">{index + 1}</span>
                 <span>de {visibleFields.length}</span>
               </div>
-
-              <FieldRenderer
-                field={field}
-                value={responses[field.id]}
-                onChange={(value) => updateResponse(field.id, value)}
-                error={errors[field.id]}
-              />
+              <FieldRenderer field={field} value={responses[field.id]} onChange={(value) => updateResponse(field.id, value)} error={errors[field.id]} />
             </div>
           ))}
 
-          {/* Global Error */}
           {errors[0] && (
             <div className="p-4 bg-red-500/10 border border-red-500/30 rounded-xl">
               <p className="text-red-400">{errors[0]}</p>
             </div>
           )}
 
-          {/* Submit */}
           <div className="sticky bottom-4">
             <button
               type="submit"
@@ -720,15 +1007,9 @@ function ChecklistForm() {
               className="btn-primary w-full py-4 text-base font-semibold rounded-2xl shadow-theme-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
             >
               {submitting ? (
-                <>
-                  <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                  Enviando...
-                </>
+                <><div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" /> Enviando...</>
               ) : (
-                <>
-                  <FiSend className="w-5 h-5" />
-                  Enviar Checklist
-                </>
+                <><FiSend className="w-5 h-5" /> Enviar Checklist</>
               )}
             </button>
           </div>
