@@ -809,20 +809,20 @@ function ChecklistForm() {
         <header className="bg-surface border-b border-subtle sticky top-0 z-50">
           <div className="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="flex items-center justify-between h-16">
-              <div className="flex items-center gap-4">
-                <Link href={APP_CONFIG.routes.dashboard} className="p-2 text-secondary hover:text-main hover:bg-surface-hover rounded-lg transition-colors">
+              <div className="flex items-center gap-2 sm:gap-4 min-w-0">
+                <Link href={APP_CONFIG.routes.dashboard} className="p-1.5 sm:p-2 text-secondary hover:text-main hover:bg-surface-hover rounded-lg transition-colors shrink-0">
                   <FiArrowLeft className="w-5 h-5" />
                 </Link>
-                <div>
-                  <h1 className="text-lg font-bold text-main line-clamp-1">{template.name}</h1>
-                  <p className="text-xs text-muted">{store.name}</p>
+                <div className="min-w-0">
+                  <h1 className="text-sm sm:text-lg font-bold text-main line-clamp-1">{template.name}</h1>
+                  <p className="text-[10px] sm:text-xs text-muted truncate">{store.name}</p>
                 </div>
               </div>
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2 sm:gap-3 shrink-0">
                 <ThemeToggle />
                 <div className="text-right">
-                  <p className="text-sm font-medium text-primary">{completedCount}/{totalCount}</p>
-                  <p className="text-xs text-muted">etapas</p>
+                  <p className="text-xs sm:text-sm font-medium text-primary">{completedCount}/{totalCount}</p>
+                  <p className="text-[10px] sm:text-xs text-muted">etapas</p>
                 </div>
               </div>
             </div>
@@ -849,30 +849,30 @@ function ChecklistForm() {
                   key={section.id}
                   type="button"
                   onClick={() => setActiveSection(section.id)}
-                  className={`w-full text-left card p-5 transition-all hover:shadow-theme-md cursor-pointer ${
+                  className={`w-full text-left card p-3 sm:p-5 transition-all hover:shadow-theme-md cursor-pointer ${
                     isDone
                       ? 'border-success/30 hover:border-success/50'
                       : 'border-subtle hover:border-primary/30'
                   }`}
                 >
-                  <div className="flex items-center gap-4">
-                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-sm font-bold ${
+                  <div className="flex items-center gap-3 sm:gap-4">
+                    <div className={`w-9 h-9 sm:w-10 sm:h-10 rounded-xl flex items-center justify-center text-sm font-bold shrink-0 ${
                       isDone ? 'bg-success/20 text-success' : 'bg-primary/10 text-primary'
                     }`}>
-                      {isDone ? <FiCheckCircle className="w-5 h-5" /> : idx + 1}
+                      {isDone ? <FiCheckCircle className="w-4 h-4 sm:w-5 sm:h-5" /> : idx + 1}
                     </div>
-                    <div className="flex-1">
-                      <h3 className={`font-semibold ${isDone ? 'text-success' : 'text-main'}`}>
+                    <div className="flex-1 min-w-0">
+                      <h3 className={`font-semibold text-sm sm:text-base ${isDone ? 'text-success' : 'text-main'}`}>
                         {section.name}
                       </h3>
-                      <p className="text-xs text-muted">
+                      <p className="text-[10px] sm:text-xs text-muted">
                         {sectionFields.length} campo{sectionFields.length !== 1 ? 's' : ''}
                         {isDone && progress?.completed_at && (
-                          <> &middot; Concluido as {new Date(progress.completed_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</>
+                          <> &middot; {new Date(progress.completed_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</>
                         )}
                       </p>
                     </div>
-                    <FiChevronRight className={`w-5 h-5 ${isDone ? 'text-success' : 'text-muted'}`} />
+                    <FiChevronRight className={`w-4 h-4 sm:w-5 sm:h-5 shrink-0 ${isDone ? 'text-success' : 'text-muted'}`} />
                   </div>
                 </button>
               )
@@ -906,21 +906,21 @@ function ChecklistForm() {
       <div className="min-h-screen bg-page">
         <header className="bg-surface border-b border-subtle sticky top-0 z-50">
           <div className="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="flex items-center justify-between h-16">
-              <div className="flex items-center gap-4">
-                <button onClick={() => setActiveSection(null)} className="p-2 text-secondary hover:text-main hover:bg-surface-hover rounded-lg transition-colors">
+            <div className="flex items-center justify-between h-14 sm:h-16">
+              <div className="flex items-center gap-2 sm:gap-4 min-w-0">
+                <button onClick={() => setActiveSection(null)} className="p-1.5 sm:p-2 text-secondary hover:text-main hover:bg-surface-hover rounded-lg transition-colors shrink-0">
                   <FiArrowLeft className="w-5 h-5" />
                 </button>
-                <div>
-                  <h1 className="text-lg font-bold text-main line-clamp-1">{section?.name}</h1>
-                  <p className="text-xs text-muted">{template.name}</p>
+                <div className="min-w-0">
+                  <h1 className="text-sm sm:text-lg font-bold text-main line-clamp-1">{section?.name}</h1>
+                  <p className="text-[10px] sm:text-xs text-muted truncate">{template.name}</p>
                 </div>
               </div>
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2 sm:gap-3 shrink-0">
                 <ThemeToggle />
                 <div className="text-right">
-                  <p className="text-sm font-medium text-primary">{progressPct}%</p>
-                  <p className="text-xs text-muted">completo</p>
+                  <p className="text-xs sm:text-sm font-medium text-primary">{progressPct}%</p>
+                  <p className="text-[10px] sm:text-xs text-muted">completo</p>
                 </div>
               </div>
             </div>
@@ -933,7 +933,7 @@ function ChecklistForm() {
         <main className="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
             <div className="space-y-6">
               {isDone && (
-                <div className="p-3 bg-success/10 border border-success/30 rounded-xl flex items-center gap-2 text-sm text-success">
+                <div className="p-2.5 sm:p-3 bg-success/10 border border-success/30 rounded-xl flex items-center gap-2 text-xs sm:text-sm text-success">
                   <FiCheckCircle className="w-4 h-4 shrink-0" />
                   <span>Etapa concluida — altere o que precisar e salve novamente</span>
                 </div>
@@ -942,10 +942,10 @@ function ChecklistForm() {
                 <div
                   key={field.id}
                   id={`field-${field.id}`}
-                  className={`card p-6 transition-all ${errors[field.id] ? 'border-red-500/50' : ''}`}
+                  className={`card p-4 sm:p-6 transition-all ${errors[field.id] ? 'border-red-500/50' : ''}`}
                 >
-                  <div className="flex items-center gap-2 mb-4 text-sm text-muted">
-                    <span className="w-6 h-6 rounded-full bg-surface-hover flex items-center justify-center text-xs">{index + 1}</span>
+                  <div className="flex items-center gap-2 mb-3 sm:mb-4 text-xs sm:text-sm text-muted">
+                    <span className="w-5 h-5 sm:w-6 sm:h-6 rounded-full bg-surface-hover flex items-center justify-center text-[10px] sm:text-xs">{index + 1}</span>
                     <span>de {sectionFields.length}</span>
                   </div>
                   <FieldRenderer field={field} value={responses[field.id]} onChange={(value) => updateResponse(field.id, value)} error={errors[field.id]} />
@@ -992,21 +992,21 @@ function ChecklistForm() {
     <div className="min-h-screen bg-page">
       <header className="bg-surface border-b border-subtle sticky top-0 z-50">
         <div className="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16">
-            <div className="flex items-center gap-4">
-              <Link href={APP_CONFIG.routes.dashboard} className="p-2 text-secondary hover:text-main hover:bg-surface-hover rounded-lg transition-colors">
+          <div className="flex items-center justify-between h-14 sm:h-16">
+            <div className="flex items-center gap-2 sm:gap-4 min-w-0">
+              <Link href={APP_CONFIG.routes.dashboard} className="p-1.5 sm:p-2 text-secondary hover:text-main hover:bg-surface-hover rounded-lg transition-colors shrink-0">
                 <FiArrowLeft className="w-5 h-5" />
               </Link>
-              <div>
-                <h1 className="text-lg font-bold text-main line-clamp-1">{template.name}</h1>
-                <p className="text-xs text-muted">{store.name}</p>
+              <div className="min-w-0">
+                <h1 className="text-sm sm:text-lg font-bold text-main line-clamp-1">{template.name}</h1>
+                <p className="text-[10px] sm:text-xs text-muted truncate">{store.name}</p>
               </div>
             </div>
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2 sm:gap-3 shrink-0">
               <ThemeToggle />
               <div className="text-right">
-                <p className="text-sm font-medium text-primary">{progress}%</p>
-                <p className="text-xs text-muted">completo</p>
+                <p className="text-xs sm:text-sm font-medium text-primary">{progress}%</p>
+                <p className="text-[10px] sm:text-xs text-muted">completo</p>
               </div>
             </div>
           </div>
@@ -1016,16 +1016,16 @@ function ChecklistForm() {
         </div>
       </header>
 
-      <main className="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <form onSubmit={handleFullSubmit} className="space-y-6">
+      <main className="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
+        <form onSubmit={handleFullSubmit} className="space-y-4 sm:space-y-6">
           {visibleFields.map((field, index) => (
             <div
               key={field.id}
               id={`field-${field.id}`}
-              className={`card p-6 transition-all ${errors[field.id] ? 'border-red-500/50' : ''}`}
+              className={`card p-4 sm:p-6 transition-all ${errors[field.id] ? 'border-red-500/50' : ''}`}
             >
-              <div className="flex items-center gap-2 mb-4 text-sm text-muted">
-                <span className="w-6 h-6 rounded-full bg-surface-hover flex items-center justify-center text-xs">{index + 1}</span>
+              <div className="flex items-center gap-2 mb-3 sm:mb-4 text-xs sm:text-sm text-muted">
+                <span className="w-5 h-5 sm:w-6 sm:h-6 rounded-full bg-surface-hover flex items-center justify-center text-[10px] sm:text-xs">{index + 1}</span>
                 <span>de {visibleFields.length}</span>
               </div>
               <FieldRenderer field={field} value={responses[field.id]} onChange={(value) => updateResponse(field.id, value)} error={errors[field.id]} />

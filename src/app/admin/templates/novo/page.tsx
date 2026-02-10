@@ -149,6 +149,7 @@ export default function NovoTemplatePage() {
   }
 
   const removeSection = (id: string) => {
+    if (!confirm('Deseja realmente excluir esta etapa? Os campos dela ficarao sem etapa.')) return
     setSections(sections.filter(s => s.id !== id))
     // Unassign fields from this section
     setFields(fields.map(f => f.section_id === id ? { ...f, section_id: null } : f))
@@ -188,6 +189,7 @@ export default function NovoTemplatePage() {
   }
 
   const removeField = (id: string) => {
+    if (!confirm('Deseja realmente excluir este campo?')) return
     setFields(fields.filter(f => f.id !== id))
     if (editingField === id) setEditingField(null)
   }
@@ -501,32 +503,32 @@ export default function NovoTemplatePage() {
                     <div key={section.id} className="border border-subtle rounded-xl overflow-hidden">
                       {/* Section header */}
                       <div
-                        className={`flex items-center gap-3 p-3 cursor-pointer transition-colors ${
+                        className={`flex items-center gap-2 sm:gap-3 p-2 sm:p-3 cursor-pointer transition-colors ${
                           isExpanded ? 'bg-primary/10 border-b border-subtle' : 'bg-surface hover:bg-surface-hover'
                         }`}
                         onClick={() => setExpandedSection(isExpanded ? null : section.id)}
                       >
-                        <div className="flex flex-col gap-1" onClick={e => e.stopPropagation()}>
-                          <button type="button" onClick={() => moveSectionOrder(section.id, 'up')} disabled={idx === 0} className="p-1 text-muted hover:text-main disabled:opacity-30">
+                        <div className="flex flex-col gap-0.5" onClick={e => e.stopPropagation()}>
+                          <button type="button" onClick={() => moveSectionOrder(section.id, 'up')} disabled={idx === 0} className="p-0.5 sm:p-1 text-muted hover:text-main disabled:opacity-30">
                             <FiChevronUp className="w-3 h-3" />
                           </button>
-                          <button type="button" onClick={() => moveSectionOrder(section.id, 'down')} disabled={idx === sections.length - 1} className="p-1 text-muted hover:text-main disabled:opacity-30">
+                          <button type="button" onClick={() => moveSectionOrder(section.id, 'down')} disabled={idx === sections.length - 1} className="p-0.5 sm:p-1 text-muted hover:text-main disabled:opacity-30">
                             <FiChevronDown className="w-3 h-3" />
                           </button>
                         </div>
-                        <span className="w-7 h-7 rounded-lg bg-primary/10 flex items-center justify-center text-xs font-bold text-primary">{idx + 1}</span>
+                        <span className="w-6 h-6 sm:w-7 sm:h-7 rounded-lg bg-primary/10 flex items-center justify-center text-xs font-bold text-primary shrink-0">{idx + 1}</span>
                         <input
                           type="text"
                           value={section.name}
                           onChange={(e) => updateSection(section.id, { name: e.target.value })}
                           onClick={e => e.stopPropagation()}
                           placeholder="Nome da etapa"
-                          className="flex-1 bg-transparent border-none text-main placeholder:text-muted focus:outline-none font-medium"
+                          className="flex-1 min-w-0 bg-transparent border-none text-main placeholder:text-muted focus:outline-none font-medium text-sm sm:text-base"
                         />
-                        <span className="text-xs text-muted whitespace-nowrap">{sectionFields.length} campos</span>
-                        {isExpanded ? <FiChevronUp className="w-4 h-4 text-primary" /> : <FiChevronDown className="w-4 h-4 text-muted" />}
-                        <button type="button" onClick={(e) => { e.stopPropagation(); removeSection(section.id) }} className="p-2 text-error hover:bg-error/20 rounded-lg transition-colors">
-                          <FiTrash2 className="w-4 h-4" />
+                        <span className="text-xs text-muted whitespace-nowrap hidden sm:inline">{sectionFields.length} campos</span>
+                        {isExpanded ? <FiChevronUp className="w-4 h-4 text-primary shrink-0" /> : <FiChevronDown className="w-4 h-4 text-muted shrink-0" />}
+                        <button type="button" onClick={(e) => { e.stopPropagation(); removeSection(section.id) }} className="p-1.5 sm:p-2 text-error hover:bg-error/20 rounded-lg transition-colors shrink-0">
+                          <FiTrash2 className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                         </button>
                       </div>
 
@@ -548,28 +550,28 @@ export default function NovoTemplatePage() {
                           ) : (
                             sectionFields.map((field, fieldIdx) => (
                               <div key={field.id} className={`border rounded-xl transition-all ${editingField === field.id ? 'border-primary bg-surface-hover' : 'border-subtle bg-surface'}`}>
-                                <div className="flex items-center gap-3 p-3">
-                                  <div className="flex flex-col gap-1">
-                                    <button type="button" onClick={() => moveField(field.id, 'up')} disabled={fieldIdx === 0} className="p-1 text-muted hover:text-main disabled:opacity-30"><FiChevronUp className="w-3 h-3" /></button>
-                                    <button type="button" onClick={() => moveField(field.id, 'down')} disabled={fieldIdx === sectionFields.length - 1} className="p-1 text-muted hover:text-main disabled:opacity-30"><FiChevronDown className="w-3 h-3" /></button>
+                                <div className="flex items-center gap-2 sm:gap-3 p-2 sm:p-3">
+                                  <div className="flex flex-col gap-0.5">
+                                    <button type="button" onClick={() => moveField(field.id, 'up')} disabled={fieldIdx === 0} className="p-0.5 sm:p-1 text-muted hover:text-main disabled:opacity-30"><FiChevronUp className="w-3 h-3" /></button>
+                                    <button type="button" onClick={() => moveField(field.id, 'down')} disabled={fieldIdx === sectionFields.length - 1} className="p-0.5 sm:p-1 text-muted hover:text-main disabled:opacity-30"><FiChevronDown className="w-3 h-3" /></button>
                                   </div>
-                                  <div className="w-8 h-8 rounded-lg bg-surface-hover border border-subtle flex items-center justify-center text-sm">{getFieldTypeIcon(field.field_type)}</div>
+                                  <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-surface-hover border border-subtle flex items-center justify-center text-sm shrink-0">{getFieldTypeIcon(field.field_type)}</div>
                                   <div className="flex-1 min-w-0">
-                                    <input type="text" value={field.name} onChange={(e) => updateField(field.id, { name: e.target.value })} placeholder="Nome do campo" className="w-full bg-transparent border-none text-main placeholder:text-muted focus:outline-none font-medium text-sm" />
-                                    <p className="text-xs text-muted">{getFieldTypeLabel(field.field_type)}</p>
+                                    <input type="text" value={field.name} onChange={(e) => updateField(field.id, { name: e.target.value })} placeholder="Nome do campo" className="w-full bg-transparent border-none text-main placeholder:text-muted focus:outline-none font-medium text-xs sm:text-sm" />
+                                    <p className="text-[10px] sm:text-xs text-muted">{getFieldTypeLabel(field.field_type)}</p>
                                   </div>
-                                  <div className="flex items-center gap-1">
-                                    <label className="flex items-center gap-1 text-xs text-secondary">
-                                      <input type="checkbox" checked={field.is_required} onChange={(e) => updateField(field.id, { is_required: e.target.checked })} className="rounded border-default bg-surface text-primary focus:ring-primary w-3.5 h-3.5" />
-                                      Obrig.
+                                  <div className="flex items-center gap-0.5 sm:gap-1 shrink-0">
+                                    <label className="flex items-center gap-0.5 sm:gap-1 text-[10px] sm:text-xs text-secondary" title="Obrigatorio">
+                                      <input type="checkbox" checked={field.is_required} onChange={(e) => updateField(field.id, { is_required: e.target.checked })} className="rounded border-default bg-surface text-primary focus:ring-primary w-3 h-3 sm:w-3.5 sm:h-3.5" />
+                                      <span className="hidden sm:inline">Obrig.</span><span className="sm:hidden">*</span>
                                     </label>
-                                    <button type="button" onClick={() => setEditingField(editingField === field.id ? null : field.id)} className={`p-1.5 rounded-lg transition-colors ${editingField === field.id ? 'bg-primary/20 text-primary' : 'text-muted hover:bg-surface-hover'}`}><FiSettings className="w-3.5 h-3.5" /></button>
-                                    <button type="button" onClick={() => removeField(field.id)} className="p-1.5 text-error hover:bg-error/20 rounded-lg transition-colors"><FiTrash2 className="w-3.5 h-3.5" /></button>
+                                    <button type="button" onClick={() => setEditingField(editingField === field.id ? null : field.id)} className={`p-1 sm:p-1.5 rounded-lg transition-colors ${editingField === field.id ? 'bg-primary/20 text-primary' : 'text-muted hover:bg-surface-hover'}`}><FiSettings className="w-3 h-3 sm:w-3.5 sm:h-3.5" /></button>
+                                    <button type="button" onClick={() => removeField(field.id)} className="p-1 sm:p-1.5 text-error hover:bg-error/20 rounded-lg transition-colors"><FiTrash2 className="w-3 h-3 sm:w-3.5 sm:h-3.5" /></button>
                                   </div>
                                 </div>
                                 {editingField === field.id && (
-                                  <div className="px-3 pb-3 pt-2 border-t border-subtle space-y-3">
-                                    <div className="grid grid-cols-2 gap-3">
+                                  <div className="px-2 pb-2 sm:px-3 sm:pb-3 pt-2 border-t border-subtle space-y-3">
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                       <div>
                                         <label className="block text-xs text-muted mb-1">Placeholder</label>
                                         <input type="text" value={field.placeholder} onChange={(e) => updateField(field.id, { placeholder: e.target.value })} className="input text-sm" placeholder="Texto de exemplo..." />
@@ -649,28 +651,28 @@ export default function NovoTemplatePage() {
                     ) : (
                       generalFields.map((field, fieldIdx) => (
                         <div key={field.id} className={`border rounded-xl transition-all ${editingField === field.id ? 'border-primary bg-surface-hover' : 'border-subtle bg-surface'}`}>
-                          <div className="flex items-center gap-3 p-3">
-                            <div className="flex flex-col gap-1">
-                              <button type="button" onClick={() => moveField(field.id, 'up')} disabled={fieldIdx === 0} className="p-1 text-muted hover:text-main disabled:opacity-30"><FiChevronUp className="w-3 h-3" /></button>
-                              <button type="button" onClick={() => moveField(field.id, 'down')} disabled={fieldIdx === generalFields.length - 1} className="p-1 text-muted hover:text-main disabled:opacity-30"><FiChevronDown className="w-3 h-3" /></button>
+                          <div className="flex items-center gap-2 sm:gap-3 p-2 sm:p-3">
+                            <div className="flex flex-col gap-0.5">
+                              <button type="button" onClick={() => moveField(field.id, 'up')} disabled={fieldIdx === 0} className="p-0.5 sm:p-1 text-muted hover:text-main disabled:opacity-30"><FiChevronUp className="w-3 h-3" /></button>
+                              <button type="button" onClick={() => moveField(field.id, 'down')} disabled={fieldIdx === generalFields.length - 1} className="p-0.5 sm:p-1 text-muted hover:text-main disabled:opacity-30"><FiChevronDown className="w-3 h-3" /></button>
                             </div>
-                            <div className="w-8 h-8 rounded-lg bg-surface-hover border border-subtle flex items-center justify-center text-sm">{getFieldTypeIcon(field.field_type)}</div>
+                            <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-surface-hover border border-subtle flex items-center justify-center text-sm shrink-0">{getFieldTypeIcon(field.field_type)}</div>
                             <div className="flex-1 min-w-0">
-                              <input type="text" value={field.name} onChange={(e) => updateField(field.id, { name: e.target.value })} placeholder="Nome do campo" className="w-full bg-transparent border-none text-main placeholder:text-muted focus:outline-none font-medium text-sm" />
-                              <p className="text-xs text-muted">{getFieldTypeLabel(field.field_type)}</p>
+                              <input type="text" value={field.name} onChange={(e) => updateField(field.id, { name: e.target.value })} placeholder="Nome do campo" className="w-full bg-transparent border-none text-main placeholder:text-muted focus:outline-none font-medium text-xs sm:text-sm" />
+                              <p className="text-[10px] sm:text-xs text-muted">{getFieldTypeLabel(field.field_type)}</p>
                             </div>
-                            <div className="flex items-center gap-1">
-                              <label className="flex items-center gap-1 text-xs text-secondary">
-                                <input type="checkbox" checked={field.is_required} onChange={(e) => updateField(field.id, { is_required: e.target.checked })} className="rounded border-default bg-surface text-primary focus:ring-primary w-3.5 h-3.5" />
-                                Obrig.
+                            <div className="flex items-center gap-0.5 sm:gap-1 shrink-0">
+                              <label className="flex items-center gap-0.5 sm:gap-1 text-[10px] sm:text-xs text-secondary" title="Obrigatorio">
+                                <input type="checkbox" checked={field.is_required} onChange={(e) => updateField(field.id, { is_required: e.target.checked })} className="rounded border-default bg-surface text-primary focus:ring-primary w-3 h-3 sm:w-3.5 sm:h-3.5" />
+                                <span className="hidden sm:inline">Obrig.</span><span className="sm:hidden">*</span>
                               </label>
-                              <button type="button" onClick={() => setEditingField(editingField === field.id ? null : field.id)} className={`p-1.5 rounded-lg transition-colors ${editingField === field.id ? 'bg-primary/20 text-primary' : 'text-muted hover:bg-surface-hover'}`}><FiSettings className="w-3.5 h-3.5" /></button>
-                              <button type="button" onClick={() => removeField(field.id)} className="p-1.5 text-error hover:bg-error/20 rounded-lg transition-colors"><FiTrash2 className="w-3.5 h-3.5" /></button>
+                              <button type="button" onClick={() => setEditingField(editingField === field.id ? null : field.id)} className={`p-1 sm:p-1.5 rounded-lg transition-colors ${editingField === field.id ? 'bg-primary/20 text-primary' : 'text-muted hover:bg-surface-hover'}`}><FiSettings className="w-3 h-3 sm:w-3.5 sm:h-3.5" /></button>
+                              <button type="button" onClick={() => removeField(field.id)} className="p-1 sm:p-1.5 text-error hover:bg-error/20 rounded-lg transition-colors"><FiTrash2 className="w-3 h-3 sm:w-3.5 sm:h-3.5" /></button>
                             </div>
                           </div>
                           {editingField === field.id && (
-                            <div className="px-3 pb-3 pt-2 border-t border-subtle space-y-3">
-                              <div className="grid grid-cols-2 gap-3">
+                            <div className="px-2 pb-2 sm:px-3 sm:pb-3 pt-2 border-t border-subtle space-y-3">
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                 <div>
                                   <label className="block text-xs text-muted mb-1">Placeholder</label>
                                   <input type="text" value={field.placeholder} onChange={(e) => updateField(field.id, { placeholder: e.target.value })} className="input text-sm" placeholder="Texto de exemplo..." />
@@ -729,10 +731,10 @@ export default function NovoTemplatePage() {
             ) : (
               <>
                 {/* No sections: flat field list */}
-                <div className="flex flex-wrap gap-2 mb-6 p-4 bg-surface-hover rounded-xl border border-subtle">
-                  <p className="w-full text-sm text-muted mb-2">Adicionar campo:</p>
+                <div className="flex flex-wrap gap-1.5 sm:gap-2 mb-6 p-2 sm:p-4 bg-surface-hover rounded-xl border border-subtle">
+                  <p className="w-full text-xs sm:text-sm text-muted mb-1 sm:mb-2">Adicionar campo:</p>
                   {fieldTypes.map(type => (
-                    <button key={type.value} type="button" onClick={() => addField(type.value)} className="btn-secondary flex items-center gap-2 px-3 py-2 text-sm">
+                    <button key={type.value} type="button" onClick={() => addField(type.value)} className="btn-secondary flex items-center gap-1 sm:gap-2 px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm">
                       <span>{type.icon}</span>
                       <span>{type.label}</span>
                     </button>
@@ -748,28 +750,28 @@ export default function NovoTemplatePage() {
                   <div className="space-y-3">
                     {fields.map((field, index) => (
                       <div key={field.id} className={`border rounded-xl transition-all ${editingField === field.id ? 'border-primary bg-surface-hover' : 'border-subtle bg-surface'}`}>
-                        <div className="flex items-center gap-3 p-4">
-                          <div className="flex flex-col gap-1">
-                            <button type="button" onClick={() => moveField(field.id, 'up')} disabled={index === 0} className="p-1 text-muted hover:text-main disabled:opacity-30"><FiChevronUp className="w-4 h-4" /></button>
-                            <button type="button" onClick={() => moveField(field.id, 'down')} disabled={index === fields.length - 1} className="p-1 text-muted hover:text-main disabled:opacity-30"><FiChevronDown className="w-4 h-4" /></button>
+                        <div className="flex items-center gap-2 sm:gap-3 p-2 sm:p-4">
+                          <div className="flex flex-col gap-0.5">
+                            <button type="button" onClick={() => moveField(field.id, 'up')} disabled={index === 0} className="p-0.5 sm:p-1 text-muted hover:text-main disabled:opacity-30"><FiChevronUp className="w-3 h-3 sm:w-4 sm:h-4" /></button>
+                            <button type="button" onClick={() => moveField(field.id, 'down')} disabled={index === fields.length - 1} className="p-0.5 sm:p-1 text-muted hover:text-main disabled:opacity-30"><FiChevronDown className="w-3 h-3 sm:w-4 sm:h-4" /></button>
                           </div>
-                          <div className="w-10 h-10 rounded-lg bg-surface-hover border border-subtle flex items-center justify-center text-lg">{getFieldTypeIcon(field.field_type)}</div>
-                          <div className="flex-1">
-                            <input type="text" value={field.name} onChange={(e) => updateField(field.id, { name: e.target.value })} placeholder="Nome do campo" className="w-full bg-transparent border-none text-main placeholder:text-muted focus:outline-none font-medium" />
-                            <p className="text-xs text-muted">{getFieldTypeLabel(field.field_type)}</p>
+                          <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg bg-surface-hover border border-subtle flex items-center justify-center text-sm sm:text-lg shrink-0">{getFieldTypeIcon(field.field_type)}</div>
+                          <div className="flex-1 min-w-0">
+                            <input type="text" value={field.name} onChange={(e) => updateField(field.id, { name: e.target.value })} placeholder="Nome do campo" className="w-full bg-transparent border-none text-main placeholder:text-muted focus:outline-none font-medium text-sm sm:text-base" />
+                            <p className="text-[10px] sm:text-xs text-muted">{getFieldTypeLabel(field.field_type)}</p>
                           </div>
-                          <div className="flex items-center gap-2">
-                            <label className="flex items-center gap-2 text-sm text-secondary">
-                              <input type="checkbox" checked={field.is_required} onChange={(e) => updateField(field.id, { is_required: e.target.checked })} className="rounded border-default bg-surface text-primary focus:ring-primary" />
-                              Obrigatorio
+                          <div className="flex items-center gap-1 sm:gap-2 shrink-0">
+                            <label className="flex items-center gap-1 sm:gap-2 text-[10px] sm:text-sm text-secondary" title="Obrigatorio">
+                              <input type="checkbox" checked={field.is_required} onChange={(e) => updateField(field.id, { is_required: e.target.checked })} className="rounded border-default bg-surface text-primary focus:ring-primary w-3 h-3 sm:w-4 sm:h-4" />
+                              <span className="hidden sm:inline">Obrigatorio</span><span className="sm:hidden">*</span>
                             </label>
-                            <button type="button" onClick={() => setEditingField(editingField === field.id ? null : field.id)} className={`p-2 rounded-lg transition-colors ${editingField === field.id ? 'bg-primary/20 text-primary' : 'text-muted hover:bg-surface-hover'}`}><FiSettings className="w-4 h-4" /></button>
-                            <button type="button" onClick={() => removeField(field.id)} className="p-2 text-error hover:bg-error/20 rounded-lg transition-colors"><FiTrash2 className="w-4 h-4" /></button>
+                            <button type="button" onClick={() => setEditingField(editingField === field.id ? null : field.id)} className={`p-1 sm:p-2 rounded-lg transition-colors ${editingField === field.id ? 'bg-primary/20 text-primary' : 'text-muted hover:bg-surface-hover'}`}><FiSettings className="w-3.5 h-3.5 sm:w-4 sm:h-4" /></button>
+                            <button type="button" onClick={() => removeField(field.id)} className="p-1 sm:p-2 text-error hover:bg-error/20 rounded-lg transition-colors"><FiTrash2 className="w-3.5 h-3.5 sm:w-4 sm:h-4" /></button>
                           </div>
                         </div>
                         {editingField === field.id && (
-                          <div className="px-4 pb-4 pt-2 border-t border-subtle space-y-4">
-                            <div className="grid grid-cols-2 gap-4">
+                          <div className="px-2 pb-2 sm:px-4 sm:pb-4 pt-2 border-t border-subtle space-y-3 sm:space-y-4">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                               <div>
                                 <label className="block text-xs text-muted mb-1">Placeholder</label>
                                 <input type="text" value={field.placeholder} onChange={(e) => updateField(field.id, { placeholder: e.target.value })} className="input text-sm" placeholder="Texto de exemplo..." />
