@@ -17,11 +17,9 @@ import {
   FiBriefcase,
   FiPlus,
   FiLayers,
-  FiMenu,
+  FiArrowUp,
+  FiArrowDown,
 } from 'react-icons/fi'
-import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core'
-import { SortableContext, verticalListSortingStrategy, useSortable, arrayMove } from '@dnd-kit/sortable'
-import { CSS } from '@dnd-kit/utilities'
 import type { Store, FieldType, TemplateCategory, Sector, FunctionRow } from '@/types/database'
 
 type SectionConfig = {
@@ -53,26 +51,6 @@ type VisibilityConfig = {
 
 type SectorWithStore = Sector & {
   store: Store
-}
-
-function SortableSectionItem({ id, children }: { id: string; children: (dragHandleProps: Record<string, unknown>) => React.ReactNode }) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id })
-  const style = { transform: CSS.Translate.toString(transform), transition, opacity: isDragging ? 0.5 : 1, position: 'relative' as const, zIndex: isDragging ? 50 : 'auto' as const }
-  return (
-    <div ref={setNodeRef} style={style} className="border border-subtle rounded-xl overflow-hidden">
-      {children({ ...attributes, ...listeners })}
-    </div>
-  )
-}
-
-function SortableFieldItem({ id, children, isEditing }: { id: string; isEditing: boolean; children: (dragHandleProps: Record<string, unknown>) => React.ReactNode }) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id })
-  const style = { transform: CSS.Translate.toString(transform), transition, opacity: isDragging ? 0.5 : 1, position: 'relative' as const, zIndex: isDragging ? 50 : 'auto' as const }
-  return (
-    <div ref={setNodeRef} style={style} className={`border rounded-xl transition-colors ${isEditing ? 'border-primary bg-surface-hover' : 'border-subtle bg-surface'}`}>
-      {children({ ...attributes, ...listeners })}
-    </div>
-  )
 }
 
 export default function NovoTemplatePage() {
@@ -179,34 +157,16 @@ export default function NovoTemplatePage() {
     setFields(fields.map(f => f.section_id === id ? { ...f, section_id: null } : f))
   }
 
-  const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
-    useSensor(KeyboardSensor)
-  )
-
-  const handleSectionDragEnd = (event: DragEndEvent) => {
-    const { active, over } = event
-    if (!over || active.id === over.id) return
-    setSections(prev => {
-      const oldIndex = prev.findIndex(s => s.id === active.id)
-      const newIndex = prev.findIndex(s => s.id === over.id)
-      if (oldIndex === -1 || newIndex === -1) return prev
-      return arrayMove(prev, oldIndex, newIndex).map((s, i) => ({ ...s, sort_order: i + 1 }))
-    })
-  }
-
-  const handleFieldDragEnd = (sectionId: string | null) => (event: DragEndEvent) => {
-    const { active, over } = event
-    if (!over || active.id === over.id) return
-    setFields(prev => {
-      const group = prev.filter(f => f.section_id === sectionId).sort((a, b) => a.sort_order - b.sort_order)
-      const oldIndex = group.findIndex(f => f.id === active.id)
-      const newIndex = group.findIndex(f => f.id === over.id)
-      if (oldIndex === -1 || newIndex === -1) return prev
-      const reordered = arrayMove(group, oldIndex, newIndex)
-      const sortMap = new Map(reordered.map((f, i) => [f.id, i + 1]))
-      return prev.map(f => sortMap.has(f.id) ? { ...f, sort_order: sortMap.get(f.id)! } : f)
-    })
+  const moveSectionOrder = (id: string, direction: 'up' | 'down') => {
+    const index = sections.findIndex(s => s.id === id)
+    if ((direction === 'up' && index === 0) || (direction === 'down' && index === sections.length - 1)) return
+    const newSections = [...sections]
+    const newIndex = direction === 'up' ? index - 1 : index + 1
+    const temp = newSections[index]
+    newSections[index] = newSections[newIndex]
+    newSections[newIndex] = temp
+    newSections.forEach((s, i) => s.sort_order = i + 1)
+    setSections(newSections)
   }
 
   const addField = (type: FieldType, sectionId?: string | null) => {
@@ -236,6 +196,31 @@ export default function NovoTemplatePage() {
     if (editingField === id) setEditingField(null)
   }
 
+  const moveField = (id: string, direction: 'up' | 'down') => {
+    const field = fields.find(f => f.id === id)
+    if (!field) return
+
+    // Scope movement within same section group
+    const groupFields = fields
+      .filter(f => f.section_id === field.section_id)
+      .sort((a, b) => a.sort_order - b.sort_order)
+    const idxInGroup = groupFields.findIndex(f => f.id === id)
+
+    if (
+      (direction === 'up' && idxInGroup === 0) ||
+      (direction === 'down' && idxInGroup === groupFields.length - 1)
+    ) return
+
+    const neighbor = direction === 'up' ? groupFields[idxInGroup - 1] : groupFields[idxInGroup + 1]
+    const fieldSort = field.sort_order
+    const neighborSort = neighbor.sort_order
+
+    setFields(fields.map(f => {
+      if (f.id === id) return { ...f, sort_order: neighborSort }
+      if (f.id === neighbor.id) return { ...f, sort_order: fieldSort }
+      return f
+    }))
+  }
 
   // Toggle a sector's visibility
   const toggleSectorVisibility = (storeId: number, sectorId: number) => {
@@ -510,8 +495,6 @@ export default function NovoTemplatePage() {
             {sections.length > 0 ? (
               <div className="space-y-4">
                 {/* Section accordions */}
-                <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleSectionDragEnd}>
-                <SortableContext items={sections.map(s => s.id)} strategy={verticalListSortingStrategy}>
                 {sections.map((section, idx) => {
                   const sectionFields = fields
                     .filter(f => f.section_id === section.id)
@@ -519,8 +502,7 @@ export default function NovoTemplatePage() {
                   const isExpanded = expandedSection === section.id
 
                   return (
-                    <SortableSectionItem key={section.id} id={section.id}>
-                    {(dragHandleProps) => (<>
+                    <div key={section.id} className="border border-subtle rounded-xl overflow-hidden">
                       {/* Section header */}
                       <div
                         className={`flex items-center gap-2 sm:gap-3 p-2 sm:p-3 cursor-pointer transition-colors ${
@@ -528,8 +510,13 @@ export default function NovoTemplatePage() {
                         }`}
                         onClick={() => setExpandedSection(isExpanded ? null : section.id)}
                       >
-                        <div {...dragHandleProps} onClick={e => e.stopPropagation()} className="cursor-grab active:cursor-grabbing p-1 text-muted hover:text-main touch-none">
-                          <FiMenu className="w-4 h-4" />
+                        <div className="flex flex-col gap-0.5" onClick={e => e.stopPropagation()}>
+                          <button type="button" onClick={() => moveSectionOrder(section.id, 'up')} disabled={idx === 0} className="p-0.5 sm:p-1 text-muted hover:text-main disabled:opacity-30">
+                            <FiChevronUp className="w-3 h-3" />
+                          </button>
+                          <button type="button" onClick={() => moveSectionOrder(section.id, 'down')} disabled={idx === sections.length - 1} className="p-0.5 sm:p-1 text-muted hover:text-main disabled:opacity-30">
+                            <FiChevronDown className="w-3 h-3" />
+                          </button>
                         </div>
                         <span className="w-6 h-6 sm:w-7 sm:h-7 rounded-lg bg-primary/10 flex items-center justify-center text-xs font-bold text-primary shrink-0">{idx + 1}</span>
                         <input
@@ -563,14 +550,12 @@ export default function NovoTemplatePage() {
                           {sectionFields.length === 0 ? (
                             <p className="text-center text-muted text-sm py-4">Nenhum campo nesta etapa</p>
                           ) : (
-                            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleFieldDragEnd(section.id)}>
-                            <SortableContext items={sectionFields.map(f => f.id)} strategy={verticalListSortingStrategy}>
-                            {sectionFields.map((field) => (
-                              <SortableFieldItem key={field.id} id={field.id} isEditing={editingField === field.id}>
-                              {(fieldDragHandleProps) => (<>
+                            sectionFields.map((field, fieldIdx) => (
+                              <div key={field.id} className={`border rounded-xl transition-all ${editingField === field.id ? 'border-primary bg-surface-hover' : 'border-subtle bg-surface'}`}>
                                 <div className="flex items-center gap-2 sm:gap-3 p-2 sm:p-3">
-                                  <div {...fieldDragHandleProps} className="cursor-grab active:cursor-grabbing p-1 text-muted hover:text-main touch-none">
-                                    <FiMenu className="w-3.5 h-3.5" />
+                                  <div className="flex flex-col gap-0.5">
+                                    <button type="button" onClick={() => moveField(field.id, 'up')} disabled={fieldIdx === 0} className="p-1 rounded-md text-muted hover:text-primary hover:bg-primary/10 disabled:opacity-20 disabled:hover:bg-transparent disabled:hover:text-muted transition-colors"><FiArrowUp className="w-3 h-3" /></button>
+                                    <button type="button" onClick={() => moveField(field.id, 'down')} disabled={fieldIdx === sectionFields.length - 1} className="p-1 rounded-md text-muted hover:text-primary hover:bg-primary/10 disabled:opacity-20 disabled:hover:bg-transparent disabled:hover:text-muted transition-colors"><FiArrowDown className="w-3 h-3" /></button>
                                   </div>
                                   <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-surface-hover border border-subtle flex items-center justify-center text-sm shrink-0">{getFieldTypeIcon(field.field_type)}</div>
                                   <div className="flex-1 min-w-0">
@@ -649,20 +634,14 @@ export default function NovoTemplatePage() {
                                     {!['dropdown', 'checkbox_multiple'].includes(field.field_type) && (<div><label className="block text-xs text-muted mb-1">Validacao cruzada</label><select value={(field.options as { validationRole?: string } | null)?.validationRole || ''} onChange={(e) => updateField(field.id, { options: { ...((field.options as Record<string, unknown>) || {}), validationRole: e.target.value || null } })} className="input text-sm"><option value="">Nenhum</option><option value="nota">Numero da nota</option><option value="valor">Valor</option></select></div>)}
                                   </div>
                                 )}
-                              </>)}
-                              </SortableFieldItem>
-                            ))}
-                            </SortableContext>
-                            </DndContext>
+                              </div>
+                            ))
                           )}
                         </div>
                       )}
-                    </>)}
-                    </SortableSectionItem>
+                    </div>
                   )
                 })}
-                </SortableContext>
-                </DndContext>
 
                 {/* Campos Gerais (without section) */}
                 <div className="border border-dashed border-subtle rounded-xl p-4 space-y-3">
@@ -681,14 +660,12 @@ export default function NovoTemplatePage() {
                     return generalFields.length === 0 ? (
                       <p className="text-center text-muted text-sm py-2">Nenhum campo geral</p>
                     ) : (
-                      <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleFieldDragEnd(null)}>
-                      <SortableContext items={generalFields.map(f => f.id)} strategy={verticalListSortingStrategy}>
-                      {generalFields.map((field) => (
-                        <SortableFieldItem key={field.id} id={field.id} isEditing={editingField === field.id}>
-                        {(fieldDragHandleProps) => (<>
+                      generalFields.map((field, fieldIdx) => (
+                        <div key={field.id} className={`border rounded-xl transition-all ${editingField === field.id ? 'border-primary bg-surface-hover' : 'border-subtle bg-surface'}`}>
                           <div className="flex items-center gap-2 sm:gap-3 p-2 sm:p-3">
-                            <div {...fieldDragHandleProps} className="cursor-grab active:cursor-grabbing p-1 text-muted hover:text-main touch-none">
-                              <FiMenu className="w-3.5 h-3.5" />
+                            <div className="flex flex-col gap-0.5">
+                              <button type="button" onClick={() => moveField(field.id, 'up')} disabled={fieldIdx === 0} className="p-1 rounded-md text-muted hover:text-primary hover:bg-primary/10 disabled:opacity-20 disabled:hover:bg-transparent disabled:hover:text-muted transition-colors"><FiArrowUp className="w-3 h-3" /></button>
+                              <button type="button" onClick={() => moveField(field.id, 'down')} disabled={fieldIdx === generalFields.length - 1} className="p-1 rounded-md text-muted hover:text-primary hover:bg-primary/10 disabled:opacity-20 disabled:hover:bg-transparent disabled:hover:text-muted transition-colors"><FiArrowDown className="w-3 h-3" /></button>
                             </div>
                             <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-surface-hover border border-subtle flex items-center justify-center text-sm shrink-0">{getFieldTypeIcon(field.field_type)}</div>
                             <div className="flex-1 min-w-0">
@@ -765,11 +742,8 @@ export default function NovoTemplatePage() {
                               {!['dropdown', 'checkbox_multiple'].includes(field.field_type) && (<div><label className="block text-xs text-muted mb-1">Validacao cruzada</label><select value={(field.options as { validationRole?: string } | null)?.validationRole || ''} onChange={(e) => updateField(field.id, { options: { ...((field.options as Record<string, unknown>) || {}), validationRole: e.target.value || null } })} className="input text-sm"><option value="">Nenhum</option><option value="nota">Numero da nota</option><option value="valor">Valor</option></select></div>)}
                             </div>
                           )}
-                        </>)}
-                        </SortableFieldItem>
-                      ))}
-                      </SortableContext>
-                      </DndContext>
+                        </div>
+                      ))
                     )
                   })()}
                 </div>
@@ -793,15 +767,13 @@ export default function NovoTemplatePage() {
                     <p className="text-sm mt-1">Clique nos botoes acima para adicionar campos</p>
                   </div>
                 ) : (
-                  <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleFieldDragEnd(null)}>
-                  <SortableContext items={fields.map(f => f.id)} strategy={verticalListSortingStrategy}>
                   <div className="space-y-3">
-                    {fields.map((field) => (
-                      <SortableFieldItem key={field.id} id={field.id} isEditing={editingField === field.id}>
-                      {(fieldDragHandleProps) => (<>
+                    {fields.map((field, index) => (
+                      <div key={field.id} className={`border rounded-xl transition-all ${editingField === field.id ? 'border-primary bg-surface-hover' : 'border-subtle bg-surface'}`}>
                         <div className="flex items-center gap-2 sm:gap-3 p-2 sm:p-4">
-                          <div {...fieldDragHandleProps} className="cursor-grab active:cursor-grabbing p-1 text-muted hover:text-main touch-none">
-                            <FiMenu className="w-4 h-4" />
+                          <div className="flex flex-col gap-0.5">
+                            <button type="button" onClick={() => moveField(field.id, 'up')} disabled={index === 0} className="p-1 rounded-md text-muted hover:text-primary hover:bg-primary/10 disabled:opacity-20 disabled:hover:bg-transparent disabled:hover:text-muted transition-colors"><FiArrowUp className="w-3.5 h-3.5 sm:w-4 sm:h-4" /></button>
+                            <button type="button" onClick={() => moveField(field.id, 'down')} disabled={index === fields.length - 1} className="p-1 rounded-md text-muted hover:text-primary hover:bg-primary/10 disabled:opacity-20 disabled:hover:bg-transparent disabled:hover:text-muted transition-colors"><FiArrowDown className="w-3.5 h-3.5 sm:w-4 sm:h-4" /></button>
                           </div>
                           <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg bg-surface-hover border border-subtle flex items-center justify-center text-sm sm:text-lg shrink-0">{getFieldTypeIcon(field.field_type)}</div>
                           <div className="flex-1 min-w-0">
@@ -871,12 +843,9 @@ export default function NovoTemplatePage() {
                             {!['dropdown', 'checkbox_multiple'].includes(field.field_type) && (<div><label className="block text-xs text-muted mb-1">Validacao cruzada</label><select value={(field.options as { validationRole?: string } | null)?.validationRole || ''} onChange={(e) => updateField(field.id, { options: { ...((field.options as Record<string, unknown>) || {}), validationRole: e.target.value || null } })} className="input text-sm"><option value="">Nenhum</option><option value="nota">Numero da nota</option><option value="valor">Valor</option></select></div>)}
                           </div>
                         )}
-                      </>)}
-                      </SortableFieldItem>
+                      </div>
                     ))}
                   </div>
-                  </SortableContext>
-                  </DndContext>
                 )}
               </>
             )}
