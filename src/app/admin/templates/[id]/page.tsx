@@ -854,7 +854,7 @@ export default function EditTemplatePage() {
                   </div>
                 ) : (
                   <div className="space-y-3">
-                    {fields.map((field, index) => (
+                    {[...fields].sort((a, b) => a.sort_order - b.sort_order).map((field, index) => (
                       <div key={field.id} className={`border rounded-xl transition-all ${editingField === field.id ? 'border-primary bg-surface-hover' : 'border-subtle bg-surface'}`}>
                         <div className="flex items-center gap-2 sm:gap-3 p-2 sm:p-4">
                           <div className="flex flex-col gap-0.5">
