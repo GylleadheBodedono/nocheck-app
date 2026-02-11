@@ -218,21 +218,24 @@ export async function processarValidacaoCruzada(
     // 1. Encontrar campos de "numero da nota" e "valor"
     // Prioridade: campo marcado explicitamente pelo admin (validationRole)
     // Fallback: deteccao por nome (palavras-chave)
+    // Tipos de campo validos para nota (exclui yes_no, checkbox, dropdown, photo, etc)
+    const tiposTextoNumero = ['text', 'number', 'textarea']
+
     const campoNota = fields.find(f =>
       (f.options as { validationRole?: string } | null)?.validationRole === 'nota'
-    ) || fields.find(f =>
-      f.name.toLowerCase().includes('nota') ||
-      f.name.toLowerCase().includes('nf') ||
-      f.name.toLowerCase().includes('numero')
-    )
+    ) || fields.find(f => {
+      if (!tiposTextoNumero.includes(f.field_type)) return false
+      const name = f.name.toLowerCase()
+      return name.includes('nota') || name.includes('nf') || name.includes('numero')
+    })
 
     const campoValor = fields.find(f =>
       (f.options as { validationRole?: string } | null)?.validationRole === 'valor'
-    ) || fields.find(f =>
-      f.name.toLowerCase().includes('valor') ||
-      f.name.toLowerCase().includes('total') ||
-      f.name.toLowerCase().includes('quantia')
-    )
+    ) || fields.find(f => {
+      if (!tiposTextoNumero.includes(f.field_type)) return false
+      const name = f.name.toLowerCase()
+      return name.includes('valor') || name.includes('total') || name.includes('quantia')
+    })
 
     if (!campoNota) {
       // Template nao tem campo de nota - verificar expiradas e sair
