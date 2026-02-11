@@ -43,7 +43,7 @@ type ChecklistDetail = {
   created_at: string
   store: { id: number; name: string } | null
   sector: { id: number; name: string } | null
-  user: { id: string; name: string } | null
+  user: { id: string; full_name: string } | null
   template: { id: number; name: string; category: string | null } | null
 }
 
@@ -131,7 +131,7 @@ export default function ChecklistViewPage() {
         created_at: cl.created_at,
         store: cl.store_name ? { id: cl.store_id, name: cl.store_name } : null,
         sector: cl.sector_name && cl.sector_id ? { id: cl.sector_id, name: cl.sector_name } : null,
-        user: cl.user_name ? { id: cl.created_by, name: cl.user_name } : null,
+        user: cl.user_name ? { id: cl.created_by, full_name: cl.user_name } : null,
         template: cl.template_name ? { id: cl.template_id, name: cl.template_name, category: cl.template_category || null } : null,
       }
       setChecklist(checklistDetail)
@@ -207,7 +207,7 @@ export default function ChecklistViewPage() {
           *,
           store:stores(id, name),
           sector:sectors(id, name),
-          user:users!checklists_created_by_fkey(id, name),
+          user:users!checklists_created_by_fkey(id, full_name),
           template:checklist_templates(id, name, category)
         `)
         .eq('id', Number(checklistId))
@@ -389,7 +389,7 @@ export default function ChecklistViewPage() {
             {checklist.user && (
               <div className="flex items-center gap-2 text-secondary">
                 <FiUser className="w-4 h-4 text-muted" />
-                <span>{checklist.user.name}</span>
+                <span>{checklist.user.full_name}</span>
               </div>
             )}
             {checklist.store && (
