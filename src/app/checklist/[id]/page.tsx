@@ -17,7 +17,6 @@ import {
   FiLayers,
   FiChevronDown,
   FiChevronUp,
-  FiWifiOff,
 } from 'react-icons/fi'
 import {
   getAuthCache,
@@ -81,7 +80,6 @@ export default function ChecklistViewPage() {
   const [checklistSections, setChecklistSections] = useState<ChecklistSectionRow[]>([])
   const [collapsedSections, setCollapsedSections] = useState<Set<number>>(new Set())
   const [error, setError] = useState<string | null>(null)
-  const [isOffline, setIsOffline] = useState(false)
 
   const router = useRouter()
   const params = useParams()
@@ -159,7 +157,6 @@ export default function ChecklistViewPage() {
         value_json: r.value_json,
       })))
       setChecklistSections(cachedClSections)
-      setIsOffline(true)
       setLoading(false)
 
       console.log('[ChecklistView] Carregado do cache offline')
