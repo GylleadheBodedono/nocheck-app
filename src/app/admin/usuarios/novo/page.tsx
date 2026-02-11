@@ -25,6 +25,7 @@ export default function NovoUsuarioPage() {
   const [fullName, setFullName] = useState('')
   const [phone, setPhone] = useState('')
   const [isAdmin, setIsAdmin] = useState(false)
+  const [autoConfirm, setAutoConfirm] = useState(false)
   const [functionId, setFunctionId] = useState<number | null>(null)
   const [storeAssignments, setStoreAssignments] = useState<{ store_id: number; sector_id: number | null; is_primary: boolean }[]>([])
 
@@ -103,6 +104,7 @@ export default function NovoUsuarioPage() {
           fullName,
           phone: phone || undefined,
           isAdmin,
+          autoConfirm,
           functionId: isAdmin ? undefined : (functionId || undefined),
           storeAssignments: isAdmin ? [] : storeAssignments,
           redirectTo: `${window.location.origin}/auth/callback`,
@@ -133,6 +135,7 @@ export default function NovoUsuarioPage() {
     setFullName('')
     setPhone('')
     setIsAdmin(false)
+    setAutoConfirm(false)
     setFunctionId(null)
     setStoreAssignments([])
   }
@@ -254,6 +257,19 @@ export default function NovoUsuarioPage() {
                   />
                   <label htmlFor="isAdmin" className="text-secondary">
                     Este usuario e <span className="text-amber-400 font-medium">Administrador</span>
+                  </label>
+                </div>
+
+                <div className="flex items-center gap-3">
+                  <input
+                    type="checkbox"
+                    id="autoConfirm"
+                    checked={autoConfirm}
+                    onChange={(e) => setAutoConfirm(e.target.checked)}
+                    className="w-5 h-5 rounded border-subtle bg-page text-primary focus:ring-primary"
+                  />
+                  <label htmlFor="autoConfirm" className="text-secondary">
+                    Confirmar email automaticamente <span className="text-xs text-muted">(para emails ficticios)</span>
                   </label>
                 </div>
               </div>

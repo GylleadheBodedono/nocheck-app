@@ -413,6 +413,8 @@ function ChecklistForm() {
   // GPS auto-collection
   useEffect(() => {
     if (!store || loading) return
+    // Offline: pular GPS para permitir preenchimento
+    if (!navigator.onLine) { setGpsStatus('granted'); return }
     if (store.require_gps === false) { setGpsStatus('granted'); return }
     if (!navigator.geolocation) { setGpsStatus('denied'); return }
 

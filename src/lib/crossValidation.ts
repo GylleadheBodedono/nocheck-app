@@ -244,8 +244,9 @@ export async function processarValidacaoCruzada(
     const respostaNota = responses.find(r => r.field_id === campoNota.id)
     const respostaValor = campoValor ? responses.find(r => r.field_id === campoValor.id) : null
 
-    const numeroNota = respostaNota?.value_text || respostaNota?.value_number?.toString()
-    const valor = respostaValor?.value_number || parseFloat(respostaValor?.value_text || '0') || null
+    const numeroNota = (respostaNota?.value_text || respostaNota?.value_number?.toString() || '').trim()
+    const valorRaw = respostaValor?.value_number ?? parseFloat(respostaValor?.value_text || '')
+    const valor = (valorRaw === null || valorRaw === undefined || isNaN(valorRaw as number)) ? null : valorRaw
 
     if (!numeroNota) {
       await verificarValidacoesExpiradas(supabase)
@@ -281,19 +282,34 @@ export async function processarValidacaoCruzada(
     const sectorId = await getUserSectorId(supabase, userId, storeId)
 
     // 5. Verificar se ja existe validacao para esta nota (match exato)
-    // Filtra por loja e setor (se disponivel)
+    // Primeiro tenta com setor, se nao encontrar tenta sem setor
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    let query = (supabase as any)
-      .from('cross_validations')
-      .select('*')
-      .eq('store_id', storeId)
-      .eq('numero_nota', numeroNota)
+    let existingValidation = null
 
     if (sectorId) {
-      query = query.eq('sector_id', sectorId)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data } = await (supabase as any)
+        .from('cross_validations')
+        .select('*')
+        .eq('store_id', storeId)
+        .eq('numero_nota', numeroNota)
+        .eq('sector_id', sectorId)
+        .single()
+      existingValidation = data
     }
 
-    const { data: existingValidation } = await query.single()
+    // Se nao encontrou com setor (ou setor e null), busca sem filtro de setor
+    if (!existingValidation) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data } = await (supabase as any)
+        .from('cross_validations')
+        .select('*')
+        .eq('store_id', storeId)
+        .eq('numero_nota', numeroNota)
+        .eq('status', 'pendente')
+        .single()
+      existingValidation = data
+    }
 
     // Buscar nome da loja e setor para notificações
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -380,17 +396,13 @@ export async function processarValidacaoCruzada(
       const trintaMinutosAtras = new Date(Date.now() - 30 * 60 * 1000).toISOString()
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      let sisterQuery = (supabase as any)
+      const sisterQuery = (supabase as any)
         .from('cross_validations')
         .select('*')
         .eq('store_id', storeId)
         .eq('status', 'pendente')
         .gte('created_at', trintaMinutosAtras)
         .is(!isAprendiz ? 'estoquista_checklist_id' : 'aprendiz_checklist_id', null)
-
-      if (sectorId) {
-        sisterQuery = sisterQuery.eq('sector_id', sectorId)
-      }
 
       const { data: pendingValidations } = await sisterQuery
 

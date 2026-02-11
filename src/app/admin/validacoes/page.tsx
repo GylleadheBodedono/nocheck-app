@@ -650,82 +650,43 @@ export default function ValidacoesPage() {
                   </div>
 
                   <div className="p-6">
-                    {isLinked && linked ? (
-                      // Layout para notas diferentes vinculadas
-                      <div>
-                        {/* Explicação do vínculo */}
-                        {primary.match_reason && (
-                          <div className="mb-4 p-3 rounded-lg bg-orange-500/10 border border-orange-500/20">
-                            <div className="flex items-start gap-2">
-                              <FiInfo className="w-4 h-4 text-orange-500 mt-0.5 flex-shrink-0" />
-                              <div>
-                                <p className="text-sm font-medium text-orange-500">Notas vinculadas automaticamente</p>
-                                <p className="text-xs text-muted mt-1">{primary.match_reason}</p>
-                              </div>
+                    <div>
+                      {/* Explicacao do vinculo (apenas para notas diferentes) */}
+                      {isLinked && linked && primary.match_reason && (
+                        <div className="mb-4 p-3 rounded-lg bg-orange-500/10 border border-orange-500/20">
+                          <div className="flex items-start gap-2">
+                            <FiInfo className="w-4 h-4 text-orange-500 mt-0.5 flex-shrink-0" />
+                            <div>
+                              <p className="text-sm font-medium text-orange-500">Notas vinculadas automaticamente</p>
+                              <p className="text-xs text-muted mt-1">{primary.match_reason}</p>
                             </div>
                           </div>
-                        )}
-
-                        {/* Comparação lado a lado */}
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          {/* Lado Funcionario */}
-                          <div className="p-4 rounded-lg bg-surface-hover">
-                            <p className="text-xs text-muted mb-2 font-medium">FUNCIONARIO</p>
-                            <p className="text-lg font-bold text-main mb-1">
-                              Nota: {primary.valor_estoquista !== null ? primary.numero_nota : linked.numero_nota}
-                            </p>
-                            <p className="text-2xl font-bold text-primary">
-                              {formatCurrency(primary.valor_estoquista ?? linked.valor_estoquista)}
-                            </p>
-                          </div>
-
-                          {/* Lado Aprendiz */}
-                          <div className="p-4 rounded-lg bg-surface-hover">
-                            <p className="text-xs text-muted mb-2 font-medium">APRENDIZ</p>
-                            <p className="text-lg font-bold text-main mb-1">
-                              Nota: {primary.valor_aprendiz !== null ? primary.numero_nota : linked.numero_nota}
-                            </p>
-                            <p className="text-2xl font-bold text-primary">
-                              {formatCurrency(primary.valor_aprendiz ?? linked.valor_aprendiz)}
-                            </p>
-                          </div>
                         </div>
+                      )}
 
-                        {/* Diferença */}
-                        {primary.diferenca !== null && (
-                          <div className="mt-4 pt-4 border-t border-subtle flex items-center justify-between">
-                            <span className="text-sm text-muted">Diferença de valores:</span>
-                            <span className={`text-xl font-bold ${
-                              primary.diferenca === 0 ? 'text-success' : 'text-error'
-                            }`}>
-                              {formatCurrency(primary.diferenca)}
-                            </span>
-                          </div>
-                        )}
-                      </div>
-                    ) : (
-                      // Layout padrão para validações normais
+                      {/* Layout unificado - mesma linha */}
                       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-                        {/* Left - Info */}
                         <div className="flex-1">
                           <p className="text-lg font-semibold text-main mb-1">
                             Nota: {primary.numero_nota}
+                            {isLinked && linked && linked.numero_nota !== primary.numero_nota && (
+                              <span className="text-muted"> / {linked.numero_nota}</span>
+                            )}
                           </p>
                         </div>
 
-                        {/* Right - Values Comparison */}
                         <div className="flex items-center gap-6">
                           <div className="text-center">
                             <p className="text-xs text-muted mb-1">Funcionario</p>
                             <p className="text-lg font-bold text-main">
-                              {formatCurrency(primary.valor_estoquista)}
+                              {formatCurrency(primary.valor_estoquista ?? (linked?.valor_estoquista ?? null))}
                             </p>
                           </div>
 
                           <div className="text-center">
                             <p className="text-xs text-muted mb-1">Aprendiz</p>
                             <p className="text-lg font-bold text-main">
-                              {formatCurrency(primary.valor_aprendiz)}
+                              {formatCurrency(primary.valor_aprendiz ?? (linked?.valor_aprendiz ?? null))}
                             </p>
                           </div>
 
@@ -743,7 +704,7 @@ export default function ValidacoesPage() {
                           )}
                         </div>
                       </div>
-                    )}
+                    </div>
                   </div>
                 </div>
               )

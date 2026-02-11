@@ -241,6 +241,12 @@ export function useAuth() {
           const profile = await fetchUserProfile(session.user.id)
           if (profile) {
             setUserProfile(profile)
+            // Limpa cache se usuario diferente (previne dados residuais)
+            const cachedAuth = await getAuthCache()
+            if (cachedAuth && cachedAuth.userId !== session.user.id) {
+              console.log('[useAuth] Usuario diferente detectado, limpando cache anterior')
+              await clearAllCache()
+            }
             // Cacheia para uso offline
             await cacheUserData(session, profile)
           }

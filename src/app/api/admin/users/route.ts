@@ -98,12 +98,13 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { email, password, fullName, phone, isAdmin, storeId, functionId, sectorId, storeAssignments, redirectTo } = body as {
+    const { email, password, fullName, phone, isAdmin, autoConfirm, storeId, functionId, sectorId, storeAssignments, redirectTo } = body as {
       email: string
       password: string
       fullName: string
       phone?: string
       isAdmin: boolean
+      autoConfirm?: boolean
       storeId?: number
       functionId?: number
       sectorId?: number
@@ -118,36 +119,70 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // 1. signUp com anon key (envia email "Confirm your signup")
-    const anonClient = createClient(supabaseUrl, supabaseAnonKey, {
-      auth: { autoRefreshToken: false, persistSession: false }
-    })
+    // 1. Criar usuario - auto-confirm usa admin API, senao usa signUp normal
+    let userId: string
 
-    const { data: signUpData, error: signUpError } = await anonClient.auth.signUp({
-      email,
-      password,
-      options: {
-        data: { full_name: fullName },
-        emailRedirectTo: redirectTo || undefined,
-      },
-    })
+    if (autoConfirm) {
+      // Auto-confirm: usa admin API para criar usuario ja confirmado
+      const adminClient = createClient(supabaseUrl, supabaseServiceKey, {
+        auth: { autoRefreshToken: false, persistSession: false }
+      })
 
-    if (signUpError) {
-      console.error('[API Users] Erro no signUp:', signUpError)
-      return NextResponse.json(
-        { error: signUpError.message },
-        { status: 400 }
-      )
+      const { data: adminData, error: adminError } = await adminClient.auth.admin.createUser({
+        email,
+        password,
+        email_confirm: true,
+        user_metadata: { full_name: fullName },
+      })
+
+      if (adminError) {
+        console.error('[API Users] Erro no admin.createUser:', adminError)
+        return NextResponse.json(
+          { error: adminError.message },
+          { status: 400 }
+        )
+      }
+
+      if (!adminData.user) {
+        return NextResponse.json(
+          { error: 'Erro ao criar usuario' },
+          { status: 500 }
+        )
+      }
+
+      userId = adminData.user.id
+    } else {
+      // Fluxo normal: signUp com anon key (envia email de confirmacao)
+      const anonClient = createClient(supabaseUrl, supabaseAnonKey, {
+        auth: { autoRefreshToken: false, persistSession: false }
+      })
+
+      const { data: signUpData, error: signUpError } = await anonClient.auth.signUp({
+        email,
+        password,
+        options: {
+          data: { full_name: fullName },
+          emailRedirectTo: redirectTo || undefined,
+        },
+      })
+
+      if (signUpError) {
+        console.error('[API Users] Erro no signUp:', signUpError)
+        return NextResponse.json(
+          { error: signUpError.message },
+          { status: 400 }
+        )
+      }
+
+      if (!signUpData.user) {
+        return NextResponse.json(
+          { error: 'Erro ao criar usuario' },
+          { status: 500 }
+        )
+      }
+
+      userId = signUpData.user.id
     }
-
-    if (!signUpData.user) {
-      return NextResponse.json(
-        { error: 'Erro ao criar usuario' },
-        { status: 500 }
-      )
-    }
-
-    const userId = signUpData.user.id
 
     // 2. Service role para atualizar perfil e roles
     const supabase = createClient(supabaseUrl, supabaseServiceKey, {
@@ -202,10 +237,10 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      needsConfirmation: true,
+      needsConfirmation: !autoConfirm,
       user: {
         id: userId,
-        email: signUpData.user.email,
+        email,
       },
     })
   } catch (error) {
