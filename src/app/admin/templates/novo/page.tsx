@@ -4,7 +4,7 @@ import React, { useEffect, useState, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { APP_CONFIG } from '@/lib/config'
-import { Header } from '@/components/ui'
+import { Header, IconPicker } from '@/components/ui'
 import Link from 'next/link'
 import {
   FiSave,
@@ -222,8 +222,60 @@ export default function NovoTemplatePage() {
     if (editingField === id) setEditingField(null)
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const getFieldIcon = (field: FieldConfig): string | null => {
+    if (field.options && typeof field.options === 'object' && !Array.isArray(field.options)) {
+      return (field.options as Record<string, unknown>).icon as string | null || null
+    }
+    return null
+  }
+
+  const setFieldIcon = (fieldId: string, iconName: string | null) => {
+    setFields(fields.map(f => {
+      if (f.id !== fieldId) return f
+      if (Array.isArray(f.options)) {
+        return { ...f, options: iconName ? { items: f.options, icon: iconName } : f.options }
+      } else if (f.options && typeof f.options === 'object') {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const opts = { ...(f.options as any), icon: iconName }
+        if (!iconName) delete opts.icon
+        return { ...f, options: Object.keys(opts).length === 0 ? null : opts }
+      } else {
+        return iconName ? { ...f, options: { icon: iconName } } : f
+      }
+    }))
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const getOptionsItems = (options: any): string[] => {
+    if (Array.isArray(options)) return options
+    if (options && typeof options === 'object' && 'items' in options) {
+      return options.items as string[]
+    }
+    return []
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const serializeOptions = (options: any): any => {
+    if (Array.isArray(options)) return options.filter((o: string) => o.trim())
+    if (options && typeof options === 'object' && 'items' in options) {
+      return { ...options, items: (options.items as string[]).filter((o: string) => o.trim()) }
+    }
+    return options
+  }
+
   const changeFieldType = (id: string, newType: FieldType) => {
-    const defaultOptions = (newType === 'dropdown' || newType === 'checkbox_multiple') ? [] : newType === 'number' ? { numberSubtype: 'decimal' } : null
+    const currentIcon = getFieldIcon(fields.find(f => f.id === id)!)
+    let defaultOptions: unknown = (newType === 'dropdown' || newType === 'checkbox_multiple') ? [] : newType === 'number' ? { numberSubtype: 'decimal' } : null
+    if (currentIcon) {
+      if (Array.isArray(defaultOptions)) {
+        defaultOptions = { items: defaultOptions, icon: currentIcon }
+      } else if (defaultOptions && typeof defaultOptions === 'object') {
+        defaultOptions = { ...(defaultOptions as Record<string, unknown>), icon: currentIcon }
+      } else {
+        defaultOptions = { icon: currentIcon }
+      }
+    }
     setFields(fields.map(f => f.id === id ? { ...f, field_type: newType, options: defaultOptions } : f))
   }
 
@@ -346,7 +398,7 @@ export default function NovoTemplatePage() {
             field_type: f.field_type,
             is_required: f.is_required,
             sort_order: f.sort_order,
-            options: Array.isArray(f.options) ? f.options.filter((o: string) => o.trim()) : f.options,
+            options: serializeOptions(f.options),
             validation: f.validation,
             placeholder: f.placeholder || null,
             help_text: f.help_text || null,
@@ -562,7 +614,7 @@ export default function NovoTemplatePage() {
                                   <div {...fieldListeners} className="cursor-grab active:cursor-grabbing p-1 text-muted hover:text-primary touch-none">
                                     <RiDraggable className="w-4 h-4" />
                                   </div>
-                                  <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-surface-hover border border-subtle flex items-center justify-center text-sm shrink-0">{getFieldTypeIcon(field.field_type)}</div>
+                                  <IconPicker value={getFieldIcon(field)} onChange={(icon) => setFieldIcon(field.id, icon)} fallback={getFieldTypeIcon(field.field_type)} />
                                   <div className="flex-1 min-w-0">
                                     <input type="text" value={field.name} onChange={(e) => updateField(field.id, { name: e.target.value })} placeholder="Nome do campo" className="w-full bg-transparent border-none text-main placeholder:text-muted focus:outline-none font-medium text-xs sm:text-sm" />
                                     <p className="text-[10px] sm:text-xs text-muted">{getFieldTypeLabel(field.field_type)}</p>
@@ -608,7 +660,7 @@ export default function NovoTemplatePage() {
                                         <label className="block text-xs text-muted mb-1">Tipo de numero</label>
                                         <div className="grid grid-cols-2 gap-2">
                                           {[{ value: 'monetario', label: 'Monetario (R$)' }, { value: 'quantidade', label: 'Quantidade (un)' }, { value: 'decimal', label: 'Decimal' }, { value: 'porcentagem', label: 'Porcentagem (%)' }].map(st => (
-                                            <button key={st.value} type="button" onClick={() => updateField(field.id, { options: { numberSubtype: st.value } })} className={`px-3 py-2 rounded-lg text-sm font-medium transition-all border ${(field.options as { numberSubtype?: string } | null)?.numberSubtype === st.value ? 'bg-primary/15 border-primary text-primary' : 'bg-surface border-subtle text-muted hover:border-primary/40'}`}>{st.label}</button>
+                                            <button key={st.value} type="button" onClick={() => updateField(field.id, { options: { numberSubtype: st.value, ...(getFieldIcon(field) ? { icon: getFieldIcon(field) } : {}) } })} className={`px-3 py-2 rounded-lg text-sm font-medium transition-all border ${(field.options as { numberSubtype?: string } | null)?.numberSubtype === st.value ? 'bg-primary/15 border-primary text-primary' : 'bg-surface border-subtle text-muted hover:border-primary/40'}`}>{st.label}</button>
                                           ))}
                                         </div>
                                       </div>
@@ -617,15 +669,15 @@ export default function NovoTemplatePage() {
                                       <div>
                                         <label className="block text-xs text-muted mb-2">Opcoes</label>
                                         <div className="space-y-2">
-                                          {(Array.isArray(field.options) ? field.options : []).map((opt: string, optIdx: number) => (
+                                          {getOptionsItems(field.options).map((opt: string, optIdx: number) => (
                                             <div key={optIdx} className="flex items-center gap-2">
                                               <span className="text-muted cursor-grab text-sm select-none">☰</span>
-                                              <input type="text" value={opt} onChange={(e) => { const newOpts = [...(Array.isArray(field.options) ? field.options : [])]; newOpts[optIdx] = e.target.value; updateField(field.id, { options: newOpts }) }} placeholder={`Opcao ${optIdx + 1}`} className="input text-sm flex-1" />
-                                              <button type="button" onClick={() => { const newOpts = (Array.isArray(field.options) ? field.options : []).filter((_: string, i: number) => i !== optIdx); updateField(field.id, { options: newOpts }) }} className="p-1 text-error hover:bg-error/20 rounded transition-colors shrink-0"><FiTrash2 className="w-3 h-3" /></button>
+                                              <input type="text" value={opt} onChange={(e) => { const newOpts = [...getOptionsItems(field.options)]; newOpts[optIdx] = e.target.value; updateField(field.id, { options: getFieldIcon(field) ? { items: newOpts, icon: getFieldIcon(field) } : newOpts }) }} placeholder={`Opcao ${optIdx + 1}`} className="input text-sm flex-1" />
+                                              <button type="button" onClick={() => { const newOpts = getOptionsItems(field.options).filter((_: string, i: number) => i !== optIdx); updateField(field.id, { options: getFieldIcon(field) ? { items: newOpts, icon: getFieldIcon(field) } : newOpts }) }} className="p-1 text-error hover:bg-error/20 rounded transition-colors shrink-0"><FiTrash2 className="w-3 h-3" /></button>
                                             </div>
                                           ))}
                                         </div>
-                                        <button type="button" onClick={() => updateField(field.id, { options: [...(Array.isArray(field.options) ? field.options : []), ''] })} className="mt-2 text-xs text-primary hover:text-primary/80 font-medium py-1.5 px-3 border border-primary/30 rounded-lg hover:bg-primary/5 transition-colors">+ Adicionar opcao</button>
+                                        <button type="button" onClick={() => { const newOpts = [...getOptionsItems(field.options), '']; updateField(field.id, { options: getFieldIcon(field) ? { items: newOpts, icon: getFieldIcon(field) } : newOpts }) }} className="mt-2 text-xs text-primary hover:text-primary/80 font-medium py-1.5 px-3 border border-primary/30 rounded-lg hover:bg-primary/5 transition-colors">+ Adicionar opcao</button>
                                       </div>
                                     )}
                                     {field.field_type === 'yes_no' && (
@@ -686,7 +738,7 @@ export default function NovoTemplatePage() {
                             <div {...fieldListeners} className="cursor-grab active:cursor-grabbing p-1 text-muted hover:text-primary touch-none">
                               <RiDraggable className="w-4 h-4" />
                             </div>
-                            <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-surface-hover border border-subtle flex items-center justify-center text-sm shrink-0">{getFieldTypeIcon(field.field_type)}</div>
+                            <IconPicker value={getFieldIcon(field)} onChange={(icon) => setFieldIcon(field.id, icon)} fallback={getFieldTypeIcon(field.field_type)} />
                             <div className="flex-1 min-w-0">
                               <input type="text" value={field.name} onChange={(e) => updateField(field.id, { name: e.target.value })} placeholder="Nome do campo" className="w-full bg-transparent border-none text-main placeholder:text-muted focus:outline-none font-medium text-xs sm:text-sm" />
                               <p className="text-[10px] sm:text-xs text-muted">{getFieldTypeLabel(field.field_type)}</p>
@@ -724,7 +776,7 @@ export default function NovoTemplatePage() {
                                   <label className="block text-xs text-muted mb-1">Tipo de numero</label>
                                   <div className="grid grid-cols-2 gap-2">
                                     {[{ value: 'monetario', label: 'Monetario (R$)' }, { value: 'quantidade', label: 'Quantidade (un)' }, { value: 'decimal', label: 'Decimal' }, { value: 'porcentagem', label: 'Porcentagem (%)' }].map(st => (
-                                      <button key={st.value} type="button" onClick={() => updateField(field.id, { options: { numberSubtype: st.value } })} className={`px-3 py-2 rounded-lg text-sm font-medium transition-all border ${(field.options as { numberSubtype?: string } | null)?.numberSubtype === st.value ? 'bg-primary/15 border-primary text-primary' : 'bg-surface border-subtle text-muted hover:border-primary/40'}`}>{st.label}</button>
+                                      <button key={st.value} type="button" onClick={() => updateField(field.id, { options: { numberSubtype: st.value, ...(getFieldIcon(field) ? { icon: getFieldIcon(field) } : {}) } })} className={`px-3 py-2 rounded-lg text-sm font-medium transition-all border ${(field.options as { numberSubtype?: string } | null)?.numberSubtype === st.value ? 'bg-primary/15 border-primary text-primary' : 'bg-surface border-subtle text-muted hover:border-primary/40'}`}>{st.label}</button>
                                     ))}
                                   </div>
                                 </div>
@@ -733,15 +785,15 @@ export default function NovoTemplatePage() {
                                 <div>
                                   <label className="block text-xs text-muted mb-2">Opcoes</label>
                                   <div className="space-y-2">
-                                    {(Array.isArray(field.options) ? field.options : []).map((opt: string, optIdx: number) => (
+                                    {getOptionsItems(field.options).map((opt: string, optIdx: number) => (
                                       <div key={optIdx} className="flex items-center gap-2">
                                         <span className="text-muted cursor-grab text-sm select-none">☰</span>
-                                        <input type="text" value={opt} onChange={(e) => { const newOpts = [...(Array.isArray(field.options) ? field.options : [])]; newOpts[optIdx] = e.target.value; updateField(field.id, { options: newOpts }) }} placeholder={`Opcao ${optIdx + 1}`} className="input text-sm flex-1" />
-                                        <button type="button" onClick={() => { const newOpts = (Array.isArray(field.options) ? field.options : []).filter((_: string, i: number) => i !== optIdx); updateField(field.id, { options: newOpts }) }} className="p-1 text-error hover:bg-error/20 rounded transition-colors shrink-0"><FiTrash2 className="w-3 h-3" /></button>
+                                        <input type="text" value={opt} onChange={(e) => { const newOpts = [...getOptionsItems(field.options)]; newOpts[optIdx] = e.target.value; updateField(field.id, { options: getFieldIcon(field) ? { items: newOpts, icon: getFieldIcon(field) } : newOpts }) }} placeholder={`Opcao ${optIdx + 1}`} className="input text-sm flex-1" />
+                                        <button type="button" onClick={() => { const newOpts = getOptionsItems(field.options).filter((_: string, i: number) => i !== optIdx); updateField(field.id, { options: getFieldIcon(field) ? { items: newOpts, icon: getFieldIcon(field) } : newOpts }) }} className="p-1 text-error hover:bg-error/20 rounded transition-colors shrink-0"><FiTrash2 className="w-3 h-3" /></button>
                                       </div>
                                     ))}
                                   </div>
-                                  <button type="button" onClick={() => updateField(field.id, { options: [...(Array.isArray(field.options) ? field.options : []), ''] })} className="mt-2 text-xs text-primary hover:text-primary/80 font-medium py-1.5 px-3 border border-primary/30 rounded-lg hover:bg-primary/5 transition-colors">+ Adicionar opcao</button>
+                                  <button type="button" onClick={() => { const newOpts = [...getOptionsItems(field.options), '']; updateField(field.id, { options: getFieldIcon(field) ? { items: newOpts, icon: getFieldIcon(field) } : newOpts }) }} className="mt-2 text-xs text-primary hover:text-primary/80 font-medium py-1.5 px-3 border border-primary/30 rounded-lg hover:bg-primary/5 transition-colors">+ Adicionar opcao</button>
                                 </div>
                               )}
                               {field.field_type === 'yes_no' && (
@@ -799,7 +851,7 @@ export default function NovoTemplatePage() {
                           <div {...fieldListeners} className="cursor-grab active:cursor-grabbing p-1 text-muted hover:text-primary touch-none">
                             <RiDraggable className="w-5 h-5" />
                           </div>
-                          <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg bg-surface-hover border border-subtle flex items-center justify-center text-sm sm:text-lg shrink-0">{getFieldTypeIcon(field.field_type)}</div>
+                          <IconPicker value={getFieldIcon(field)} onChange={(icon) => setFieldIcon(field.id, icon)} fallback={getFieldTypeIcon(field.field_type)} />
                           <div className="flex-1 min-w-0">
                             <input type="text" value={field.name} onChange={(e) => updateField(field.id, { name: e.target.value })} placeholder="Nome do campo" className="w-full bg-transparent border-none text-main placeholder:text-muted focus:outline-none font-medium text-sm sm:text-base" />
                             <p className="text-[10px] sm:text-xs text-muted">{getFieldTypeLabel(field.field_type)}</p>
@@ -830,7 +882,7 @@ export default function NovoTemplatePage() {
                                 <label className="block text-xs text-muted mb-1">Tipo de numero</label>
                                 <div className="grid grid-cols-2 gap-2">
                                   {[{ value: 'monetario', label: 'Monetario (R$)' }, { value: 'quantidade', label: 'Quantidade (un)' }, { value: 'decimal', label: 'Decimal' }, { value: 'porcentagem', label: 'Porcentagem (%)' }].map(st => (
-                                    <button key={st.value} type="button" onClick={() => updateField(field.id, { options: { numberSubtype: st.value } })} className={`px-3 py-2 rounded-lg text-sm font-medium transition-all border ${(field.options as { numberSubtype?: string } | null)?.numberSubtype === st.value ? 'bg-primary/15 border-primary text-primary' : 'bg-surface border-subtle text-muted hover:border-primary/40'}`}>{st.label}</button>
+                                    <button key={st.value} type="button" onClick={() => updateField(field.id, { options: { numberSubtype: st.value, ...(getFieldIcon(field) ? { icon: getFieldIcon(field) } : {}) } })} className={`px-3 py-2 rounded-lg text-sm font-medium transition-all border ${(field.options as { numberSubtype?: string } | null)?.numberSubtype === st.value ? 'bg-primary/15 border-primary text-primary' : 'bg-surface border-subtle text-muted hover:border-primary/40'}`}>{st.label}</button>
                                   ))}
                                 </div>
                               </div>
@@ -839,15 +891,15 @@ export default function NovoTemplatePage() {
                               <div>
                                 <label className="block text-xs text-muted mb-2">Opcoes</label>
                                 <div className="space-y-2">
-                                  {(Array.isArray(field.options) ? field.options : []).map((opt: string, optIdx: number) => (
+                                  {getOptionsItems(field.options).map((opt: string, optIdx: number) => (
                                     <div key={optIdx} className="flex items-center gap-2">
                                       <span className="text-muted cursor-grab text-sm select-none">☰</span>
-                                      <input type="text" value={opt} onChange={(e) => { const newOpts = [...(Array.isArray(field.options) ? field.options : [])]; newOpts[optIdx] = e.target.value; updateField(field.id, { options: newOpts }) }} placeholder={`Opcao ${optIdx + 1}`} className="input text-sm flex-1" />
-                                      <button type="button" onClick={() => { const newOpts = (Array.isArray(field.options) ? field.options : []).filter((_: string, i: number) => i !== optIdx); updateField(field.id, { options: newOpts }) }} className="p-1 text-error hover:bg-error/20 rounded transition-colors shrink-0"><FiTrash2 className="w-3 h-3" /></button>
+                                      <input type="text" value={opt} onChange={(e) => { const newOpts = [...getOptionsItems(field.options)]; newOpts[optIdx] = e.target.value; updateField(field.id, { options: getFieldIcon(field) ? { items: newOpts, icon: getFieldIcon(field) } : newOpts }) }} placeholder={`Opcao ${optIdx + 1}`} className="input text-sm flex-1" />
+                                      <button type="button" onClick={() => { const newOpts = getOptionsItems(field.options).filter((_: string, i: number) => i !== optIdx); updateField(field.id, { options: getFieldIcon(field) ? { items: newOpts, icon: getFieldIcon(field) } : newOpts }) }} className="p-1 text-error hover:bg-error/20 rounded transition-colors shrink-0"><FiTrash2 className="w-3 h-3" /></button>
                                     </div>
                                   ))}
                                 </div>
-                                <button type="button" onClick={() => updateField(field.id, { options: [...(Array.isArray(field.options) ? field.options : []), ''] })} className="mt-2 text-xs text-primary hover:text-primary/80 font-medium py-1.5 px-3 border border-primary/30 rounded-lg hover:bg-primary/5 transition-colors">+ Adicionar opcao</button>
+                                <button type="button" onClick={() => { const newOpts = [...getOptionsItems(field.options), '']; updateField(field.id, { options: getFieldIcon(field) ? { items: newOpts, icon: getFieldIcon(field) } : newOpts }) }} className="mt-2 text-xs text-primary hover:text-primary/80 font-medium py-1.5 px-3 border border-primary/30 rounded-lg hover:bg-primary/5 transition-colors">+ Adicionar opcao</button>
                               </div>
                             )}
                             {field.field_type === 'yes_no' && (

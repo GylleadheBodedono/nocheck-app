@@ -4,7 +4,7 @@ import React, { useEffect, useState, useMemo } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { APP_CONFIG } from '@/lib/config'
-import { Header, LoadingPage } from '@/components/ui'
+import { Header, LoadingPage, IconPicker } from '@/components/ui'
 import Link from 'next/link'
 import {
   FiSave,
@@ -192,7 +192,8 @@ export default function EditTemplatePage() {
           field_type: f.field_type,
           is_required: f.is_required,
           sort_order: f.sort_order || 0,
-          options: f.options as string[] | null,
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          options: f.options as any,
           validation: f.validation as Record<string, unknown> | null,
           placeholder: f.placeholder || '',
           help_text: f.help_text || '',
@@ -330,8 +331,60 @@ export default function EditTemplatePage() {
     if (editingField === id) setEditingField(null)
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const getFieldIcon = (field: FieldConfig): string | null => {
+    if (field.options && typeof field.options === 'object' && !Array.isArray(field.options)) {
+      return (field.options as Record<string, unknown>).icon as string | null || null
+    }
+    return null
+  }
+
+  const setFieldIcon = (fieldId: string, iconName: string | null) => {
+    setFields(fields.map(f => {
+      if (f.id !== fieldId) return f
+      if (Array.isArray(f.options)) {
+        return { ...f, options: iconName ? { items: f.options, icon: iconName } : f.options }
+      } else if (f.options && typeof f.options === 'object') {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const opts = { ...(f.options as any), icon: iconName }
+        if (!iconName) delete opts.icon
+        return { ...f, options: Object.keys(opts).length === 0 ? null : opts }
+      } else {
+        return iconName ? { ...f, options: { icon: iconName } } : f
+      }
+    }))
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const getOptionsItems = (options: any): string[] => {
+    if (Array.isArray(options)) return options
+    if (options && typeof options === 'object' && 'items' in options) {
+      return options.items as string[]
+    }
+    return []
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const serializeOptions = (options: any): any => {
+    if (Array.isArray(options)) return options.filter((o: string) => o.trim())
+    if (options && typeof options === 'object' && 'items' in options) {
+      return { ...options, items: (options.items as string[]).filter((o: string) => o.trim()) }
+    }
+    return options
+  }
+
   const changeFieldType = (id: string, newType: FieldType) => {
-    const defaultOptions = (newType === 'dropdown' || newType === 'checkbox_multiple') ? [] : newType === 'number' ? { numberSubtype: 'decimal' } : null
+    const currentIcon = getFieldIcon(fields.find(f => f.id === id)!)
+    let defaultOptions: unknown = (newType === 'dropdown' || newType === 'checkbox_multiple') ? [] : newType === 'number' ? { numberSubtype: 'decimal' } : null
+    if (currentIcon) {
+      if (Array.isArray(defaultOptions)) {
+        defaultOptions = { items: defaultOptions, icon: currentIcon }
+      } else if (defaultOptions && typeof defaultOptions === 'object') {
+        defaultOptions = { ...(defaultOptions as Record<string, unknown>), icon: currentIcon }
+      } else {
+        defaultOptions = { icon: currentIcon }
+      }
+    }
     setFields(fields.map(f => f.id === id ? { ...f, field_type: newType, options: defaultOptions } : f))
   }
 
@@ -492,7 +545,7 @@ export default function EditTemplatePage() {
             is_required: field.is_required,
             sort_order: field.sort_order,
             section_id: resolveSection(field.section_id),
-            options: Array.isArray(field.options) ? field.options.filter((o: string) => o.trim()) : field.options,
+            options: serializeOptions(field.options),
             validation: field.validation,
             placeholder: field.placeholder || null,
             help_text: field.help_text || null,
@@ -515,7 +568,7 @@ export default function EditTemplatePage() {
               field_type: f.field_type,
               is_required: f.is_required,
               sort_order: f.sort_order,
-              options: Array.isArray(f.options) ? f.options.filter((o: string) => o.trim()) : f.options,
+              options: serializeOptions(f.options),
               validation: f.validation,
               placeholder: f.placeholder || null,
               help_text: f.help_text || null,
@@ -760,7 +813,7 @@ export default function EditTemplatePage() {
                                   <div {...fieldListeners} className="cursor-grab active:cursor-grabbing p-1 text-muted hover:text-primary touch-none">
                                     <RiDraggable className="w-4 h-4" />
                                   </div>
-                                  <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-surface-hover border border-subtle flex items-center justify-center text-sm shrink-0">{getFieldTypeIcon(field.field_type)}</div>
+                                  <IconPicker value={getFieldIcon(field)} onChange={(icon) => setFieldIcon(field.id, icon)} fallback={getFieldTypeIcon(field.field_type)} />
                                   <div className="flex-1 min-w-0">
                                     <input type="text" value={field.name} onChange={(e) => updateField(field.id, { name: e.target.value })} placeholder="Nome do campo" className="w-full bg-transparent border-none text-main placeholder:text-muted focus:outline-none font-medium text-xs sm:text-sm" />
                                     <p className="text-[10px] sm:text-xs text-muted">{getFieldTypeLabel(field.field_type)}</p>
@@ -784,8 +837,8 @@ export default function EditTemplatePage() {
                                       <div><label className="block text-xs text-muted mb-1">Texto de ajuda</label><input type="text" value={field.help_text} onChange={(e) => updateField(field.id, { help_text: e.target.value })} className="input text-sm" placeholder="Instrucoes para o usuario..." /></div>
                                     </div>
                                     {sections.length > 0 && (<div><label className="block text-xs text-muted mb-1">Mover para etapa</label><select value={field.section_id || ''} onChange={(e) => updateField(field.id, { section_id: e.target.value || null })} className="input text-sm"><option value="">Sem etapa (geral)</option>{sections.map(s => (<option key={s.id} value={s.id}>{s.name || '(sem nome)'}</option>))}</select></div>)}
-                                    {field.field_type === 'number' && (<div><label className="block text-xs text-muted mb-1">Tipo de numero</label><div className="grid grid-cols-2 gap-2">{[{ value: 'monetario', label: 'Monetario (R$)' }, { value: 'quantidade', label: 'Quantidade (un)' }, { value: 'decimal', label: 'Decimal' }, { value: 'porcentagem', label: 'Porcentagem (%)' }].map(st => (<button key={st.value} type="button" onClick={() => updateField(field.id, { options: { numberSubtype: st.value } })} className={`px-3 py-2 rounded-lg text-sm font-medium transition-all border ${(field.options as { numberSubtype?: string } | null)?.numberSubtype === st.value ? 'bg-primary/15 border-primary text-primary' : 'bg-surface border-subtle text-muted hover:border-primary/40'}`}>{st.label}</button>))}</div></div>)}
-                                    {(field.field_type === 'dropdown' || field.field_type === 'checkbox_multiple') && (<div><label className="block text-xs text-muted mb-2">Opcoes</label><div className="space-y-2">{(Array.isArray(field.options) ? field.options : []).map((opt: string, optIdx: number) => (<div key={optIdx} className="flex items-center gap-2"><span className="text-muted cursor-grab text-sm select-none">☰</span><input type="text" value={opt} onChange={(e) => { const newOpts = [...(Array.isArray(field.options) ? field.options : [])]; newOpts[optIdx] = e.target.value; updateField(field.id, { options: newOpts }) }} placeholder={`Opcao ${optIdx + 1}`} className="input text-sm flex-1" /><button type="button" onClick={() => { const newOpts = (Array.isArray(field.options) ? field.options : []).filter((_: string, i: number) => i !== optIdx); updateField(field.id, { options: newOpts }) }} className="p-1 text-error hover:bg-error/20 rounded transition-colors shrink-0"><FiTrash2 className="w-3 h-3" /></button></div>))}</div><button type="button" onClick={() => updateField(field.id, { options: [...(Array.isArray(field.options) ? field.options : []), ''] })} className="mt-2 text-xs text-primary hover:text-primary/80 font-medium py-1.5 px-3 border border-primary/30 rounded-lg hover:bg-primary/5 transition-colors">+ Adicionar opcao</button></div>)}
+                                    {field.field_type === 'number' && (<div><label className="block text-xs text-muted mb-1">Tipo de numero</label><div className="grid grid-cols-2 gap-2">{[{ value: 'monetario', label: 'Monetario (R$)' }, { value: 'quantidade', label: 'Quantidade (un)' }, { value: 'decimal', label: 'Decimal' }, { value: 'porcentagem', label: 'Porcentagem (%)' }].map(st => (<button key={st.value} type="button" onClick={() => updateField(field.id, { options: { numberSubtype: st.value, ...(getFieldIcon(field) ? { icon: getFieldIcon(field) } : {}) } })} className={`px-3 py-2 rounded-lg text-sm font-medium transition-all border ${(field.options as { numberSubtype?: string } | null)?.numberSubtype === st.value ? 'bg-primary/15 border-primary text-primary' : 'bg-surface border-subtle text-muted hover:border-primary/40'}`}>{st.label}</button>))}</div></div>)}
+                                    {(field.field_type === 'dropdown' || field.field_type === 'checkbox_multiple') && (<div><label className="block text-xs text-muted mb-2">Opcoes</label><div className="space-y-2">{(getOptionsItems(field.options)).map((opt: string, optIdx: number) => (<div key={optIdx} className="flex items-center gap-2"><span className="text-muted cursor-grab text-sm select-none">☰</span><input type="text" value={opt} onChange={(e) => { const newOpts = [...(getOptionsItems(field.options))]; newOpts[optIdx] = e.target.value; updateField(field.id, { options: getFieldIcon(field) ? { items: newOpts, icon: getFieldIcon(field) } : newOpts }) }} placeholder={`Opcao ${optIdx + 1}`} className="input text-sm flex-1" /><button type="button" onClick={() => { const newOpts = (getOptionsItems(field.options)).filter((_: string, i: number) => i !== optIdx); updateField(field.id, { options: getFieldIcon(field) ? { items: newOpts, icon: getFieldIcon(field) } : newOpts }) }} className="p-1 text-error hover:bg-error/20 rounded transition-colors shrink-0"><FiTrash2 className="w-3 h-3" /></button></div>))}</div><button type="button" onClick={() => { const newItems = [...getOptionsItems(field.options), '']; updateField(field.id, { options: getFieldIcon(field) ? { items: newItems, icon: getFieldIcon(field) } : newItems }) }} className="mt-2 text-xs text-primary hover:text-primary/80 font-medium py-1.5 px-3 border border-primary/30 rounded-lg hover:bg-primary/5 transition-colors">+ Adicionar opcao</button></div>)}
                                     {field.field_type === 'yes_no' && (<div className="space-y-2"><label className="flex items-center gap-2 text-sm text-secondary cursor-pointer"><input type="checkbox" checked={(field.options as { allowPhoto?: boolean } | null)?.allowPhoto || false} onChange={(e) => updateField(field.id, { options: { ...((field.options as Record<string, unknown>) || {}), allowPhoto: e.target.checked, photoRequired: false } })} className="rounded border-default bg-surface text-primary focus:ring-primary" />Permitir foto</label>{(field.options as { allowPhoto?: boolean } | null)?.allowPhoto && (<select value={(field.options as { photoRequired?: boolean } | null)?.photoRequired ? 'required' : 'optional'} onChange={(e) => updateField(field.id, { options: { ...((field.options as Record<string, unknown>) || {}), photoRequired: e.target.value === 'required' } })} className="input text-sm"><option value="optional">Foto opcional</option><option value="required">Foto obrigatoria</option></select>)}</div>)}
                                     {!['dropdown', 'checkbox_multiple'].includes(field.field_type) && (<div><label className="block text-xs text-muted mb-1">Validacao cruzada</label><select value={(field.options as { validationRole?: string } | null)?.validationRole || ''} onChange={(e) => updateField(field.id, { options: { ...((field.options as Record<string, unknown>) || {}), validationRole: e.target.value || null } })} className="input text-sm"><option value="">Nenhum</option><option value="nota">Numero da nota</option><option value="valor">Valor</option></select></div>)}
                                   </div>
@@ -831,7 +884,7 @@ export default function EditTemplatePage() {
                             <div {...fieldListeners} className="cursor-grab active:cursor-grabbing p-1 text-muted hover:text-primary touch-none">
                               <RiDraggable className="w-4 h-4" />
                             </div>
-                            <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-surface-hover border border-subtle flex items-center justify-center text-sm shrink-0">{getFieldTypeIcon(field.field_type)}</div>
+                            <IconPicker value={getFieldIcon(field)} onChange={(icon) => setFieldIcon(field.id, icon)} fallback={getFieldTypeIcon(field.field_type)} />
                             <div className="flex-1 min-w-0">
                               <input type="text" value={field.name} onChange={(e) => updateField(field.id, { name: e.target.value })} placeholder="Nome do campo" className="w-full bg-transparent border-none text-main placeholder:text-muted focus:outline-none font-medium text-xs sm:text-sm" />
                               <p className="text-[10px] sm:text-xs text-muted">{getFieldTypeLabel(field.field_type)}</p>
@@ -855,8 +908,8 @@ export default function EditTemplatePage() {
                                 <div><label className="block text-xs text-muted mb-1">Texto de ajuda</label><input type="text" value={field.help_text} onChange={(e) => updateField(field.id, { help_text: e.target.value })} className="input text-sm" placeholder="Instrucoes para o usuario..." /></div>
                               </div>
                               <div><label className="block text-xs text-muted mb-1">Mover para etapa</label><select value={field.section_id || ''} onChange={(e) => updateField(field.id, { section_id: e.target.value || null })} className="input text-sm"><option value="">Sem etapa (geral)</option>{sections.map(s => (<option key={s.id} value={s.id}>{s.name || '(sem nome)'}</option>))}</select></div>
-                              {field.field_type === 'number' && (<div><label className="block text-xs text-muted mb-1">Tipo de numero</label><div className="grid grid-cols-2 gap-2">{[{ value: 'monetario', label: 'Monetario (R$)' }, { value: 'quantidade', label: 'Quantidade (un)' }, { value: 'decimal', label: 'Decimal' }, { value: 'porcentagem', label: 'Porcentagem (%)' }].map(st => (<button key={st.value} type="button" onClick={() => updateField(field.id, { options: { numberSubtype: st.value } })} className={`px-3 py-2 rounded-lg text-sm font-medium transition-all border ${(field.options as { numberSubtype?: string } | null)?.numberSubtype === st.value ? 'bg-primary/15 border-primary text-primary' : 'bg-surface border-subtle text-muted hover:border-primary/40'}`}>{st.label}</button>))}</div></div>)}
-                              {(field.field_type === 'dropdown' || field.field_type === 'checkbox_multiple') && (<div><label className="block text-xs text-muted mb-2">Opcoes</label><div className="space-y-2">{(Array.isArray(field.options) ? field.options : []).map((opt: string, optIdx: number) => (<div key={optIdx} className="flex items-center gap-2"><span className="text-muted cursor-grab text-sm select-none">☰</span><input type="text" value={opt} onChange={(e) => { const newOpts = [...(Array.isArray(field.options) ? field.options : [])]; newOpts[optIdx] = e.target.value; updateField(field.id, { options: newOpts }) }} placeholder={`Opcao ${optIdx + 1}`} className="input text-sm flex-1" /><button type="button" onClick={() => { const newOpts = (Array.isArray(field.options) ? field.options : []).filter((_: string, i: number) => i !== optIdx); updateField(field.id, { options: newOpts }) }} className="p-1 text-error hover:bg-error/20 rounded transition-colors shrink-0"><FiTrash2 className="w-3 h-3" /></button></div>))}</div><button type="button" onClick={() => updateField(field.id, { options: [...(Array.isArray(field.options) ? field.options : []), ''] })} className="mt-2 text-xs text-primary hover:text-primary/80 font-medium py-1.5 px-3 border border-primary/30 rounded-lg hover:bg-primary/5 transition-colors">+ Adicionar opcao</button></div>)}
+                              {field.field_type === 'number' && (<div><label className="block text-xs text-muted mb-1">Tipo de numero</label><div className="grid grid-cols-2 gap-2">{[{ value: 'monetario', label: 'Monetario (R$)' }, { value: 'quantidade', label: 'Quantidade (un)' }, { value: 'decimal', label: 'Decimal' }, { value: 'porcentagem', label: 'Porcentagem (%)' }].map(st => (<button key={st.value} type="button" onClick={() => updateField(field.id, { options: { numberSubtype: st.value, ...(getFieldIcon(field) ? { icon: getFieldIcon(field) } : {}) } })} className={`px-3 py-2 rounded-lg text-sm font-medium transition-all border ${(field.options as { numberSubtype?: string } | null)?.numberSubtype === st.value ? 'bg-primary/15 border-primary text-primary' : 'bg-surface border-subtle text-muted hover:border-primary/40'}`}>{st.label}</button>))}</div></div>)}
+                              {(field.field_type === 'dropdown' || field.field_type === 'checkbox_multiple') && (<div><label className="block text-xs text-muted mb-2">Opcoes</label><div className="space-y-2">{(getOptionsItems(field.options)).map((opt: string, optIdx: number) => (<div key={optIdx} className="flex items-center gap-2"><span className="text-muted cursor-grab text-sm select-none">☰</span><input type="text" value={opt} onChange={(e) => { const newOpts = [...(getOptionsItems(field.options))]; newOpts[optIdx] = e.target.value; updateField(field.id, { options: getFieldIcon(field) ? { items: newOpts, icon: getFieldIcon(field) } : newOpts }) }} placeholder={`Opcao ${optIdx + 1}`} className="input text-sm flex-1" /><button type="button" onClick={() => { const newOpts = (getOptionsItems(field.options)).filter((_: string, i: number) => i !== optIdx); updateField(field.id, { options: getFieldIcon(field) ? { items: newOpts, icon: getFieldIcon(field) } : newOpts }) }} className="p-1 text-error hover:bg-error/20 rounded transition-colors shrink-0"><FiTrash2 className="w-3 h-3" /></button></div>))}</div><button type="button" onClick={() => { const newItems = [...getOptionsItems(field.options), '']; updateField(field.id, { options: getFieldIcon(field) ? { items: newItems, icon: getFieldIcon(field) } : newItems }) }} className="mt-2 text-xs text-primary hover:text-primary/80 font-medium py-1.5 px-3 border border-primary/30 rounded-lg hover:bg-primary/5 transition-colors">+ Adicionar opcao</button></div>)}
                               {field.field_type === 'yes_no' && (<div className="space-y-2"><label className="flex items-center gap-2 text-sm text-secondary cursor-pointer"><input type="checkbox" checked={(field.options as { allowPhoto?: boolean } | null)?.allowPhoto || false} onChange={(e) => updateField(field.id, { options: { ...((field.options as Record<string, unknown>) || {}), allowPhoto: e.target.checked, photoRequired: false } })} className="rounded border-default bg-surface text-primary focus:ring-primary" />Permitir foto</label>{(field.options as { allowPhoto?: boolean } | null)?.allowPhoto && (<select value={(field.options as { photoRequired?: boolean } | null)?.photoRequired ? 'required' : 'optional'} onChange={(e) => updateField(field.id, { options: { ...((field.options as Record<string, unknown>) || {}), photoRequired: e.target.value === 'required' } })} className="input text-sm"><option value="optional">Foto opcional</option><option value="required">Foto obrigatoria</option></select>)}</div>)}
                               {!['dropdown', 'checkbox_multiple'].includes(field.field_type) && (<div><label className="block text-xs text-muted mb-1">Validacao cruzada</label><select value={(field.options as { validationRole?: string } | null)?.validationRole || ''} onChange={(e) => updateField(field.id, { options: { ...((field.options as Record<string, unknown>) || {}), validationRole: e.target.value || null } })} className="input text-sm"><option value="">Nenhum</option><option value="nota">Numero da nota</option><option value="valor">Valor</option></select></div>)}
                             </div>
@@ -897,7 +950,7 @@ export default function EditTemplatePage() {
                           <div {...fieldListeners} className="cursor-grab active:cursor-grabbing p-1 text-muted hover:text-primary touch-none">
                             <RiDraggable className="w-4 h-4 sm:w-5 sm:h-5" />
                           </div>
-                          <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg bg-surface-hover border border-subtle flex items-center justify-center text-sm sm:text-lg shrink-0">{getFieldTypeIcon(field.field_type)}</div>
+                          <IconPicker value={getFieldIcon(field)} onChange={(icon) => setFieldIcon(field.id, icon)} fallback={getFieldTypeIcon(field.field_type)} />
                           <div className="flex-1 min-w-0">
                             <input type="text" value={field.name} onChange={(e) => updateField(field.id, { name: e.target.value })} placeholder="Nome do campo" className="w-full bg-transparent border-none text-main placeholder:text-muted focus:outline-none font-medium text-sm sm:text-base" />
                             <p className="text-[10px] sm:text-xs text-muted">{getFieldTypeLabel(field.field_type)}</p>
@@ -915,8 +968,8 @@ export default function EditTemplatePage() {
                               <div><label className="block text-xs text-muted mb-1">Placeholder</label><input type="text" value={field.placeholder} onChange={(e) => updateField(field.id, { placeholder: e.target.value })} className="input text-sm" placeholder="Texto de exemplo..." /></div>
                               <div><label className="block text-xs text-muted mb-1">Texto de ajuda</label><input type="text" value={field.help_text} onChange={(e) => updateField(field.id, { help_text: e.target.value })} className="input text-sm" placeholder="Instrucoes para o usuario..." /></div>
                             </div>
-                            {field.field_type === 'number' && (<div><label className="block text-xs text-muted mb-1">Tipo de numero</label><div className="grid grid-cols-2 gap-2">{[{ value: 'monetario', label: 'Monetario (R$)' }, { value: 'quantidade', label: 'Quantidade (un)' }, { value: 'decimal', label: 'Decimal' }, { value: 'porcentagem', label: 'Porcentagem (%)' }].map(st => (<button key={st.value} type="button" onClick={() => updateField(field.id, { options: { numberSubtype: st.value } })} className={`px-3 py-2 rounded-lg text-sm font-medium transition-all border ${(field.options as { numberSubtype?: string } | null)?.numberSubtype === st.value ? 'bg-primary/15 border-primary text-primary' : 'bg-surface border-subtle text-muted hover:border-primary/40'}`}>{st.label}</button>))}</div></div>)}
-                            {(field.field_type === 'dropdown' || field.field_type === 'checkbox_multiple') && (<div><label className="block text-xs text-muted mb-2">Opcoes</label><div className="space-y-2">{(Array.isArray(field.options) ? field.options : []).map((opt: string, optIdx: number) => (<div key={optIdx} className="flex items-center gap-2"><span className="text-muted cursor-grab text-sm select-none">☰</span><input type="text" value={opt} onChange={(e) => { const newOpts = [...(Array.isArray(field.options) ? field.options : [])]; newOpts[optIdx] = e.target.value; updateField(field.id, { options: newOpts }) }} placeholder={`Opcao ${optIdx + 1}`} className="input text-sm flex-1" /><button type="button" onClick={() => { const newOpts = (Array.isArray(field.options) ? field.options : []).filter((_: string, i: number) => i !== optIdx); updateField(field.id, { options: newOpts }) }} className="p-1 text-error hover:bg-error/20 rounded transition-colors shrink-0"><FiTrash2 className="w-3 h-3" /></button></div>))}</div><button type="button" onClick={() => updateField(field.id, { options: [...(Array.isArray(field.options) ? field.options : []), ''] })} className="mt-2 text-xs text-primary hover:text-primary/80 font-medium py-1.5 px-3 border border-primary/30 rounded-lg hover:bg-primary/5 transition-colors">+ Adicionar opcao</button></div>)}
+                            {field.field_type === 'number' && (<div><label className="block text-xs text-muted mb-1">Tipo de numero</label><div className="grid grid-cols-2 gap-2">{[{ value: 'monetario', label: 'Monetario (R$)' }, { value: 'quantidade', label: 'Quantidade (un)' }, { value: 'decimal', label: 'Decimal' }, { value: 'porcentagem', label: 'Porcentagem (%)' }].map(st => (<button key={st.value} type="button" onClick={() => updateField(field.id, { options: { numberSubtype: st.value, ...(getFieldIcon(field) ? { icon: getFieldIcon(field) } : {}) } })} className={`px-3 py-2 rounded-lg text-sm font-medium transition-all border ${(field.options as { numberSubtype?: string } | null)?.numberSubtype === st.value ? 'bg-primary/15 border-primary text-primary' : 'bg-surface border-subtle text-muted hover:border-primary/40'}`}>{st.label}</button>))}</div></div>)}
+                            {(field.field_type === 'dropdown' || field.field_type === 'checkbox_multiple') && (<div><label className="block text-xs text-muted mb-2">Opcoes</label><div className="space-y-2">{(getOptionsItems(field.options)).map((opt: string, optIdx: number) => (<div key={optIdx} className="flex items-center gap-2"><span className="text-muted cursor-grab text-sm select-none">☰</span><input type="text" value={opt} onChange={(e) => { const newOpts = [...(getOptionsItems(field.options))]; newOpts[optIdx] = e.target.value; updateField(field.id, { options: getFieldIcon(field) ? { items: newOpts, icon: getFieldIcon(field) } : newOpts }) }} placeholder={`Opcao ${optIdx + 1}`} className="input text-sm flex-1" /><button type="button" onClick={() => { const newOpts = (getOptionsItems(field.options)).filter((_: string, i: number) => i !== optIdx); updateField(field.id, { options: getFieldIcon(field) ? { items: newOpts, icon: getFieldIcon(field) } : newOpts }) }} className="p-1 text-error hover:bg-error/20 rounded transition-colors shrink-0"><FiTrash2 className="w-3 h-3" /></button></div>))}</div><button type="button" onClick={() => { const newItems = [...getOptionsItems(field.options), '']; updateField(field.id, { options: getFieldIcon(field) ? { items: newItems, icon: getFieldIcon(field) } : newItems }) }} className="mt-2 text-xs text-primary hover:text-primary/80 font-medium py-1.5 px-3 border border-primary/30 rounded-lg hover:bg-primary/5 transition-colors">+ Adicionar opcao</button></div>)}
                             {field.field_type === 'yes_no' && (<div className="space-y-2"><label className="flex items-center gap-2 text-sm text-secondary cursor-pointer"><input type="checkbox" checked={(field.options as { allowPhoto?: boolean } | null)?.allowPhoto || false} onChange={(e) => updateField(field.id, { options: { ...((field.options as Record<string, unknown>) || {}), allowPhoto: e.target.checked, photoRequired: false } })} className="rounded border-default bg-surface text-primary focus:ring-primary" />Permitir foto</label>{(field.options as { allowPhoto?: boolean } | null)?.allowPhoto && (<select value={(field.options as { photoRequired?: boolean } | null)?.photoRequired ? 'required' : 'optional'} onChange={(e) => updateField(field.id, { options: { ...((field.options as Record<string, unknown>) || {}), photoRequired: e.target.value === 'required' } })} className="input text-sm"><option value="optional">Foto opcional</option><option value="required">Foto obrigatoria</option></select>)}</div>)}
                             {!['dropdown', 'checkbox_multiple'].includes(field.field_type) && (<div><label className="block text-xs text-muted mb-1">Validacao cruzada</label><select value={(field.options as { validationRole?: string } | null)?.validationRole || ''} onChange={(e) => updateField(field.id, { options: { ...((field.options as Record<string, unknown>) || {}), validationRole: e.target.value || null } })} className="input text-sm"><option value="">Nenhum</option><option value="nota">Numero da nota</option><option value="valor">Valor</option></select></div>)}
                           </div>
