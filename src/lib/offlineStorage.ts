@@ -291,4 +291,82 @@ export async function updateOfflineChecklistSection(
   })
 }
 
+/**
+ * Update a single field response in an offline checklist (for auto-save).
+ * Works for both sectioned and non-sectioned checklists.
+ */
+export async function updateOfflineFieldResponse(
+  checklistId: string,
+  sectionId: number | null,
+  fieldId: number,
+  responseData: { valueText: string | null; valueNumber: number | null; valueJson: unknown }
+): Promise<void> {
+  const database = await initDB()
+
+  return new Promise((resolve, reject) => {
+    const transaction = database.transaction([STORE_NAME], 'readwrite')
+    const store = transaction.objectStore(STORE_NAME)
+    const getRequest = store.get(checklistId)
+
+    getRequest.onsuccess = () => {
+      const checklist = getRequest.result as PendingChecklist
+      if (!checklist) {
+        reject(new Error('Checklist nao encontrado'))
+        return
+      }
+
+      const newEntry = {
+        fieldId,
+        valueText: responseData.valueText,
+        valueNumber: responseData.valueNumber,
+        valueJson: responseData.valueJson,
+      }
+
+      if (sectionId !== null && checklist.sections) {
+        // Sectioned: update within the specific section
+        checklist.sections = checklist.sections.map(s => {
+          if (s.sectionId !== sectionId) return s
+          const existing = s.responses.findIndex(r => r.fieldId === fieldId)
+          if (existing >= 0) {
+            s.responses[existing] = newEntry
+          } else {
+            s.responses.push(newEntry)
+          }
+          return s
+        })
+      } else {
+        // Non-sectioned: update in main responses array
+        const existing = checklist.responses.findIndex(r => r.fieldId === fieldId)
+        if (existing >= 0) {
+          checklist.responses[existing] = newEntry
+        } else {
+          checklist.responses.push(newEntry)
+        }
+      }
+
+      const updateRequest = store.put(checklist)
+      updateRequest.onsuccess = () => resolve()
+      updateRequest.onerror = () => reject(updateRequest.error)
+    }
+
+    getRequest.onerror = () => reject(getRequest.error)
+  })
+}
+
+/**
+ * Put/update an offline checklist directly in IndexedDB.
+ * Used to update section statuses during auto-save flow.
+ */
+export async function putOfflineChecklist(checklist: PendingChecklist): Promise<void> {
+  const database = await initDB()
+
+  return new Promise((resolve, reject) => {
+    const transaction = database.transaction([STORE_NAME], 'readwrite')
+    const store = transaction.objectStore(STORE_NAME)
+    const request = store.put(checklist)
+    request.onsuccess = () => resolve()
+    request.onerror = () => reject(request.error)
+  })
+}
+
 export type { PendingChecklist, PendingChecklistSection }

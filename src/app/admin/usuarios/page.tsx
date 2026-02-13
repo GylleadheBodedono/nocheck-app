@@ -193,7 +193,15 @@ export default function UsuariosPage() {
         throw new Error(data.error || 'Erro ao excluir usuario')
       }
     } catch (err) {
-      console.warn('[Usuarios] API delete falhou, tentando Supabase direto...', err)
+      const errMsg = err instanceof Error ? err.message : 'Erro desconhecido'
+      console.warn('[Usuarios] API delete falhou:', errMsg)
+
+      // If FK constraint error, show useful message and revert
+      if (errMsg.includes('registros vinculados') || errMsg.includes('migration')) {
+        alert(errMsg)
+        setUsers(previousUsers)
+        return
+      }
 
       // Fallback: deleta direto do public.users
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -204,7 +212,7 @@ export default function UsuariosPage() {
 
       if (error) {
         console.error('Erro ao deletar usuario:', error)
-        alert('Erro ao excluir usuario. Tente novamente.')
+        alert(error.message || 'Erro ao excluir usuario. Tente novamente.')
         // Reverte a remoçao otimista
         setUsers(previousUsers)
       }

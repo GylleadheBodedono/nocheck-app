@@ -125,8 +125,18 @@ export async function DELETE(
 
     if (error) {
       console.error('[API Users] Erro ao deletar usuario:', error)
+
+      // Detect FK constraint errors
+      const msg = error.message || ''
+      if (msg.includes('foreign key') || msg.includes('violates') || msg.includes('23503')) {
+        return NextResponse.json(
+          { error: 'Nao foi possivel excluir o usuario porque existem registros vinculados. Execute a migration 018_fix_user_deletion.sql para corrigir as constraints do banco.' },
+          { status: 409 }
+        )
+      }
+
       return NextResponse.json(
-        { error: error.message },
+        { error: msg || 'Erro ao excluir usuario' },
         { status: 400 }
       )
     }
@@ -134,8 +144,17 @@ export async function DELETE(
     return NextResponse.json({ success: true })
   } catch (error) {
     console.error('[API Users] Erro:', error)
+    const msg = error instanceof Error ? error.message : 'Erro desconhecido'
+
+    if (msg.includes('foreign key') || msg.includes('violates') || msg.includes('23503')) {
+      return NextResponse.json(
+        { error: 'Nao foi possivel excluir o usuario porque existem registros vinculados. Execute a migration 018_fix_user_deletion.sql para corrigir as constraints do banco.' },
+        { status: 409 }
+      )
+    }
+
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Erro desconhecido' },
+      { error: msg },
       { status: 500 }
     )
   }

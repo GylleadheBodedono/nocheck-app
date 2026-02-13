@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, Suspense, useMemo, useCallback } from 'react'
+import { useEffect, useState, useRef, Suspense, useMemo, useCallback } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { FieldRenderer } from '@/components/fields/FieldRenderer'
@@ -14,14 +14,17 @@ import {
   FiMapPin,
   FiLayers,
   FiChevronRight,
+  FiCloud,
+  FiLoader,
 } from 'react-icons/fi'
 import type { ChecklistTemplate, TemplateField, Store, TemplateSection } from '@/types/database'
 import { APP_CONFIG } from '@/lib/config'
 import { LoadingPage, Header } from '@/components/ui'
 import { processarValidacaoCruzada } from '@/lib/crossValidation'
 import { processarNaoConformidades } from '@/lib/actionPlanEngine'
-import { saveOfflineChecklist, updateOfflineChecklistSection, updateChecklistStatus, getPendingChecklists } from '@/lib/offlineStorage'
+import { saveOfflineChecklist, updateChecklistStatus, getPendingChecklists, updateOfflineFieldResponse, putOfflineChecklist, getOfflineChecklist } from '@/lib/offlineStorage'
 import { getTemplatesCache, getStoresCache, getTemplateFieldsCache, getAuthCache, getTemplateSectionsCache } from '@/lib/offlineCache'
+import { useDebouncedCallback } from 'use-debounce'
 
 type FieldWithSection = TemplateField & { section_id: number | null }
 
@@ -97,6 +100,8 @@ function ChecklistForm() {
   const [offlineChecklistId, setOfflineChecklistId] = useState<string | null>(null) // Offline UUID for sectioned mode
 
   const [savedOffline, setSavedOffline] = useState(false)
+  const [autoSaveStatus, setAutoSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
+  const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   // Get fields for a specific section
   const getFieldsForSection = useCallback((sectionId: number): FieldWithSection[] => {
@@ -436,11 +441,221 @@ function ChecklistForm() {
     )
   }, [store, loading])
 
+  // For NON-SECTIONED templates: create em_andamento checklist on mount so auto-save has a checklistId
+  useEffect(() => {
+    if (hasSections || !template || loading || !store) return
+    if (checklistId || offlineChecklistId) return // already initialized
+
+    const initNonSectionedChecklist = async () => {
+      let userId: string | null = null
+      try {
+        const { data: { user } } = await supabase.auth.getUser()
+        userId = user?.id || null
+      } catch { /* offline */ }
+      if (!userId) {
+        const cachedAuth = await getAuthCache()
+        userId = cachedAuth?.userId || null
+      }
+      if (!userId) return
+
+      // === OFFLINE ===
+      if (!navigator.onLine) {
+        const pendingOffline = await getPendingChecklists()
+        const existingOffline = pendingOffline.find(c =>
+          c.templateId === Number(templateId) &&
+          c.storeId === Number(storeId) &&
+          c.userId === userId &&
+          (!c.sections || c.sections.length === 0) &&
+          c.syncStatus === 'syncing'
+        )
+
+        if (existingOffline) {
+          setOfflineChecklistId(existingOffline.id)
+          // Restore responses
+          const restoredResponses: Record<number, unknown> = {}
+          for (const r of existingOffline.responses) {
+            const field = template?.fields.find(f => f.id === r.fieldId)
+            if (!field) continue
+            if (field.field_type === 'photo') {
+              const json = r.valueJson as { photos?: string[] } | null
+              restoredResponses[r.fieldId] = json?.photos || []
+            } else if (field.field_type === 'yes_no') {
+              const json = r.valueJson as { photos?: string[] } | null
+              if (json?.photos && json.photos.length > 0) {
+                restoredResponses[r.fieldId] = { answer: r.valueText || '', photos: json.photos }
+              } else {
+                restoredResponses[r.fieldId] = r.valueText
+              }
+            } else if (['checkbox_multiple', 'signature', 'gps'].includes(field.field_type)) {
+              restoredResponses[r.fieldId] = r.valueJson
+            } else if (r.valueNumber !== null) {
+              if (r.valueJson && typeof r.valueJson === 'object' && 'subtype' in (r.valueJson as Record<string, unknown>)) {
+                restoredResponses[r.fieldId] = { subtype: (r.valueJson as Record<string, unknown>).subtype, number: r.valueNumber }
+              } else {
+                restoredResponses[r.fieldId] = r.valueNumber
+              }
+            } else if (r.valueText !== null) {
+              restoredResponses[r.fieldId] = r.valueText
+            }
+          }
+          if (Object.keys(restoredResponses).length > 0) setResponses(restoredResponses)
+        } else {
+          const offlineId = await saveOfflineChecklist({
+            templateId: Number(templateId),
+            storeId: Number(storeId),
+            sectorId: null,
+            userId,
+            responses: [],
+          })
+          await updateChecklistStatus(offlineId, 'syncing') // guard: don't sync prematurely
+          setOfflineChecklistId(offlineId)
+        }
+        return
+      }
+
+      // === ONLINE ===
+      const todayStart = new Date()
+      todayStart.setHours(0, 0, 0, 0)
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data: existing } = await (supabase as any)
+        .from('checklists')
+        .select('id')
+        .eq('template_id', Number(templateId))
+        .eq('store_id', Number(storeId))
+        .eq('created_by', userId)
+        .eq('status', 'em_andamento')
+        .gte('created_at', todayStart.toISOString())
+        .order('created_at', { ascending: false })
+        .limit(1)
+
+      if (existing && existing.length > 0) {
+        await loadExistingChecklist(existing[0].id)
+      } else {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const { data: newChecklist, error: createErr } = await (supabase as any)
+          .from('checklists')
+          .insert({
+            template_id: Number(templateId),
+            store_id: Number(storeId),
+            status: 'em_andamento',
+            created_by: userId,
+            started_at: new Date().toISOString(),
+            latitude: userLocation?.lat ?? null,
+            longitude: userLocation?.lng ?? null,
+            accuracy: userLocation?.accuracy ?? null,
+          })
+          .select()
+          .single()
+
+        if (createErr) {
+          console.error('[Checklist] Erro ao criar checklist:', createErr)
+          return
+        }
+        setChecklistId(newChecklist.id)
+      }
+    }
+
+    initNonSectionedChecklist()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasSections, template, loading, store])
+
+  // Build response data for a single field (no photo upload - photos stay as base64 during auto-save)
+  const buildSingleResponseRow = useCallback((fieldId: number, value: unknown) => {
+    if (value === undefined || value === null) return null
+    const field = template?.fields.find(f => f.id === fieldId)
+    if (!field) return null
+
+    let valueText: string | null = null
+    let valueNumber: number | null = null
+    let valueJson: unknown = null
+
+    if (field.field_type === 'number') {
+      if (typeof value === 'object' && value !== null && 'number' in (value as Record<string, unknown>)) {
+        const numObj = value as { subtype: string; number: number }
+        valueNumber = numObj.number
+        valueJson = { subtype: numObj.subtype }
+      } else {
+        valueNumber = value as number
+      }
+    } else if (field.field_type === 'calculated') {
+      valueNumber = value as number
+    } else if (field.field_type === 'photo') {
+      const photos = value as string[]
+      valueJson = { photos: photos || [], uploadedToDrive: false }
+    } else if (field.field_type === 'yes_no') {
+      if (typeof value === 'object' && value !== null && 'answer' in (value as Record<string, unknown>)) {
+        const yesNoObj = value as { answer: string; photos?: string[] }
+        valueText = yesNoObj.answer
+        if (yesNoObj.photos && yesNoObj.photos.length > 0) {
+          valueJson = { photos: yesNoObj.photos }
+        }
+      } else {
+        valueText = value as string
+      }
+    } else if (['checkbox_multiple', 'signature', 'gps'].includes(field.field_type)) {
+      valueJson = value
+    } else {
+      valueText = value as string
+    }
+
+    return { fieldId, valueText, valueNumber, valueJson }
+  }, [template])
+
+  // Debounced auto-save: saves a single field response after 1.5s of inactivity
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const autoSaveField = useDebouncedCallback(async (fieldId: number, value: unknown) => {
+    const row = buildSingleResponseRow(fieldId, value)
+    if (!row) return
+
+    setAutoSaveStatus('saving')
+    try {
+      if (navigator.onLine && checklistId) {
+        // Online: upsert to checklist_responses
+        let userId: string | null = null
+        try {
+          const { data: { user } } = await supabase.auth.getUser()
+          userId = user?.id || null
+        } catch { /* offline */ }
+
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        await (supabase as any)
+          .from('checklist_responses')
+          .upsert({
+            checklist_id: checklistId,
+            field_id: row.fieldId,
+            value_text: row.valueText,
+            value_number: row.valueNumber,
+            value_json: row.valueJson,
+            answered_by: userId,
+          }, { onConflict: 'checklist_id,field_id' })
+      } else if (offlineChecklistId) {
+        // Offline: update in IndexedDB
+        const field = template?.fields.find(f => f.id === fieldId)
+        const sectionId = field?.section_id ?? null
+        await updateOfflineFieldResponse(offlineChecklistId, sectionId, fieldId, {
+          valueText: row.valueText,
+          valueNumber: row.valueNumber,
+          valueJson: row.valueJson,
+        })
+      }
+
+      setAutoSaveStatus('saved')
+      if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current)
+      autoSaveTimerRef.current = setTimeout(() => setAutoSaveStatus('idle'), 2000)
+    } catch (err) {
+      console.error('[AutoSave] Error:', err)
+      setAutoSaveStatus('error')
+    }
+  }, 1500)
+
   const updateResponse = (fieldId: number, value: unknown) => {
     setResponses(prev => ({ ...prev, [fieldId]: value }))
     if (errors[fieldId]) {
       setErrors(prev => { const n = { ...prev }; delete n[fieldId]; return n })
     }
+    // Trigger debounced auto-save
+    autoSaveField(fieldId, value)
   }
 
   // Build response row data for a set of fields
@@ -541,164 +756,214 @@ function ChecklistForm() {
     return Object.keys(newErrors).length === 0
   }
 
-  // === SECTION SUBMIT ===
-  const handleSectionSubmit = async (sectionId: number) => {
-    const sectionFields = getFieldsForSection(sectionId)
-    const fieldIds = sectionFields.map(f => f.id)
+  // === SECTION BACK: auto-mark section as complete if all required fields are filled ===
+  const handleSectionBack = async () => {
+    // Flush pending auto-save
+    autoSaveField.flush()
 
-    if (!validateFields(fieldIds)) {
-      const firstErrorId = fieldIds.find(id => errors[id])
-      if (firstErrorId) document.getElementById(`field-${firstErrorId}`)?.scrollIntoView({ behavior: 'smooth' })
+    if (activeSection === null) { setActiveSection(null); return }
+
+    const sectionFields = getFieldsForSection(activeSection)
+    const requiredFieldIds = sectionFields
+      .filter(f => f.is_required && f.field_type !== 'gps')
+      .map(f => f.id)
+
+    // Check if all required fields are filled
+    const allRequiredFilled = requiredFieldIds.every(id => {
+      const v = responses[id]
+      if (v === undefined || v === null || v === '' || (Array.isArray(v) && v.length === 0)) return false
+      if (typeof v === 'object' && v !== null && 'answer' in (v as Record<string, unknown>)) {
+        const ans = (v as Record<string, unknown>).answer
+        if (!ans || ans === '') return false
+      }
+      return true
+    })
+
+    // Has at least one response in this section
+    const hasAnyResponse = sectionFields.some(f => {
+      const v = responses[f.id]
+      return v !== undefined && v !== null && v !== '' && !(Array.isArray(v) && v.length === 0)
+    })
+
+    if (allRequiredFilled && hasAnyResponse) {
+      try {
+        if (navigator.onLine && checklistId) {
+          const sectionProg = sectionProgress.find(sp => sp.section_id === activeSection)
+          if (sectionProg?.db_id) {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            await (supabase as any)
+              .from('checklist_sections')
+              .update({ status: 'concluido', completed_at: new Date().toISOString() })
+              .eq('id', sectionProg.db_id)
+          }
+        } else if (offlineChecklistId) {
+          const cl = await getOfflineChecklist(offlineChecklistId)
+          if (cl?.sections) {
+            cl.sections = cl.sections.map(s =>
+              s.sectionId === activeSection
+                ? { ...s, status: 'concluido' as const, completedAt: new Date().toISOString() }
+                : s
+            )
+            await putOfflineChecklist(cl)
+          }
+        }
+
+        setSectionProgress(prev => prev.map(sp =>
+          sp.section_id === activeSection
+            ? { ...sp, status: 'concluido' as const, completed_at: new Date().toISOString() }
+            : sp
+        ))
+      } catch (err) {
+        console.error('[Checklist] Erro ao marcar secao como concluida:', err)
+      }
+    }
+
+    setActiveSection(null)
+  }
+
+  // === UPLOAD PENDING PHOTOS (base64 → cloud) ===
+  const uploadPendingPhotos = async (clId: number) => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: respData } = await (supabase as any)
+      .from('checklist_responses')
+      .select('id, field_id, value_json')
+      .eq('checklist_id', clId)
+
+    if (!respData) return
+
+    for (const r of respData) {
+      const json = r.value_json as { photos?: string[] } | null
+      if (!json?.photos) continue
+      const hasBase64 = json.photos.some((p: string) => p.startsWith('data:'))
+      if (!hasBase64) continue
+
+      const uploadedUrls: string[] = []
+      for (let i = 0; i < json.photos.length; i++) {
+        if (json.photos[i].startsWith('data:')) {
+          const url = await uploadPhoto(json.photos[i], `checklist_${clId}_field_${r.field_id}_foto_${i + 1}.jpg`)
+          uploadedUrls.push(url || json.photos[i])
+        } else {
+          uploadedUrls.push(json.photos[i])
+        }
+      }
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await (supabase as any)
+        .from('checklist_responses')
+        .update({ value_json: { photos: uploadedUrls, uploadedToDrive: true } })
+        .eq('id', r.id)
+    }
+  }
+
+  // === FINALIZE CHECKLIST (sectioned: all sections complete → enviar) ===
+  const handleFinalizeChecklist = async () => {
+    setSubmitting(true)
+
+    let userId: string | null = null
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      userId = user?.id || null
+    } catch { /* offline */ }
+    if (!userId) {
+      const cachedAuth = await getAuthCache()
+      userId = cachedAuth?.userId || null
+    }
+    if (!userId) {
+      setErrors({ 0: 'Usuario nao autenticado.' })
+      setSubmitting(false)
       return
     }
 
-    setSubmitting(true)
-
     try {
-      let userId: string | null = null
-      try {
-        const { data: { user } } = await supabase.auth.getUser()
-        userId = user?.id || null
-      } catch { /* offline */ }
-      if (!userId) {
-        const cachedAuth = await getAuthCache()
-        userId = cachedAuth?.userId || null
-      }
-
-      const responseData = await buildResponseRows(fieldIds, navigator.onLine)
-
-      // === OFFLINE MODE ===
+      // === OFFLINE ===
       if (!navigator.onLine && offlineChecklistId) {
-        await updateOfflineChecklistSection(offlineChecklistId, sectionId, responseData)
-
-        // Update local progress
-        const newProgress = sectionProgress.map(sp =>
-          sp.section_id === sectionId
-            ? { ...sp, status: 'concluido' as const, completed_at: new Date().toISOString() }
-            : sp
-        )
-        setSectionProgress(newProgress)
-
-        // Check if all sections are complete
-        const allDone = newProgress.every(sp => sp.status === 'concluido')
-        if (allDone) {
-          setSavedOffline(true)
-          setSuccess(true)
-          setTimeout(() => router.push(APP_CONFIG.routes.dashboard), 2000)
-          setSubmitting(false)
-          return
-        }
-
-        // Go back to section list
-        setActiveSection(null)
-        setSubmitting(false)
+        await updateChecklistStatus(offlineChecklistId, 'pending')
+        setSavedOffline(true)
+        setSuccess(true)
+        setTimeout(() => router.push(APP_CONFIG.routes.dashboard), 2000)
         return
       }
 
+      // === ONLINE ===
       if (checklistId && navigator.onLine) {
-        // Delete existing responses for this section's fields (re-edit case)
-        const sectionPrevDone = sectionProgress.find(sp => sp.section_id === sectionId)?.status === 'concluido'
-        if (sectionPrevDone) {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          await (supabase as any)
-            .from('checklist_responses')
-            .delete()
-            .eq('checklist_id', checklistId)
-            .in('field_id', fieldIds)
+        // Upload pending photos (base64 → cloud)
+        await uploadPendingPhotos(checklistId)
+
+        // Finalize checklist status
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        await (supabase as any)
+          .from('checklists')
+          .update({ status: 'concluido', completed_at: new Date().toISOString() })
+          .eq('id', checklistId)
+
+        // Process cross validation + non-conformity
+        if (template) {
+          const allFieldIds = template.fields.map(f => f.id)
+          const allResponseData = await buildResponseRows(allFieldIds, false)
+          const allResponseMapped = allResponseData.map(r => ({
+            field_id: r.fieldId,
+            value_text: r.valueText,
+            value_number: r.valueNumber,
+            value_json: r.valueJson,
+          }))
+          await processarValidacaoCruzada(
+            supabase,
+            checklistId,
+            Number(templateId),
+            Number(storeId),
+            userId,
+            allResponseMapped,
+            template.fields
+          )
+          await processarNaoConformidades(
+            supabase,
+            checklistId,
+            Number(templateId),
+            Number(storeId),
+            null,
+            userId,
+            allResponseMapped,
+            template.fields.map(f => ({ id: f.id, name: f.name, field_type: f.field_type, options: f.options }))
+          )
         }
 
-        // Insert responses for this section
-        const responseRows = responseData.map(r => ({
+        // Activity log
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        await (supabase as any).from('activity_log').insert({
+          store_id: Number(storeId),
+          user_id: userId,
           checklist_id: checklistId,
-          field_id: r.fieldId,
-          value_text: r.valueText,
-          value_number: r.valueNumber,
-          value_json: r.valueJson,
-          answered_by: userId,
-        }))
+          action: 'checklist_concluido',
+          details: { template_name: template?.name },
+        })
 
-        if (responseRows.length > 0) {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const { error: respError } = await (supabase as any)
-            .from('checklist_responses')
-            .insert(responseRows)
-          if (respError) throw respError
-        }
-
-        // Update checklist_sections status
-        const sectionProg = sectionProgress.find(sp => sp.section_id === sectionId)
-        if (sectionProg?.db_id) {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          await (supabase as any)
-            .from('checklist_sections')
-            .update({ status: 'concluido', completed_at: new Date().toISOString() })
-            .eq('id', sectionProg.db_id)
-        }
-
-        // Update local progress
-        const newProgress = sectionProgress.map(sp =>
-          sp.section_id === sectionId
-            ? { ...sp, status: 'concluido' as const, completed_at: new Date().toISOString() }
-            : sp
-        )
-        setSectionProgress(newProgress)
-
-        // Check if all sections are complete
-        const allDone = newProgress.every(sp => sp.status === 'concluido')
-        if (allDone) {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          await (supabase as any)
-            .from('checklists')
-            .update({ status: 'concluido', completed_at: new Date().toISOString() })
-            .eq('id', checklistId)
-
-          // Process cross validation
-          if (template) {
-            const allFieldIds = template.fields.map(f => f.id)
-            const allResponseData = await buildResponseRows(allFieldIds, false)
-            const allResponseMapped = allResponseData.map(r => ({ field_id: r.fieldId, value_text: r.valueText, value_number: r.valueNumber, value_json: r.valueJson }))
-            await processarValidacaoCruzada(
-              supabase,
-              checklistId,
-              Number(templateId),
-              Number(storeId),
-              userId || '',
-              allResponseMapped,
-              template.fields
-            )
-
-            // Process non-conformity action plans
-            await processarNaoConformidades(
-              supabase,
-              checklistId,
-              Number(templateId),
-              Number(storeId),
-              null,
-              userId || '',
-              allResponseMapped,
-              template.fields.map(f => ({ id: f.id, name: f.name, field_type: f.field_type, options: f.options }))
-            )
-          }
-
+        setSuccess(true)
+        setTimeout(() => router.push(APP_CONFIG.routes.dashboard), 2000)
+      }
+    } catch (err) {
+      console.error('[Checklist] Erro ao finalizar:', err)
+      // Offline fallback
+      if (offlineChecklistId) {
+        try {
+          await updateChecklistStatus(offlineChecklistId, 'pending')
+          setSavedOffline(true)
           setSuccess(true)
           setTimeout(() => router.push(APP_CONFIG.routes.dashboard), 2000)
           return
-        }
-
-        // Go back to section list
-        setActiveSection(null)
+        } catch { /* ignore */ }
       }
-    } catch (err) {
-      console.error('[Checklist] Erro ao salvar secao:', err)
-      setErrors({ 0: err instanceof Error ? err.message : 'Erro ao salvar secao' })
+      setErrors({ 0: err instanceof Error ? err.message : 'Erro ao finalizar checklist' })
+      setSubmitting(false)
     }
-
-    setSubmitting(false)
   }
 
   // === FULL SUBMIT (non-sectioned templates) ===
+  // With auto-save, responses are already saved. This just validates + finalizes.
   const handleFullSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+
+    // Flush pending auto-save
+    autoSaveField.flush()
 
     const allFieldIds = (template?.fields || []).filter(f => f.field_type !== 'gps').map(f => f.id)
     if (!validateFields(allFieldIds)) {
@@ -726,98 +991,89 @@ function ChecklistForm() {
     }
 
     try {
-      // Offline save
-      if (!navigator.onLine) {
+      // === OFFLINE ===
+      if (!navigator.onLine && offlineChecklistId) {
+        // Ensure all responses are stored before marking for sync
         const responseData = await buildResponseRows(allFieldIds, false)
-        await saveOfflineChecklist({
-          templateId: Number(templateId),
-          storeId: Number(storeId),
-          sectorId: null,
-          userId,
-          responses: responseData,
-        })
+        const cl = await getOfflineChecklist(offlineChecklistId)
+        if (cl) {
+          cl.responses = responseData
+          cl.syncStatus = 'pending'
+          await putOfflineChecklist(cl)
+        } else {
+          await updateChecklistStatus(offlineChecklistId, 'pending')
+        }
         setSavedOffline(true)
         setSuccess(true)
         setTimeout(() => router.push(APP_CONFIG.routes.dashboard), 2000)
         return
       }
 
-      const responseData = await buildResponseRows(allFieldIds, true)
+      // === ONLINE ===
+      if (checklistId) {
+        // Upload pending photos
+        await uploadPendingPhotos(checklistId)
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data: checklist, error: checklistError } = await (supabase as any)
-        .from('checklists')
-        .insert({
-          template_id: Number(templateId),
+        // Finalize
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        await (supabase as any)
+          .from('checklists')
+          .update({ status: 'concluido', completed_at: new Date().toISOString() })
+          .eq('id', checklistId)
+
+        // Process cross validation + non-conformity
+        const allResponseData = await buildResponseRows(allFieldIds, false)
+        const responseMapped = allResponseData.map(r => ({
+          field_id: r.fieldId,
+          value_text: r.valueText,
+          value_number: r.valueNumber,
+          value_json: r.valueJson,
+        }))
+        await processarValidacaoCruzada(
+          supabase,
+          checklistId,
+          Number(templateId),
+          Number(storeId),
+          userId,
+          responseMapped,
+          template?.fields || []
+        )
+        await processarNaoConformidades(
+          supabase,
+          checklistId,
+          Number(templateId),
+          Number(storeId),
+          null,
+          userId,
+          responseMapped,
+          (template?.fields || []).map(f => ({ id: f.id, name: f.name, field_type: f.field_type, options: f.options }))
+        )
+
+        // Activity log (fixed table name: activity_log not activity_logs)
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        await (supabase as any).from('activity_log').insert({
           store_id: Number(storeId),
-          status: 'concluido',
-          created_by: userId,
-          started_at: new Date().toISOString(),
-          completed_at: new Date().toISOString(),
-          latitude: userLocation?.lat ?? null,
-          longitude: userLocation?.lng ?? null,
-          accuracy: userLocation?.accuracy ?? null,
+          user_id: userId,
+          checklist_id: checklistId,
+          action: 'checklist_concluido',
+          details: { template_name: template?.name },
         })
-        .select()
-        .single()
 
-      if (checklistError) throw checklistError
-
-      const responseRows = responseData.map(r => ({
-        checklist_id: checklist.id,
-        field_id: r.fieldId,
-        value_text: r.valueText,
-        value_number: r.valueNumber,
-        value_json: r.valueJson,
-        answered_by: userId,
-      }))
-
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { error: responsesError } = await (supabase as any)
-        .from('checklist_responses')
-        .insert(responseRows)
-      if (responsesError) throw responsesError
-
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      await (supabase as any).from('activity_logs').insert({
-        store_id: Number(storeId),
-        user_id: userId,
-        checklist_id: checklist.id,
-        action: 'checklist_concluido',
-        details: { template_name: template?.name },
-      })
-
-      const responseMapped = responseRows.map(r => ({ field_id: r.field_id, value_text: r.value_text, value_number: r.value_number, value_json: r.value_json }))
-      await processarValidacaoCruzada(
-        supabase,
-        checklist.id,
-        Number(templateId),
-        Number(storeId),
-        userId,
-        responseMapped,
-        template?.fields || []
-      )
-
-      // Process non-conformity action plans
-      await processarNaoConformidades(
-        supabase,
-        checklist.id,
-        Number(templateId),
-        Number(storeId),
-        null,
-        userId,
-        responseMapped,
-        (template?.fields || []).map(f => ({ id: f.id, name: f.name, field_type: f.field_type, options: f.options }))
-      )
-
-      setSuccess(true)
-      setTimeout(() => router.push(APP_CONFIG.routes.dashboard), 2000)
+        setSuccess(true)
+        setTimeout(() => router.push(APP_CONFIG.routes.dashboard), 2000)
+      }
     } catch (err) {
       console.error('Error submitting checklist:', err)
 
       // Try offline fallback
       try {
-        if (userId) {
+        if (userId && offlineChecklistId) {
+          await updateChecklistStatus(offlineChecklistId, 'pending')
+          setSavedOffline(true)
+          setSuccess(true)
+          setTimeout(() => router.push(APP_CONFIG.routes.dashboard), 2000)
+          return
+        } else if (userId) {
           const responseData = await buildResponseRows(allFieldIds, false)
           await saveOfflineChecklist({
             templateId: Number(templateId),
@@ -999,7 +1255,25 @@ function ChecklistForm() {
             })}
           </div>
 
-          <div className="mt-8">
+          {/* Enviar Checklist button: only when all sections are complete */}
+          {sectionProgress.length > 0 && sectionProgress.every(sp => sp.status === 'concluido') && (
+            <div className="mt-6">
+              <button
+                type="button"
+                onClick={handleFinalizeChecklist}
+                disabled={submitting}
+                className="btn-primary w-full py-4 text-base font-semibold rounded-2xl shadow-theme-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              >
+                {submitting ? (
+                  <><div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" /> Enviando...</>
+                ) : (
+                  <><FiSend className="w-5 h-5" /> Enviar Checklist</>
+                )}
+              </button>
+            </div>
+          )}
+
+          <div className="mt-4">
             <Link href={APP_CONFIG.routes.dashboard} className="btn-ghost w-full py-3 text-center block">
               Voltar ao Dashboard
             </Link>
@@ -1025,7 +1299,7 @@ function ChecklistForm() {
     return (
       <div className="min-h-screen bg-page">
         <Header
-          onBack={() => setActiveSection(null)}
+          onBack={handleSectionBack}
           title={section?.name}
           subtitle={template.name}
           icon={FiLayers}
@@ -1046,7 +1320,7 @@ function ChecklistForm() {
               {isDone && (
                 <div className="p-2.5 sm:p-3 bg-success/10 border border-success/30 rounded-xl flex items-center gap-2 text-xs sm:text-sm text-success">
                   <FiCheckCircle className="w-4 h-4 shrink-0" />
-                  <span>Etapa concluida — altere o que precisar e salve novamente</span>
+                  <span>Etapa concluida — alteracoes sao salvas automaticamente</span>
                 </div>
               )}
               {sectionFields.map((field, index) => (
@@ -1069,19 +1343,18 @@ function ChecklistForm() {
                 </div>
               )}
 
-              <div className="sticky bottom-4">
-                <button
-                  type="button"
-                  onClick={() => handleSectionSubmit(activeSection)}
-                  disabled={submitting}
-                  className="btn-primary w-full py-4 text-base font-semibold rounded-2xl shadow-theme-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                >
-                  {submitting ? (
-                    <><div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" /> Salvando...</>
-                  ) : (
-                    <><FiSend className="w-5 h-5" /> {isDone ? 'Salvar Alteracoes' : 'Salvar Etapa'}</>
-                  )}
-                </button>
+              {/* Auto-save status indicator */}
+              <div className="sticky bottom-4 flex justify-center">
+                <div className={`inline-flex items-center gap-2 px-4 py-2 rounded-full text-xs font-medium backdrop-blur-sm transition-all duration-300 ${
+                  autoSaveStatus === 'saving' ? 'bg-primary/10 text-primary border border-primary/20' :
+                  autoSaveStatus === 'saved' ? 'bg-success/10 text-success border border-success/20' :
+                  autoSaveStatus === 'error' ? 'bg-error/10 text-error border border-error/20' :
+                  'bg-surface/80 text-muted border border-subtle opacity-0'
+                }`}>
+                  {autoSaveStatus === 'saving' && <><FiLoader className="w-3.5 h-3.5 animate-spin" /> Salvando...</>}
+                  {autoSaveStatus === 'saved' && <><FiCloud className="w-3.5 h-3.5" /> Salvo</>}
+                  {autoSaveStatus === 'error' && <><FiAlertCircle className="w-3.5 h-3.5" /> Erro ao salvar</>}
+                </div>
               </div>
             </div>
         </main>
@@ -1137,6 +1410,21 @@ function ChecklistForm() {
           {errors[0] && (
             <div className="p-4 bg-red-500/10 border border-red-500/30 rounded-xl">
               <p className="text-red-400">{errors[0]}</p>
+            </div>
+          )}
+
+          {/* Auto-save status indicator */}
+          {autoSaveStatus !== 'idle' && (
+            <div className="flex justify-center">
+              <div className={`inline-flex items-center gap-2 px-4 py-2 rounded-full text-xs font-medium transition-all duration-300 ${
+                autoSaveStatus === 'saving' ? 'bg-primary/10 text-primary border border-primary/20' :
+                autoSaveStatus === 'saved' ? 'bg-success/10 text-success border border-success/20' :
+                'bg-error/10 text-error border border-error/20'
+              }`}>
+                {autoSaveStatus === 'saving' && <><FiLoader className="w-3.5 h-3.5 animate-spin" /> Salvando...</>}
+                {autoSaveStatus === 'saved' && <><FiCloud className="w-3.5 h-3.5" /> Salvo</>}
+                {autoSaveStatus === 'error' && <><FiAlertCircle className="w-3.5 h-3.5" /> Erro ao salvar</>}
+              </div>
             </div>
           )}
 
