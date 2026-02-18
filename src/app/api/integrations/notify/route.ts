@@ -1,6 +1,7 @@
 export const runtime = 'edge'
 
 import { NextRequest, NextResponse } from 'next/server'
+import { verifyApiAuth } from '@/lib/api-auth'
 
 const TEAMS_WEBHOOK_URL = process.env.TEAMS_WEBHOOK_URL || ''
 
@@ -35,6 +36,9 @@ type ActionPlanData = {
  * Envia alertas para o Teams quando há divergência na validação ou plano de ação
  */
 export async function POST(request: NextRequest) {
+  const auth = await verifyApiAuth(request)
+  if (auth.error) return auth.error
+
   try {
     const body = await request.json()
     const { action, data } = body as { action: string; data: ValidationData | ActionPlanData }

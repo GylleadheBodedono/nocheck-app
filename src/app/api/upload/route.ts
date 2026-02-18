@@ -2,6 +2,7 @@ export const runtime = 'edge'
 
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { verifyApiAuth } from '@/lib/api-auth'
 
 export const dynamic = 'force-dynamic'
 
@@ -15,6 +16,9 @@ const MAX_FILE_SIZE = 5 * 1024 * 1024 // 5MB
  * Faz upload de imagem para o Supabase Storage
  */
 export async function POST(request: NextRequest) {
+  const auth = await verifyApiAuth(request)
+  if (auth.error) return auth.error
+
   console.log('[Upload] Recebendo requisição de upload')
 
   try {

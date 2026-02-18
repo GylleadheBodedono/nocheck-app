@@ -183,6 +183,11 @@ export default function AdminPage() {
   }, [supabase, router])
 
   const handleSignOut = async () => {
+    try {
+      if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
+        navigator.serviceWorker.controller.postMessage({ type: 'CLEAR_CACHE' })
+      }
+    } catch { /* ignore */ }
     if (supabase) {
       await supabase.auth.signOut()
     }

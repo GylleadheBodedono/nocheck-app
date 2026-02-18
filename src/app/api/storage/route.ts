@@ -2,6 +2,7 @@ export const runtime = 'edge'
 
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { verifyApiAuth } from '@/lib/api-auth'
 
 export const dynamic = 'force-dynamic'
 
@@ -14,6 +15,9 @@ const BUCKET = 'checklist-images'
  * Lista arquivos de uma pasta no bucket
  */
 export async function GET(request: NextRequest) {
+  const auth = await verifyApiAuth(request, true)
+  if (auth.error) return auth.error
+
   try {
     const folder = request.nextUrl.searchParams.get('folder') || 'uploads'
 
@@ -63,6 +67,9 @@ export async function GET(request: NextRequest) {
  * Body: { paths: ['uploads/file1.jpg'] }
  */
 export async function DELETE(request: NextRequest) {
+  const auth = await verifyApiAuth(request, true)
+  if (auth.error) return auth.error
+
   try {
     const body = await request.json()
     const { paths } = body as { paths: string[] }

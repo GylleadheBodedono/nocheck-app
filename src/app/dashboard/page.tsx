@@ -679,6 +679,11 @@ export default function DashboardPage() {
   }
 
   const handleSignOut = async () => {
+    try {
+      if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
+        navigator.serviceWorker.controller.postMessage({ type: 'CLEAR_CACHE' })
+      }
+    } catch { /* ignore */ }
     await supabase.auth.signOut()
     router.push(APP_CONFIG.routes.login)
   }

@@ -1,8 +1,9 @@
 export const runtime = 'edge'
 
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { enviarResumoDiarioTeams } from '@/lib/integrations/teams'
+import { verifyApiAuth } from '@/lib/api-auth'
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
@@ -15,7 +16,10 @@ const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
  * - teams: boolean (enviar resumo para Teams)
  * - days: number (quantos dias de dados, default 7)
  */
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
+  const auth = await verifyApiAuth(request, true)
+  if (auth.error) return auth.error
+
   try {
     const body = await request.json()
     const { teams = true, days = 7 } = body
@@ -79,7 +83,10 @@ export async function POST(request: Request) {
  * GET /api/integrations/export
  * Retorna status das integrações
  */
-export async function GET() {
+export async function GET(request: NextRequest) {
+  const auth = await verifyApiAuth(request, true)
+  if (auth.error) return auth.error
+
   const teamsConfigured = !!process.env.TEAMS_WEBHOOK_URL
   const driveConfigured = !!process.env.GOOGLE_CLIENT_EMAIL && !!process.env.GOOGLE_PRIVATE_KEY
 

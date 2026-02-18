@@ -319,6 +319,16 @@ export function useAuth() {
       console.error('[useAuth] Error clearing cache:', error)
     }
 
+    // Limpa cache do Service Worker
+    try {
+      if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator && navigator.serviceWorker.controller) {
+        navigator.serviceWorker.controller.postMessage({ type: 'CLEAR_CACHE' })
+        console.log('[useAuth] SW cache clear requested')
+      }
+    } catch (error) {
+      console.error('[useAuth] Error clearing SW cache:', error)
+    }
+
     const { error } = await supabase.auth.signOut()
     if (error) {
       setLoading(false)

@@ -2,6 +2,7 @@ export const runtime = 'edge'
 
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { verifyApiAuth } from '@/lib/api-auth'
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
@@ -12,7 +13,10 @@ const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
  * Sincroniza auth.users com public.users e retorna a lista completa
  * Usuarios que existem no auth mas nao no public sao inseridos automaticamente
  */
-export async function GET() {
+export async function GET(request: NextRequest) {
+  const auth = await verifyApiAuth(request, true)
+  if (auth.error) return auth.error
+
   try {
     const supabase = createClient(supabaseUrl, supabaseServiceKey, {
       auth: { autoRefreshToken: false, persistSession: false }
@@ -98,6 +102,9 @@ export async function GET() {
  * Depois atualiza o perfil e insere os roles
  */
 export async function POST(request: NextRequest) {
+  const auth = await verifyApiAuth(request, true)
+  if (auth.error) return auth.error
+
   try {
     const body = await request.json()
     const { email, password, fullName, phone, isAdmin, autoConfirm, storeId, functionId, sectorId, storeAssignments, redirectTo } = body as {

@@ -2,6 +2,7 @@ export const runtime = 'edge'
 
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { verifyApiAuth } from '@/lib/api-auth'
 
 /**
  * POST /api/notifications/email
@@ -10,6 +11,9 @@ import { createClient } from '@supabase/supabase-js'
  * Body: { to: string, subject: string, htmlBody: string }
  */
 export async function POST(request: NextRequest) {
+  const auth = await verifyApiAuth(request)
+  if (auth.error) return auth.error
+
   try {
     const { to, subject, htmlBody } = await request.json()
 
