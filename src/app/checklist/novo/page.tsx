@@ -7,7 +7,6 @@ import { FieldRenderer } from '@/components/fields/FieldRenderer'
 import Link from 'next/link'
 import {
   FiArrowLeft,
-  FiSend,
   FiCheckCircle,
   FiAlertCircle,
   FiCloudOff,
@@ -99,7 +98,8 @@ function ChecklistForm() {
   const [checklistId, setChecklistId] = useState<number | null>(null) // DB checklist id for sectioned mode
   const [offlineChecklistId, setOfflineChecklistId] = useState<string | null>(null) // Offline UUID for sectioned mode
 
-  const [savedOffline, setSavedOffline] = useState(false)
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const [savedOffline, _setSavedOffline] = useState(false)
   const [autoSaveStatus, setAutoSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
   const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -348,6 +348,19 @@ function ChecklistForm() {
   }, [hasSections, template, loading, store])
 
   const loadExistingChecklist = async (clId: number) => {
+    // Verificar se checklist ja foi finalizado - redirecionar para view
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: clData } = await (supabase as any)
+      .from('checklists')
+      .select('status')
+      .eq('id', clId)
+      .single()
+
+    if (clData?.status === 'concluido' || clData?.status === 'validado') {
+      router.push(`/checklist/${clId}`)
+      return
+    }
+
     setChecklistId(clId)
 
     // Load checklist_sections progress
@@ -855,8 +868,14 @@ function ChecklistForm() {
     }
   }
 
-  // === FINALIZE CHECKLIST (sectioned: all sections complete → enviar) ===
+  // === FINALIZE CHECKLIST (both sectioned and non-sectioned) ===
   const handleFinalizeChecklist = async () => {
+    // Finalizar exige internet
+    if (!navigator.onLine) {
+      setErrors({ 0: 'Voce precisa estar conectado a internet para finalizar o checklist. Suas respostas estao salvas e voce pode finalizar quando estiver online.' })
+      return
+    }
+
     setSubmitting(true)
 
     let userId: string | null = null
@@ -875,17 +894,8 @@ function ChecklistForm() {
     }
 
     try {
-      // === OFFLINE ===
-      if (!navigator.onLine && offlineChecklistId) {
-        await updateChecklistStatus(offlineChecklistId, 'pending')
-        setSavedOffline(true)
-        setSuccess(true)
-        setTimeout(() => router.push(APP_CONFIG.routes.dashboard), 2000)
-        return
-      }
-
       // === ONLINE ===
-      if (checklistId && navigator.onLine) {
+      if (checklistId) {
         // Upload pending photos (base64 → cloud)
         await uploadPendingPhotos(checklistId)
 
@@ -942,26 +952,14 @@ function ChecklistForm() {
       }
     } catch (err) {
       console.error('[Checklist] Erro ao finalizar:', err)
-      // Offline fallback
-      if (offlineChecklistId) {
-        try {
-          await updateChecklistStatus(offlineChecklistId, 'pending')
-          setSavedOffline(true)
-          setSuccess(true)
-          setTimeout(() => router.push(APP_CONFIG.routes.dashboard), 2000)
-          return
-        } catch { /* ignore */ }
-      }
       setErrors({ 0: err instanceof Error ? err.message : 'Erro ao finalizar checklist' })
       setSubmitting(false)
     }
   }
 
-  // === FULL SUBMIT (non-sectioned templates) ===
-  // With auto-save, responses are already saved. This just validates + finalizes.
-  const handleFullSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-
+  // === FINALIZE (non-sectioned templates) ===
+  // With auto-save, responses are already saved. This validates + calls handleFinalizeChecklist.
+  const handleNonSectionedFinalize = async () => {
     // Flush pending auto-save
     autoSaveField.flush()
 
@@ -972,128 +970,8 @@ function ChecklistForm() {
       return
     }
 
-    setSubmitting(true)
-
-    let userId: string | null = null
-    try {
-      const { data: { user } } = await supabase.auth.getUser()
-      userId = user?.id || null
-    } catch { /* offline */ }
-    if (!userId) {
-      const cachedAuth = await getAuthCache()
-      userId = cachedAuth?.userId || null
-    }
-
-    if (!userId) {
-      setErrors({ 0: 'Usuario nao autenticado. Faca login novamente.' })
-      setSubmitting(false)
-      return
-    }
-
-    try {
-      // === OFFLINE ===
-      if (!navigator.onLine && offlineChecklistId) {
-        // Ensure all responses are stored before marking for sync
-        const responseData = await buildResponseRows(allFieldIds, false)
-        const cl = await getOfflineChecklist(offlineChecklistId)
-        if (cl) {
-          cl.responses = responseData
-          cl.syncStatus = 'pending'
-          await putOfflineChecklist(cl)
-        } else {
-          await updateChecklistStatus(offlineChecklistId, 'pending')
-        }
-        setSavedOffline(true)
-        setSuccess(true)
-        setTimeout(() => router.push(APP_CONFIG.routes.dashboard), 2000)
-        return
-      }
-
-      // === ONLINE ===
-      if (checklistId) {
-        // Upload pending photos
-        await uploadPendingPhotos(checklistId)
-
-        // Finalize
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        await (supabase as any)
-          .from('checklists')
-          .update({ status: 'concluido', completed_at: new Date().toISOString() })
-          .eq('id', checklistId)
-
-        // Process cross validation + non-conformity
-        const allResponseData = await buildResponseRows(allFieldIds, false)
-        const responseMapped = allResponseData.map(r => ({
-          field_id: r.fieldId,
-          value_text: r.valueText,
-          value_number: r.valueNumber,
-          value_json: r.valueJson,
-        }))
-        await processarValidacaoCruzada(
-          supabase,
-          checklistId,
-          Number(templateId),
-          Number(storeId),
-          userId,
-          responseMapped,
-          template?.fields || []
-        )
-        await processarNaoConformidades(
-          supabase,
-          checklistId,
-          Number(templateId),
-          Number(storeId),
-          null,
-          userId,
-          responseMapped,
-          (template?.fields || []).map(f => ({ id: f.id, name: f.name, field_type: f.field_type, options: f.options }))
-        )
-
-        // Activity log (fixed table name: activity_log not activity_logs)
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        await (supabase as any).from('activity_log').insert({
-          store_id: Number(storeId),
-          user_id: userId,
-          checklist_id: checklistId,
-          action: 'checklist_concluido',
-          details: { template_name: template?.name },
-        })
-
-        setSuccess(true)
-        setTimeout(() => router.push(APP_CONFIG.routes.dashboard), 2000)
-      }
-    } catch (err) {
-      console.error('Error submitting checklist:', err)
-
-      // Try offline fallback
-      try {
-        if (userId && offlineChecklistId) {
-          await updateChecklistStatus(offlineChecklistId, 'pending')
-          setSavedOffline(true)
-          setSuccess(true)
-          setTimeout(() => router.push(APP_CONFIG.routes.dashboard), 2000)
-          return
-        } else if (userId) {
-          const responseData = await buildResponseRows(allFieldIds, false)
-          await saveOfflineChecklist({
-            templateId: Number(templateId),
-            storeId: Number(storeId),
-            sectorId: null,
-            userId,
-            responses: responseData,
-          })
-          setSavedOffline(true)
-          setSuccess(true)
-          setTimeout(() => router.push(APP_CONFIG.routes.dashboard), 2000)
-          return
-        }
-      } catch (offlineErr) {
-        console.error('[Checklist] Erro ao salvar offline:', offlineErr)
-      }
-
-      setErrors({ 0: err instanceof Error ? err.message : APP_CONFIG.messages.error })
-      setSubmitting(false)
-    }
+    // Delegate to shared finalize handler (checks internet, marks concluido, etc.)
+    await handleFinalizeChecklist()
   }
 
   // ========== RENDER ==========
@@ -1255,23 +1133,21 @@ function ChecklistForm() {
             })}
           </div>
 
-          {/* Enviar Checklist button: only when all sections are complete */}
-          {sectionProgress.length > 0 && sectionProgress.every(sp => sp.status === 'concluido') && (
-            <div className="mt-6">
-              <button
-                type="button"
-                onClick={handleFinalizeChecklist}
-                disabled={submitting}
-                className="btn-primary w-full py-4 text-base font-semibold rounded-2xl shadow-theme-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-              >
-                {submitting ? (
-                  <><div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" /> Enviando...</>
-                ) : (
-                  <><FiSend className="w-5 h-5" /> Enviar Checklist</>
-                )}
-              </button>
-            </div>
-          )}
+          {/* Finalizar Checklist button: always visible */}
+          <div className="mt-6">
+            <button
+              type="button"
+              onClick={handleFinalizeChecklist}
+              disabled={submitting}
+              className="btn-primary w-full py-4 text-base font-semibold rounded-2xl shadow-theme-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+            >
+              {submitting ? (
+                <><div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" /> Finalizando...</>
+              ) : (
+                <><FiCheckCircle className="w-5 h-5" /> Finalizar Checklist</>
+              )}
+            </button>
+          </div>
 
           <div className="mt-4">
             <Link href={APP_CONFIG.routes.dashboard} className="btn-ghost w-full py-3 text-center block">
@@ -1392,7 +1268,7 @@ function ChecklistForm() {
       </Header>
 
       <main className="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
-        <form onSubmit={handleFullSubmit} className="space-y-4 sm:space-y-6">
+        <div className="space-y-4 sm:space-y-6">
           {visibleFields.map((field, index) => (
             <div
               key={field.id}
@@ -1428,20 +1304,24 @@ function ChecklistForm() {
             </div>
           )}
 
-          <div className="sticky bottom-4">
+          <div className="sticky bottom-4 space-y-3">
             <button
-              type="submit"
+              type="button"
+              onClick={handleNonSectionedFinalize}
               disabled={submitting}
               className="btn-primary w-full py-4 text-base font-semibold rounded-2xl shadow-theme-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
             >
               {submitting ? (
-                <><div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" /> Enviando...</>
+                <><div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" /> Finalizando...</>
               ) : (
-                <><FiSend className="w-5 h-5" /> Enviar Checklist</>
+                <><FiCheckCircle className="w-5 h-5" /> Finalizar Checklist</>
               )}
             </button>
+            <Link href={APP_CONFIG.routes.dashboard} className="btn-ghost w-full py-3 text-center block">
+              Voltar ao Dashboard
+            </Link>
           </div>
-        </form>
+        </div>
       </main>
     </div>
   )

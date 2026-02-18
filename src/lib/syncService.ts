@@ -345,6 +345,20 @@ export async function syncAll(): Promise<{ synced: number; failed: number }> {
   updateStatus({ isSyncing: true, lastError: null })
 
   const pending = await getPendingChecklists()
+
+  // Recuperar checklists presos em 'syncing' (ex: usuário saiu da página sem finalizar)
+  const now = Date.now()
+  for (const c of pending) {
+    if (c.syncStatus === 'syncing') {
+      const age = now - new Date(c.createdAt).getTime()
+      if (age > 5 * 60 * 1000) { // 5 minutos
+        console.log('[Sync] Recuperando checklist preso em syncing:', c.id)
+        await updateChecklistStatus(c.id, 'pending')
+        c.syncStatus = 'pending'
+      }
+    }
+  }
+
   const pendingOnly = pending.filter(c => c.syncStatus === 'pending' || c.syncStatus === 'failed')
 
   let synced = 0
@@ -359,13 +373,14 @@ export async function syncAll(): Promise<{ synced: number; failed: number }> {
     }
   }
 
-  // Update pending count
+  // Update pending count (only count actually syncable items)
   const remainingPending = await getPendingChecklists()
+  const syncableCount = remainingPending.filter(c => c.syncStatus === 'pending' || c.syncStatus === 'failed').length
 
   isSyncing = false
   updateStatus({
     isSyncing: false,
-    pendingCount: remainingPending.length,
+    pendingCount: syncableCount,
     lastSyncAt: new Date().toISOString(),
     lastError: failed > 0 ? `${failed} checklist(s) falharam` : null,
   })
@@ -403,16 +418,17 @@ export function initSyncService(): () => void {
 
   window.addEventListener('online', handleOnline)
 
-  // Update pending count on init
+  // Update pending count on init (only count syncable items)
   getPendingChecklists().then(pending => {
-    updateStatus({ pendingCount: pending.length })
+    const syncable = pending.filter(c => c.syncStatus === 'pending' || c.syncStatus === 'failed')
+    updateStatus({ pendingCount: syncable.length })
   })
 
   // Se já está online e tem pendentes, tenta sincronizar
   if (navigator.onLine) {
     getPendingChecklists().then(pending => {
       if (pending.length > 0) {
-        console.log('[Sync] Online com', pending.length, 'pendentes, sincronizando...')
+        console.log('[Sync] Online com', pending.length, 'itens offline, sincronizando...')
         syncAll()
       }
     })
