@@ -1,3 +1,5 @@
+export const runtime = 'edge'
+
 import { NextRequest, NextResponse } from 'next/server'
 
 const TEAMS_WEBHOOK_URL = process.env.TEAMS_WEBHOOK_URL || ''
