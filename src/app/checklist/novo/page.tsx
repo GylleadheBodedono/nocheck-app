@@ -21,7 +21,7 @@ import { APP_CONFIG } from '@/lib/config'
 import { LoadingPage, Header } from '@/components/ui'
 import { processarValidacaoCruzada } from '@/lib/crossValidation'
 import { processarNaoConformidades } from '@/lib/actionPlanEngine'
-import { saveOfflineChecklist, updateChecklistStatus, getPendingChecklists, updateOfflineFieldResponse, putOfflineChecklist, getOfflineChecklist } from '@/lib/offlineStorage'
+import { saveOfflineChecklist, updateChecklistStatus, getPendingChecklists, updateOfflineFieldResponse, putOfflineChecklist, getOfflineChecklist, type PendingChecklist } from '@/lib/offlineStorage'
 import { getTemplatesCache, getStoresCache, getTemplateFieldsCache, getAuthCache, getTemplateSectionsCache } from '@/lib/offlineCache'
 import { useDebouncedCallback } from 'use-debounce'
 
@@ -236,6 +236,28 @@ function ChecklistForm() {
       if (resumeId) {
         if (navigator.onLine) {
           await loadExistingChecklist(Number(resumeId))
+        } else {
+          // Offline: carregar do IndexedDB
+          const pendingOffline = await getPendingChecklists()
+          const existingOffline = pendingOffline.find(c => c.id === resumeId)
+            || pendingOffline.find(c =>
+              c.templateId === Number(templateId) &&
+              c.storeId === Number(storeId) &&
+              c.userId === userId &&
+              c.sections && c.sections.length > 0 &&
+              !c.sections.every(s => s.status === 'concluido')
+            )
+
+          if (existingOffline) {
+            setOfflineChecklistId(existingOffline.id)
+            setSectionProgress(existingOffline.sections!.map(s => ({
+              section_id: s.sectionId,
+              status: s.status,
+              completed_at: s.completedAt,
+            })))
+            const restoredResponses = restoreOfflineResponses(existingOffline)
+            if (Object.keys(restoredResponses).length > 0) setResponses(restoredResponses)
+          }
         }
         return
       }
@@ -260,6 +282,9 @@ function ChecklistForm() {
             status: s.status,
             completed_at: s.completedAt,
           })))
+          // Restaurar respostas de todas as secoes
+          const restoredResponses = restoreOfflineResponses(existingOffline)
+          if (Object.keys(restoredResponses).length > 0) setResponses(restoredResponses)
         } else {
           // Create new offline sectioned checklist
           const sectionEntries = sortedSections.map(s => ({
@@ -401,6 +426,64 @@ function ChecklistForm() {
     initSectionedChecklist()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hasSections, template, loading, store])
+
+  // Restaurar respostas de um checklist offline (sectioned ou non-sectioned)
+  const restoreOfflineResponses = (checklist: PendingChecklist): Record<number, unknown> => {
+    const restoredResponses: Record<number, unknown> = {}
+
+    // Coletar respostas de sections + array principal
+    const allResponses: Array<{ fieldId: number; valueText: string | null; valueNumber: number | null; valueJson: unknown }> = []
+    if (checklist.sections && checklist.sections.length > 0) {
+      for (const section of checklist.sections) {
+        allResponses.push(...section.responses)
+      }
+    }
+    allResponses.push(...checklist.responses)
+
+    for (const r of allResponses) {
+      const field = template?.fields.find(f => f.id === r.fieldId)
+      if (!field) continue
+      switch (field.field_type) {
+        case 'number':
+          if (r.valueJson && typeof r.valueJson === 'object' && 'subtype' in (r.valueJson as Record<string, unknown>)) {
+            restoredResponses[r.fieldId] = { subtype: (r.valueJson as Record<string, unknown>).subtype, number: r.valueNumber }
+          } else {
+            restoredResponses[r.fieldId] = r.valueNumber
+          }
+          break
+        case 'calculated':
+          restoredResponses[r.fieldId] = r.valueNumber
+          break
+        case 'photo': {
+          const json = r.valueJson as { photos?: string[] } | null
+          restoredResponses[r.fieldId] = json?.photos || []
+          break
+        }
+        case 'yes_no': {
+          const yJson = r.valueJson as { photos?: string[]; conditionalText?: string; conditionalPhotos?: string[] } | null
+          if (yJson && (yJson.photos?.length || yJson.conditionalText || yJson.conditionalPhotos?.length)) {
+            const val: Record<string, unknown> = { answer: r.valueText || '' }
+            if (yJson.photos && yJson.photos.length > 0) val.photos = yJson.photos
+            if (yJson.conditionalText) val.conditionalText = yJson.conditionalText
+            if (yJson.conditionalPhotos && yJson.conditionalPhotos.length > 0) val.conditionalPhotos = yJson.conditionalPhotos
+            restoredResponses[r.fieldId] = val
+          } else {
+            restoredResponses[r.fieldId] = r.valueText
+          }
+          break
+        }
+        case 'checkbox_multiple':
+        case 'signature':
+        case 'gps':
+          restoredResponses[r.fieldId] = r.valueJson
+          break
+        default:
+          restoredResponses[r.fieldId] = r.valueText
+      }
+    }
+
+    return restoredResponses
+  }
 
   const loadExistingChecklist = async (clId: number) => {
     // Verificar se checklist ja foi finalizado - redirecionar para view
@@ -547,37 +630,8 @@ function ChecklistForm() {
 
         if (existingOffline) {
           setOfflineChecklistId(existingOffline.id)
-          // Restore responses
-          const restoredResponses: Record<number, unknown> = {}
-          for (const r of existingOffline.responses) {
-            const field = template?.fields.find(f => f.id === r.fieldId)
-            if (!field) continue
-            if (field.field_type === 'photo') {
-              const json = r.valueJson as { photos?: string[] } | null
-              restoredResponses[r.fieldId] = json?.photos || []
-            } else if (field.field_type === 'yes_no') {
-              const json = r.valueJson as { photos?: string[]; conditionalText?: string; conditionalPhotos?: string[] } | null
-              if (json && (json.photos?.length || json.conditionalText || json.conditionalPhotos?.length)) {
-                const val: Record<string, unknown> = { answer: r.valueText || '' }
-                if (json.photos && json.photos.length > 0) val.photos = json.photos
-                if (json.conditionalText) val.conditionalText = json.conditionalText
-                if (json.conditionalPhotos && json.conditionalPhotos.length > 0) val.conditionalPhotos = json.conditionalPhotos
-                restoredResponses[r.fieldId] = val
-              } else {
-                restoredResponses[r.fieldId] = r.valueText
-              }
-            } else if (['checkbox_multiple', 'signature', 'gps'].includes(field.field_type)) {
-              restoredResponses[r.fieldId] = r.valueJson
-            } else if (r.valueNumber !== null) {
-              if (r.valueJson && typeof r.valueJson === 'object' && 'subtype' in (r.valueJson as Record<string, unknown>)) {
-                restoredResponses[r.fieldId] = { subtype: (r.valueJson as Record<string, unknown>).subtype, number: r.valueNumber }
-              } else {
-                restoredResponses[r.fieldId] = r.valueNumber
-              }
-            } else if (r.valueText !== null) {
-              restoredResponses[r.fieldId] = r.valueText
-            }
-          }
+          // Restaurar respostas usando funcao utilitaria
+          const restoredResponses = restoreOfflineResponses(existingOffline)
           if (Object.keys(restoredResponses).length > 0) setResponses(restoredResponses)
         } else {
           const offlineId = await saveOfflineChecklist({
@@ -772,9 +826,45 @@ function ChecklistForm() {
           valueJson: row.valueJson,
         })
       } else {
-        console.warn('[AutoSave] SKIP - no checklist ID available')
-        setAutoSaveStatus('error')
-        return
+        // IDs ainda nao disponiveis — aguardar inicializacao e tentar de novo
+        let retries = 0
+        const maxRetries = 5
+        while (retries < maxRetries) {
+          await new Promise(resolve => setTimeout(resolve, 500))
+          retries++
+          if (checklistIdRef.current || offlineChecklistIdRef.current) break
+        }
+
+        // Tentar salvar apos espera
+        if (navigator.onLine && checklistIdRef.current) {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const { error: retryErr } = await (supabase as any)
+            .from('checklist_responses')
+            .upsert({
+              checklist_id: checklistIdRef.current,
+              field_id: row.fieldId,
+              value_text: row.valueText,
+              value_number: row.valueNumber,
+              value_json: row.valueJson,
+            }, { onConflict: 'checklist_id,field_id' })
+          if (retryErr) {
+            console.error('[AutoSave] Retry upsert error:', retryErr)
+            setAutoSaveStatus('error')
+            return
+          }
+        } else if (offlineChecklistIdRef.current) {
+          const field = template?.fields.find(f => f.id === fieldId)
+          const sectionId = field?.section_id ?? null
+          await updateOfflineFieldResponse(offlineChecklistIdRef.current, sectionId, fieldId, {
+            valueText: row.valueText,
+            valueNumber: row.valueNumber,
+            valueJson: row.valueJson,
+          })
+        } else {
+          console.error('[AutoSave] Falha: nenhum ID disponivel apos aguardar inicializacao')
+          setAutoSaveStatus('error')
+          return
+        }
       }
 
       setAutoSaveStatus('saved')
