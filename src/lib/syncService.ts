@@ -401,7 +401,7 @@ export async function syncAll(): Promise<{ synced: number; failed: number }> {
   for (const c of pending) {
     if (c.syncStatus === 'syncing') {
       const age = now - new Date(c.createdAt).getTime()
-      if (age > 5 * 60 * 1000) { // 5 minutos
+      if (age > 1 * 60 * 1000) { // 1 minuto
         console.log('[Sync] Recuperando checklist preso em syncing:', c.id)
         await updateChecklistStatus(c.id, 'pending')
         c.syncStatus = 'pending'
@@ -474,11 +474,12 @@ export function initSyncService(): () => void {
     updateStatus({ pendingCount: syncable.length })
   })
 
-  // Se já está online e tem pendentes, tenta sincronizar
+  // Se já está online e tem pendentes sincronizáveis, tenta sincronizar
   if (navigator.onLine) {
     getPendingChecklists().then(pending => {
-      if (pending.length > 0) {
-        console.log('[Sync] Online com', pending.length, 'itens offline, sincronizando...')
+      const syncable = pending.filter(c => c.syncStatus === 'pending' || c.syncStatus === 'failed')
+      if (syncable.length > 0) {
+        console.log('[Sync] Online com', syncable.length, 'itens prontos para sync')
         syncAll()
       }
     })

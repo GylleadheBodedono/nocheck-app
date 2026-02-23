@@ -237,16 +237,15 @@ function ChecklistForm() {
         if (navigator.onLine) {
           await loadExistingChecklist(Number(resumeId))
         } else {
-          // Offline: carregar do IndexedDB
+          // Offline: resumeId e ID numerico do DB, nao UUID offline
+          // Buscar pelo template+store+user no IndexedDB
           const pendingOffline = await getPendingChecklists()
-          const existingOffline = pendingOffline.find(c => c.id === resumeId)
-            || pendingOffline.find(c =>
-              c.templateId === Number(templateId) &&
-              c.storeId === Number(storeId) &&
-              c.userId === userId &&
-              c.sections && c.sections.length > 0 &&
-              !c.sections.every(s => s.status === 'concluido')
-            )
+          const existingOffline = pendingOffline.find(c =>
+            c.templateId === Number(templateId) &&
+            c.storeId === Number(storeId) &&
+            c.userId === userId &&
+            c.sections && c.sections.length > 0
+          )
 
           if (existingOffline) {
             setOfflineChecklistId(existingOffline.id)
@@ -1113,6 +1112,12 @@ function ChecklistForm() {
                 : s
             )
             await putOfflineChecklist(cl)
+
+            // Se TODAS as secoes estao concluidas, liberar para sync
+            const allDone = cl.sections.every(s => s.status === 'concluido')
+            if (allDone) {
+              await updateChecklistStatus(offlineChecklistId, 'pending')
+            }
           }
         }
 
