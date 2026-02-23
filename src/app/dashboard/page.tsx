@@ -73,6 +73,7 @@ type ChecklistWithDetails = Checklist & {
   template: ChecklistTemplate
   store: Store
   sector: Sector | null
+  user?: { full_name: string } | null
 }
 
 type InProgressChecklist = {
@@ -84,6 +85,7 @@ type InProgressChecklist = {
   store: { id: number; name: string }
   totalSections: number
   completedSections: number
+  user_name?: string | null
 }
 
 type UserStats = {
@@ -113,6 +115,8 @@ export default function DashboardPage() {
     pendingSync: 0,
   })
   const [pendingActionPlans, setPendingActionPlans] = useState(0)
+  const [todayInProgressMap, setTodayInProgressMap] = useState<Record<string, number>>({}) // key: templateId-storeId -> checklistId
+  const [todayCompletedSet, setTodayCompletedSet] = useState<Set<string>>(new Set()) // key: templateId-storeId
   const [loading, setLoading] = useState(true)
   const [notLoggedIn, setNotLoggedIn] = useState(false)
   const [isOffline, setIsOffline] = useState(false)
@@ -297,7 +301,8 @@ export default function DashboardPage() {
         *,
         template:checklist_templates(*),
         store:stores(*),
-        sector:sectors(*)
+        sector:sectors(*),
+        user:users!checklists_created_by_fkey(full_name)
       `)
       .order('created_at', { ascending: false })
       .limit(10)
@@ -321,7 +326,8 @@ export default function DashboardPage() {
         id, template_id, store_id, created_at,
         template:checklist_templates(id, name, category),
         store:stores(id, name),
-        checklist_sections(id, section_id, status)
+        checklist_sections(id, section_id, status),
+        user:users!checklists_created_by_fkey(full_name)
       `)
       .eq('status', 'em_andamento')
       .order('created_at', { ascending: false })
@@ -336,7 +342,6 @@ export default function DashboardPage() {
     if (inProgressData) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const withProgress = (inProgressData as any[])
-        .filter(c => c.checklist_sections && c.checklist_sections.length > 0)
         .map(c => ({
           id: c.id,
           template_id: c.template_id,
@@ -344,11 +349,49 @@ export default function DashboardPage() {
           created_at: c.created_at,
           template: c.template,
           store: c.store,
-          totalSections: c.checklist_sections.length,
+          totalSections: c.checklist_sections?.length || 0,
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          completedSections: c.checklist_sections.filter((s: any) => s.status === 'concluido').length,
+          completedSections: c.checklist_sections?.filter((s: any) => s.status === 'concluido').length || 0,
+          user_name: c.user?.full_name || null,
         }))
       setInProgressChecklists(withProgress)
+
+      // Build todayInProgressMap: template+store -> checklist id (for today only)
+      const todayStart = new Date()
+      todayStart.setHours(0, 0, 0, 0)
+      const todayMap: Record<string, number> = {}
+      for (const c of withProgress) {
+        if (new Date(c.created_at) >= todayStart) {
+          todayMap[`${c.template_id}-${c.store_id}`] = c.id
+        }
+      }
+      setTodayInProgressMap(todayMap)
+    }
+
+    // Fetch today's completed/incompleto checklists to block re-starting
+    const todayStartForCompleted = new Date()
+    todayStartForCompleted.setHours(0, 0, 0, 0)
+    const todayCompletedISO = new Date(todayStartForCompleted.getTime() - todayStartForCompleted.getTimezoneOffset() * 60000).toISOString()
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let completedTodayQuery = (supabase as any)
+      .from('checklists')
+      .select('template_id, store_id')
+      .in('status', ['concluido', 'incompleto', 'validado'])
+      .gte('created_at', todayCompletedISO)
+
+    if (!profileData?.is_admin) {
+      completedTodayQuery = completedTodayQuery.eq('created_by', user.id)
+    }
+
+    const { data: completedTodayData } = await completedTodayQuery
+
+    if (completedTodayData) {
+      const completedSet = new Set<string>()
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      for (const c of completedTodayData as any[]) {
+        completedSet.add(`${c.template_id}-${c.store_id}`)
+      }
+      setTodayCompletedSet(completedSet)
     }
 
     // Fetch pending offline checklists
@@ -582,6 +625,7 @@ export default function DashboardPage() {
           template: { id: c.template_id, name: c.template_name || 'Checklist', category: c.template_category || null } as ChecklistTemplate,
           store: { id: c.store_id, name: c.store_name || 'Loja' } as Store,
           sector: c.sector_name ? { id: c.sector_id || 0, name: c.sector_name } as Sector : null,
+          user: c.user_name ? { full_name: c.user_name } : null,
         }))
 
         setRecentChecklists(recentWithDetails)
@@ -602,6 +646,7 @@ export default function DashboardPage() {
               store: { id: c.store_id, name: c.store_name || 'Loja' },
               totalSections: clSections.length,
               completedSections: clSections.filter(s => s.status === 'concluido').length,
+              user_name: c.user_name || null,
             }
           }).filter(c => c.totalSections > 0)
 
@@ -778,6 +823,7 @@ export default function DashboardPage() {
       em_andamento: { label: 'Em Andamento', class: 'bg-warning/20 text-warning' },
       concluido: { label: 'Concluido', class: 'bg-success/20 text-success' },
       validado: { label: 'Validado', class: 'bg-info/20 text-info' },
+      incompleto: { label: 'Incompleto', class: 'bg-error/20 text-error' },
     }
     return badges[status] || badges.rascunho
   }
@@ -1055,9 +1101,10 @@ export default function DashboardPage() {
                 </h2>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   {inProgressChecklists.map(item => {
-                    const pct = item.totalSections > 0
+                    const hasSections = item.totalSections > 0
+                    const pct = hasSections
                       ? Math.round((item.completedSections / item.totalSections) * 100)
-                      : 0
+                      : null
                     return (
                       <Link
                         key={item.id}
@@ -1069,22 +1116,31 @@ export default function DashboardPage() {
                             <FiLayers className="w-5 h-5 text-warning" />
                           </div>
                           <span className="badge-secondary text-xs bg-warning/20 text-warning">
-                            {item.completedSections}/{item.totalSections} etapas
+                            {hasSections ? `${item.completedSections}/${item.totalSections} etapas` : 'Em andamento'}
                           </span>
                         </div>
                         <h3 className="font-semibold text-main mb-1 group-hover:text-primary transition-colors">
                           {item.template?.name}
                         </h3>
+                        {item.user_name && (
+                          <p className="text-xs text-primary/80 mb-1">
+                            {item.user_name}
+                          </p>
+                        )}
                         <p className="text-xs text-muted mb-2">
                           {item.store?.name} - {formatDate(item.created_at)}
                         </p>
-                        <div className="w-full bg-surface-hover rounded-full h-2">
-                          <div
-                            className="bg-warning h-2 rounded-full transition-all"
-                            style={{ width: `${pct}%` }}
-                          />
-                        </div>
-                        <p className="text-xs text-muted mt-1">{pct}% concluido</p>
+                        {hasSections && pct !== null && (
+                          <>
+                            <div className="w-full bg-surface-hover rounded-full h-2">
+                              <div
+                                className="bg-warning h-2 rounded-full transition-all"
+                                style={{ width: `${pct}%` }}
+                              />
+                            </div>
+                            <p className="text-xs text-muted mt-1">{pct}% concluido</p>
+                          </>
+                        )}
                       </Link>
                     )
                   })}
@@ -1109,17 +1165,59 @@ export default function DashboardPage() {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 {availableTemplates.map(({ template }) => {
                   const sectionCount = template.template_sections?.length || 0
+                  const key = `${template.id}-${selectedStore}`
+                  const existingChecklistId = todayInProgressMap[key]
+                  const isCompleted = todayCompletedSet.has(key)
+                  const isResume = !!existingChecklistId && !isCompleted
+
+                  if (isCompleted) {
+                    return (
+                      <div
+                        key={template.id}
+                        className="card p-5 opacity-60 cursor-default"
+                      >
+                        <div className="flex items-start justify-between mb-3">
+                          <div className="w-10 h-10 rounded-xl bg-success/10 flex items-center justify-center">
+                            <FiCheckCircle className="w-5 h-5 text-success" />
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="badge-secondary text-xs bg-success/20 text-success">
+                              Concluido hoje
+                            </span>
+                          </div>
+                        </div>
+                        <h3 className="font-semibold text-main mb-1">{template.name}</h3>
+                        {template.description && (
+                          <p className="text-sm text-muted line-clamp-2">{template.description}</p>
+                        )}
+                      </div>
+                    )
+                  }
+
                   return (
                     <Link
                       key={template.id}
-                      href={`${APP_CONFIG.routes.checklistNew}?template=${template.id}&store=${selectedStore}`}
-                      className="group card-hover p-5"
+                      href={isResume
+                        ? `${APP_CONFIG.routes.checklistNew}?template=${template.id}&store=${selectedStore}&resume=${existingChecklistId}`
+                        : `${APP_CONFIG.routes.checklistNew}?template=${template.id}&store=${selectedStore}`
+                      }
+                      className={`group card-hover p-5 ${isResume ? 'border-l-4 border-warning' : ''}`}
                     >
                       <div className="flex items-start justify-between mb-3">
-                        <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center group-hover:bg-primary/20 transition-colors">
-                          <FiClipboard className="w-5 h-5 text-primary" />
+                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center transition-colors ${
+                          isResume ? 'bg-warning/20' : 'bg-primary/10 group-hover:bg-primary/20'
+                        }`}>
+                          {isResume
+                            ? <FiPlay className="w-5 h-5 text-warning" />
+                            : <FiClipboard className="w-5 h-5 text-primary" />
+                          }
                         </div>
                         <div className="flex items-center gap-2">
+                          {isResume && (
+                            <span className="badge-secondary text-xs bg-warning/20 text-warning">
+                              Continuar
+                            </span>
+                          )}
                           {sectionCount > 0 && (
                             <span className="badge-secondary text-xs flex items-center gap-1 bg-info/20 text-info">
                               <FiLayers className="w-3 h-3" />
@@ -1247,6 +1345,11 @@ export default function DashboardPage() {
                           {statusBadge.label}
                         </span>
                       </div>
+                      {checklist.user?.full_name && (
+                        <p className="text-[1rem] text-accent text-primary/80 mb-1">
+                          {checklist.user.full_name}
+                        </p>
+                      )}
                       <p className="text-xs text-muted mb-1">
                         {checklist.store?.name}
                         {checklist.sector && ` - ${checklist.sector.name}`}

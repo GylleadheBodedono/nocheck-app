@@ -560,32 +560,66 @@ function CalculatedField({ field: _field, value }: { field: TemplateField; value
 function YesNoField({ field, value, onChange }: { field: TemplateField; value: unknown; onChange: (v: unknown) => void }) {
   const allowPhoto = (field.options as { allowPhoto?: boolean } | null)?.allowPhoto || false
   const inputRef = useRef<HTMLInputElement>(null)
+  const conditionalInputRef = useRef<HTMLInputElement>(null)
   const [compressingPhoto, setCompressingPhoto] = useState(false)
+  const [compressingConditionalPhoto, setCompressingConditionalPhoto] = useState(false)
 
-  // Parse value - can be string (legacy) or { answer, photos }
+  // Parse conditional field config from options
+  const opts = field.options as Record<string, unknown> | null
+  const onNoConfig = opts?.onNo as { showTextField?: boolean; textFieldLabel?: string; textFieldRequired?: boolean; showPhotoField?: boolean; photoFieldLabel?: string; photoFieldRequired?: boolean } | undefined
+  const onYesConfig = opts?.onYes as { showTextField?: boolean; textFieldLabel?: string; textFieldRequired?: boolean; showPhotoField?: boolean; photoFieldLabel?: string; photoFieldRequired?: boolean } | undefined
+
+  // Parse value - can be string (legacy) or { answer, photos, conditionalText, conditionalPhotos }
   const answer: string = typeof value === 'object' && value !== null && 'answer' in (value as Record<string, unknown>)
     ? (value as Record<string, unknown>).answer as string
     : (typeof value === 'string' ? value : '')
   const photos: string[] = typeof value === 'object' && value !== null && 'photos' in (value as Record<string, unknown>)
     ? (value as Record<string, unknown>).photos as string[]
     : []
+  const conditionalText: string = typeof value === 'object' && value !== null && 'conditionalText' in (value as Record<string, unknown>)
+    ? (value as Record<string, unknown>).conditionalText as string || ''
+    : ''
+  const conditionalPhotos: string[] = typeof value === 'object' && value !== null && 'conditionalPhotos' in (value as Record<string, unknown>)
+    ? (value as Record<string, unknown>).conditionalPhotos as string[] || []
+    : []
+
+  // Get active conditional config based on current answer
+  const activeConditionalConfig = answer === 'nao' ? onNoConfig : answer === 'sim' ? onYesConfig : undefined
+  const hasConditional = activeConditionalConfig && (activeConditionalConfig.showTextField || activeConditionalConfig.showPhotoField)
+
+  // Build full value object preserving all data
+  const buildValue = (updates: Record<string, unknown>) => {
+    const base: Record<string, unknown> = { answer }
+    if (photos.length > 0) base.photos = photos
+    if (conditionalText) base.conditionalText = conditionalText
+    if (conditionalPhotos.length > 0) base.conditionalPhotos = conditionalPhotos
+    const merged = { ...base, ...updates }
+    // If switching answer and the new answer has no conditional config, clear conditional data
+    if (updates.answer) {
+      const newAnswer = updates.answer as string
+      const newConfig = newAnswer === 'nao' ? onNoConfig : newAnswer === 'sim' ? onYesConfig : undefined
+      if (!newConfig || (!newConfig.showTextField && !newConfig.showPhotoField)) {
+        delete merged.conditionalText
+        delete merged.conditionalPhotos
+      }
+    }
+    // Simplify to string if only answer
+    const keys = Object.keys(merged).filter(k => {
+      const v = merged[k]
+      if (v === undefined || v === null || v === '') return false
+      if (Array.isArray(v) && v.length === 0) return false
+      return true
+    })
+    if (keys.length === 1 && keys[0] === 'answer') return merged.answer
+    return merged
+  }
 
   const handleAnswer = (ans: string) => {
-    if (allowPhoto && photos.length > 0) {
-      onChange({ answer: ans, photos })
-    } else {
-      onChange(ans)
-    }
+    onChange(buildValue({ answer: ans }))
   }
 
   const handlePhotosChange = (newPhotos: string[]) => {
-    if (newPhotos.length > 0) {
-      onChange({ answer: answer || '', photos: newPhotos })
-    } else if (answer) {
-      onChange(answer)
-    } else {
-      onChange('')
-    }
+    onChange(buildValue({ photos: newPhotos }))
   }
 
   const handleCapture = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -684,6 +718,103 @@ function YesNoField({ field, value, onChange }: { field: TemplateField; value: u
             onChange={handleCapture}
             className="hidden"
           />
+        </div>
+      )}
+
+      {/* Conditional fields based on answer */}
+      {hasConditional && activeConditionalConfig && (
+        <div className={`p-3 rounded-xl border-2 space-y-3 ${
+          answer === 'nao'
+            ? 'bg-red-500/5 border-red-500/20'
+            : 'bg-emerald-500/5 border-emerald-500/20'
+        }`}>
+          {activeConditionalConfig.showTextField && (
+            <div>
+              <label className="block text-sm font-medium text-secondary mb-1">
+                {activeConditionalConfig.textFieldLabel || 'Explique o motivo'}
+                {activeConditionalConfig.textFieldRequired && <span className="text-red-400 ml-1">*</span>}
+              </label>
+              <textarea
+                value={conditionalText}
+                onChange={(e) => onChange(buildValue({ conditionalText: e.target.value }))}
+                placeholder={activeConditionalConfig.textFieldLabel || 'Explique o motivo...'}
+                className="input w-full px-4 py-3 rounded-xl min-h-[80px]"
+                rows={3}
+              />
+            </div>
+          )}
+          {activeConditionalConfig.showPhotoField && (
+            <div>
+              <label className="block text-sm font-medium text-secondary mb-1">
+                {activeConditionalConfig.photoFieldLabel || 'Foto de evidencia'}
+                {activeConditionalConfig.photoFieldRequired && <span className="text-red-400 ml-1">*</span>}
+              </label>
+              {conditionalPhotos.length > 0 && (
+                <div className="grid grid-cols-3 gap-2 mb-2">
+                  {conditionalPhotos.map((photo, index) => (
+                    <div key={index} className="relative aspect-square rounded-lg overflow-hidden bg-surface">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={photo} alt={`Foto condicional ${index + 1}`} className="w-full h-full object-cover" />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const newPhotos = conditionalPhotos.filter((_, i) => i !== index)
+                          onChange(buildValue({ conditionalPhotos: newPhotos }))
+                        }}
+                        className="absolute top-1 right-1 p-1 bg-red-500 rounded-full text-white"
+                      >
+                        <FiX className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {conditionalPhotos.length < 3 && (
+                <button
+                  type="button"
+                  onClick={() => conditionalInputRef.current?.click()}
+                  disabled={compressingConditionalPhoto}
+                  className="w-full py-3 border-2 border-dashed border-default hover:border-primary rounded-xl text-secondary hover:text-primary transition-colors flex items-center justify-center gap-2 disabled:opacity-50 text-sm"
+                >
+                  {compressingConditionalPhoto ? (
+                    <>
+                      <div className="w-4 h-4 border-2 border-secondary border-t-transparent rounded-full animate-spin" />
+                      <span>Processando...</span>
+                    </>
+                  ) : (
+                    <>
+                      <FiCamera className="w-4 h-4" />
+                      <span>Anexar Foto ({conditionalPhotos.length}/3)</span>
+                    </>
+                  )}
+                </button>
+              )}
+              <input
+                ref={conditionalInputRef}
+                type="file"
+                accept="image/*"
+                capture="environment"
+                onChange={async (e) => {
+                  const files = e.target.files
+                  if (!files) return
+                  setCompressingConditionalPhoto(true)
+                  const newPhotos: string[] = []
+                  for (let i = 0; i < files.length; i++) {
+                    try {
+                      const compressed = await compressImage(files[i], 1200, 0.7)
+                      newPhotos.push(compressed)
+                    } catch (err) {
+                      console.error('Error compressing image:', err)
+                    }
+                  }
+                  onChange(buildValue({ conditionalPhotos: [...conditionalPhotos, ...newPhotos] }))
+                  setCompressingConditionalPhoto(false)
+                  if (conditionalInputRef.current) conditionalInputRef.current.value = ''
+                }}
+                className="hidden"
+              />
+            </div>
+          )}
         </div>
       )}
     </div>

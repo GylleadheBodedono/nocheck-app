@@ -628,6 +628,35 @@ export type Database = {
         }
       }
       // ============================================
+      // JUSTIFICATIVAS - Checklists incompletos
+      // ============================================
+      checklist_justifications: {
+        Row: {
+          id: number
+          checklist_id: number
+          field_id: number
+          justification_text: string
+          justified_by: string | null
+          justified_at: string
+        }
+        Insert: {
+          id?: number
+          checklist_id: number
+          field_id: number
+          justification_text: string
+          justified_by?: string | null
+          justified_at?: string
+        }
+        Update: {
+          id?: number
+          checklist_id?: number
+          field_id?: number
+          justification_text?: string
+          justified_by?: string | null
+          justified_at?: string
+        }
+      }
+      // ============================================
       // PLANOS DE ACAO - Condicoes de campo
       // ============================================
       field_conditions: {
@@ -895,7 +924,7 @@ export type FieldType =
   | 'calculated'
   | 'yes_no'
   | 'rating'
-export type ChecklistStatus = 'rascunho' | 'em_andamento' | 'concluido' | 'validado'
+export type ChecklistStatus = 'rascunho' | 'em_andamento' | 'concluido' | 'validado' | 'incompleto'
 export type SyncStatus = 'pending' | 'syncing' | 'synced' | 'conflict'
 export type StorageProvider = 'google_drive' | 'supabase'
 export type ValidationStatus = 'pendente' | 'sucesso' | 'falhou' | 'notas_diferentes' | 'expirado'
@@ -1082,6 +1111,10 @@ export type TemplateSectionUpdate = Database['public']['Tables']['template_secti
 export type ChecklistSectionRow = Database['public']['Tables']['checklist_sections']['Row']
 export type ChecklistSectionInsert = Database['public']['Tables']['checklist_sections']['Insert']
 export type ChecklistSectionUpdate = Database['public']['Tables']['checklist_sections']['Update']
+
+// Checklist Justifications (justificativas para incompletos)
+export type ChecklistJustification = Database['public']['Tables']['checklist_justifications']['Row']
+export type ChecklistJustificationInsert = Database['public']['Tables']['checklist_justifications']['Insert']
 
 // ============================================
 // PLANOS DE ACAO - Helper types

@@ -198,12 +198,18 @@ function GPSReadOnly({ value }: { value: GPSValue }) {
 }
 
 function YesNoReadOnly({ value }: { value: unknown }) {
-  // Parse value - can be string (legacy) or { answer, photos }
+  // Parse value - can be string (legacy) or { answer, photos, conditionalText, conditionalPhotos }
   const answer: string = typeof value === 'object' && value !== null && 'answer' in (value as Record<string, unknown>)
     ? (value as Record<string, unknown>).answer as string
     : (typeof value === 'string' ? String(value) : '')
   const photos: string[] = typeof value === 'object' && value !== null && 'photos' in (value as Record<string, unknown>)
     ? (value as Record<string, unknown>).photos as string[]
+    : []
+  const conditionalText: string = typeof value === 'object' && value !== null && 'conditionalText' in (value as Record<string, unknown>)
+    ? (value as Record<string, unknown>).conditionalText as string || ''
+    : ''
+  const conditionalPhotos: string[] = typeof value === 'object' && value !== null && 'conditionalPhotos' in (value as Record<string, unknown>)
+    ? (value as Record<string, unknown>).conditionalPhotos as string[] || []
     : []
 
   const isSim = answer === 'sim'
@@ -226,6 +232,25 @@ function YesNoReadOnly({ value }: { value: unknown }) {
               <img src={photo} alt={`Foto ${index + 1}`} className="w-full h-full object-cover" />
             </div>
           ))}
+        </div>
+      )}
+      {(conditionalText || conditionalPhotos.length > 0) && (
+        <div className={`p-3 rounded-xl border-2 space-y-2 ${
+          isSim ? 'bg-emerald-500/5 border-emerald-500/20' : 'bg-red-500/5 border-red-500/20'
+        }`}>
+          {conditionalText && (
+            <p className="text-sm text-secondary">{conditionalText}</p>
+          )}
+          {conditionalPhotos.length > 0 && (
+            <div className="grid grid-cols-3 gap-2">
+              {conditionalPhotos.map((photo, index) => (
+                <div key={index} className="relative aspect-square rounded-lg overflow-hidden bg-surface border border-subtle">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={photo} alt={`Foto condicional ${index + 1}`} className="w-full h-full object-cover" />
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
     </div>

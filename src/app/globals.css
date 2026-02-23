@@ -7,58 +7,67 @@
    ============================================ */
 
 :root {
-  /* Clean Modern Palette (Light Mode) */
-  --bg-page: #F8FAFC;
-  --bg-surface: #FEFEFF;
-  --bg-surface-hover: #F1F5F9;
-  --bg-surface-active: #E2E8F0;
+  /* ── Backgrounds ── */
+  --bg-page: #FAF8F5;            /* creme suave, como linho */
+  --bg-surface: #FFFFFF;
+  --bg-surface-hover: #F5F0EA;   /* hover com tom quente */
+  --bg-surface-active: #EBE3D8;  /* active mais saturado */
 
-  /* RGB variants for transparency */
-  --bg-surface-rgb: 254, 254, 255;
-  --bg-surface-hover-rgb: 241, 245, 249;
+  /* RGB variants para transparência */
+  --bg-surface-rgb: 255, 255, 255;
+  --bg-surface-hover-rgb: 245, 240, 234;
 
-  --text-main: #1E293B;
-  --text-secondary: #475569;
-  --text-muted: #94A3B8;
+  /* ── Textos ── */
+  --text-main: #2C1810;          /* marrom escuro profundo */
+  --text-secondary: #5C4A3A;     /* marrom médio */
+  --text-muted: #9C8B7A;         /* marrom claro / muted */
   --text-inverse: #FFFFFF;
 
-  --primary: #1E293B;
-  --primary-hover: #0F172A;
+  /* ── Primary – dourado/caramelo (identidade do restaurante) ── */
+  --primary: #B8935A;            /* dourado quente */
+  --primary-hover: #A07D45;      /* dourado mais escuro no hover */
   --primary-foreground: #FFFFFF;
 
-  --secondary: #64748B;
-  --secondary-hover: #475569;
+  /* ── Secondary – marrom neutro ── */
+  --secondary: #6B5744;          /* marrom tabaco */
+  --secondary-hover: #54432F;    /* marrom mais fechado */
   --secondary-foreground: #FFFFFF;
 
-  --accent: #3B82F6;
+  /* ── Accent – terracota quente (CTAs, destaques) ── */
+  --accent: #C47A4A;             /* terracota / cobre */
+  --accent-hover: #AD6838;
   --accent-foreground: #FFFFFF;
 
-  --border-subtle: #E2E8F0;
-  --border-default: #CBD5E1;
-  --border-strong: #94A3B8;
+  /* ── Borders ── */
+  --border-subtle: #EBE3D8;      /* quase invisível, quente */
+  --border-default: #D4C8B8;     /* borda padrão */
+  --border-strong: #9C8B7A;      /* borda forte */
 
-  --status-success-bg: #F0FDF4;
-  --status-success-text: #16A34A;
-  --status-success-border: #86EFAC;
+  /* ── Status ── */
+  --status-success-bg: #F2F8F0;
+  --status-success-text: #3D7A2E;
+  --status-success-border: #A3D492;
 
-  --status-error-bg: #FEF2F2;
-  --status-error-text: #DC2626;
-  --status-error-border: #FCA5A5;
+  --status-error-bg: #FDF2F0;
+  --status-error-text: #C03525;
+  --status-error-border: #E8A49B;
 
-  --status-warning-bg: #FFF7ED;
-  --status-warning-text: #EA580C;
-  --status-warning-border: #FDBA74;
+  --status-warning-bg: #FDF6ED;
+  --status-warning-text: #B5651D;
+  --status-warning-border: #E8C98A;
 
-  --status-info-bg: #EFF6FF;
-  --status-info-text: #2563EB;
-  --status-info-border: #93C5FD;
+  --status-info-bg: #F0F4FA;
+  --status-info-text: #3B6AA0;
+  --status-info-border: #A0C0E0;
 
-  --shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.04);
-  --shadow-md: 0 4px 6px rgba(15, 23, 42, 0.06);
-  --shadow-lg: 0 10px 15px rgba(15, 23, 42, 0.08);
-  --shadow-xl: 0 20px 25px rgba(15, 23, 42, 0.10);
+  /* ── Shadows (tom quente) ── */
+  --shadow-sm: 0 1px 2px rgba(44, 24, 16, 0.05);
+  --shadow-md: 0 4px 8px rgba(44, 24, 16, 0.07);
+  --shadow-lg: 0 10px 20px rgba(44, 24, 16, 0.09);
+  --shadow-xl: 0 20px 30px rgba(44, 24, 16, 0.12);
 
-  --ring-color: rgba(74, 55, 40, 0.3);
+  /* ── Focus ring ── */
+  --ring-color: rgba(184, 147, 90, 0.35);
 }
 
 [data-theme='dark'] {

@@ -19,6 +19,7 @@ import {
   FiLayers,
   FiChevronDown,
   FiChevronUp,
+  FiAlertCircle,
 } from 'react-icons/fi'
 import {
   getAuthCache,
@@ -81,6 +82,7 @@ export default function ChecklistViewPage() {
   const [sections, setSections] = useState<TemplateSection[]>([])
   const [checklistSections, setChecklistSections] = useState<ChecklistSectionRow[]>([])
   const [collapsedSections, setCollapsedSections] = useState<Set<number>>(new Set())
+  const [justifications, setJustifications] = useState<Record<number, string>>({}) // field_id -> justification_text
   const [error, setError] = useState<string | null>(null)
 
   const router = useRouter()
@@ -263,6 +265,23 @@ export default function ChecklistViewPage() {
       setSections(sectionsRes.data || [])
       setResponses(responsesRes.data || [])
       setChecklistSections(checklistSectionsRes.data || [])
+
+      // Fetch justifications if checklist is incompleto
+      if (checklistData.status === 'incompleto') {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const { data: justData } = await (supabase as any)
+          .from('checklist_justifications')
+          .select('field_id, justification_text')
+          .eq('checklist_id', Number(checklistId))
+        if (justData) {
+          const justMap: Record<number, string> = {}
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          for (const j of justData as any[]) {
+            justMap[j.field_id] = j.justification_text
+          }
+          setJustifications(justMap)
+        }
+      }
     } catch (err) {
       console.error('[ChecklistView] Erro:', err)
       // Tenta carregar do cache como fallback
@@ -343,6 +362,7 @@ export default function ChecklistViewPage() {
 
   const statusLabel: Record<string, { text: string; color: string }> = {
     concluido: { text: 'Concluido', color: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' },
+    incompleto: { text: 'Incompleto', color: 'bg-amber-500/20 text-amber-400 border-amber-500/30' },
     em_andamento: { text: 'Em andamento', color: 'bg-amber-500/20 text-amber-400 border-amber-500/30' },
     rascunho: { text: 'Rascunho', color: 'bg-gray-500/20 text-gray-400 border-gray-500/30' },
   }
@@ -438,6 +458,19 @@ export default function ChecklistViewPage() {
           )}
         </div>
 
+        {/* Incomplete checklist banner */}
+        {checklist.status === 'incompleto' && Object.keys(justifications).length > 0 && (
+          <div className="card p-4 border-l-4 border-warning bg-warning/5">
+            <div className="flex items-center gap-2 mb-1">
+              <FiAlertCircle className="w-4 h-4 text-warning" />
+              <span className="font-semibold text-warning text-sm">Checklist Incompleto</span>
+            </div>
+            <p className="text-xs text-secondary">
+              Este checklist foi finalizado com {Object.keys(justifications).length} campo{Object.keys(justifications).length !== 1 ? 's' : ''} obrigatorio{Object.keys(justifications).length !== 1 ? 's' : ''} nao preenchido{Object.keys(justifications).length !== 1 ? 's' : ''}, com justificativas.
+            </p>
+          </div>
+        )}
+
         {/* Fields */}
         <div className="space-y-4">
           <h3 className="font-semibold text-main">Respostas ({responses.length}/{fields.length})</h3>
@@ -504,6 +537,12 @@ export default function ChecklistViewPage() {
                                   Ver no Google Maps
                                 </a>
                               )}
+                              {justifications[field.id] && (
+                                <div className="mt-2 p-2 bg-warning/10 border border-warning/20 rounded-lg">
+                                  <p className="text-xs font-medium text-warning mb-1">Justificativa:</p>
+                                  <p className="text-xs text-secondary">{justifications[field.id]}</p>
+                                </div>
+                              )}
                             </div>
                           )
                         })}
@@ -539,6 +578,12 @@ export default function ChecklistViewPage() {
                               Ver no Google Maps
                             </a>
                           )}
+                          {justifications[field.id] && (
+                            <div className="mt-2 p-2 bg-warning/10 border border-warning/20 rounded-lg">
+                              <p className="text-xs font-medium text-warning mb-1">Justificativa:</p>
+                              <p className="text-xs text-secondary">{justifications[field.id]}</p>
+                            </div>
+                          )}
                         </div>
                       )
                     })}
@@ -565,6 +610,12 @@ export default function ChecklistViewPage() {
                       >
                         Ver no Google Maps
                       </a>
+                    )}
+                    {justifications[field.id] && (
+                      <div className="mt-2 p-2 bg-warning/10 border border-warning/20 rounded-lg">
+                        <p className="text-xs font-medium text-warning mb-1">Justificativa:</p>
+                        <p className="text-xs text-secondary">{justifications[field.id]}</p>
+                      </div>
                     )}
                   </div>
                 )

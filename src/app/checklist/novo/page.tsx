@@ -97,11 +97,23 @@ function ChecklistForm() {
   const [activeSection, setActiveSection] = useState<number | null>(null) // section_id being filled
   const [checklistId, setChecklistId] = useState<number | null>(null) // DB checklist id for sectioned mode
   const [offlineChecklistId, setOfflineChecklistId] = useState<string | null>(null) // Offline UUID for sectioned mode
+  const checklistIdRef = useRef<number | null>(null)
+  const offlineChecklistIdRef = useRef<string | null>(null)
 
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [savedOffline, _setSavedOffline] = useState(false)
   const [autoSaveStatus, setAutoSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
   const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const initializingRef = useRef(false) // Guard against double-init (StrictMode / fast re-renders)
+
+  useEffect(() => { checklistIdRef.current = checklistId }, [checklistId])
+  useEffect(() => { offlineChecklistIdRef.current = offlineChecklistId }, [offlineChecklistId])
+
+  // Justification states (for incomplete checklist finalization)
+  const [showIncompleteModal, setShowIncompleteModal] = useState(false)
+  const [showJustificationScreen, setShowJustificationScreen] = useState(false)
+  const [emptyRequiredFields, setEmptyRequiredFields] = useState<FieldWithSection[]>([])
+  const [justifications, setJustifications] = useState<Record<number, string>>({})
 
   // Get fields for a specific section
   const getFieldsForSection = useCallback((sectionId: number): FieldWithSection[] => {
@@ -205,6 +217,10 @@ function ChecklistForm() {
     if (!hasSections || !template || loading || !store) return
 
     const initSectionedChecklist = async () => {
+      if (initializingRef.current) return
+      initializingRef.current = true
+
+      try {
       let userId: string | null = null
       try {
         const { data: { user } } = await supabase.auth.getUser()
@@ -276,10 +292,27 @@ function ChecklistForm() {
       }
 
       // === ONLINE MODE ===
-      // Check for existing em_andamento checklist for this template+store+user today
       const todayStart = new Date()
       todayStart.setHours(0, 0, 0, 0)
 
+      // Check if already completed/incompleto today - redirect to view
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data: completedToday } = await (supabase as any)
+        .from('checklists')
+        .select('id')
+        .eq('template_id', Number(templateId))
+        .eq('store_id', Number(storeId))
+        .eq('created_by', userId)
+        .in('status', ['concluido', 'incompleto', 'validado'])
+        .gte('created_at', todayStart.toISOString())
+        .limit(1)
+
+      if (completedToday && completedToday.length > 0) {
+        router.push(`/checklist/${completedToday[0].id}`)
+        return
+      }
+
+      // Check for existing em_andamento checklist for this template+store+user today
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { data: existing } = await (supabase as any)
         .from('checklists')
@@ -313,6 +346,25 @@ function ChecklistForm() {
           .single()
 
         if (createErr) {
+          // Handle unique constraint violation (duplicate em_andamento for today)
+          if (createErr.code === '23505') {
+            console.warn('[Checklist] Duplicate detected, loading existing checklist')
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const { data: existingRetry } = await (supabase as any)
+              .from('checklists')
+              .select('id')
+              .eq('template_id', Number(templateId))
+              .eq('store_id', Number(storeId))
+              .eq('created_by', userId)
+              .eq('status', 'em_andamento')
+              .gte('created_at', todayStart.toISOString())
+              .order('created_at', { ascending: false })
+              .limit(1)
+            if (existingRetry && existingRetry.length > 0) {
+              await loadExistingChecklist(existingRetry[0].id)
+              return
+            }
+          }
           console.error('[Checklist] Erro ao criar checklist:', createErr)
           return
         }
@@ -341,6 +393,9 @@ function ChecklistForm() {
           })))
         }
       }
+      } finally {
+        initializingRef.current = false
+      }
     }
 
     initSectionedChecklist()
@@ -356,7 +411,7 @@ function ChecklistForm() {
       .eq('id', clId)
       .single()
 
-    if (clData?.status === 'concluido' || clData?.status === 'validado') {
+    if (clData?.status === 'concluido' || clData?.status === 'validado' || clData?.status === 'incompleto') {
       router.push(`/checklist/${clId}`)
       return
     }
@@ -408,9 +463,13 @@ function ChecklistForm() {
             break
           }
           case 'yes_no': {
-            const yJson = r.value_json as { photos?: string[] } | null
-            if (yJson?.photos && yJson.photos.length > 0) {
-              restoredResponses[r.field_id] = { answer: r.value_text || '', photos: yJson.photos }
+            const yJson = r.value_json as { photos?: string[]; conditionalText?: string; conditionalPhotos?: string[] } | null
+            if (yJson && (yJson.photos?.length || yJson.conditionalText || yJson.conditionalPhotos?.length)) {
+              const val: Record<string, unknown> = { answer: r.value_text || '' }
+              if (yJson.photos && yJson.photos.length > 0) val.photos = yJson.photos
+              if (yJson.conditionalText) val.conditionalText = yJson.conditionalText
+              if (yJson.conditionalPhotos && yJson.conditionalPhotos.length > 0) val.conditionalPhotos = yJson.conditionalPhotos
+              restoredResponses[r.field_id] = val
             } else {
               restoredResponses[r.field_id] = r.value_text
             }
@@ -460,6 +519,10 @@ function ChecklistForm() {
     if (checklistId || offlineChecklistId) return // already initialized
 
     const initNonSectionedChecklist = async () => {
+      if (initializingRef.current) return
+      initializingRef.current = true
+
+      try {
       let userId: string | null = null
       try {
         const { data: { user } } = await supabase.auth.getUser()
@@ -493,9 +556,13 @@ function ChecklistForm() {
               const json = r.valueJson as { photos?: string[] } | null
               restoredResponses[r.fieldId] = json?.photos || []
             } else if (field.field_type === 'yes_no') {
-              const json = r.valueJson as { photos?: string[] } | null
-              if (json?.photos && json.photos.length > 0) {
-                restoredResponses[r.fieldId] = { answer: r.valueText || '', photos: json.photos }
+              const json = r.valueJson as { photos?: string[]; conditionalText?: string; conditionalPhotos?: string[] } | null
+              if (json && (json.photos?.length || json.conditionalText || json.conditionalPhotos?.length)) {
+                const val: Record<string, unknown> = { answer: r.valueText || '' }
+                if (json.photos && json.photos.length > 0) val.photos = json.photos
+                if (json.conditionalText) val.conditionalText = json.conditionalText
+                if (json.conditionalPhotos && json.conditionalPhotos.length > 0) val.conditionalPhotos = json.conditionalPhotos
+                restoredResponses[r.fieldId] = val
               } else {
                 restoredResponses[r.fieldId] = r.valueText
               }
@@ -527,8 +594,32 @@ function ChecklistForm() {
       }
 
       // === ONLINE ===
+
+      // If resuming a specific checklist (from dashboard "Continuar" link)
+      if (resumeId) {
+        await loadExistingChecklist(Number(resumeId))
+        return
+      }
+
       const todayStart = new Date()
       todayStart.setHours(0, 0, 0, 0)
+
+      // Check if already completed/incompleto today - redirect to view
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data: completedToday } = await (supabase as any)
+        .from('checklists')
+        .select('id')
+        .eq('template_id', Number(templateId))
+        .eq('store_id', Number(storeId))
+        .eq('created_by', userId)
+        .in('status', ['concluido', 'incompleto', 'validado'])
+        .gte('created_at', todayStart.toISOString())
+        .limit(1)
+
+      if (completedToday && completedToday.length > 0) {
+        router.push(`/checklist/${completedToday[0].id}`)
+        return
+      }
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { data: existing } = await (supabase as any)
@@ -562,10 +653,32 @@ function ChecklistForm() {
           .single()
 
         if (createErr) {
+          // Handle unique constraint violation (duplicate em_andamento for today)
+          if (createErr.code === '23505') {
+            console.warn('[Checklist] Duplicate detected, loading existing checklist')
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const { data: existingRetry } = await (supabase as any)
+              .from('checklists')
+              .select('id')
+              .eq('template_id', Number(templateId))
+              .eq('store_id', Number(storeId))
+              .eq('created_by', userId)
+              .eq('status', 'em_andamento')
+              .gte('created_at', todayStart.toISOString())
+              .order('created_at', { ascending: false })
+              .limit(1)
+            if (existingRetry && existingRetry.length > 0) {
+              await loadExistingChecklist(existingRetry[0].id)
+              return
+            }
+          }
           console.error('[Checklist] Erro ao criar checklist:', createErr)
           return
         }
         setChecklistId(newChecklist.id)
+      }
+      } finally {
+        initializingRef.current = false
       }
     }
 
@@ -598,11 +711,13 @@ function ChecklistForm() {
       valueJson = { photos: photos || [], uploadedToDrive: false }
     } else if (field.field_type === 'yes_no') {
       if (typeof value === 'object' && value !== null && 'answer' in (value as Record<string, unknown>)) {
-        const yesNoObj = value as { answer: string; photos?: string[] }
+        const yesNoObj = value as { answer: string; photos?: string[]; conditionalText?: string; conditionalPhotos?: string[] }
         valueText = yesNoObj.answer
-        if (yesNoObj.photos && yesNoObj.photos.length > 0) {
-          valueJson = { photos: yesNoObj.photos }
-        }
+        const jsonParts: Record<string, unknown> = {}
+        if (yesNoObj.photos && yesNoObj.photos.length > 0) jsonParts.photos = yesNoObj.photos
+        if (yesNoObj.conditionalText) jsonParts.conditionalText = yesNoObj.conditionalText
+        if (yesNoObj.conditionalPhotos && yesNoObj.conditionalPhotos.length > 0) jsonParts.conditionalPhotos = yesNoObj.conditionalPhotos
+        if (Object.keys(jsonParts).length > 0) valueJson = jsonParts
       } else {
         valueText = value as string
       }
@@ -623,7 +738,7 @@ function ChecklistForm() {
 
     setAutoSaveStatus('saving')
     try {
-      if (navigator.onLine && checklistId) {
+      if (navigator.onLine && checklistIdRef.current) {
         // Online: upsert to checklist_responses
         let userId: string | null = null
         try {
@@ -632,25 +747,34 @@ function ChecklistForm() {
         } catch { /* offline */ }
 
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        await (supabase as any)
+        const { error: upsertErr } = await (supabase as any)
           .from('checklist_responses')
           .upsert({
-            checklist_id: checklistId,
+            checklist_id: checklistIdRef.current,
             field_id: row.fieldId,
             value_text: row.valueText,
             value_number: row.valueNumber,
             value_json: row.valueJson,
             answered_by: userId,
           }, { onConflict: 'checklist_id,field_id' })
-      } else if (offlineChecklistId) {
+        if (upsertErr) {
+          console.error('[AutoSave] Upsert error:', upsertErr)
+          setAutoSaveStatus('error')
+          return
+        }
+      } else if (offlineChecklistIdRef.current) {
         // Offline: update in IndexedDB
         const field = template?.fields.find(f => f.id === fieldId)
         const sectionId = field?.section_id ?? null
-        await updateOfflineFieldResponse(offlineChecklistId, sectionId, fieldId, {
+        await updateOfflineFieldResponse(offlineChecklistIdRef.current, sectionId, fieldId, {
           valueText: row.valueText,
           valueNumber: row.valueNumber,
           valueJson: row.valueJson,
         })
+      } else {
+        console.warn('[AutoSave] SKIP - no checklist ID available')
+        setAutoSaveStatus('error')
+        return
       }
 
       setAutoSaveStatus('saved')
@@ -662,6 +786,18 @@ function ChecklistForm() {
     }
   }, 1500)
 
+  // Flush auto-save on page unload or component unmount
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      autoSaveField.flush()
+    }
+    window.addEventListener('beforeunload', handleBeforeUnload)
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload)
+      autoSaveField.flush()
+    }
+  }, [autoSaveField])
+
   const updateResponse = (fieldId: number, value: unknown) => {
     setResponses(prev => ({ ...prev, [fieldId]: value }))
     if (errors[fieldId]) {
@@ -670,6 +806,13 @@ function ChecklistForm() {
     // Trigger debounced auto-save
     autoSaveField(fieldId, value)
   }
+
+  // Navigate back to dashboard, ensuring pending auto-save completes
+  const handleBackToDashboard = useCallback(async () => {
+    autoSaveField.flush()
+    await new Promise(resolve => setTimeout(resolve, 500))
+    router.push(APP_CONFIG.routes.dashboard)
+  }, [autoSaveField, router])
 
   // Build response row data for a set of fields
   const buildResponseRows = async (fieldIds: number[], attemptUpload: boolean) => {
@@ -708,20 +851,33 @@ function ChecklistForm() {
           valueJson = { photos: photos || [], uploadedToDrive: false }
         }
       } else if (field.field_type === 'yes_no') {
-        // yes_no can be string (legacy) or { answer, photos }
+        // yes_no can be string (legacy) or { answer, photos, conditionalText, conditionalPhotos }
         if (typeof value === 'object' && value !== null && 'answer' in (value as Record<string, unknown>)) {
-          const yesNoObj = value as { answer: string; photos?: string[] }
+          const yesNoObj = value as { answer: string; photos?: string[]; conditionalText?: string; conditionalPhotos?: string[] }
           valueText = yesNoObj.answer
+          const jsonParts: Record<string, unknown> = {}
           if (yesNoObj.photos && yesNoObj.photos.length > 0 && attemptUpload) {
             const uploadedUrls: string[] = []
             for (let i = 0; i < yesNoObj.photos.length; i++) {
               const url = await uploadPhoto(yesNoObj.photos[i], `checklist_${Date.now()}_yesno_foto_${i + 1}.jpg`, 'anexos')
               uploadedUrls.push(url || yesNoObj.photos[i])
             }
-            valueJson = { photos: uploadedUrls }
+            jsonParts.photos = uploadedUrls
           } else if (yesNoObj.photos && yesNoObj.photos.length > 0) {
-            valueJson = { photos: yesNoObj.photos }
+            jsonParts.photos = yesNoObj.photos
           }
+          if (yesNoObj.conditionalText) jsonParts.conditionalText = yesNoObj.conditionalText
+          if (yesNoObj.conditionalPhotos && yesNoObj.conditionalPhotos.length > 0 && attemptUpload) {
+            const uploadedUrls: string[] = []
+            for (let i = 0; i < yesNoObj.conditionalPhotos.length; i++) {
+              const url = await uploadPhoto(yesNoObj.conditionalPhotos[i], `checklist_${Date.now()}_yesno_cond_foto_${i + 1}.jpg`, 'anexos')
+              uploadedUrls.push(url || yesNoObj.conditionalPhotos[i])
+            }
+            jsonParts.conditionalPhotos = uploadedUrls
+          } else if (yesNoObj.conditionalPhotos && yesNoObj.conditionalPhotos.length > 0) {
+            jsonParts.conditionalPhotos = yesNoObj.conditionalPhotos
+          }
+          if (Object.keys(jsonParts).length > 0) valueJson = jsonParts
         } else {
           valueText = value as string
         }
@@ -737,36 +893,38 @@ function ChecklistForm() {
     return rows
   }
 
-  // Validate a set of fields
-  const validateFields = (fieldIds: number[]): boolean => {
-    const newErrors: Record<number, string> = {}
-    for (const fieldId of fieldIds) {
-      const field = template?.fields.find(f => f.id === fieldId)
-      if (!field || field.field_type === 'gps') continue
-      if (field.is_required) {
-        const value = responses[fieldId]
-        if (value === undefined || value === null || value === '' || (Array.isArray(value) && value.length === 0)) {
-          newErrors[fieldId] = 'Este campo e obrigatorio'
-        }
-        // For yes_no with required answer: check answer exists
-        if (field.field_type === 'yes_no' && typeof value === 'object' && value !== null) {
-          const ans = (value as Record<string, unknown>).answer
-          if (!ans || ans === '') {
-            newErrors[fieldId] = 'Este campo e obrigatorio'
-          }
-        }
+  // Get all empty required fields across all sections (for finalization check)
+  const getEmptyRequiredFields = (): FieldWithSection[] => {
+    if (!template) return []
+    return template.fields.filter(field => {
+      if (!field.is_required || field.field_type === 'gps') return false
+      const value = responses[field.id]
+      if (value === undefined || value === null || value === '' || (Array.isArray(value) && value.length === 0)) {
+        return true
       }
-      // Photo required validation for yes_no fields
-      if (field.field_type === 'yes_no' && (field.options as { photoRequired?: boolean } | null)?.photoRequired) {
-        const value = responses[fieldId]
-        const hasPhotos = typeof value === 'object' && value !== null && 'photos' in (value as Record<string, unknown>) && ((value as Record<string, unknown>).photos as string[]).length > 0
-        if (!hasPhotos) {
-          newErrors[fieldId] = 'Foto obrigatoria para este campo'
-        }
+      // Check yes_no object with empty answer
+      if (field.field_type === 'yes_no' && typeof value === 'object' && value !== null) {
+        const ans = (value as Record<string, unknown>).answer
+        if (!ans || ans === '') return true
       }
+      return false
+    })
+  }
+
+  // Pre-finalize: validates all fields, shows justification modal if incomplete
+  const handlePreFinalize = async () => {
+    autoSaveField.flush()
+
+    const emptyFields = getEmptyRequiredFields()
+    if (emptyFields.length > 0) {
+      // Has empty required fields: show incomplete modal for justification
+      setEmptyRequiredFields(emptyFields)
+      setShowIncompleteModal(true)
+      return
     }
-    setErrors(prev => ({ ...prev, ...newErrors }))
-    return Object.keys(newErrors).length === 0
+
+    // All required fields filled: finalize normally
+    await handleFinalizeChecklist()
   }
 
   // === SECTION BACK: auto-mark section as complete if all required fields are filled ===
@@ -777,6 +935,53 @@ function ChecklistForm() {
     if (activeSection === null) { setActiveSection(null); return }
 
     const sectionFields = getFieldsForSection(activeSection)
+
+    // Bulk save ALL responses for this section (debounce may have skipped some)
+    try {
+      if (navigator.onLine && checklistIdRef.current) {
+        let userId: string | null = null
+        try {
+          const { data: { user } } = await supabase.auth.getUser()
+          userId = user?.id || null
+        } catch { /* offline */ }
+
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const rows: any[] = sectionFields
+          .map(f => {
+            const row = buildSingleResponseRow(f.id, responses[f.id])
+            if (!row) return null
+            return {
+              checklist_id: checklistIdRef.current,
+              field_id: row.fieldId,
+              value_text: row.valueText,
+              value_number: row.valueNumber,
+              value_json: row.valueJson,
+              answered_by: userId,
+            }
+          })
+          .filter(Boolean)
+
+        if (rows.length > 0) {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          await (supabase as any)
+            .from('checklist_responses')
+            .upsert(rows, { onConflict: 'checklist_id,field_id' })
+        }
+      } else if (offlineChecklistIdRef.current) {
+        for (const f of sectionFields) {
+          const row = buildSingleResponseRow(f.id, responses[f.id])
+          if (!row) continue
+          await updateOfflineFieldResponse(offlineChecklistIdRef.current, activeSection, f.id, {
+            valueText: row.valueText,
+            valueNumber: row.valueNumber,
+            valueJson: row.valueJson,
+          })
+        }
+      }
+    } catch (err) {
+      console.error('[Checklist] Erro no bulk save da secao:', err)
+    }
+
     const requiredFieldIds = sectionFields
       .filter(f => f.is_required && f.field_type !== 'gps')
       .map(f => f.id)
@@ -845,25 +1050,48 @@ function ChecklistForm() {
     if (!respData) return
 
     for (const r of respData) {
-      const json = r.value_json as { photos?: string[] } | null
-      if (!json?.photos) continue
-      const hasBase64 = json.photos.some((p: string) => p.startsWith('data:'))
-      if (!hasBase64) continue
+      const json = r.value_json as Record<string, unknown> | null
+      if (!json) continue
 
-      const uploadedUrls: string[] = []
-      for (let i = 0; i < json.photos.length; i++) {
-        if (json.photos[i].startsWith('data:')) {
-          const url = await uploadPhoto(json.photos[i], `checklist_${clId}_field_${r.field_id}_foto_${i + 1}.jpg`)
-          uploadedUrls.push(url || json.photos[i])
-        } else {
-          uploadedUrls.push(json.photos[i])
+      const photos = json.photos as string[] | undefined
+      const condPhotos = json.conditionalPhotos as string[] | undefined
+      const hasBase64Photos = photos?.some((p: string) => p.startsWith('data:')) || false
+      const hasBase64CondPhotos = condPhotos?.some((p: string) => p.startsWith('data:')) || false
+      if (!hasBase64Photos && !hasBase64CondPhotos) continue
+
+      const updatedJson: Record<string, unknown> = { ...json }
+
+      if (photos && hasBase64Photos) {
+        const uploadedUrls: string[] = []
+        for (let i = 0; i < photos.length; i++) {
+          if (photos[i].startsWith('data:')) {
+            const url = await uploadPhoto(photos[i], `checklist_${clId}_field_${r.field_id}_foto_${i + 1}.jpg`)
+            uploadedUrls.push(url || photos[i])
+          } else {
+            uploadedUrls.push(photos[i])
+          }
         }
+        updatedJson.photos = uploadedUrls
+        updatedJson.uploadedToDrive = true
+      }
+
+      if (condPhotos && hasBase64CondPhotos) {
+        const uploadedUrls: string[] = []
+        for (let i = 0; i < condPhotos.length; i++) {
+          if (condPhotos[i].startsWith('data:')) {
+            const url = await uploadPhoto(condPhotos[i], `checklist_${clId}_field_${r.field_id}_cond_foto_${i + 1}.jpg`)
+            uploadedUrls.push(url || condPhotos[i])
+          } else {
+            uploadedUrls.push(condPhotos[i])
+          }
+        }
+        updatedJson.conditionalPhotos = uploadedUrls
       }
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       await (supabase as any)
         .from('checklist_responses')
-        .update({ value_json: { photos: uploadedUrls, uploadedToDrive: true } })
+        .update({ value_json: updatedJson })
         .eq('id', r.id)
     }
   }
@@ -957,21 +1185,114 @@ function ChecklistForm() {
     }
   }
 
-  // === FINALIZE (non-sectioned templates) ===
-  // With auto-save, responses are already saved. This validates + calls handleFinalizeChecklist.
-  const handleNonSectionedFinalize = async () => {
-    // Flush pending auto-save
-    autoSaveField.flush()
+  // === FINALIZE WITH JUSTIFICATIONS (incomplete checklist) ===
+  const handleFinalizeWithJustifications = async () => {
+    // Validate all justifications are filled
+    const missing = emptyRequiredFields.filter(f => !justifications[f.id]?.trim())
+    if (missing.length > 0) return
 
-    const allFieldIds = (template?.fields || []).filter(f => f.field_type !== 'gps').map(f => f.id)
-    if (!validateFields(allFieldIds)) {
-      const firstErrorId = Object.keys(errors)[0]
-      document.getElementById(`field-${firstErrorId}`)?.scrollIntoView({ behavior: 'smooth' })
+    if (!navigator.onLine || !checklistId) {
+      setErrors({ 0: 'Voce precisa estar conectado para finalizar com justificativas.' })
       return
     }
 
-    // Delegate to shared finalize handler (checks internet, marks concluido, etc.)
-    await handleFinalizeChecklist()
+    setSubmitting(true)
+
+    let userId: string | null = null
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      userId = user?.id || null
+    } catch { /* offline */ }
+    if (!userId) {
+      const cachedAuth = await getAuthCache()
+      userId = cachedAuth?.userId || null
+    }
+    if (!userId) {
+      setErrors({ 0: 'Usuario nao autenticado.' })
+      setSubmitting(false)
+      return
+    }
+
+    try {
+      // Upload pending photos
+      await uploadPendingPhotos(checklistId)
+
+      // Insert justifications
+      const justificationRows = emptyRequiredFields.map(field => ({
+        checklist_id: checklistId,
+        field_id: field.id,
+        justification_text: justifications[field.id].trim(),
+        justified_by: userId,
+      }))
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await (supabase as any).from('checklist_justifications').insert(justificationRows)
+
+      // Mark checklist as incompleto
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await (supabase as any)
+        .from('checklists')
+        .update({ status: 'incompleto', completed_at: new Date().toISOString() })
+        .eq('id', checklistId)
+
+      // Process cross-validation + non-conformities
+      if (template) {
+        const allFieldIds = template.fields.map(f => f.id)
+        const allResponseData = await buildResponseRows(allFieldIds, false)
+        const allResponseMapped = allResponseData.map(r => ({
+          field_id: r.fieldId,
+          value_text: r.valueText,
+          value_number: r.valueNumber,
+          value_json: r.valueJson,
+        }))
+        await processarValidacaoCruzada(
+          supabase,
+          checklistId,
+          Number(templateId),
+          Number(storeId),
+          userId,
+          allResponseMapped,
+          template.fields
+        )
+        await processarNaoConformidades(
+          supabase,
+          checklistId,
+          Number(templateId),
+          Number(storeId),
+          null,
+          userId,
+          allResponseMapped,
+          template.fields.map(f => ({ id: f.id, name: f.name, field_type: f.field_type, options: f.options }))
+        )
+      }
+
+      // Activity log
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await (supabase as any).from('activity_log').insert({
+        store_id: Number(storeId),
+        user_id: userId,
+        checklist_id: checklistId,
+        action: 'checklist_incompleto',
+        details: {
+          template_name: template?.name,
+          justified_fields: emptyRequiredFields.map(f => f.name),
+          justification_count: emptyRequiredFields.length,
+        },
+      })
+
+      setSuccess(true)
+      setTimeout(() => router.push(APP_CONFIG.routes.dashboard), 2000)
+    } catch (err) {
+      console.error('[Checklist] Erro ao finalizar com justificativas:', err)
+      setErrors({ 0: err instanceof Error ? err.message : 'Erro ao finalizar checklist' })
+      setSubmitting(false)
+    }
+  }
+
+  // === FINALIZE (non-sectioned templates) ===
+  // Uses handlePreFinalize which validates + shows justification modal if needed
+  const handleNonSectionedFinalize = async () => {
+    await handlePreFinalize()
   }
 
   // ========== RENDER ==========
@@ -1007,6 +1328,82 @@ function ChecklistForm() {
             {savedOffline ? 'O checklist sera enviado quando voce estiver online.' : APP_CONFIG.messages.redirecting}
           </p>
         </div>
+      </div>
+    )
+  }
+
+  // Justification screen (for incomplete checklist finalization)
+  if (showJustificationScreen) {
+    const allJustified = emptyRequiredFields.every(f => justifications[f.id]?.trim())
+    return (
+      <div className="min-h-screen bg-page">
+        <Header
+          onBack={() => setShowJustificationScreen(false)}
+          title="Justificativas"
+          subtitle={template.name}
+          icon={FiAlertCircle}
+        />
+        <main className="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          <div className="card p-4 sm:p-6 mb-6 border-l-4 border-warning">
+            <p className="text-sm text-secondary">
+              Preencha uma justificativa para cada campo obrigatorio nao respondido.
+              Todos os campos abaixo precisam de uma explicacao.
+            </p>
+          </div>
+          <div className="space-y-4">
+            {emptyRequiredFields.map((field, idx) => {
+              // Find which section this field belongs to
+              const section = hasSections && field.section_id
+                ? sortedSections.find(s => s.id === field.section_id)
+                : null
+              return (
+                <div key={field.id} className="card p-4 sm:p-6">
+                  <div className="flex items-center gap-2 mb-3 text-xs text-muted">
+                    <span className="w-6 h-6 rounded-full bg-warning/20 flex items-center justify-center text-warning text-xs font-bold">{idx + 1}</span>
+                    <span>de {emptyRequiredFields.length}</span>
+                    {section && (
+                      <span className="ml-auto text-xs text-muted">{section.name}</span>
+                    )}
+                  </div>
+                  <label className="font-medium text-main block mb-2">{field.name}</label>
+                  {field.help_text && <p className="text-sm text-muted mb-2">{field.help_text}</p>}
+                  <p className="text-xs text-warning mb-3">Campo obrigatorio nao preenchido</p>
+                  <textarea
+                    value={justifications[field.id] || ''}
+                    onChange={(e) => setJustifications(prev => ({ ...prev, [field.id]: e.target.value }))}
+                    placeholder="Explique o motivo pelo qual este campo nao foi preenchido..."
+                    className="input w-full px-4 py-3 rounded-xl min-h-[100px]"
+                    rows={3}
+                  />
+                  {!justifications[field.id]?.trim() && (
+                    <p className="text-xs text-error mt-1">Justificativa obrigatoria</p>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+          <div className="sticky bottom-4 mt-6 space-y-3">
+            <button
+              type="button"
+              onClick={handleFinalizeWithJustifications}
+              disabled={submitting || !allJustified}
+              className="btn-primary w-full py-4 text-base font-semibold rounded-2xl shadow-theme-lg disabled:opacity-50"
+            >
+              {submitting ? (
+                <><div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin inline-block mr-2" /> Finalizando...</>
+              ) : (
+                'Finalizar com Justificativas'
+              )}
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowJustificationScreen(false)}
+              className="btn-ghost w-full py-3"
+            >
+              Voltar e continuar preenchendo
+            </button>
+          </div>
+        </main>
       </div>
     )
   }
@@ -1070,7 +1467,7 @@ function ChecklistForm() {
     return (
       <div className="min-h-screen bg-page">
         <Header
-          backHref={APP_CONFIG.routes.dashboard}
+          onBack={handleBackToDashboard}
           title={template.name}
           subtitle={store.name}
           icon={FiLayers}
@@ -1137,7 +1534,7 @@ function ChecklistForm() {
           <div className="mt-6">
             <button
               type="button"
-              onClick={handleFinalizeChecklist}
+              onClick={handlePreFinalize}
               disabled={submitting}
               className="btn-primary w-full py-4 text-base font-semibold rounded-2xl shadow-theme-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
             >
@@ -1150,11 +1547,56 @@ function ChecklistForm() {
           </div>
 
           <div className="mt-4">
-            <Link href={APP_CONFIG.routes.dashboard} className="btn-ghost w-full py-3 text-center block">
+            <button onClick={handleBackToDashboard} className="btn-ghost w-full py-3 text-center block">
               Voltar ao Dashboard
-            </Link>
+            </button>
           </div>
         </main>
+
+        {/* Incomplete Checklist Modal (sectioned) */}
+        {showIncompleteModal && (
+          <div className="fixed inset-0 z-50 bg-black/50 overflow-y-auto">
+            <div className="min-h-full flex items-center justify-center py-8 px-4">
+              <div className="card w-full max-w-md p-6 text-center">
+                <div className="w-16 h-16 rounded-full bg-warning/20 flex items-center justify-center mx-auto mb-4">
+                  <FiAlertCircle className="w-8 h-8 text-warning" />
+                </div>
+                <h2 className="text-xl font-bold text-main mb-2">Checklist Incompleto</h2>
+                <p className="text-secondary mb-2">
+                  Voce realmente deseja finalizar o checklist <strong>INCOMPLETO</strong>?
+                </p>
+                <p className="text-sm text-muted mb-6">
+                  {emptyRequiredFields.length} campo{emptyRequiredFields.length !== 1 ? 's' : ''} obrigatorio{emptyRequiredFields.length !== 1 ? 's' : ''} nao preenchido{emptyRequiredFields.length !== 1 ? 's' : ''}.
+                </p>
+                <div className="space-y-3">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowIncompleteModal(false)
+                      setShowJustificationScreen(true)
+                    }}
+                    className="btn-primary w-full py-3"
+                  >
+                    Sim, justificar e finalizar
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowIncompleteModal(false)}
+                    className="btn-secondary w-full py-3"
+                  >
+                    Nao, continuar preenchendo
+                  </button>
+                  <button
+                    onClick={handleBackToDashboard}
+                    className="btn-ghost w-full py-3 block text-center"
+                  >
+                    Voltar ao Dashboard (manter pendente)
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     )
   }
@@ -1251,7 +1693,7 @@ function ChecklistForm() {
   return (
     <div className="min-h-screen bg-page">
       <Header
-        backHref={APP_CONFIG.routes.dashboard}
+        onBack={handleBackToDashboard}
         title={template.name}
         subtitle={store.name}
         icon={FiLayers}
@@ -1317,12 +1759,57 @@ function ChecklistForm() {
                 <><FiCheckCircle className="w-5 h-5" /> Finalizar Checklist</>
               )}
             </button>
-            <Link href={APP_CONFIG.routes.dashboard} className="btn-ghost w-full py-3 text-center block">
+            <button onClick={handleBackToDashboard} className="btn-ghost w-full py-3 text-center block">
               Voltar ao Dashboard
-            </Link>
+            </button>
           </div>
         </div>
       </main>
+
+      {/* Incomplete Checklist Confirmation Modal */}
+      {showIncompleteModal && (
+        <div className="fixed inset-0 z-50 bg-black/50 overflow-y-auto">
+          <div className="min-h-full flex items-center justify-center py-8 px-4">
+            <div className="card w-full max-w-md p-6 text-center">
+              <div className="w-16 h-16 rounded-full bg-warning/20 flex items-center justify-center mx-auto mb-4">
+                <FiAlertCircle className="w-8 h-8 text-warning" />
+              </div>
+              <h2 className="text-xl font-bold text-main mb-2">Checklist Incompleto</h2>
+              <p className="text-secondary mb-2">
+                Voce realmente deseja finalizar o checklist <strong>INCOMPLETO</strong>?
+              </p>
+              <p className="text-sm text-muted mb-6">
+                {emptyRequiredFields.length} campo{emptyRequiredFields.length !== 1 ? 's' : ''} obrigatorio{emptyRequiredFields.length !== 1 ? 's' : ''} nao preenchido{emptyRequiredFields.length !== 1 ? 's' : ''}.
+              </p>
+              <div className="space-y-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowIncompleteModal(false)
+                    setShowJustificationScreen(true)
+                  }}
+                  className="btn-primary w-full py-3"
+                >
+                  Sim, justificar e finalizar
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowIncompleteModal(false)}
+                  className="btn-secondary w-full py-3"
+                >
+                  Nao, continuar preenchendo
+                </button>
+                <Link
+                  href={APP_CONFIG.routes.dashboard}
+                  className="btn-ghost w-full py-3 block text-center"
+                >
+                  Voltar ao Dashboard (manter pendente)
+                </Link>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

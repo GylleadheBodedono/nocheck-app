@@ -150,10 +150,60 @@ async function processResponsesWithImages(
           }
         }
 
+        // Also process conditionalPhotos if present
+        const jsonObj = response.valueJson as Record<string, unknown>
+        let processedCondPhotos: string[] | undefined
+        const condPhotos = jsonObj?.conditionalPhotos as string[] | undefined
+        if (condPhotos && condPhotos.length > 0) {
+          processedCondPhotos = []
+          for (let i = 0; i < condPhotos.length; i++) {
+            const cp = condPhotos[i]
+            if (!cp || typeof cp !== 'string') continue
+            if (cp.startsWith('http')) {
+              processedCondPhotos.push(cp)
+            } else if (cp.startsWith('data:') || cp.length > 1000) {
+              const url = await uploadImageToStorage(cp, `sync_${Date.now()}_cond_foto_${i + 1}.jpg`)
+              if (url) { processedCondPhotos.push(url) } else { processedCondPhotos.push(cp); allImagesUploaded = false }
+            } else {
+              processedCondPhotos.push(cp)
+            }
+          }
+        }
+
+        const resultJson: Record<string, unknown> = { photos: uploadedUrls, uploadedToDrive: hasUploaded }
+        if (jsonObj?.conditionalText) resultJson.conditionalText = jsonObj.conditionalText
+        if (processedCondPhotos && processedCondPhotos.length > 0) resultJson.conditionalPhotos = processedCondPhotos
+
         console.log('[Sync] Resultado: uploaded=', hasUploaded, 'allOk=', allImagesUploaded, 'urls=', uploadedUrls.length)
         processedResponses.push({
           ...response,
-          valueJson: { photos: uploadedUrls, uploadedToDrive: hasUploaded },
+          valueJson: resultJson,
+        })
+        continue
+      }
+    }
+
+    // Handle conditionalPhotos even when no regular photos exist
+    if (response.valueJson && typeof response.valueJson === 'object' && !Array.isArray(response.valueJson)) {
+      const jsonObj = response.valueJson as Record<string, unknown>
+      const condPhotos = jsonObj?.conditionalPhotos as string[] | undefined
+      if (condPhotos && condPhotos.length > 0 && condPhotos.some(p => typeof p === 'string' && (p.startsWith('data:') || p.length > 1000) && !p.startsWith('http'))) {
+        const processedCondPhotos: string[] = []
+        for (let i = 0; i < condPhotos.length; i++) {
+          const cp = condPhotos[i]
+          if (!cp || typeof cp !== 'string') continue
+          if (cp.startsWith('http')) {
+            processedCondPhotos.push(cp)
+          } else if (cp.startsWith('data:') || cp.length > 1000) {
+            const url = await uploadImageToStorage(cp, `sync_${Date.now()}_cond_foto_${i + 1}.jpg`)
+            if (url) { processedCondPhotos.push(url) } else { processedCondPhotos.push(cp); allImagesUploaded = false }
+          } else {
+            processedCondPhotos.push(cp)
+          }
+        }
+        processedResponses.push({
+          ...response,
+          valueJson: { ...jsonObj, conditionalPhotos: processedCondPhotos },
         })
         continue
       }

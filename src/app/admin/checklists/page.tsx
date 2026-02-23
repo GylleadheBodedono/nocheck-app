@@ -315,6 +315,7 @@ export default function AdminChecklistsPage() {
       rascunho: { label: 'Rascunho', class: 'bg-surface-hover text-muted', icon: FiClock },
       em_andamento: { label: 'Em Andamento', class: 'bg-warning/20 text-warning', icon: FiClock },
       concluido: { label: 'Concluído', class: 'bg-success/20 text-success', icon: FiCheckCircle },
+      incompleto: { label: 'Incompleto', class: 'bg-warning/20 text-warning', icon: FiAlertCircle },
       validado: { label: 'Validado', class: 'bg-info/20 text-info', icon: FiCheckCircle },
     }
     return badges[status] || badges.rascunho
