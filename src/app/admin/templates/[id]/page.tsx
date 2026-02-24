@@ -149,12 +149,27 @@ export default function EditTemplatePage() {
 
       // Fetch users for condition editor
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data: usersData } = await (supabase as any)
+      const { data: usersData, error: usersError } = await (supabase as any)
         .from('users')
         .select('id, full_name')
         .eq('is_active', true)
         .order('full_name')
-      if (usersData) setConditionUsers((usersData as { id: string; full_name: string }[]).map((u) => ({ id: u.id, name: u.full_name })))
+      if (usersError) {
+        console.error('[Template] Erro ao buscar usuarios para condicoes:', usersError.message)
+      }
+      if (usersData && usersData.length > 0) {
+        setConditionUsers((usersData as { id: string; full_name: string }[]).map((u) => ({ id: u.id, name: u.full_name })))
+      } else {
+        console.warn('[Template] Nenhum usuario encontrado para condicoes. RLS pode estar bloqueando. Tentando sem filtro...')
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const { data: usersRetry } = await (supabase as any)
+          .from('users')
+          .select('id, full_name')
+          .order('full_name')
+        if (usersRetry && usersRetry.length > 0) {
+          setConditionUsers((usersRetry as { id: string; full_name: string }[]).map((u) => ({ id: u.id, name: u.full_name })))
+        }
+      }
 
       // Fetch action plan presets
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
