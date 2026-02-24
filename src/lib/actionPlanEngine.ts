@@ -67,14 +67,17 @@ function evaluateCondition(
       console.log(`[ActionPlan][DEBUG] yes_no: answer="${answer}", condition_type="${condition.condition_type}", condValue="${condValue.value}"`)
       if (!answer) return condition.condition_type === 'empty'
 
+      const answerNorm = answer.toLowerCase()
+      const condNorm = ((condValue.value as string) || '').toLowerCase()
+
       if (condition.condition_type === 'equals') {
-        const result = answer === condValue.value
-        console.log(`[ActionPlan][DEBUG] yes_no equals: "${answer}" === "${condValue.value}" => ${result}`)
+        const result = answerNorm === condNorm
+        console.log(`[ActionPlan][DEBUG] yes_no equals: "${answerNorm}" === "${condNorm}" => ${result}`)
         return result
       }
       if (condition.condition_type === 'not_equals') {
-        const result = answer !== condValue.value
-        console.log(`[ActionPlan][DEBUG] yes_no not_equals: "${answer}" !== "${condValue.value}" => ${result}`)
+        const result = answerNorm !== condNorm
+        console.log(`[ActionPlan][DEBUG] yes_no not_equals: "${answerNorm}" !== "${condNorm}" => ${result}`)
         return result
       }
       return false
@@ -110,8 +113,11 @@ function evaluateCondition(
       const targetValues = (condValue.values as string[]) || []
       console.log(`[ActionPlan][DEBUG] dropdown: val="${val}", condition_type="${condition.condition_type}", targetValues=${JSON.stringify(targetValues)}`)
 
-      if (condition.condition_type === 'in_list') return targetValues.includes(val)
-      if (condition.condition_type === 'not_in_list') return !targetValues.includes(val)
+      const valNorm = val.toLowerCase()
+      const targetValuesNorm = targetValues.map(v => v.toLowerCase())
+
+      if (condition.condition_type === 'in_list') return targetValuesNorm.includes(valNorm)
+      if (condition.condition_type === 'not_in_list') return !targetValuesNorm.includes(valNorm)
       if (condition.condition_type === 'empty') return val.trim() === ''
       return false
     }
@@ -136,9 +142,12 @@ function evaluateCondition(
     case 'text': {
       const text = response.value_text || ''
       console.log(`[ActionPlan][DEBUG] text: text="${text}", condition_type="${condition.condition_type}", condValue="${condValue.value}"`)
+      const textNorm = text.toLowerCase()
+      const condTextNorm = ((condValue.value as string) || '').toLowerCase()
+
       if (condition.condition_type === 'empty') return text.trim() === ''
-      if (condition.condition_type === 'equals') return text === condValue.value
-      if (condition.condition_type === 'not_equals') return text !== condValue.value
+      if (condition.condition_type === 'equals') return textNorm === condTextNorm
+      if (condition.condition_type === 'not_equals') return textNorm !== condTextNorm
       return false
     }
 
