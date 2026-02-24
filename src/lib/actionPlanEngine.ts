@@ -337,7 +337,7 @@ export async function processarNaoConformidades(
       plansCreated++
 
       // 7. Criar notificacao in-app para o responsavel
-      await createNotification(supabase, assigneeId, {
+      const notifResult = await createNotification(supabase, assigneeId, {
         type: reincidencia.isReincidencia ? 'reincidencia_detected' : 'action_plan_assigned',
         title: reincidencia.isReincidencia
           ? `Reincidencia #${reincidencia.count + 1}: ${field.name}`
@@ -351,14 +351,36 @@ export async function processarNaoConformidades(
           is_reincidencia: reincidencia.isReincidencia,
         },
       })
+      console.log('[ActionPlan] Notificacao responsavel:', notifResult.success ? 'OK' : notifResult.error)
+
+      // 7b. Notificar quem respondeu o checklist (se nao for o mesmo que o responsavel)
+      if (userId !== assigneeId) {
+        const assigneeNameForNotif = (await sb.from('users').select('full_name').eq('id', assigneeId).single()).data?.full_name || 'o responsavel'
+        await createNotification(supabase, userId, {
+          type: 'action_plan_created',
+          title: `Plano de acao gerado: ${field.name}`,
+          message: `Voce respondeu "${templateName}" e o campo "${field.name}" foi marcado como "${nonConformityValue}". ${assigneeNameForNotif} ja foi notificado.`,
+          link: `/admin/planos-de-acao/${plan.id}`,
+          metadata: {
+            action_plan_id: plan.id,
+            store_id: storeId,
+            field_name: field.name,
+            non_conformity_value: nonConformityValue,
+          },
+        })
+      }
 
       // 8. Buscar dados do responsavel e enviar email + Teams
       try {
-        const { data: assignee } = await sb
+        const { data: assignee, error: assigneeErr } = await sb
           .from('users')
           .select('email, full_name')
           .eq('id', assigneeId)
           .single()
+
+        if (assigneeErr) {
+          console.error('[ActionPlan] Erro ao buscar assignee:', assigneeErr)
+        }
 
         const assigneeName = assignee?.full_name || 'Nao atribuido'
 
@@ -393,7 +415,10 @@ export async function processarNaoConformidades(
             emailVars
           )
 
-          await sendEmailNotification(assignee.email, emailSubject, htmlBody)
+          const emailResult = await sendEmailNotification(assignee.email, emailSubject, htmlBody)
+          console.log('[ActionPlan] Email para', assignee.email, ':', emailResult.success ? 'OK' : emailResult.error)
+        } else {
+          console.warn('[ActionPlan] Assignee sem email, pulando envio')
         }
 
         // Teams alert
