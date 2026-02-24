@@ -1256,6 +1256,7 @@ export async function cacheAllDataForOffline(userId: string): Promise<void> {
     }
 
     // 14. Busca e salva planos de acao (para admin: todos; para usuario: somente atribuidos)
+    // Sem FK-disambiguated join (users!action_plans_assigned_to_fkey falha com 400)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let apQuery = (supabase as any)
       .from('action_plans')
@@ -1266,8 +1267,7 @@ export async function cacheAllDataForOffline(userId: string): Promise<void> {
         non_conformity_value, created_by, created_at, updated_at,
         store:stores(name),
         template:checklist_templates(name),
-        field:template_fields(name),
-        assignee:users!action_plans_assigned_to_fkey(full_name)
+        field:template_fields(name)
       `)
       .order('created_at', { ascending: false })
       .limit(200)
@@ -1279,6 +1279,20 @@ export async function cacheAllDataForOffline(userId: string): Promise<void> {
     const { data: actionPlansData } = await apQuery
 
     if (actionPlansData && actionPlansData.length > 0) {
+      // Buscar nomes dos responsaveis separadamente (evita FK-disambiguated join)
+      const assigneeIds = [...new Set(actionPlansData.map((p: { assigned_to: string }) => p.assigned_to).filter(Boolean))]
+      let assigneeMap = new Map<string, string>()
+      if (assigneeIds.length > 0) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const { data: assignees } = await (supabase as any)
+          .from('users')
+          .select('id, full_name')
+          .in('id', assigneeIds)
+        if (assignees) {
+          assigneeMap = new Map(assignees.map((u: { id: string; full_name: string }) => [u.id, u.full_name]))
+        }
+      }
+
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const plansToCache: CachedActionPlan[] = actionPlansData.map((p: any) => ({
         id: p.id,
@@ -1304,7 +1318,7 @@ export async function cacheAllDataForOffline(userId: string): Promise<void> {
         store_name: p.store?.name,
         template_name: p.template?.name,
         field_name: p.field?.name,
-        assignee_name: p.assignee?.full_name,
+        assignee_name: assigneeMap.get(p.assigned_to) || null,
         cachedAt: new Date().toISOString(),
       }))
 

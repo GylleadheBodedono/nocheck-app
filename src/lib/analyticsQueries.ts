@@ -200,17 +200,16 @@ export async function fetchReincidenciaData(
   cutoff.setDate(cutoff.getDate() - days)
   const cutoffISO = cutoff.toISOString()
 
-  // Buscar planos com reincidencia
+  // Buscar planos com reincidencia (sem FK-disambiguated join que falha com 400)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: reincPlans } = await (supabase as any)
+  const { data: reincPlansRaw } = await (supabase as any)
     .from('action_plans')
     .select(`
       id, field_id, store_id, template_id, reincidencia_count,
       created_at, status, assigned_to, completed_at, deadline,
       field:template_fields(name),
       store:stores(name),
-      template:checklist_templates(name),
-      assignee:users!action_plans_assigned_to_fkey(full_name)
+      template:checklist_templates(name)
     `)
     .eq('is_reincidencia', true)
     .gte('created_at', cutoffISO)
@@ -218,15 +217,44 @@ export async function fetchReincidenciaData(
 
   // Buscar todos planos para stats de assignee
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: allPlans } = await (supabase as any)
+  const { data: allPlansRaw } = await (supabase as any)
     .from('action_plans')
     .select(`
-      id, assigned_to, status, created_at, completed_at, deadline,
-      assignee:users!action_plans_assigned_to_fkey(full_name)
+      id, assigned_to, status, created_at, completed_at, deadline
     `)
     .gte('created_at', cutoffISO)
 
-  if (!reincPlans || reincPlans.length === 0) {
+  // Buscar nomes dos responsaveis separadamente (evita FK-disambiguated join)
+  const allAssigneeIds = [...new Set([
+    ...(reincPlansRaw || []).map((p: { assigned_to: string }) => p.assigned_to),
+    ...(allPlansRaw || []).map((p: { assigned_to: string }) => p.assigned_to),
+  ].filter(Boolean))]
+
+  let assigneeNamesMap = new Map<string, string>()
+  if (allAssigneeIds.length > 0) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: assigneeUsers } = await (supabase as any)
+      .from('users')
+      .select('id, full_name')
+      .in('id', allAssigneeIds)
+    if (assigneeUsers) {
+      assigneeNamesMap = new Map(assigneeUsers.map((u: { id: string; full_name: string }) => [u.id, u.full_name]))
+    }
+  }
+
+  // Enriquecer planos com dados do assignee
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const reincPlans = (reincPlansRaw || []).map((p: any) => ({
+    ...p,
+    assignee: assigneeNamesMap.get(p.assigned_to) ? { full_name: assigneeNamesMap.get(p.assigned_to) } : null,
+  }))
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const allPlans = (allPlansRaw || []).map((p: any) => ({
+    ...p,
+    assignee: assigneeNamesMap.get(p.assigned_to) ? { full_name: assigneeNamesMap.get(p.assigned_to) } : null,
+  }))
+
+  if (reincPlans.length === 0) {
     // Build assignee stats even without reincidencias
     const byAssignee = buildAssigneeStats(allPlans || [])
     return {
