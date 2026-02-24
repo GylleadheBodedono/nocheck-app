@@ -121,12 +121,12 @@ export default function PlanoDeAcaoPage() {
     try {
       setIsOffline(false)
 
-      // Fetch all data in parallel
+      // Fetch all data in parallel (sem FK-disambiguated joins que podem falhar)
       const [plansRes, storesRes, usersRes] = await Promise.all([
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         (supabase as any)
           .from('action_plans')
-          .select(`*, store:stores(name), assigned_user:users!action_plans_assigned_to_fkey(full_name), field:template_fields(name), template:checklist_templates(name), action_plan_stores(store_id, store:stores(name))`)
+          .select(`*, store:stores(name), field:template_fields(name), template:checklist_templates(name), action_plan_stores(store_id, store:stores(name))`)
           .order('created_at', { ascending: false }),
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         (supabase as any)
@@ -142,8 +142,30 @@ export default function PlanoDeAcaoPage() {
           .order('full_name'),
       ])
 
+      if (plansRes.error) {
+        console.error('[PlanosDeAcao] Erro na query de planos:', plansRes.error.message)
+      }
+
       if (plansRes.data) {
-        setActionPlans(plansRes.data)
+        // Buscar nomes dos responsaveis separadamente
+        const assigneeIds = [...new Set(plansRes.data.map((p: { assigned_to: string }) => p.assigned_to).filter(Boolean))]
+        let usersMap = new Map<string, string>()
+        if (assigneeIds.length > 0) {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const { data: assignees } = await (supabase as any)
+            .from('users')
+            .select('id, full_name')
+            .in('id', assigneeIds)
+          if (assignees) {
+            usersMap = new Map(assignees.map((u: { id: string; full_name: string }) => [u.id, u.full_name]))
+          }
+        }
+        // Montar assigned_user em cada plano
+        const plansWithUsers = plansRes.data.map((p: { assigned_to: string }) => ({
+          ...p,
+          assigned_user: usersMap.get(p.assigned_to) ? { full_name: usersMap.get(p.assigned_to) } : null,
+        }))
+        setActionPlans(plansWithUsers)
       }
       if (storesRes.data) {
         setStores(storesRes.data)
