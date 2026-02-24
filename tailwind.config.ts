@@ -59,9 +59,24 @@ const config: Config = {
           "0%": { opacity: "0", transform: "translateY(8px)" },
           "100%": { opacity: "1", transform: "translateY(0)" },
         },
+        "float-slow": {
+          "0%, 100%": { transform: "translateY(0) translateX(0)" },
+          "50%": { transform: "translateY(-20px) translateX(10px)" },
+        },
+        "float-delayed": {
+          "0%, 100%": { transform: "translateY(0) translateX(0)" },
+          "50%": { transform: "translateY(15px) translateX(-10px)" },
+        },
+        "float-slow-reverse": {
+          "0%, 100%": { transform: "translateY(0) translateX(0)" },
+          "50%": { transform: "translateY(-12px) translateX(-8px)" },
+        },
       },
       animation: {
         "fade-in": "fade-in 0.3s ease-out",
+        "float-slow": "float-slow 8s ease-in-out infinite",
+        "float-delayed": "float-delayed 10s ease-in-out infinite 2s",
+        "float-slow-reverse": "float-slow-reverse 12s ease-in-out infinite 4s",
       },
     },
   },

@@ -8,6 +8,7 @@ import { APP_CONFIG } from '@/lib/config'
 import { ThemeToggle, LoadingInline } from '@/components/ui'
 import { triggerPrecache } from '@/hooks/usePrecache'
 import { cacheAllDataForOffline } from '@/lib/offlineCache'
+import { FiLock, FiMail } from 'react-icons/fi'
 
 function LoginForm() {
   const searchParams = useSearchParams()
@@ -18,8 +19,6 @@ function LoginForm() {
   const [loading, setLoading] = useState(false)
   const [status, setStatus] = useState<string>('')
 
-  // Detecta confirmacao de email via hash fragment (#access_token=...&type=signup)
-  // O Supabase retorna tokens no hash que so o browser consegue ler
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const hash = window.location.hash
@@ -30,16 +29,11 @@ function LoginForm() {
     }
   }, [])
 
-  // Mostra erro ou sucesso vindo da URL (ex: confirmação de email)
   useEffect(() => {
     const errorParam = searchParams.get('error')
     const messageParam = searchParams.get('message')
-    if (errorParam) {
-      setError(decodeURIComponent(errorParam))
-    }
-    if (messageParam) {
-      setSuccessMsg(decodeURIComponent(messageParam))
-    }
+    if (errorParam) setError(decodeURIComponent(errorParam))
+    if (messageParam) setSuccessMsg(decodeURIComponent(messageParam))
   }, [searchParams])
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -50,10 +44,7 @@ function LoginForm() {
 
     try {
       const supabase = createClient()
-      const { error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      })
+      const { error } = await supabase.auth.signInWithPassword({ email, password })
 
       if (error) {
         if (error.message.includes('Invalid login')) {
@@ -66,40 +57,27 @@ function LoginForm() {
         return
       }
 
-      // Aguardar a sessao estar completamente estabelecida
       setStatus('Verificando sessao...')
       const { data: session } = await supabase.auth.getSession()
 
       if (session?.session) {
-        // Faz cache dos DADOS para funcionamento offline
         setStatus('Salvando dados para modo offline...')
-
         try {
-          // Salva todos os dados no IndexedDB
           await cacheAllDataForOffline(session.session.user.id)
-          console.log('[Login] Dados cacheados com sucesso')
         } catch (err) {
           console.error('[Login] Erro ao cachear dados:', err)
         }
 
-        // Faz precache das PÁGINAS para funcionamento offline
-        setStatus('Preparando aplicação offline...')
-
+        setStatus('Preparando aplicacao offline...')
         try {
-          // Aguarda o precache completar (com timeout de 30s)
           await triggerPrecache()
-          console.log('[Login] Precache completado com sucesso')
         } catch (err) {
-          // Continua mesmo com erro - melhor ter login sem cache do que travar
           console.error('[Login] Erro no precache:', err)
         }
 
         setStatus('Redirecionando...')
-        // Usar window.location para garantir reload completo da página
-        // router.push() não funciona bem após login no Next.js App Router
         window.location.href = APP_CONFIG.routes.dashboard
       } else {
-        // Fallback - redireciona direto
         window.location.href = APP_CONFIG.routes.dashboard
       }
     } catch {
@@ -110,111 +88,206 @@ function LoginForm() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-page px-4">
-      {/* Theme Toggle */}
-      <div className="absolute top-4 right-4">
-        <ThemeToggle />
-      </div>
+    <div className="h-screen w-screen p-2 bg-[#0a0a0a]">
+      <div className="h-full w-full flex rounded-2xl overflow-hidden">
 
-      <div className="w-full max-w-md">
-        {/* Logo */}
-        <div className="text-center ml-8 mb-8">
-          <div className="flex justify-center mb-4">
-            {/* Logo-dark.png = texto escuro, para tema claro */}
-            <Image
-              src="/Logo-dark.png"
-              alt={APP_CONFIG.name}
-              width={320}
-              height={120}
-              className="logo-for-light"
-              priority
-            />
-            {/* Logo.png = texto claro, para tema escuro */}
-            <Image
-              src="/Logo.png"
-              alt={APP_CONFIG.name}
-              width={320}
-              height={120}
-              className="logo-for-dark"
-              priority
-            />
+        {/* Left Side - Decorative Panel */}
+        <div className="hidden lg:flex lg:w-[55%] relative overflow-hidden rounded-2xl">
+          {/* Animated gradient background */}
+          <div className="absolute inset-0 bg-gradient-to-br from-[#B8935A] via-[#8B6E3B] to-[#2C1810] animate-gradient" />
+
+          {/* Mesh overlay */}
+          <div className="absolute inset-0 opacity-30"
+            style={{
+              backgroundImage: `radial-gradient(at 20% 30%, rgba(255,255,255,0.15) 0%, transparent 50%),
+                                radial-gradient(at 80% 70%, rgba(196,122,74,0.3) 0%, transparent 50%),
+                                radial-gradient(at 50% 10%, rgba(255,255,255,0.1) 0%, transparent 40%)`
+            }}
+          />
+
+          {/* Floating glass orbs */}
+          <div className="absolute top-[15%] left-[10%] w-64 h-64 rounded-full bg-white/5 backdrop-blur-3xl border border-white/10 animate-float-slow" />
+          <div className="absolute bottom-[20%] right-[15%] w-48 h-48 rounded-full bg-white/5 backdrop-blur-3xl border border-white/10 animate-float-delayed" />
+          <div className="absolute top-[60%] left-[30%] w-32 h-32 rounded-full bg-white/8 backdrop-blur-3xl border border-white/5 animate-float-slow-reverse" />
+
+          {/* Grain texture overlay */}
+          <div className="absolute inset-0 opacity-[0.03]"
+            style={{
+              backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E")`,
+            }}
+          />
+
+          {/* Content */}
+          <div className="relative z-10 flex flex-col justify-between p-12 w-full">
+            {/* Top */}
+            <div>
+              <div className="flex items-center gap-3 mb-2">
+                <div className="w-10 h-10 rounded-xl bg-white/10 backdrop-blur-sm border border-white/20 flex items-center justify-center">
+                  <span className="text-white font-bold text-lg">N</span>
+                </div>
+                <span className="text-white/90 font-semibold text-lg tracking-tight">NoCheck</span>
+              </div>
+            </div>
+
+            {/* Center */}
+            <div className="max-w-md">
+              <h1 className="text-5xl xl:text-6xl font-bold text-white leading-[1.1] tracking-tight mb-6">
+                Gestao
+                <br />
+                inteligente
+                <br />
+                <span className="text-white/50">de checklists</span>
+              </h1>
+              <p className="text-white/60 text-lg leading-relaxed max-w-sm">
+                Controle completo das operacoes da sua empresa com checklists digitais, validacoes e planos de acao.
+              </p>
+            </div>
+
+            {/* Bottom stats */}
+            <div className="flex gap-8">
+              <div>
+                <p className="text-3xl font-bold text-white">100%</p>
+                <p className="text-sm text-white/40 mt-1">Digital</p>
+              </div>
+              <div className="w-px bg-white/10" />
+              <div>
+                <p className="text-3xl font-bold text-white">24/7</p>
+                <p className="text-sm text-white/40 mt-1">Offline</p>
+              </div>
+              <div className="w-px bg-white/10" />
+              <div>
+                <p className="text-3xl font-bold text-white">Real</p>
+                <p className="text-sm text-white/40 mt-1">Time Sync</p>
+              </div>
+            </div>
           </div>
-          <p className="text-muted mt-2">Sistema de Checklists</p>
         </div>
 
-        {/* Login Form */}
-        <div className="card p-8">
-          <form onSubmit={handleSubmit} className="space-y-6">
-            {/* Email */}
-            <div>
-              <label htmlFor="email" className="block text-sm font-medium text-secondary mb-2">
-                Email
-              </label>
-              <input
-                id="email"
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-                autoComplete="email"
-                className="input"
-                placeholder="seu@email.com"
-              />
-            </div>
+        {/* Right Side - Login Form */}
+        <div className="flex-1 flex flex-col relative bg-page rounded-2xl lg:rounded-l-none">
+          {/* Theme toggle */}
+          <div className="absolute top-5 right-5 z-10">
+            <ThemeToggle />
+          </div>
 
-            {/* Password */}
-            <div>
-              <label htmlFor="password" className="block text-sm font-medium text-secondary mb-2">
-                Senha
-              </label>
-              <input
-                id="password"
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                autoComplete="current-password"
-                className="input"
-                placeholder="********"
-              />
-            </div>
-
-            {/* Success Message */}
-            {successMsg && (
-              <div className="p-4 bg-success/10 rounded-xl border border-success/30">
-                <p className="text-success text-sm text-center">{successMsg}</p>
+          {/* Form container */}
+          <div className="flex-1 flex items-center justify-center px-6 sm:px-12 lg:px-16">
+            <div className="w-full max-w-[400px]">
+              {/* Logo */}
+              <div className="mb-10">
+                <div className="flex justify-start mb-6">
+                  <Image
+                    src="/Logo-dark.png"
+                    alt={APP_CONFIG.name}
+                    width={200}
+                    height={75}
+                    className="logo-for-light"
+                    priority
+                  />
+                  <Image
+                    src="/Logo.png"
+                    alt={APP_CONFIG.name}
+                    width={200}
+                    height={75}
+                    className="logo-for-dark"
+                    priority
+                  />
+                </div>
+                <h2 className="text-2xl font-bold text-main tracking-tight">
+                  Bem-vindo de volta
+                </h2>
+                <p className="text-muted mt-1.5 text-[15px]">
+                  Entre com suas credenciais para acessar o painel
+                </p>
               </div>
-            )}
 
-            {/* Error Message */}
-            {error && (
-              <div className="p-4 bg-error rounded-xl border border-error">
-                <p className="text-error text-sm text-center">{error}</p>
-              </div>
-            )}
+              {/* Form */}
+              <form onSubmit={handleSubmit} className="space-y-5">
+                {/* Email */}
+                <div>
+                  <label htmlFor="email" className="block text-sm font-medium text-secondary mb-2">
+                    Email
+                  </label>
+                  <div className="relative">
+                    <div className="absolute left-4 top-1/2 -translate-y-1/2 text-muted pointer-events-none">
+                      <FiMail className="w-[18px] h-[18px]" />
+                    </div>
+                    <input
+                      id="email"
+                      type="email"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      required
+                      autoComplete="email"
+                      className="input pl-11"
+                      placeholder="seu@email.com"
+                    />
+                  </div>
+                </div>
 
-            {/* Submit Button */}
-            <button
-              type="submit"
-              disabled={loading}
-              className="btn-primary w-full py-3 flex items-center justify-center gap-2"
-            >
-              {loading ? (
-                <>
-                  <LoadingInline />
-                  {status || 'Entrando...'}
-                </>
-              ) : (
-                'Entrar'
-              )}
-            </button>
-          </form>
+                {/* Password */}
+                <div>
+                  <label htmlFor="password" className="block text-sm font-medium text-secondary mb-2">
+                    Senha
+                  </label>
+                  <div className="relative">
+                    <div className="absolute left-4 top-1/2 -translate-y-1/2 text-muted pointer-events-none">
+                      <FiLock className="w-[18px] h-[18px]" />
+                    </div>
+                    <input
+                      id="password"
+                      type="password"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      required
+                      autoComplete="current-password"
+                      className="input pl-11"
+                      placeholder="••••••••"
+                    />
+                  </div>
+                </div>
+
+                {/* Success */}
+                {successMsg && (
+                  <div className="p-3.5 bg-success/10 rounded-xl border border-success/20">
+                    <p className="text-success text-sm text-center">{successMsg}</p>
+                  </div>
+                )}
+
+                {/* Error */}
+                {error && (
+                  <div className="p-3.5 bg-red-500/10 rounded-xl border border-red-500/20">
+                    <p className="text-red-500 text-sm text-center">{error}</p>
+                  </div>
+                )}
+
+                {/* Submit */}
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="btn-primary w-full py-3.5 flex items-center justify-center gap-2 text-[15px] font-semibold shadow-lg shadow-primary/20 hover:shadow-xl hover:shadow-primary/30 transition-all duration-300"
+                >
+                  {loading ? (
+                    <>
+                      <LoadingInline />
+                      {status || 'Entrando...'}
+                    </>
+                  ) : (
+                    'Entrar'
+                  )}
+                </button>
+              </form>
+
+              {/* Footer */}
+              <p className="text-center text-muted text-xs mt-10">
+                {APP_CONFIG.company} &middot; {APP_CONFIG.year}
+              </p>
+            </div>
+          </div>
+
+          {/* Mobile decorative bar */}
+          <div className="lg:hidden h-1.5 mx-6 mb-6 rounded-full bg-gradient-to-r from-[#B8935A] via-[#C47A4A] to-[#8B6E3B] opacity-60" />
         </div>
-
-        {/* Footer */}
-        <p className="text-center text-muted text-sm mt-8">
-          {APP_CONFIG.company} - {APP_CONFIG.year}
-        </p>
       </div>
     </div>
   )
@@ -223,8 +296,8 @@ function LoginForm() {
 export default function LoginPage() {
   return (
     <Suspense fallback={
-      <div className="min-h-screen flex items-center justify-center bg-page">
-        <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+      <div className="h-screen w-screen flex items-center justify-center bg-[#0a0a0a]">
+        <div className="w-8 h-8 border-2 border-[#B8935A] border-t-transparent rounded-full animate-spin" />
       </div>
     }>
       <LoginForm />
