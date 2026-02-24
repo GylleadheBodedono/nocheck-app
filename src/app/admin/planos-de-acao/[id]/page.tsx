@@ -28,6 +28,7 @@ import {
   FiUpload,
   FiLink,
   FiInfo,
+  FiTrash2,
 } from 'react-icons/fi'
 import type { ActionPlanStatus, Severity } from '@/types/database'
 import { createNotification } from '@/lib/notificationService'
@@ -154,6 +155,8 @@ export default function ActionPlanDetailPage() {
   const [submittingComment, setSubmittingComment] = useState(false)
   const [uploadingEvidence, setUploadingEvidence] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [accessLevel, setAccessLevel] = useState<'admin' | 'assignee' | 'viewer'>('admin')
+  const [isAdminUser, setIsAdminUser] = useState(false)
 
   const fileInputRef = useRef<HTMLInputElement>(null)
   const router = useRouter()
@@ -249,7 +252,7 @@ export default function ActionPlanDetailPage() {
     }
     setCurrentUserId(user.id)
 
-    // Verify admin
+    // Verificar perfil
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data: profile } = await (supabase as any)
       .from('users')
@@ -257,9 +260,25 @@ export default function ActionPlanDetailPage() {
       .eq('id', user.id)
       .single()
 
-    if (!profile?.is_admin) {
-      router.push(APP_CONFIG.routes.dashboard)
-      return
+    const isAdmin = profile?.is_admin || false
+    setIsAdminUser(isAdmin)
+
+    if (isAdmin) {
+      setAccessLevel('admin')
+    } else {
+      // Nao-admin: verificar se tem acesso ao plano
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data: planCheck } = await (supabase as any)
+        .from('action_plans')
+        .select('assigned_to, created_by')
+        .eq('id', planId)
+        .single()
+
+      if (!planCheck || (planCheck.assigned_to !== user.id && planCheck.created_by !== user.id)) {
+        router.push(APP_CONFIG.routes.dashboard)
+        return
+      }
+      setAccessLevel(planCheck.assigned_to === user.id ? 'assignee' : 'viewer')
     }
 
     const [planData, updatesData] = await Promise.all([fetchPlan(), fetchUpdates()])
@@ -484,6 +503,31 @@ export default function ActionPlanDetailPage() {
   }
 
   // ============================================
+  // DELETE PLAN (admin only)
+  // ============================================
+
+  const handleDelete = async () => {
+    if (!plan || !confirm('Tem certeza que deseja EXCLUIR este plano? Esta acao e irreversivel.')) return
+
+    setError(null)
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const sb = supabase as any
+      // Deletar dependencias primeiro
+      await sb.from('action_plan_updates').delete().eq('action_plan_id', plan.id)
+      await sb.from('action_plan_stores').delete().eq('action_plan_id', plan.id)
+      await sb.from('action_plan_evidence').delete().eq('action_plan_id', plan.id)
+      // Deletar plano
+      const { error: deleteError } = await sb.from('action_plans').delete().eq('id', plan.id)
+      if (deleteError) throw deleteError
+      router.push(APP_CONFIG.routes.adminActionPlans)
+    } catch (err) {
+      console.error('[ActionPlan] Erro ao excluir plano:', err)
+      setError('Erro ao excluir plano.')
+    }
+  }
+
+  // ============================================
   // RENDER
   // ============================================
 
@@ -679,7 +723,7 @@ export default function ActionPlanDetailPage() {
         {/* ============================================ */}
         {/* 5. STATUS ACTION BUTTONS */}
         {/* ============================================ */}
-        {(plan.status === 'aberto' || plan.status === 'em_andamento') && (
+        {accessLevel !== 'viewer' && (plan.status === 'aberto' || plan.status === 'em_andamento') && (
           <div className="card p-6">
             <h3 className="text-sm font-semibold text-muted uppercase tracking-wider mb-4 flex items-center gap-2">
               <FiRefreshCw className="w-4 h-4" />
@@ -718,10 +762,23 @@ export default function ActionPlanDetailPage() {
           </div>
         )}
 
+        {/* DELETE BUTTON (admin only) */}
+        {isAdminUser && (
+          <div className="card p-6">
+            <button
+              onClick={handleDelete}
+              className="flex items-center gap-2 px-5 py-2.5 rounded-xl font-medium text-sm bg-error/20 text-error hover:bg-error/30 transition-colors"
+            >
+              <FiTrash2 className="w-4 h-4" />
+              Excluir Plano
+            </button>
+          </div>
+        )}
+
         {/* ============================================ */}
         {/* 7. ADD COMMENT FORM */}
         {/* ============================================ */}
-        {plan.status !== 'cancelado' && (
+        {accessLevel !== 'viewer' && plan.status !== 'cancelado' && (
           <div className="card p-6">
             <h3 className="text-sm font-semibold text-muted uppercase tracking-wider mb-4 flex items-center gap-2">
               <FiMessageSquare className="w-4 h-4" />

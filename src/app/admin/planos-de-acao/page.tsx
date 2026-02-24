@@ -45,6 +45,7 @@ export default function PlanoDeAcaoPage() {
   const [loading, setLoading] = useState(true)
   const [actionPlans, setActionPlans] = useState<ActionPlan[]>([])
   const [isOffline, setIsOffline] = useState(false)
+  const [isAdmin, setIsAdmin] = useState(false)
 
   // Filters
   const [filterStatus, setFilterStatus] = useState('')
@@ -113,21 +114,24 @@ export default function PlanoDeAcaoPage() {
       return
     }
 
-    if (!isAdminUser) {
-      router.push(APP_CONFIG.routes.dashboard)
-      return
-    }
+    setIsAdmin(isAdminUser)
 
     try {
       setIsOffline(false)
 
-      // Fetch all data in parallel (sem FK-disambiguated joins que podem falhar)
+      // Fetch plans: admin ve todos, nao-admin ve apenas os atribuidos a ele
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      let plansQuery = (supabase as any)
+        .from('action_plans')
+        .select(`*, store:stores(name), field:template_fields(name), template:checklist_templates(name), action_plan_stores(store_id, store:stores(name))`)
+        .order('created_at', { ascending: false })
+
+      if (!isAdminUser) {
+        plansQuery = plansQuery.eq('assigned_to', userId)
+      }
+
       const [plansRes, storesRes, usersRes] = await Promise.all([
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        (supabase as any)
-          .from('action_plans')
-          .select(`*, store:stores(name), field:template_fields(name), template:checklist_templates(name), action_plan_stores(store_id, store:stores(name))`)
-          .order('created_at', { ascending: false }),
+        plansQuery,
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         (supabase as any)
           .from('stores')
@@ -288,9 +292,9 @@ export default function PlanoDeAcaoPage() {
   return (
     <div className="min-h-screen bg-page">
       <Header
-        title="Planos de Acao"
+        title={isAdmin ? 'Planos de Acao' : 'Meus Planos de Acao'}
         icon={FiAlertTriangle}
-        backHref={APP_CONFIG.routes.admin}
+        backHref={isAdmin ? APP_CONFIG.routes.admin : APP_CONFIG.routes.dashboard}
       />
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -306,21 +310,27 @@ export default function PlanoDeAcaoPage() {
 
         {/* Header with New Plan button */}
         <div className="flex items-center justify-between mb-6">
-          <h2 className="text-lg font-semibold text-main">Planos de Acao</h2>
-          <Link
-            href={APP_CONFIG.routes.adminActionPlanPresets}
-            className="btn-secondary flex items-center gap-2"
-          >
-            <FiLayers className="w-4 h-4" />
-            <span className="hidden sm:inline">Modelos</span>
-          </Link>
-          <Link
-            href={APP_CONFIG.routes.adminActionPlanNew}
-            className="btn-primary flex items-center gap-2"
-          >
-            <FiPlus className="w-4 h-4" />
-            <span className="hidden sm:inline">Novo Plano</span>
-          </Link>
+          <h2 className="text-lg font-semibold text-main">
+            {isAdmin ? 'Planos de Acao' : 'Meus Planos de Acao'}
+          </h2>
+          {isAdmin && (
+            <>
+              <Link
+                href={APP_CONFIG.routes.adminActionPlanPresets}
+                className="btn-secondary flex items-center gap-2"
+              >
+                <FiLayers className="w-4 h-4" />
+                <span className="hidden sm:inline">Modelos</span>
+              </Link>
+              <Link
+                href={APP_CONFIG.routes.adminActionPlanNew}
+                className="btn-primary flex items-center gap-2"
+              >
+                <FiPlus className="w-4 h-4" />
+                <span className="hidden sm:inline">Novo Plano</span>
+              </Link>
+            </>
+          )}
         </div>
 
         {/* Summary Cards */}
