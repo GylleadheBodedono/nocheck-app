@@ -1,7 +1,5 @@
 'use client'
 
-export const runtime = 'edge'
-
 import { useEffect, useState, useMemo, useCallback, useRef } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import Link from 'next/link'
@@ -167,14 +165,15 @@ export default function ActionPlanDetailPage() {
 
   const fetchPlan = useCallback(async () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data, error: fetchError } = await (supabase as any)
+    const sb = supabase as any
+
+    // Query principal sem FK-disambiguated user joins (evita problemas com auth.users FK)
+    const { data, error: fetchError } = await sb
       .from('action_plans')
       .select(`
         *,
         store:stores(name),
         sector:sectors(name),
-        assigned_user:users!action_plans_assigned_to_fkey(full_name, email),
-        assigned_by_user:users!action_plans_assigned_by_fkey(full_name),
         template:checklist_templates(name),
         field:template_fields(name),
         action_plan_stores(store:stores(name))
@@ -183,12 +182,38 @@ export default function ActionPlanDetailPage() {
       .single()
 
     if (fetchError) {
-      console.error('[ActionPlan] Erro ao buscar plano:', fetchError)
-      setError('Plano de acao nao encontrado.')
+      console.error('[ActionPlan] Erro ao buscar plano:', fetchError.message, fetchError.code, fetchError.details)
+      setError(fetchError.code === 'PGRST116'
+        ? 'Plano de acao nao encontrado.'
+        : `Erro ao carregar plano: ${fetchError.message}`)
       return null
     }
 
-    return data as PlanDetail
+    // Buscar dados de usuarios separadamente (assigned_to e assigned_by referenciam auth.users)
+    const plan = data as PlanDetail
+    plan.assigned_user = null
+    plan.assigned_by_user = null
+
+    const userIds = [plan.assigned_to, plan.assigned_by].filter(Boolean)
+    if (userIds.length > 0) {
+      const { data: usersData } = await sb
+        .from('users')
+        .select('id, full_name, email')
+        .in('id', userIds)
+
+      if (usersData) {
+        type UserInfo = { id: string; full_name: string; email: string }
+        const usersMap = new Map<string, UserInfo>(usersData.map((u: UserInfo) => [u.id, u]))
+        const assignedUser = usersMap.get(plan.assigned_to)
+        if (assignedUser) plan.assigned_user = { full_name: assignedUser.full_name, email: assignedUser.email }
+        if (plan.assigned_by) {
+          const assignedByUser = usersMap.get(plan.assigned_by)
+          if (assignedByUser) plan.assigned_by_user = { full_name: assignedByUser.full_name }
+        }
+      }
+    }
+
+    return plan
   }, [supabase, planId])
 
   const fetchUpdates = useCallback(async () => {

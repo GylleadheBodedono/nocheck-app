@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { FiAlertTriangle, FiChevronDown, FiChevronUp, FiTrash2 } from 'react-icons/fi'
+import { FiAlertTriangle, FiChevronDown, FiChevronUp, FiTrash2, FiLayers } from 'react-icons/fi'
 import type { ConditionType, Severity } from '@/types/database'
 
 export type ConditionConfig = {
@@ -14,6 +14,15 @@ export type ConditionConfig = {
   descriptionTemplate: string
 }
 
+export type PresetOption = {
+  id: number
+  name: string
+  severity: Severity
+  deadlineDays: number
+  defaultAssigneeId: string | null
+  descriptionTemplate: string
+}
+
 type UserOption = {
   id: string
   name: string
@@ -22,11 +31,13 @@ type UserOption = {
 type Props = {
   fieldType: string
   fieldName: string
-  dropdownOptions?: string[] // opcoes do dropdown, se aplicavel
-  checkboxOptions?: string[] // opcoes do checkbox_multiple, se aplicavel
+  dropdownOptions?: string[]
+  checkboxOptions?: string[]
   condition: ConditionConfig | null
   onChange: (condition: ConditionConfig | null) => void
   users: UserOption[]
+  presets?: PresetOption[]
+  onSaveAsPreset?: (data: { name: string; severity: Severity; deadlineDays: number; defaultAssigneeId: string | null; descriptionTemplate: string }) => void
 }
 
 const SEVERITY_OPTIONS: { value: Severity; label: string; color: string }[] = [
@@ -54,8 +65,12 @@ export function FieldConditionEditor({
   condition,
   onChange,
   users,
+  presets = [],
+  onSaveAsPreset,
 }: Props) {
   const [expanded, setExpanded] = useState(false)
+  const [showSavePreset, setShowSavePreset] = useState(false)
+  const [presetName, setPresetName] = useState('')
 
   const handleToggle = () => {
     if (!condition) {
@@ -103,6 +118,32 @@ export function FieldConditionEditor({
   const update = (partial: Partial<ConditionConfig>) => {
     if (!condition) return
     onChange({ ...condition, ...partial })
+  }
+
+  const handlePresetSelect = (presetId: string) => {
+    if (!presetId || !condition) return
+    const preset = presets.find(p => String(p.id) === presetId)
+    if (!preset) return
+
+    update({
+      severity: preset.severity,
+      deadlineDays: preset.deadlineDays,
+      defaultAssigneeId: preset.defaultAssigneeId,
+      descriptionTemplate: preset.descriptionTemplate || condition.descriptionTemplate,
+    })
+  }
+
+  const handleSaveAsPreset = () => {
+    if (!condition || !presetName.trim() || !onSaveAsPreset) return
+    onSaveAsPreset({
+      name: presetName.trim(),
+      severity: condition.severity,
+      deadlineDays: condition.deadlineDays,
+      defaultAssigneeId: condition.defaultAssigneeId,
+      descriptionTemplate: condition.descriptionTemplate,
+    })
+    setPresetName('')
+    setShowSavePreset(false)
   }
 
   // Tipos de campo suportados para condicoes
@@ -358,6 +399,35 @@ export function FieldConditionEditor({
 
           {/* Campos comuns */}
           <div className="border-t border-subtle pt-3 mt-3 space-y-3">
+
+            {/* Selector de modelo */}
+            {presets.length > 0 && (
+              <div>
+                <label className="block text-xs font-medium text-secondary mb-1 flex items-center gap-1.5">
+                  <FiLayers className="w-3.5 h-3.5" />
+                  Usar modelo
+                </label>
+                <select
+                  defaultValue=""
+                  onChange={(e) => {
+                    handlePresetSelect(e.target.value)
+                    e.target.value = ''
+                  }}
+                  className="input"
+                >
+                  <option value="">-- Selecione um modelo para preencher --</option>
+                  {presets.map((p) => (
+                    <option key={p.id} value={String(p.id)}>
+                      {p.name} ({SEVERITY_OPTIONS.find(s => s.value === p.severity)?.label}, {p.deadlineDays}d)
+                    </option>
+                  ))}
+                </select>
+                <p className="text-xs text-muted mt-1">
+                  Selecionar um modelo preenche severidade, prazo, responsavel e descricao automaticamente.
+                </p>
+              </div>
+            )}
+
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="block text-xs font-medium text-secondary mb-1">Severidade</label>
@@ -414,6 +484,48 @@ export function FieldConditionEditor({
                 Variaveis: {'{field_name}'}, {'{value}'}, {'{store_name}'}
               </p>
             </div>
+
+            {/* Salvar como modelo */}
+            {onSaveAsPreset && (
+              <div>
+                {showSavePreset ? (
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      value={presetName}
+                      onChange={(e) => setPresetName(e.target.value)}
+                      placeholder="Nome do modelo"
+                      className="input flex-1 text-sm"
+                      onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleSaveAsPreset() } }}
+                    />
+                    <button
+                      type="button"
+                      onClick={handleSaveAsPreset}
+                      disabled={!presetName.trim()}
+                      className="px-3 py-2 text-xs rounded-lg font-medium bg-primary/10 text-primary hover:bg-primary/20 transition-colors disabled:opacity-50"
+                    >
+                      Salvar
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { setShowSavePreset(false); setPresetName('') }}
+                      className="px-3 py-2 text-xs rounded-lg text-muted hover:text-main hover:bg-surface-hover transition-colors"
+                    >
+                      Cancelar
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setShowSavePreset(true)}
+                    className="flex items-center gap-1.5 text-xs text-primary hover:text-primary/80 transition-colors"
+                  >
+                    <FiLayers className="w-3.5 h-3.5" />
+                    Salvar como modelo reutilizavel
+                  </button>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Remover condicao */}

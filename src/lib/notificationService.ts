@@ -49,25 +49,34 @@ export async function createNotification(
 
 /**
  * Envia email de notificacao via API route
+ * @param accessToken - Token JWT do Supabase para autenticacao (mais confiavel que cookies)
  */
 export async function sendEmailNotification(
   to: string,
   subject: string,
-  htmlBody: string
+  htmlBody: string,
+  accessToken?: string
 ): Promise<{ success: boolean; error?: string }> {
   try {
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+    if (accessToken) {
+      headers['Authorization'] = `Bearer ${accessToken}`
+    }
+
     const response = await fetch('/api/notifications/email', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers,
+      credentials: 'include',
       body: JSON.stringify({ to, subject, htmlBody }),
     })
 
     if (!response.ok) {
       const text = await response.text()
-      console.error('[Email] Erro ao enviar:', text)
-      return { success: false, error: text }
+      console.error('[Email] Erro ao enviar para', to, ':', response.status, text)
+      return { success: false, error: `${response.status}: ${text}` }
     }
 
+    console.log('[Email] Enviado com sucesso para', to)
     return { success: true }
   } catch (err) {
     console.error('[Email] Erro ao chamar API:', err)

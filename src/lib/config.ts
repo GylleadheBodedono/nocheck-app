@@ -31,6 +31,7 @@ export const APP_CONFIG = {
     adminGallery: '/admin/galeria',
     adminActionPlans: '/admin/planos-de-acao',
     adminActionPlanNew: '/admin/planos-de-acao/novo',
+    adminActionPlanPresets: '/admin/planos-de-acao/modelos',
     adminSettings: '/admin/configuracoes',
     checklistNew: '/checklist/novo',
   },

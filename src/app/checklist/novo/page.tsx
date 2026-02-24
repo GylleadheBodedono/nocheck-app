@@ -1310,7 +1310,7 @@ function ChecklistForm() {
             allResponseMapped,
             template.fields
           )
-          await processarNaoConformidades(
+          const ncResult = await processarNaoConformidades(
             supabase,
             checklistId,
             Number(templateId),
@@ -1320,6 +1320,7 @@ function ChecklistForm() {
             allResponseMapped,
             template.fields.map(f => ({ id: f.id, name: f.name, field_type: f.field_type, options: f.options }))
           )
+          console.log('[Checklist] Resultado nao-conformidades:', ncResult)
         }
 
         // Activity log
@@ -1411,7 +1412,7 @@ function ChecklistForm() {
           allResponseMapped,
           template.fields
         )
-        await processarNaoConformidades(
+        const ncResult2 = await processarNaoConformidades(
           supabase,
           checklistId,
           Number(templateId),
@@ -1421,6 +1422,7 @@ function ChecklistForm() {
           allResponseMapped,
           template.fields.map(f => ({ id: f.id, name: f.name, field_type: f.field_type, options: f.options }))
         )
+        console.log('[Checklist] Resultado nao-conformidades (justificativas):', ncResult2)
       }
 
       // Activity log

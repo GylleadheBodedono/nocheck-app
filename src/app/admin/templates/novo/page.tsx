@@ -23,7 +23,7 @@ import { DndContext, closestCenter, PointerSensor, useSensor, useSensors, type D
 import { SortableContext, verticalListSortingStrategy, useSortable, arrayMove } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import type { Store, FieldType, TemplateCategory, Sector, FunctionRow } from '@/types/database'
-import { FieldConditionEditor, type ConditionConfig } from '@/components/admin/FieldConditionEditor'
+import { FieldConditionEditor, type ConditionConfig, type PresetOption } from '@/components/admin/FieldConditionEditor'
 
 type SectionConfig = {
   id: string
@@ -94,6 +94,7 @@ export default function NovoTemplatePage() {
   const [expandedSection, setExpandedSection] = useState<string | null>(null)
   const [fieldConditions, setFieldConditions] = useState<Record<string, ConditionConfig | null>>({})
   const [conditionUsers, setConditionUsers] = useState<{ id: string; name: string }[]>([])
+  const [conditionPresets, setConditionPresets] = useState<PresetOption[]>([])
 
   // Visibility - now includes sector_id
   const [visibility, setVisibility] = useState<VisibilityConfig[]>([])
@@ -140,6 +141,24 @@ export default function NovoTemplatePage() {
         .eq('is_active', true)
         .order('full_name')
       if (usersData) setConditionUsers((usersData as { id: string; full_name: string }[]).map((u) => ({ id: u.id, name: u.full_name })))
+
+      // Fetch presets for condition editor
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data: presetsData } = await (supabase as any)
+        .from('action_plan_presets')
+        .select('id, name, severity, deadline_days, default_assignee_id, description_template')
+        .eq('is_active', true)
+        .order('name')
+      if (presetsData) {
+        setConditionPresets((presetsData as { id: number; name: string; severity: string; deadline_days: number; default_assignee_id: string | null; description_template: string | null }[]).map((p) => ({
+          id: p.id,
+          name: p.name,
+          severity: p.severity as PresetOption['severity'],
+          deadlineDays: p.deadline_days,
+          defaultAssigneeId: p.default_assignee_id,
+          descriptionTemplate: p.description_template || '',
+        })))
+      }
     }
 
     fetchData()
@@ -338,6 +357,40 @@ export default function NovoTemplatePage() {
   const isStoreFullyEnabled = (storeId: number) => {
     const storeSectors = getSectorsForStore(storeId)
     return storeSectors.length > 0 && storeSectors.every(s => isSectorEnabled(storeId, s.id))
+  }
+
+  const handleSaveAsPreset = async (data: { name: string; severity: string; deadlineDays: number; defaultAssigneeId: string | null; descriptionTemplate: string }) => {
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data: preset, error: presetErr } = await (supabase as any)
+        .from('action_plan_presets')
+        .insert({
+          name: data.name,
+          severity: data.severity,
+          deadline_days: data.deadlineDays,
+          default_assignee_id: data.defaultAssigneeId,
+          description_template: data.descriptionTemplate,
+          is_active: true,
+        })
+        .select('id, name, severity, deadline_days, default_assignee_id, description_template')
+        .single()
+
+      if (presetErr) throw presetErr
+
+      setConditionPresets(prev => [...prev, {
+        id: preset.id,
+        name: preset.name,
+        severity: preset.severity as PresetOption['severity'],
+        deadlineDays: preset.deadline_days,
+        defaultAssigneeId: preset.default_assignee_id,
+        descriptionTemplate: preset.description_template || '',
+      }])
+
+      alert('Modelo salvo com sucesso!')
+    } catch (err) {
+      console.error('[Template] Erro ao salvar modelo:', err)
+      alert('Erro ao salvar modelo. Tente novamente.')
+    }
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -852,6 +905,8 @@ export default function NovoTemplatePage() {
                                       condition={fieldConditions[field.id] || null}
                                       onChange={(cond) => setFieldConditions(prev => ({ ...prev, [field.id]: cond }))}
                                       users={conditionUsers}
+                                      presets={conditionPresets}
+                                      onSaveAsPreset={handleSaveAsPreset}
                                     />
                                   </div>
                                 )}
@@ -964,6 +1019,8 @@ export default function NovoTemplatePage() {
                                 condition={fieldConditions[field.id] || null}
                                 onChange={(cond) => setFieldConditions(prev => ({ ...prev, [field.id]: cond }))}
                                 users={conditionUsers}
+                                presets={conditionPresets}
+                                onSaveAsPreset={handleSaveAsPreset}
                               />
                             </div>
                           )}
@@ -1066,6 +1123,8 @@ export default function NovoTemplatePage() {
                               condition={fieldConditions[field.id] || null}
                               onChange={(cond) => setFieldConditions(prev => ({ ...prev, [field.id]: cond }))}
                               users={conditionUsers}
+                              presets={conditionPresets}
+                              onSaveAsPreset={handleSaveAsPreset}
                             />
                           </div>
                         )}

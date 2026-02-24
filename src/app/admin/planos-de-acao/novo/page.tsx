@@ -225,7 +225,9 @@ export default function NovoPlanoDeAcaoPage() {
               emailVars
             )
 
-            await sendEmailNotification(assigneeEmail, subject, html)
+            const { data: { session } } = await supabase.auth.getSession()
+            const emailResult = await sendEmailNotification(assigneeEmail, subject, html, session?.access_token || undefined)
+            console.log('[PlanoDeAcao] Email para', assigneeEmail, ':', emailResult.success ? 'OK' : emailResult.error)
           }
         } catch (emailErr) {
           console.warn('[PlanoDeAcao] Erro ao enviar email:', emailErr)

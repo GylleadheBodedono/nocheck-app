@@ -25,7 +25,7 @@ import { DndContext, closestCenter, PointerSensor, useSensor, useSensors, type D
 import { SortableContext, verticalListSortingStrategy, useSortable, arrayMove } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import type { Store, FieldType, TemplateCategory, Sector, TemplateField, FunctionRow } from '@/types/database'
-import { FieldConditionEditor, type ConditionConfig } from '@/components/admin/FieldConditionEditor'
+import { FieldConditionEditor, type ConditionConfig, type PresetOption } from '@/components/admin/FieldConditionEditor'
 
 type SectionConfig = {
   id: string
@@ -111,6 +111,7 @@ export default function EditTemplatePage() {
   const [_originalVisibilityIds, setOriginalVisibilityIds] = useState<number[]>([])
   const [fieldConditions, setFieldConditions] = useState<Record<string, ConditionConfig | null>>({})
   const [conditionUsers, setConditionUsers] = useState<{ id: string; name: string }[]>([])
+  const [conditionPresets, setConditionPresets] = useState<PresetOption[]>([])
 
   useEffect(() => {
     const fetchData = async () => {
@@ -154,6 +155,27 @@ export default function EditTemplatePage() {
         .eq('is_active', true)
         .order('full_name')
       if (usersData) setConditionUsers((usersData as { id: string; full_name: string }[]).map((u) => ({ id: u.id, name: u.full_name })))
+
+      // Fetch action plan presets
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data: presetsData } = await (supabase as any)
+        .from('action_plan_presets')
+        .select('id, name, severity, deadline_days, default_assignee_id, description_template')
+        .eq('is_active', true)
+        .order('name')
+      if (presetsData) {
+        setConditionPresets(
+          (presetsData as { id: number; name: string; severity: string; deadline_days: number; default_assignee_id: string | null; description_template: string | null }[])
+            .map(p => ({
+              id: p.id,
+              name: p.name,
+              severity: p.severity as PresetOption['severity'],
+              deadlineDays: p.deadline_days,
+              defaultAssigneeId: p.default_assignee_id,
+              descriptionTemplate: p.description_template || '',
+            }))
+        )
+      }
 
       // Fetch template data with sections
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -413,6 +435,48 @@ export default function EditTemplatePage() {
       return options.items as string[]
     }
     return []
+  }
+
+  const handleSaveAsPreset = async (data: { name: string; severity: string; deadlineDays: number; defaultAssigneeId: string | null; descriptionTemplate: string }) => {
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { error: insertErr } = await (supabase as any)
+        .from('action_plan_presets')
+        .insert({
+          name: data.name,
+          severity: data.severity,
+          deadline_days: data.deadlineDays,
+          default_assignee_id: data.defaultAssigneeId,
+          description_template: data.descriptionTemplate,
+          is_active: true,
+        })
+      if (insertErr) {
+        console.error('[Template] Erro ao salvar preset:', insertErr)
+        return
+      }
+      // Refresh presets
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data: presetsData } = await (supabase as any)
+        .from('action_plan_presets')
+        .select('id, name, severity, deadline_days, default_assignee_id, description_template')
+        .eq('is_active', true)
+        .order('name')
+      if (presetsData) {
+        setConditionPresets(
+          (presetsData as { id: number; name: string; severity: string; deadline_days: number; default_assignee_id: string | null; description_template: string | null }[])
+            .map(p => ({
+              id: p.id,
+              name: p.name,
+              severity: p.severity as PresetOption['severity'],
+              deadlineDays: p.deadline_days,
+              defaultAssigneeId: p.default_assignee_id,
+              descriptionTemplate: p.description_template || '',
+            }))
+        )
+      }
+    } catch (err) {
+      console.error('[Template] Erro ao salvar preset:', err)
+    }
   }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -992,6 +1056,8 @@ export default function EditTemplatePage() {
                                       condition={fieldConditions[field.id] || null}
                                       onChange={(cond) => setFieldConditions(prev => ({ ...prev, [field.id]: cond }))}
                                       users={conditionUsers}
+                                      presets={conditionPresets}
+                                      onSaveAsPreset={handleSaveAsPreset}
                                     />
                                   </div>
                                 )}
@@ -1072,6 +1138,8 @@ export default function EditTemplatePage() {
                                       condition={fieldConditions[field.id] || null}
                                       onChange={(cond) => setFieldConditions(prev => ({ ...prev, [field.id]: cond }))}
                                       users={conditionUsers}
+                                      presets={conditionPresets}
+                                      onSaveAsPreset={handleSaveAsPreset}
                                     />
                             </div>
                           )}
@@ -1141,6 +1209,8 @@ export default function EditTemplatePage() {
                                       condition={fieldConditions[field.id] || null}
                                       onChange={(cond) => setFieldConditions(prev => ({ ...prev, [field.id]: cond }))}
                                       users={conditionUsers}
+                                      presets={conditionPresets}
+                                      onSaveAsPreset={handleSaveAsPreset}
                                     />
                           </div>
                         )}

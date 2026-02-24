@@ -222,33 +222,60 @@ export async function processarNaoConformidades(
     }
 
     if (!conditions || conditions.length === 0) {
+      console.log(`[ActionPlan] Nenhuma field_condition ativa para os ${fieldIds.length} campos deste template (IDs: ${fieldIds.join(', ')})`)
       return { success: true, plansCreated: 0 }
     }
+
+    console.log(`[ActionPlan] ${conditions.length} field_condition(s) encontrada(s) para checklist #${checklistId}`)
 
     // 2. Buscar dados de contexto (uma unica vez, antes do loop)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const sb = supabase as any
 
-    const [storeResult, templateResult, sectorResult, respondentResult, checklistResult, emailTemplateResult, emailSubjectResult] =
-      await Promise.all([
-        sb.from('stores').select('name').eq('id', storeId).single(),
-        sb.from('checklist_templates').select('name').eq('id', templateId).single(),
-        sectorId
-          ? sb.from('sectors').select('name').eq('id', sectorId).single()
-          : Promise.resolve({ data: null }),
-        sb.from('users').select('full_name').eq('id', userId).single(),
-        sb.from('checklists').select('completed_at, created_at').eq('id', checklistId).single(),
-        sb.from('app_settings').select('value').eq('key', 'action_plan_email_template').maybeSingle(),
-        sb.from('app_settings').select('value').eq('key', 'action_plan_email_subject').maybeSingle(),
-      ])
+    // Buscar access token para autenticacao do email API
+    let accessToken: string | undefined
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      accessToken = session?.access_token || undefined
+    } catch {
+      console.warn('[ActionPlan] Nao foi possivel obter access token da sessao')
+    }
 
-    const storeName = storeResult.data?.name || `Loja #${storeId}`
-    const templateName = templateResult.data?.name || `Template #${templateId}`
-    const sectorName = sectorResult.data?.name || ''
-    const respondentName = respondentResult.data?.full_name || 'Usuario'
-    const respondentTime = checklistResult.data?.completed_at || checklistResult.data?.created_at || new Date().toISOString()
-    const emailTemplateHtml: string | null = emailTemplateResult.data?.value || null
-    const emailSubjectTemplate: string | null = emailSubjectResult.data?.value || null
+    // Buscar contexto com resiliencia - falhas aqui NAO devem impedir criacao do plano
+    let storeName = `Loja #${storeId}`
+    let templateName = `Template #${templateId}`
+    let sectorName = ''
+    let respondentName = 'Usuario'
+    let respondentTime = new Date().toISOString()
+    let emailTemplateHtml: string | null = null
+    let emailSubjectTemplate: string | null = null
+
+    try {
+      const [storeResult, templateResult, sectorResult, respondentResult, checklistResult, emailTemplateResult, emailSubjectResult] =
+        await Promise.all([
+          sb.from('stores').select('name').eq('id', storeId).single(),
+          sb.from('checklist_templates').select('name').eq('id', templateId).single(),
+          sectorId
+            ? sb.from('sectors').select('name').eq('id', sectorId).single()
+            : Promise.resolve({ data: null }),
+          sb.from('users').select('full_name').eq('id', userId).single(),
+          sb.from('checklists').select('completed_at, created_at').eq('id', checklistId).single(),
+          sb.from('app_settings').select('value').eq('key', 'action_plan_email_template').maybeSingle(),
+          sb.from('app_settings').select('value').eq('key', 'action_plan_email_subject').maybeSingle(),
+        ])
+
+      if (storeResult.data?.name) storeName = storeResult.data.name
+      if (templateResult.data?.name) templateName = templateResult.data.name
+      if (sectorResult.data?.name) sectorName = sectorResult.data.name
+      if (respondentResult.data?.full_name) respondentName = respondentResult.data.full_name
+      if (checklistResult.data?.completed_at || checklistResult.data?.created_at) {
+        respondentTime = checklistResult.data.completed_at || checklistResult.data.created_at
+      }
+      emailTemplateHtml = emailTemplateResult.data?.value || null
+      emailSubjectTemplate = emailSubjectResult.data?.value || null
+    } catch (ctxErr) {
+      console.warn('[ActionPlan] Erro ao buscar dados de contexto (prosseguindo com defaults):', ctxErr)
+    }
 
     const appUrl = typeof window !== 'undefined'
       ? window.location.origin
@@ -265,7 +292,11 @@ export async function processarNaoConformidades(
       if (!response) continue
 
       const isNonConforming = evaluateCondition(field, response, condition)
-      if (!isNonConforming) continue
+      if (!isNonConforming) {
+        console.log(`[ActionPlan] Campo "${field.name}" (ID ${field.id}): conforme`)
+        continue
+      }
+      console.log(`[ActionPlan] Campo "${field.name}" (ID ${field.id}): NAO CONFORME - criando plano de acao`)
 
       // 4. Nao-conformidade detectada! Verificar reincidencia
       const reincidencia = await checkReincidencia(supabase, field.id, storeId, templateId)
@@ -415,7 +446,7 @@ export async function processarNaoConformidades(
             emailVars
           )
 
-          const emailResult = await sendEmailNotification(assignee.email, emailSubject, htmlBody)
+          const emailResult = await sendEmailNotification(assignee.email, emailSubject, htmlBody, accessToken)
           console.log('[ActionPlan] Email para', assignee.email, ':', emailResult.success ? 'OK' : emailResult.error)
         } else {
           console.warn('[ActionPlan] Assignee sem email, pulando envio')

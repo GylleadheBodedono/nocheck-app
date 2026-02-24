@@ -15,6 +15,7 @@ import {
   FiEye,
   FiAlertOctagon,
   FiActivity,
+  FiLayers,
 } from 'react-icons/fi'
 import Link from 'next/link'
 import { APP_CONFIG } from '@/lib/config'
@@ -284,6 +285,13 @@ export default function PlanoDeAcaoPage() {
         {/* Header with New Plan button */}
         <div className="flex items-center justify-between mb-6">
           <h2 className="text-lg font-semibold text-main">Planos de Acao</h2>
+          <Link
+            href={APP_CONFIG.routes.adminActionPlanPresets}
+            className="btn-secondary flex items-center gap-2"
+          >
+            <FiLayers className="w-4 h-4" />
+            <span className="hidden sm:inline">Modelos</span>
+          </Link>
           <Link
             href={APP_CONFIG.routes.adminActionPlanNew}
             className="btn-primary flex items-center gap-2"

@@ -43,31 +43,50 @@ export async function verifyApiAuth(
     }
   }
 
-  // Criar client SSR com cookies da request (mesmo padrão do middleware)
-  const supabase = createServerClient(supabaseUrl, supabaseAnonKey, {
-    cookies: {
-      getAll() {
-        return request.cookies.getAll()
-      },
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars, @typescript-eslint/no-explicit-any
-      setAll(_cookiesToSet: any) {
-        // API routes não precisam setar cookies (read-only)
-      },
-    },
-  })
+  // Tentar autenticacao via Bearer token (mais confiavel que cookies)
+  const authHeader = request.headers.get('Authorization')
+  const bearerToken = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : null
 
-  // Validar sessão do usuário
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser()
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let user: any = null
 
-  if (authError || !user) {
+  if (bearerToken) {
+    // Usar service client para validar o JWT token
+    const serviceClient = createClient(supabaseUrl, supabaseServiceKey, {
+      auth: { autoRefreshToken: false, persistSession: false },
+    })
+    const { data: { user: tokenUser }, error: tokenError } = await serviceClient.auth.getUser(bearerToken)
+    if (!tokenError && tokenUser) {
+      user = tokenUser
+    }
+  }
+
+  // Fallback: cookies da request (padrao SSR)
+  if (!user) {
+    const supabase = createServerClient(supabaseUrl, supabaseAnonKey, {
+      cookies: {
+        getAll() {
+          return request.cookies.getAll()
+        },
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars, @typescript-eslint/no-explicit-any
+        setAll(_cookiesToSet: any) {
+          // API routes nao precisam setar cookies (read-only)
+        },
+      },
+    })
+
+    const { data: { user: cookieUser }, error: authError } = await supabase.auth.getUser()
+    if (!authError && cookieUser) {
+      user = cookieUser
+    }
+  }
+
+  if (!user) {
     return {
       user: null,
       isAdmin: false,
       error: NextResponse.json(
-        { error: 'Não autenticado' },
+        { error: 'Nao autenticado' },
         { status: 401 }
       ),
     }
@@ -83,11 +102,11 @@ export async function verifyApiAuth(
   }
 
   // Verificar is_admin no public.users usando service role
-  const serviceClient = createClient(supabaseUrl, supabaseServiceKey, {
+  const adminCheckClient = createClient(supabaseUrl, supabaseServiceKey, {
     auth: { autoRefreshToken: false, persistSession: false },
   })
 
-  const { data: profile } = await serviceClient
+  const { data: profile } = await adminCheckClient
     .from('users')
     .select('is_admin')
     .eq('id', user.id)
