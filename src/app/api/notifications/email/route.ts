@@ -1,12 +1,14 @@
 export const runtime = 'edge'
 
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
 import { verifyApiAuth } from '@/lib/api-auth'
+
+const RESEND_API_KEY = process.env.RESEND_API_KEY
+const FROM_EMAIL = process.env.RESEND_FROM_EMAIL || 'onboarding@resend.dev'
 
 /**
  * POST /api/notifications/email
- * Envia email de notificacao via Supabase Auth Admin (SMTP configurado no Supabase)
+ * Envia email via Resend API
  *
  * Body: { to: string, subject: string, htmlBody: string }
  */
@@ -24,57 +26,71 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-    const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
-
-    if (!supabaseUrl || !supabaseServiceKey) {
-      console.warn('[Email] Supabase URL ou Service Key nao configurados')
+    if (!RESEND_API_KEY) {
+      console.warn('[Email] RESEND_API_KEY nao configurada')
       return NextResponse.json(
-        { success: false, error: 'Configuracao de email nao disponivel' },
+        { success: false, error: 'RESEND_API_KEY nao configurada' },
         { status: 503 }
       )
     }
 
-    // Usar Supabase Admin client para enviar email
-    const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, {
-      auth: { autoRefreshToken: false, persistSession: false }
+    // Tenta com email real primeiro
+    const response = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${RESEND_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        from: FROM_EMAIL,
+        to: [to],
+        subject,
+        html: htmlBody,
+      }),
     })
 
-    // Tentar enviar via Supabase Auth (magic link com redirect customizado)
-    // Como alternativa, se SMTP estiver configurado, usar invite
-    // A forma mais simples com Supabase SMTP e usar auth.admin.inviteUserByEmail
-    // mas isso so funciona para novos usuarios.
-    // Para enviar emails customizados, precisamos de um SMTP externo ou Edge Function.
-
-    // Abordagem: usar fetch direto para a Edge Function do Supabase (se existir)
-    // ou fallback para log warning se nao configurado
-
-    // Tentativa via Supabase Auth Admin - enviar email personalizado
-    // Nota: Supabase nao tem API nativa de envio de email customizado.
-    // Usamos o endpoint de recuperacao de senha como workaround ou
-    // implementamos via SMTP direto se as variaveis estiverem disponiveis.
-
-    // Tentar usar Supabase Edge Function para envio de email
-    try {
-      const { error } = await supabaseAdmin.functions.invoke('send-email', {
-        body: { to, subject, html: htmlBody },
-      })
-
-      if (!error) {
-        console.log(`[Email] Enviado via Supabase Function para ${to}`)
-        return NextResponse.json({ success: true })
-      }
-      console.warn('[Email] Supabase Function nao disponivel:', error)
-    } catch {
-      // Function nao existe, ignorar
+    if (response.ok) {
+      const result = await response.json()
+      console.log(`[Email] Enviado via Resend para ${to}, from: ${FROM_EMAIL}, id: ${(result as { id?: string }).id}`)
+      return NextResponse.json({ success: true, emailId: (result as { id?: string }).id })
     }
 
-    // Log warning mas retornar sucesso para nao bloquear o fluxo
-    console.warn(`[Email] Nao foi possivel enviar email para ${to}. Configure SMTP_HOST/SMTP_USER/SMTP_PASS ou crie uma Supabase Edge Function 'send-email'.`)
-    return NextResponse.json({
-      success: true,
-      warning: 'Email nao enviado - SMTP nao configurado. O plano de acao foi criado normalmente.',
-    })
+    // Fallback: se dominio customizado falhou, tenta com onboarding@resend.dev
+    const errorData = await response.json().catch(() => ({}))
+    const FALLBACK_FROM = 'onboarding@resend.dev'
+
+    if (FROM_EMAIL !== FALLBACK_FROM) {
+      console.warn(`[Email] Falha com ${FROM_EMAIL} (${response.status}), tentando fallback ${FALLBACK_FROM}...`)
+
+      const fallbackRes = await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${RESEND_API_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          from: FALLBACK_FROM,
+          to: [to],
+          subject,
+          html: htmlBody,
+        }),
+      })
+
+      if (fallbackRes.ok) {
+        const fallbackResult = await fallbackRes.json()
+        console.log(`[Email] Enviado via fallback para ${to}, id: ${(fallbackResult as { id?: string }).id}`)
+        return NextResponse.json({ success: true, emailId: (fallbackResult as { id?: string }).id, fallback: true })
+      }
+
+      const fallbackError = await fallbackRes.json().catch(() => ({}))
+      console.error('[Email] Fallback tambem falhou:', fallbackRes.status, fallbackError)
+    }
+
+    console.error('[Email] Resend erro:', response.status, errorData)
+    return NextResponse.json(
+      { success: false, error: (errorData as { message?: string }).message || `Resend erro ${response.status}` },
+      { status: 502 }
+    )
   } catch (error) {
     console.error('[Email] Erro:', error)
     return NextResponse.json(

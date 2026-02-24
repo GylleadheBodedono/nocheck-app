@@ -129,23 +129,49 @@ export async function DELETE(
       auth: { autoRefreshToken: false, persistSession: false }
     })
 
-    // Deleta do auth.users - CASCADE cuida do public.users e user_store_roles
+    // Limpar TODAS as referencias a public.users(id) antes de deletar
+    // (necessario porque FKs podem nao ter ON DELETE CASCADE/SET NULL)
+    const adminUserId = auth.user.id
+
+    // 1. Deletar registros filhos (junction tables)
+    await Promise.allSettled([
+      supabase.from('user_stores').delete().eq('user_id', userId),
+      supabase.from('user_store_roles').delete().eq('user_id', userId),
+      supabase.from('notifications').delete().eq('user_id', userId),
+    ])
+
+    // 2. Nullificar FKs que referenciam public.users(id)
+    await Promise.allSettled([
+      supabase.from('activity_log').update({ user_id: null }).eq('user_id', userId),
+      supabase.from('checklist_templates').update({ created_by: null }).eq('created_by', userId),
+      supabase.from('template_visibility').update({ assigned_by: null }).eq('assigned_by', userId),
+      supabase.from('checklists').update({ validated_by: null }).eq('validated_by', userId),
+      supabase.from('checklist_responses').update({ answered_by: null }).eq('answered_by', userId),
+      supabase.from('attachments').update({ uploaded_by: null }).eq('uploaded_by', userId),
+      supabase.from('checklist_justifications').update({ justified_by: null }).eq('justified_by', userId),
+      supabase.from('user_store_roles').update({ assigned_by: null }).eq('assigned_by', userId),
+    ])
+
+    // 3. checklists.created_by pode ser NOT NULL — tenta null, senao reatribui ao admin
+    const { error: nullErr } = await supabase
+      .from('checklists')
+      .update({ created_by: null })
+      .eq('created_by', userId)
+
+    if (nullErr) {
+      await supabase
+        .from('checklists')
+        .update({ created_by: adminUserId })
+        .eq('created_by', userId)
+    }
+
+    // 4. Agora deletar do auth.users (CASCADE deleta public.users sem bloqueio)
     const { error } = await supabase.auth.admin.deleteUser(userId)
 
     if (error) {
       console.error('[API Users] Erro ao deletar usuario:', error)
-
-      // Detect FK constraint errors
-      const msg = error.message || ''
-      if (msg.includes('foreign key') || msg.includes('violates') || msg.includes('23503')) {
-        return NextResponse.json(
-          { error: 'Nao foi possivel excluir o usuario porque existem registros vinculados. Execute a migration 018_fix_user_deletion.sql para corrigir as constraints do banco.' },
-          { status: 409 }
-        )
-      }
-
       return NextResponse.json(
-        { error: msg || 'Erro ao excluir usuario' },
+        { error: error.message || 'Erro ao excluir usuario' },
         { status: 400 }
       )
     }
@@ -153,17 +179,8 @@ export async function DELETE(
     return NextResponse.json({ success: true })
   } catch (error) {
     console.error('[API Users] Erro:', error)
-    const msg = error instanceof Error ? error.message : 'Erro desconhecido'
-
-    if (msg.includes('foreign key') || msg.includes('violates') || msg.includes('23503')) {
-      return NextResponse.json(
-        { error: 'Nao foi possivel excluir o usuario porque existem registros vinculados. Execute a migration 018_fix_user_deletion.sql para corrigir as constraints do banco.' },
-        { status: 409 }
-      )
-    }
-
     return NextResponse.json(
-      { error: msg },
+      { error: error instanceof Error ? error.message : 'Erro desconhecido' },
       { status: 500 }
     )
   }

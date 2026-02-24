@@ -80,6 +80,11 @@ export default function NovoTemplatePage() {
   const [description, setDescription] = useState('')
   const [category, setCategory] = useState<TemplateCategory>('recebimento')
 
+  // Time settings
+  const [allowedStartTime, setAllowedStartTime] = useState('')
+  const [allowedEndTime, setAllowedEndTime] = useState('')
+  const [justificationDeadlineHours, setJustificationDeadlineHours] = useState('')
+
   // Sections
   const [sections, setSections] = useState<SectionConfig[]>([])
 
@@ -367,6 +372,9 @@ export default function NovoTemplatePage() {
           name,
           description: description || null,
           category,
+          allowed_start_time: allowedStartTime || null,
+          allowed_end_time: allowedEndTime || null,
+          justification_deadline_hours: justificationDeadlineHours ? Number(justificationDeadlineHours) : null,
         })
         .select()
         .single()
@@ -556,6 +564,52 @@ export default function NovoTemplatePage() {
                   <option value="fechamento">Fechamento</option>
                   <option value="outros">Outros</option>
                 </select>
+              </div>
+            </div>
+          </div>
+
+          {/* Configuracoes de Tempo */}
+          <div className="card p-6">
+            <h2 className="text-lg font-semibold text-main mb-1">Configuracoes de Tempo</h2>
+            <p className="text-sm text-muted mb-4">Deixe vazio para sem restricao</p>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-secondary mb-2">
+                  Horario inicio
+                </label>
+                <input
+                  type="time"
+                  value={allowedStartTime}
+                  onChange={(e) => setAllowedStartTime(e.target.value)}
+                  className="input"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-secondary mb-2">
+                  Horario fim
+                </label>
+                <input
+                  type="time"
+                  value={allowedEndTime}
+                  onChange={(e) => setAllowedEndTime(e.target.value)}
+                  className="input"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-secondary mb-2">
+                  Prazo justificativas (horas)
+                </label>
+                <input
+                  type="number"
+                  min="1"
+                  value={justificationDeadlineHours}
+                  onChange={(e) => setJustificationDeadlineHours(e.target.value)}
+                  className="input"
+                  placeholder="Ex: 48"
+                />
               </div>
             </div>
           </div>

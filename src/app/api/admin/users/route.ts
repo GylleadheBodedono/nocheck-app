@@ -5,7 +5,6 @@ import { createClient } from '@supabase/supabase-js'
 import { verifyApiAuth } from '@/lib/api-auth'
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
 
 /**
@@ -161,36 +160,107 @@ export async function POST(request: NextRequest) {
 
       userId = adminData.user.id
     } else {
-      // Fluxo normal: signUp com anon key (envia email de confirmacao)
-      const anonClient = createClient(supabaseUrl, supabaseAnonKey, {
+      // Sem auto-confirm: cria usuario com email NAO confirmado + envia email via Resend
+      const adminClient = createClient(supabaseUrl, supabaseServiceKey, {
         auth: { autoRefreshToken: false, persistSession: false }
       })
 
-      const { data: signUpData, error: signUpError } = await anonClient.auth.signUp({
+      const { data: userData, error: createError } = await adminClient.auth.admin.createUser({
         email,
         password,
-        options: {
-          data: { full_name: fullName },
-          emailRedirectTo: redirectTo || undefined,
-        },
+        email_confirm: false,
+        user_metadata: { full_name: fullName },
       })
 
-      if (signUpError) {
-        console.error('[API Users] Erro no signUp:', signUpError)
+      if (createError) {
+        console.error('[API Users] Erro no admin.createUser (sem confirm):', createError)
         return NextResponse.json(
-          { error: signUpError.message },
+          { error: createError.message },
           { status: 400 }
         )
       }
 
-      if (!signUpData.user) {
+      if (!userData.user) {
         return NextResponse.json(
           { error: 'Erro ao criar usuario' },
           { status: 500 }
         )
       }
 
-      userId = signUpData.user.id
+      userId = userData.user.id
+
+      // Gerar link de confirmacao de email
+      try {
+        const { data: linkData, error: linkError } = await adminClient.auth.admin.generateLink({
+          type: 'signup',
+          email,
+          password,
+          options: { redirectTo: redirectTo || undefined },
+        })
+
+        if (linkError) {
+          console.warn('[API Users] Erro ao gerar link de confirmacao:', linkError)
+        } else if (linkData?.properties?.action_link) {
+          // Enviar email de confirmacao diretamente via Resend API
+          const confirmUrl = linkData.properties.action_link
+          const emailHtml = buildConfirmationEmailHtml(fullName, confirmUrl)
+          const resendApiKey = process.env.RESEND_API_KEY
+          const fromEmail = process.env.RESEND_FROM_EMAIL || 'onboarding@resend.dev'
+
+          if (resendApiKey) {
+            const FALLBACK_FROM = 'onboarding@resend.dev'
+            const emailRes = await fetch('https://api.resend.com/emails', {
+              method: 'POST',
+              headers: {
+                'Authorization': `Bearer ${resendApiKey}`,
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                from: fromEmail,
+                to: [email],
+                subject: 'Confirme seu email - NoCheck',
+                html: emailHtml,
+              }),
+            })
+
+            if (emailRes.ok) {
+              const result = await emailRes.json()
+              console.log('[API Users] Email de confirmacao enviado para:', email, 'from:', fromEmail, 'id:', (result as { id?: string }).id)
+            } else if (fromEmail !== FALLBACK_FROM) {
+              // Fallback: dominio customizado falhou, tenta com onboarding@resend.dev
+              console.warn(`[API Users] Falha com ${fromEmail}, tentando fallback ${FALLBACK_FROM}...`)
+              const fallbackRes = await fetch('https://api.resend.com/emails', {
+                method: 'POST',
+                headers: {
+                  'Authorization': `Bearer ${resendApiKey}`,
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                  from: FALLBACK_FROM,
+                  to: [email],
+                  subject: 'Confirme seu email - NoCheck',
+                  html: emailHtml,
+                }),
+              })
+
+              if (fallbackRes.ok) {
+                const result = await fallbackRes.json()
+                console.log('[API Users] Email enviado via fallback para:', email, 'id:', (result as { id?: string }).id)
+              } else {
+                const errData = await fallbackRes.json().catch(() => ({}))
+                console.warn('[API Users] Fallback tambem falhou:', errData)
+              }
+            } else {
+              const errData = await emailRes.json().catch(() => ({}))
+              console.warn('[API Users] Falha ao enviar email via Resend:', errData)
+            }
+          } else {
+            console.warn('[API Users] RESEND_API_KEY nao configurada, email nao enviado')
+          }
+        }
+      } catch (linkErr) {
+        console.warn('[API Users] Erro no fluxo de email de confirmacao:', linkErr)
+      }
     }
 
     // 2. Service role para atualizar perfil e roles
@@ -259,4 +329,39 @@ export async function POST(request: NextRequest) {
       { status: 500 }
     )
   }
+}
+
+// ============================================
+// EMAIL HTML BUILDER
+// ============================================
+
+function buildConfirmationEmailHtml(userName: string, confirmUrl: string): string {
+  return `
+<!DOCTYPE html>
+<html>
+<head><meta charset="UTF-8"></head>
+<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f8fafc; padding: 20px;">
+  <div style="max-width: 600px; margin: 0 auto; background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+    <div style="background: #6366f1; padding: 24px; color: white; text-align: center;">
+      <h1 style="margin: 0; font-size: 22px;">Confirme seu Email</h1>
+      <p style="margin: 8px 0 0; opacity: 0.9; font-size: 14px;">NoCheck - Sistema de Checklists</p>
+    </div>
+    <div style="padding: 32px 24px; text-align: center;">
+      <p style="color: #1e293b; font-size: 16px; margin: 0 0 8px;">Ola, <strong>${userName}</strong>!</p>
+      <p style="color: #475569; font-size: 14px; line-height: 1.6; margin: 0 0 24px;">
+        Sua conta foi criada no NoCheck. Clique no botao abaixo para confirmar seu email e ativar sua conta.
+      </p>
+      <a href="${confirmUrl}" style="display: inline-block; background: #6366f1; color: white; padding: 14px 32px; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 15px;">
+        Confirmar Email
+      </a>
+      <p style="color: #94a3b8; font-size: 12px; margin: 24px 0 0; line-height: 1.5;">
+        Se voce nao solicitou esta conta, ignore este email.
+      </p>
+    </div>
+    <div style="padding: 16px 24px; background: #f8fafc; border-top: 1px solid #e2e8f0; text-align: center;">
+      <p style="margin: 0; color: #94a3b8; font-size: 12px;">NoCheck - Sistema de Checklists</p>
+    </div>
+  </div>
+</body>
+</html>`
 }

@@ -109,6 +109,12 @@ function ChecklistForm() {
   useEffect(() => { checklistIdRef.current = checklistId }, [checklistId])
   useEffect(() => { offlineChecklistIdRef.current = offlineChecklistId }, [offlineChecklistId])
 
+  // Time restriction states
+  const [timeBlocked, setTimeBlocked] = useState(false)
+  const [timeBlockedMessage, setTimeBlockedMessage] = useState('')
+  const [justificationExpired, setJustificationExpired] = useState(false)
+  const [justificationExpiredMessage, setJustificationExpiredMessage] = useState('')
+
   // Justification states (for incomplete checklist finalization)
   const [showIncompleteModal, setShowIncompleteModal] = useState(false)
   const [showJustificationScreen, setShowJustificationScreen] = useState(false)
@@ -157,6 +163,39 @@ function ChecklistForm() {
         if (sections.length > 0) {
           setHasSections(true)
           setSortedSections(sections)
+        }
+
+        // Check time restrictions
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const rawTemplate = templateData as any
+        if (rawTemplate.allowed_start_time && rawTemplate.allowed_end_time) {
+          // Check if admin has disabled time restrictions
+          let ignoreTime = false
+          try {
+            const settingsRes = await fetch('/api/settings?key=ignore_time_restrictions', {
+              headers: { 'x-supabase-auth': (await supabase.auth.getSession()).data.session?.access_token || '' },
+            })
+            if (settingsRes.ok) {
+              const settingsData = await settingsRes.json()
+              ignoreTime = settingsData.value === 'true'
+            }
+          } catch { /* ignore */ }
+
+          if (!ignoreTime) {
+            const now = new Date()
+            const currentTime = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:00`
+            const startTime = rawTemplate.allowed_start_time as string
+            const endTime = rawTemplate.allowed_end_time as string
+            if (currentTime < startTime || currentTime > endTime) {
+              setTimeBlocked(true)
+              setTimeBlockedMessage(`Este checklist so pode ser respondido entre ${startTime.substring(0, 5)} e ${endTime.substring(0, 5)}`)
+            }
+          }
+        }
+
+        // Check justification deadline
+        if (rawTemplate.justification_deadline_hours != null) {
+          setJustificationExpired(false) // will be checked when justification is attempted
         }
       }
 
@@ -1006,6 +1045,29 @@ function ChecklistForm() {
 
     const emptyFields = getEmptyRequiredFields()
     if (emptyFields.length > 0) {
+      // Check justification deadline before showing modal
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const rawTpl = template as any
+      if (rawTpl?.justification_deadline_hours != null && checklistId) {
+        try {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const { data: checklistData } = await (supabase as any)
+            .from('checklists')
+            .select('created_at')
+            .eq('id', checklistId)
+            .single()
+          if (checklistData) {
+            const createdAt = new Date(checklistData.created_at)
+            const deadlineMs = rawTpl.justification_deadline_hours * 60 * 60 * 1000
+            const deadlineDate = new Date(createdAt.getTime() + deadlineMs)
+            if (new Date() > deadlineDate) {
+              setJustificationExpired(true)
+              setJustificationExpiredMessage(`Prazo para justificativa expirou (${rawTpl.justification_deadline_hours}h)`)
+            }
+          }
+        } catch { /* ignore */ }
+      }
+
       // Has empty required fields: show incomplete modal for justification
       setEmptyRequiredFields(emptyFields)
       setShowIncompleteModal(true)
@@ -1394,6 +1456,21 @@ function ChecklistForm() {
 
   if (loading) return <LoadingPage />
 
+  if (timeBlocked) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-page">
+        <div className="text-center max-w-md mx-auto px-4">
+          <FiAlertCircle className="w-16 h-16 text-warning mx-auto mb-4" />
+          <h2 className="text-xl font-bold text-main mb-2">Fora do horario permitido</h2>
+          <p className="text-secondary mb-6">{timeBlockedMessage}</p>
+          <Link href={APP_CONFIG.routes.dashboard} className="btn-primary inline-block px-6 py-3">
+            Voltar ao Dashboard
+          </Link>
+        </div>
+      </div>
+    )
+  }
+
   if (!template || !store) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-page">
@@ -1660,19 +1737,28 @@ function ChecklistForm() {
                 <p className="text-secondary mb-2">
                   Voce realmente deseja finalizar o checklist <strong>INCOMPLETO</strong>?
                 </p>
-                <p className="text-sm text-muted mb-6">
+                <p className="text-sm text-muted mb-4">
                   {emptyRequiredFields.length} campo{emptyRequiredFields.length !== 1 ? 's' : ''} obrigatorio{emptyRequiredFields.length !== 1 ? 's' : ''} nao preenchido{emptyRequiredFields.length !== 1 ? 's' : ''}.
                 </p>
+                {justificationExpired && (
+                  <div className="p-3 bg-error/10 border border-error/30 rounded-xl mb-4">
+                    <p className="text-error text-sm font-medium">{justificationExpiredMessage}</p>
+                  </div>
+                )}
                 <div className="space-y-3">
                   <button
                     type="button"
                     onClick={() => {
+                      if (justificationExpired) {
+                        return
+                      }
                       setShowIncompleteModal(false)
                       setShowJustificationScreen(true)
                     }}
-                    className="btn-primary w-full py-3"
+                    disabled={justificationExpired}
+                    className={`w-full py-3 ${justificationExpired ? 'btn-secondary opacity-50 cursor-not-allowed' : 'btn-primary'}`}
                   >
-                    Sim, justificar e finalizar
+                    {justificationExpired ? 'Prazo para justificativa expirou' : 'Sim, justificar e finalizar'}
                   </button>
                   <button
                     type="button"
@@ -1873,19 +1959,26 @@ function ChecklistForm() {
               <p className="text-secondary mb-2">
                 Voce realmente deseja finalizar o checklist <strong>INCOMPLETO</strong>?
               </p>
-              <p className="text-sm text-muted mb-6">
+              <p className="text-sm text-muted mb-4">
                 {emptyRequiredFields.length} campo{emptyRequiredFields.length !== 1 ? 's' : ''} obrigatorio{emptyRequiredFields.length !== 1 ? 's' : ''} nao preenchido{emptyRequiredFields.length !== 1 ? 's' : ''}.
               </p>
+              {justificationExpired && (
+                <div className="p-3 bg-error/10 border border-error/30 rounded-xl mb-4">
+                  <p className="text-error text-sm font-medium">{justificationExpiredMessage}</p>
+                </div>
+              )}
               <div className="space-y-3">
                 <button
                   type="button"
                   onClick={() => {
+                    if (justificationExpired) return
                     setShowIncompleteModal(false)
                     setShowJustificationScreen(true)
                   }}
-                  className="btn-primary w-full py-3"
+                  disabled={justificationExpired}
+                  className={`w-full py-3 ${justificationExpired ? 'btn-secondary opacity-50 cursor-not-allowed' : 'btn-primary'}`}
                 >
-                  Sim, justificar e finalizar
+                  {justificationExpired ? 'Prazo para justificativa expirou' : 'Sim, justificar e finalizar'}
                 </button>
                 <button
                   type="button"

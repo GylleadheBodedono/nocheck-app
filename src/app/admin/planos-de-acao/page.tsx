@@ -34,6 +34,7 @@ type ActionPlan = {
   assigned_user: { full_name: string } | null
   field: { name: string } | null
   template: { name: string } | null
+  action_plan_stores?: { store: { name: string }; store_id: number }[]
 }
 
 type FilterStore = { id: number; name: string }
@@ -124,7 +125,7 @@ export default function PlanoDeAcaoPage() {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         (supabase as any)
           .from('action_plans')
-          .select(`*, store:stores(name), assigned_user:users!action_plans_assigned_to_fkey(full_name), field:template_fields(name), template:checklist_templates(name)`)
+          .select(`*, store:stores(name), assigned_user:users!action_plans_assigned_to_fkey(full_name), field:template_fields(name), template:checklist_templates(name), action_plan_stores(store_id, store:stores(name))`)
           .order('created_at', { ascending: false }),
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         (supabase as any)
@@ -205,7 +206,12 @@ export default function PlanoDeAcaoPage() {
     return actionPlans.filter(p => {
       if (filterStatus && p.status !== filterStatus) return false
       if (filterSeverity && p.severity !== filterSeverity) return false
-      if (filterStore && p.store?.name !== filterStore) return false
+      if (filterStore) {
+        // Check both legacy store field and action_plan_stores
+        const matchesLegacy = p.store?.name === filterStore
+        const matchesMulti = p.action_plan_stores?.some(aps => aps.store?.name === filterStore)
+        if (!matchesLegacy && !matchesMulti) return false
+      }
       if (filterAssignee && p.assigned_user?.full_name !== filterAssignee) return false
       return true
     })
@@ -441,7 +447,17 @@ export default function PlanoDeAcaoPage() {
                           </div>
                         </td>
                         <td className="px-4 py-3">
-                          <p className="text-sm text-secondary">{plan.store?.name || '-'}</p>
+                          {plan.action_plan_stores && plan.action_plan_stores.length > 0 ? (
+                            <div className="text-sm text-secondary">
+                              {plan.action_plan_stores.map((aps, idx) => (
+                                <span key={idx}>
+                                  {aps.store?.name}{idx < plan.action_plan_stores!.length - 1 ? ', ' : ''}
+                                </span>
+                              ))}
+                            </div>
+                          ) : (
+                            <p className="text-sm text-secondary">{plan.store?.name || '-'}</p>
+                          )}
                         </td>
                         <td className="px-4 py-3">
                           <span className={`inline-block px-2 py-1 rounded-lg text-xs font-medium ${severityBadge.cls}`}>

@@ -7,6 +7,7 @@ import { FiSave, FiFileText } from 'react-icons/fi'
 import { APP_CONFIG } from '@/lib/config'
 import { LoadingPage, Header } from '@/components/ui'
 import { getAuthCache, getUserCache } from '@/lib/offlineCache'
+import { createNotification } from '@/lib/notificationService'
 import Link from 'next/link'
 
 type StoreOption = {
@@ -32,7 +33,7 @@ export default function NovoPlanoDeAcaoPage() {
   // Form state
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
-  const [storeId, setStoreId] = useState<number | ''>('')
+  const [selectedStoreIds, setSelectedStoreIds] = useState<number[]>([])
   const [severity, setSeverity] = useState<string>('media')
   const [assigneeId, setAssigneeId] = useState<string>('')
   const [deadlineDate, setDeadlineDate] = useState(() => {
@@ -122,8 +123,8 @@ export default function NovoPlanoDeAcaoPage() {
     setError(null)
     setSaving(true)
 
-    if (!storeId) {
-      setError('Selecione uma loja')
+    if (selectedStoreIds.length === 0) {
+      setError('Selecione pelo menos uma loja')
       setSaving(false)
       return
     }
@@ -141,7 +142,7 @@ export default function NovoPlanoDeAcaoPage() {
         .insert({
           title,
           description: description || null,
-          store_id: storeId,
+          store_id: selectedStoreIds[0],
           severity,
           status: 'aberto',
           assigned_to: assigneeId,
@@ -153,6 +154,31 @@ export default function NovoPlanoDeAcaoPage() {
         .single()
 
       if (insertError) throw insertError
+
+      // Insert multi-store associations
+      if (plan?.id && selectedStoreIds.length > 0) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        await (supabase as any)
+          .from('action_plan_stores')
+          .insert(
+            selectedStoreIds.map(sid => ({
+              action_plan_id: plan.id,
+              store_id: sid,
+            }))
+          )
+      }
+
+      // Notificar usuario assignado
+      if (plan?.id && assigneeId) {
+        const assigneeName = users.find(u => u.id === assigneeId)?.full_name || ''
+        await createNotification(supabase, assigneeId, {
+          type: 'action_plan_assigned',
+          title: 'Novo Plano de Acao atribuido a voce',
+          message: `${title} | Severidade: ${severity} | Prazo: ${deadlineDate}`,
+          link: `/admin/planos-de-acao/${plan.id}`,
+          metadata: { plan_id: plan.id, severity, deadline: deadlineDate, assignee_name: assigneeName },
+        }).catch(err => console.warn('[PlanoDeAcao] Erro ao criar notificacao:', err))
+      }
 
       router.push(`/admin/planos-de-acao/${plan.id}`)
     } catch (err) {
@@ -210,24 +236,36 @@ export default function NovoPlanoDeAcaoPage() {
                 />
               </div>
 
-              {/* Loja */}
+              {/* Lojas (multi-select) */}
               <div>
                 <label className="block text-sm font-medium text-main mb-1">
-                  Loja *
+                  Lojas * <span className="text-muted font-normal text-xs">(selecione uma ou mais)</span>
                 </label>
-                <select
-                  value={storeId}
-                  onChange={(e) => setStoreId(e.target.value ? Number(e.target.value) : '')}
-                  required
-                  className="input"
-                >
-                  <option value="">Selecione a loja</option>
+                <div className="border border-subtle rounded-xl p-3 max-h-48 overflow-y-auto space-y-1 bg-surface">
                   {stores.map((store) => (
-                    <option key={store.id} value={store.id}>
-                      {store.name}
-                    </option>
+                    <label key={store.id} className="flex items-center gap-3 p-2 rounded-lg hover:bg-surface-hover cursor-pointer transition-colors">
+                      <input
+                        type="checkbox"
+                        checked={selectedStoreIds.includes(store.id)}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setSelectedStoreIds(prev => [...prev, store.id])
+                          } else {
+                            setSelectedStoreIds(prev => prev.filter(id => id !== store.id))
+                          }
+                        }}
+                        className="w-4 h-4 rounded border-default bg-surface text-primary focus:ring-primary"
+                      />
+                      <span className="text-sm text-main">{store.name}</span>
+                    </label>
                   ))}
-                </select>
+                  {stores.length === 0 && (
+                    <p className="text-sm text-muted py-2">Nenhuma loja encontrada</p>
+                  )}
+                </div>
+                {selectedStoreIds.length > 0 && (
+                  <p className="text-xs text-muted mt-1">{selectedStoreIds.length} loja{selectedStoreIds.length !== 1 ? 's' : ''} selecionada{selectedStoreIds.length !== 1 ? 's' : ''}</p>
+                )}
               </div>
 
               {/* Severidade */}

@@ -59,6 +59,8 @@ export default function AdminPage() {
   })
   const [loading, setLoading] = useState(true)
   const [userName, setUserName] = useState('Admin User')
+  const [ignoreTimeRestrictions, setIgnoreTimeRestrictions] = useState(false)
+  const [togglingTime, setTogglingTime] = useState(false)
   const router = useRouter()
   const supabase = useMemo(() => createClient(), [])
 
@@ -176,11 +178,47 @@ export default function AdminPage() {
         }
       }
 
+      // Fetch time restriction setting
+      try {
+        const session = await supabase.auth.getSession()
+        const token = session.data.session?.access_token || ''
+        const res = await fetch('/api/settings?key=ignore_time_restrictions', {
+          headers: { 'x-supabase-auth': token },
+        })
+        if (res.ok) {
+          const data = await res.json()
+          setIgnoreTimeRestrictions(data.value === 'true')
+        }
+      } catch { /* ignore */ }
+
       setLoading(false)
     }
 
     fetchStats()
   }, [supabase, router])
+
+  const handleToggleTimeRestrictions = async () => {
+    setTogglingTime(true)
+    try {
+      const newValue = !ignoreTimeRestrictions
+      const session = await supabase.auth.getSession()
+      const token = session.data.session?.access_token || ''
+      const res = await fetch('/api/settings', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-supabase-auth': token,
+        },
+        body: JSON.stringify({ key: 'ignore_time_restrictions', value: String(newValue) }),
+      })
+      if (res.ok) {
+        setIgnoreTimeRestrictions(newValue)
+      }
+    } catch (err) {
+      console.error('[Admin] Erro ao alterar configuracao de tempo:', err)
+    }
+    setTogglingTime(false)
+  }
 
   const handleSignOut = async () => {
     try {
@@ -339,10 +377,10 @@ export default function AdminPage() {
   ]
 
   const statCards = [
-    { label: 'CHECKLISTS HOJE', value: stats.checklistsToday, icon: FiCheckCircle, color: 'bg-primary/10 text-primary' },
-    { label: 'PENDENTES', value: stats.pendingValidations, icon: FiAlertTriangle, color: 'bg-warning/10 text-warning' },
-    { label: 'TOTAL', value: stats.totalChecklists, icon: FiFileText, color: 'bg-info/10 text-info' },
-    { label: 'ATIVOS', value: stats.totalUsers, icon: FiUsers, color: 'bg-accent/10 text-accent' },
+    { label: 'CHECKLISTS HOJE', value: stats.checklistsToday, icon: FiCheckCircle, color: 'bg-primary/10 text-primary', href: APP_CONFIG.routes.dashboard },
+    { label: 'PENDENTES', value: stats.pendingValidations, icon: FiAlertTriangle, color: 'bg-warning/10 text-warning', href: APP_CONFIG.routes.adminChecklists },
+    { label: 'TOTAL', value: stats.totalChecklists, icon: FiFileText, color: 'bg-info/10 text-info', href: APP_CONFIG.routes.adminChecklists },
+    { label: 'ATIVOS', value: stats.totalUsers, icon: FiUsers, color: 'bg-accent/10 text-accent', href: APP_CONFIG.routes.adminUsers },
   ]
 
   return (
@@ -370,17 +408,17 @@ export default function AdminPage() {
               {statCards.map((stat) => {
                 const StatIcon = stat.icon
                 return (
-                  <div key={stat.label} className="card p-4 sm:p-5">
+                  <Link href={stat.href} key={stat.label} className="card card-hover p-4 sm:p-5">
                     <div className="flex items-center gap-3">
                       <div className={`w-11 h-11 rounded-full flex items-center justify-center shrink-0 ${stat.color.split(' ')[0]}`}>
-                        <StatIcon className={`w-5 h-5 ${stat.color.split(' ')[1]}`} />
+                        <StatIcon className={`w-6 h-6 ${stat.color.split(' ')[1]}`} />
                       </div>
                       <div className="min-w-0">
                         <p className="text-[10px] sm:text-xs font-semibold text-muted uppercase tracking-wider leading-tight truncate">{stat.label}</p>
                         <p className="text-2xl sm:text-3xl font-bold text-main leading-tight">{stat.value}</p>
                       </div>
                     </div>
-                  </div>
+                  </Link>
                 )
               })}
             </div>
@@ -426,17 +464,7 @@ export default function AdminPage() {
 
                     {/* Bottom: Decoration */}
                     <div className="mt-auto">
-                      {item.decoration === 'progress-label' && (
-                        <div>
-                          <div className="w-full h-1.5 bg-surface-hover rounded-full overflow-hidden mb-2">
-                            <div className={`h-full rounded-full ${item.barColor} ${item.barWidth}`} />
-                          </div>
-                          <div className="flex items-center justify-between">
-                            <span className="text-xs text-muted">{item.labelLeft}</span>
-                            <span className="text-xs text-muted">{item.labelRight}</span>
-                          </div>
-                        </div>
-                      )}
+                     
                       {item.decoration === 'mini-chart' && (
                         <div className="flex items-end gap-1 h-8">
                           <div className="w-3 bg-slate-200 rounded-sm" style={{ height: '40%' }} />
@@ -490,6 +518,37 @@ export default function AdminPage() {
                   )
                 })}
               </div>
+            </div>
+
+            {/* Time Restriction Toggle */}
+            <div className="card p-5">
+              <h3 className="flex items-center gap-2 text-sm font-bold text-main mb-3">
+                <FiSettings className="w-4 h-4 text-muted" />
+                Modo Teste
+              </h3>
+              <label className="flex items-center justify-between gap-3 cursor-pointer">
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-main leading-tight">Ignorar horarios</p>
+                  <p className="text-xs text-muted leading-tight mt-0.5">Desativa restricoes de horario dos templates</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleToggleTimeRestrictions}
+                  disabled={togglingTime}
+                  className={`relative w-11 h-6 rounded-full transition-colors shrink-0 ${
+                    ignoreTimeRestrictions ? 'bg-primary' : 'bg-surface-hover border border-subtle'
+                  }`}
+                >
+                  <span className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${
+                    ignoreTimeRestrictions ? 'translate-x-5' : 'translate-x-0'
+                  }`} />
+                </button>
+              </label>
+              {ignoreTimeRestrictions && (
+                <div className="mt-2 px-2 py-1 bg-warning/10 rounded-lg">
+                  <p className="text-xs text-warning font-medium">Restricoes de horario desativadas</p>
+                </div>
+              )}
             </div>
 
             {/* System Status */}

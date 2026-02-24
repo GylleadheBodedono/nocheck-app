@@ -30,6 +30,7 @@ import {
   FiInfo,
 } from 'react-icons/fi'
 import type { ActionPlanStatus, Severity } from '@/types/database'
+import { createNotification } from '@/lib/notificationService'
 
 // ============================================
 // TYPES
@@ -40,7 +41,7 @@ type PlanDetail = {
   checklist_id: number | null
   field_id: number | null
   template_id: number | null
-  store_id: number
+  store_id: number | null
   sector_id: number | null
   title: string
   description: string | null
@@ -64,6 +65,7 @@ type PlanDetail = {
   assigned_by_user: { full_name: string } | null
   template: { name: string } | null
   field: { name: string } | null
+  action_plan_stores?: { store: { name: string } }[]
 }
 
 type PlanUpdate = {
@@ -174,7 +176,8 @@ export default function ActionPlanDetailPage() {
         assigned_user:users!action_plans_assigned_to_fkey(full_name, email),
         assigned_by_user:users!action_plans_assigned_by_fkey(full_name),
         template:checklist_templates(name),
-        field:template_fields(name)
+        field:template_fields(name),
+        action_plan_stores(store:stores(name))
       `)
       .eq('id', planId)
       .single()
@@ -296,6 +299,17 @@ export default function ActionPlanDetailPage() {
 
       if (insertError) throw insertError
 
+      // Notificar usuario assignado sobre mudanca de status
+      if (plan.assigned_to && plan.assigned_to !== currentUserId) {
+        await createNotification(supabase, plan.assigned_to, {
+          type: newStatus === 'concluido' ? 'action_plan_completed' : 'action_plan_assigned',
+          title: `Plano de Acao: ${getStatusLabel(newStatus)}`,
+          message: `"${plan.title}" mudou de ${getStatusLabel(oldStatus)} para ${getStatusLabel(newStatus)}`,
+          link: `/admin/planos-de-acao/${plan.id}`,
+          metadata: { plan_id: plan.id, old_status: oldStatus, new_status: newStatus },
+        }).catch(err => console.warn('[ActionPlan] Erro ao notificar mudanca de status:', err))
+      }
+
       // Refresh data
       const [planData, updatesData] = await Promise.all([fetchPlan(), fetchUpdates()])
       if (planData) setPlan(planData)
@@ -331,6 +345,17 @@ export default function ActionPlanDetailPage() {
         })
 
       if (insertError) throw insertError
+
+      // Notificar usuario assignado sobre comentario
+      if (plan.assigned_to && plan.assigned_to !== currentUserId) {
+        await createNotification(supabase, plan.assigned_to, {
+          type: 'action_plan_comment',
+          title: 'Novo comentario no Plano de Acao',
+          message: `"${plan.title}": ${comment.trim().substring(0, 100)}`,
+          link: `/admin/planos-de-acao/${plan.id}`,
+          metadata: { plan_id: plan.id },
+        }).catch(err => console.warn('[ActionPlan] Erro ao notificar comentario:', err))
+      }
 
       setComment('')
       const updatesData = await fetchUpdates()
@@ -601,10 +626,18 @@ export default function ActionPlanDetailPage() {
               </div>
             )}
             <div>
-              <span className="text-muted block mb-1">Loja</span>
-              <div className="flex items-center gap-2">
-                <FiMapPin className="w-4 h-4 text-primary" />
-                <p className="text-main font-medium">{plan.store?.name || 'N/A'}</p>
+              <span className="text-muted block mb-1">Loja{plan.action_plan_stores && plan.action_plan_stores.length > 1 ? 's' : ''}</span>
+              <div className="flex items-start gap-2">
+                <FiMapPin className="w-4 h-4 text-primary mt-0.5 shrink-0" />
+                <div>
+                  {plan.action_plan_stores && plan.action_plan_stores.length > 0 ? (
+                    plan.action_plan_stores.map((aps, idx) => (
+                      <p key={idx} className="text-main font-medium">{aps.store?.name || 'N/A'}</p>
+                    ))
+                  ) : (
+                    <p className="text-main font-medium">{plan.store?.name || 'N/A'}</p>
+                  )}
+                </div>
               </div>
             </div>
             {plan.sector?.name && (

@@ -125,6 +125,9 @@ export type Database = {
           created_by: string | null
           created_at: string
           updated_at: string
+          allowed_start_time: string | null
+          allowed_end_time: string | null
+          justification_deadline_hours: number | null
         }
         Insert: {
           id?: number
@@ -136,6 +139,9 @@ export type Database = {
           created_by?: string | null
           created_at?: string
           updated_at?: string
+          allowed_start_time?: string | null
+          allowed_end_time?: string | null
+          justification_deadline_hours?: number | null
         }
         Update: {
           id?: number
@@ -147,6 +153,9 @@ export type Database = {
           created_by?: string | null
           created_at?: string
           updated_at?: string
+          allowed_start_time?: string | null
+          allowed_end_time?: string | null
+          justification_deadline_hours?: number | null
         }
       }
       template_fields: {
@@ -700,6 +709,26 @@ export type Database = {
       // ============================================
       // PLANOS DE ACAO
       // ============================================
+      action_plan_stores: {
+        Row: {
+          id: number
+          action_plan_id: number
+          store_id: number
+          created_at: string
+        }
+        Insert: {
+          id?: number
+          action_plan_id: number
+          store_id: number
+          created_at?: string
+        }
+        Update: {
+          id?: number
+          action_plan_id?: number
+          store_id?: number
+          created_at?: string
+        }
+      }
       action_plans: {
         Row: {
           id: number
@@ -708,7 +737,7 @@ export type Database = {
           field_condition_id: number | null
           response_id: number | null
           template_id: number | null
-          store_id: number
+          store_id: number | null
           sector_id: number | null
           title: string
           description: string | null
@@ -734,7 +763,7 @@ export type Database = {
           field_condition_id?: number | null
           response_id?: number | null
           template_id?: number | null
-          store_id: number
+          store_id?: number | null
           sector_id?: number | null
           title: string
           description?: string | null
@@ -1127,6 +1156,9 @@ export type ActionPlan = Database['public']['Tables']['action_plans']['Row']
 export type ActionPlanInsert = Database['public']['Tables']['action_plans']['Insert']
 export type ActionPlanUpdate = Database['public']['Tables']['action_plans']['Update']
 
+export type ActionPlanStore = Database['public']['Tables']['action_plan_stores']['Row']
+export type ActionPlanStoreInsert = Database['public']['Tables']['action_plan_stores']['Insert']
+
 export type ActionPlanUpdateRow = Database['public']['Tables']['action_plan_updates']['Row']
 export type ActionPlanUpdateInsert = Database['public']['Tables']['action_plan_updates']['Insert']
 
@@ -1139,12 +1171,13 @@ export type NotificationUpdate = Database['public']['Tables']['notifications']['
 
 // Tipos compostos com joins
 export type ActionPlanWithDetails = ActionPlan & {
-  store: Store
+  store: Store | null
   sector: Sector | null
   assigned_user: User
   assigned_by_user: User | null
   template: ChecklistTemplate | null
   field: TemplateField | null
+  action_plan_stores?: (ActionPlanStore & { store: Store })[]
 }
 
 export type FieldConditionWithField = FieldCondition & {
