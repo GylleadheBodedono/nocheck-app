@@ -48,6 +48,15 @@ function evaluateCondition(
 ): boolean {
   const condValue = condition.condition_value as Record<string, unknown>
 
+  console.log(`[ActionPlan][DEBUG] Avaliando campo "${field.name}" (ID ${field.id}):`, {
+    field_type: field.field_type,
+    condition_type: condition.condition_type,
+    condition_value: JSON.stringify(condValue),
+    response_text: response.value_text,
+    response_number: response.value_number,
+    response_json: JSON.stringify(response.value_json),
+  })
+
   switch (field.field_type) {
     case 'yes_no': {
       let answer: string | null = null
@@ -55,15 +64,25 @@ function evaluateCondition(
         answer = (response.value_json as Record<string, unknown>).answer as string | null
       }
       if (!answer) answer = response.value_text
+      console.log(`[ActionPlan][DEBUG] yes_no: answer="${answer}", condition_type="${condition.condition_type}", condValue="${condValue.value}"`)
       if (!answer) return condition.condition_type === 'empty'
 
-      if (condition.condition_type === 'equals') return answer === condValue.value
-      if (condition.condition_type === 'not_equals') return answer !== condValue.value
+      if (condition.condition_type === 'equals') {
+        const result = answer === condValue.value
+        console.log(`[ActionPlan][DEBUG] yes_no equals: "${answer}" === "${condValue.value}" => ${result}`)
+        return result
+      }
+      if (condition.condition_type === 'not_equals') {
+        const result = answer !== condValue.value
+        console.log(`[ActionPlan][DEBUG] yes_no not_equals: "${answer}" !== "${condValue.value}" => ${result}`)
+        return result
+      }
       return false
     }
 
     case 'number': {
       const num = response.value_number
+      console.log(`[ActionPlan][DEBUG] number: num=${num}, condition_type="${condition.condition_type}", condValue=${JSON.stringify(condValue)}`)
       if (num === null || num === undefined) return condition.condition_type === 'empty'
 
       if (condition.condition_type === 'less_than') return num < (condValue.min as number)
@@ -78,6 +97,7 @@ function evaluateCondition(
 
     case 'rating': {
       const rating = response.value_number
+      console.log(`[ActionPlan][DEBUG] rating: rating=${rating}, threshold=${condValue.threshold}`)
       if (rating === null || rating === undefined) return condition.condition_type === 'empty'
 
       const threshold = condValue.threshold as number
@@ -88,6 +108,7 @@ function evaluateCondition(
     case 'dropdown': {
       const val = response.value_text || ''
       const targetValues = (condValue.values as string[]) || []
+      console.log(`[ActionPlan][DEBUG] dropdown: val="${val}", condition_type="${condition.condition_type}", targetValues=${JSON.stringify(targetValues)}`)
 
       if (condition.condition_type === 'in_list') return targetValues.includes(val)
       if (condition.condition_type === 'not_in_list') return !targetValues.includes(val)
@@ -102,6 +123,7 @@ function evaluateCondition(
       } else if (response.value_text) {
         try { selected = JSON.parse(response.value_text) } catch { selected = [] }
       }
+      console.log(`[ActionPlan][DEBUG] checkbox_multiple: selected=${JSON.stringify(selected)}, required=${JSON.stringify(condValue.required)}, forbidden=${JSON.stringify(condValue.forbidden)}`)
 
       const required = condValue.required as string[] | undefined
       const forbidden = condValue.forbidden as string[] | undefined
@@ -113,6 +135,7 @@ function evaluateCondition(
 
     case 'text': {
       const text = response.value_text || ''
+      console.log(`[ActionPlan][DEBUG] text: text="${text}", condition_type="${condition.condition_type}", condValue="${condValue.value}"`)
       if (condition.condition_type === 'empty') return text.trim() === ''
       if (condition.condition_type === 'equals') return text === condValue.value
       if (condition.condition_type === 'not_equals') return text !== condValue.value
@@ -120,6 +143,7 @@ function evaluateCondition(
     }
 
     default:
+      console.log(`[ActionPlan][DEBUG] field_type "${field.field_type}" nao suportado para avaliacao de condicao`)
       return false
   }
 }
@@ -285,11 +309,19 @@ export async function processarNaoConformidades(
     let plansCreated = 0
 
     for (const condition of conditions as FieldCondition[]) {
+      console.log(`[ActionPlan][DEBUG] Processando condition #${condition.id}: field_id=${condition.field_id}, type="${condition.condition_type}", severity="${condition.severity}", assignee="${condition.default_assignee_id || 'nenhum'}"`)
+
       const field = fields.find(f => f.id === condition.field_id)
-      if (!field) continue
+      if (!field) {
+        console.warn(`[ActionPlan][DEBUG] Campo ID ${condition.field_id} NAO encontrado nos fields recebidos. Fields IDs: [${fields.map(f => f.id).join(', ')}]`)
+        continue
+      }
 
       const response = responses.find(r => r.field_id === condition.field_id)
-      if (!response) continue
+      if (!response) {
+        console.warn(`[ActionPlan][DEBUG] Resposta para campo "${field.name}" (ID ${field.id}) NAO encontrada. Responses field_ids: [${responses.map(r => r.field_id).join(', ')}]`)
+        continue
+      }
 
       const isNonConforming = evaluateCondition(field, response, condition)
       if (!isNonConforming) {
