@@ -9,11 +9,12 @@
  *    a. Verifica reincidencia (mesmo campo+loja nos ultimos 90 dias)
  *    b. Cria action_plan
  *    c. Cria notificacao in-app
- *    d. Envia email de notificacao
+ *    d. Envia email de notificacao (template configuravel)
  *    e. Se reincidencia, notifica admins
  */
 
-import { createNotification, sendEmailNotification, sendActionPlanTeamsAlert, buildActionPlanEmailHtml } from './notificationService'
+import { createNotification, sendEmailNotification, sendActionPlanTeamsAlert } from './notificationService'
+import { buildEmailFromTemplate, SEVERITY_COLORS, type EmailTemplateVariables } from './emailTemplateEngine'
 import type { FieldCondition } from '@/types/database'
 
 type ResponseData = {
@@ -49,7 +50,6 @@ function evaluateCondition(
 
   switch (field.field_type) {
     case 'yes_no': {
-      // value_json pode ser { answer: "Sim", ... } ou value_text pode ser "Sim"/"Nao"
       let answer: string | null = null
       if (response.value_json && typeof response.value_json === 'object') {
         answer = (response.value_json as Record<string, unknown>).answer as string | null
@@ -156,7 +156,7 @@ async function checkReincidencia(
     return {
       isReincidencia: true,
       count: previousPlans.length,
-      parentPlanId: previousPlans[previousPlans.length - 1].id, // primeiro da cadeia
+      parentPlanId: previousPlans[previousPlans.length - 1].id,
     }
   } catch (err) {
     console.error('[ActionPlan] Erro ao verificar reincidencia:', err)
@@ -225,14 +225,34 @@ export async function processarNaoConformidades(
       return { success: true, plansCreated: 0 }
     }
 
-    // 2. Buscar nome da loja para contexto
+    // 2. Buscar dados de contexto (uma unica vez, antes do loop)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: store } = await (supabase as any)
-      .from('stores')
-      .select('name')
-      .eq('id', storeId)
-      .single()
-    const storeName = store?.name || `Loja #${storeId}`
+    const sb = supabase as any
+
+    const [storeResult, templateResult, sectorResult, respondentResult, checklistResult, emailTemplateResult, emailSubjectResult] =
+      await Promise.all([
+        sb.from('stores').select('name').eq('id', storeId).single(),
+        sb.from('checklist_templates').select('name').eq('id', templateId).single(),
+        sectorId
+          ? sb.from('sectors').select('name').eq('id', sectorId).single()
+          : Promise.resolve({ data: null }),
+        sb.from('users').select('full_name').eq('id', userId).single(),
+        sb.from('checklists').select('completed_at, created_at').eq('id', checklistId).single(),
+        sb.from('app_settings').select('value').eq('key', 'action_plan_email_template').maybeSingle(),
+        sb.from('app_settings').select('value').eq('key', 'action_plan_email_subject').maybeSingle(),
+      ])
+
+    const storeName = storeResult.data?.name || `Loja #${storeId}`
+    const templateName = templateResult.data?.name || `Template #${templateId}`
+    const sectorName = sectorResult.data?.name || ''
+    const respondentName = respondentResult.data?.full_name || 'Usuario'
+    const respondentTime = checklistResult.data?.completed_at || checklistResult.data?.created_at || new Date().toISOString()
+    const emailTemplateHtml: string | null = emailTemplateResult.data?.value || null
+    const emailSubjectTemplate: string | null = emailSubjectResult.data?.value || null
+
+    const appUrl = typeof window !== 'undefined'
+      ? window.location.origin
+      : process.env.NEXT_PUBLIC_APP_URL || 'https://nocheck-app.vercel.app'
 
     // 3. Avaliar cada condicao contra as respostas
     let plansCreated = 0
@@ -275,8 +295,7 @@ export async function processarNaoConformidades(
       }
 
       // 5. Inserir resposta para obter ID (se nao tiver)
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data: responseRow } = await (supabase as any)
+      const { data: responseRow } = await sb
         .from('checklist_responses')
         .select('id')
         .eq('checklist_id', checklistId)
@@ -284,8 +303,7 @@ export async function processarNaoConformidades(
         .single()
 
       // 6. Criar plano de acao
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data: plan, error: planError } = await (supabase as any)
+      const { data: plan, error: planError } = await sb
         .from('action_plans')
         .insert({
           checklist_id: checklistId,
@@ -334,80 +352,77 @@ export async function processarNaoConformidades(
         },
       })
 
-      // 8. Buscar email do responsavel e enviar email
+      // 8. Buscar dados do responsavel e enviar email + Teams
       try {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const { data: assignee } = await (supabase as any)
+        const { data: assignee } = await sb
           .from('users')
           .select('email, full_name')
           .eq('id', assigneeId)
           .single()
 
+        const assigneeName = assignee?.full_name || 'Nao atribuido'
+
+        // Email com template configuravel
         if (assignee?.email) {
-          const appUrl = typeof window !== 'undefined'
-            ? window.location.origin
-            : process.env.NEXT_PUBLIC_APP_URL || 'https://nocheck-app.vercel.app'
-
-          const htmlBody = buildActionPlanEmailHtml({
-            planTitle: title,
-            fieldName: field.name,
-            storeName,
+          const emailVars: EmailTemplateVariables = {
+            plan_title: title,
+            field_name: field.name,
+            store_name: storeName,
+            sector_name: sectorName,
+            template_name: templateName,
+            respondent_name: respondentName,
+            respondent_time: new Date(respondentTime).toLocaleString('pt-BR'),
+            assignee_name: assigneeName,
             severity,
+            severity_label: severity.charAt(0).toUpperCase() + severity.slice(1),
+            severity_color: SEVERITY_COLORS[severity] || '#f59e0b',
             deadline: new Date(deadlineStr).toLocaleDateString('pt-BR'),
-            nonConformityValue,
-            description: condition.description_template || null,
-            isReincidencia: reincidencia.isReincidencia,
-            reincidenciaCount: reincidencia.count,
-            appUrl,
-            planId: plan.id,
-          })
+            non_conformity_value: nonConformityValue,
+            description: condition.description_template || '',
+            plan_url: `${appUrl}/admin/planos-de-acao/${plan.id}`,
+            plan_id: String(plan.id),
+            is_reincidencia: reincidencia.isReincidencia ? 'Sim' : 'Nao',
+            reincidencia_count: String(reincidencia.count),
+            reincidencia_prefix: reincidencia.isReincidencia ? `REINCIDENCIA #${reincidencia.count + 1} - ` : '',
+            app_name: 'NoCheck',
+          }
 
-          await sendEmailNotification(
-            assignee.email,
-            `[NoCheck] ${reincidencia.isReincidencia ? 'REINCIDENCIA - ' : ''}Plano de Acao: ${field.name}`,
-            htmlBody
+          const { html: htmlBody, subject: emailSubject } = buildEmailFromTemplate(
+            emailTemplateHtml,
+            emailSubjectTemplate,
+            emailVars
           )
+
+          await sendEmailNotification(assignee.email, emailSubject, htmlBody)
         }
-      } catch (emailErr) {
-        console.error('[ActionPlan] Erro ao enviar email:', emailErr)
-      }
 
-      // 9. Enviar alerta para Teams
-      try {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const { data: assignee } = await (supabase as any)
-          .from('users')
-          .select('full_name')
-          .eq('id', assigneeId)
-          .single()
-
+        // Teams alert
         await sendActionPlanTeamsAlert({
           title,
           fieldName: field.name,
           storeName,
           severity,
           deadline: new Date(deadlineStr).toLocaleDateString('pt-BR'),
-          assigneeName: assignee?.full_name || 'Nao atribuido',
+          assigneeName,
           nonConformityValue,
           isReincidencia: reincidencia.isReincidencia,
           reincidenciaCount: reincidencia.count,
         })
-      } catch (teamsErr) {
-        console.error('[ActionPlan] Erro ao enviar Teams:', teamsErr)
+      } catch (notifErr) {
+        console.error('[ActionPlan] Erro ao enviar notificacoes:', notifErr)
       }
 
-      // 10. Se reincidencia, notificar tambem os admins
+      // 9. Se reincidencia, notificar tambem os admins
       if (reincidencia.isReincidencia) {
         try {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const { data: admins } = await (supabase as any)
+          const { data: admins } = await sb
             .from('users')
             .select('id')
             .eq('is_admin', true)
             .eq('is_active', true)
 
           for (const admin of admins || []) {
-            if (admin.id === assigneeId) continue // ja notificou
+            if (admin.id === assigneeId) continue
             await createNotification(supabase, admin.id, {
               type: 'reincidencia_detected',
               title: `Reincidencia #${reincidencia.count + 1}: ${field.name}`,
@@ -446,7 +461,6 @@ export async function checkOverduePlans(
   try {
     const today = new Date().toISOString().split('T')[0]
 
-    // Buscar planos com deadline passado que ainda estao abertos/em_andamento
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data: overduePlans } = await (supabase as any)
       .from('action_plans')
@@ -456,7 +470,6 @@ export async function checkOverduePlans(
 
     if (!overduePlans || overduePlans.length === 0) return 0
 
-    // Marcar como vencido
     const overdueIds = overduePlans.map((p: { id: number }) => p.id)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     await (supabase as any)
@@ -464,7 +477,6 @@ export async function checkOverduePlans(
       .update({ status: 'vencido', updated_at: new Date().toISOString() })
       .in('id', overdueIds)
 
-    // Notificar responsaveis e admins
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data: admins } = await (supabase as any)
       .from('users')
@@ -475,7 +487,6 @@ export async function checkOverduePlans(
     const adminIds = (admins || []).map((a: { id: string }) => a.id)
 
     for (const plan of overduePlans) {
-      // Notificar responsavel
       await createNotification(supabase, plan.assigned_to, {
         type: 'action_plan_overdue',
         title: 'Plano de acao vencido',
@@ -484,7 +495,6 @@ export async function checkOverduePlans(
         metadata: { action_plan_id: plan.id },
       })
 
-      // Notificar admins (exceto se ja e o responsavel)
       for (const adminId of adminIds) {
         if (adminId === plan.assigned_to) continue
         await createNotification(supabase, adminId, {

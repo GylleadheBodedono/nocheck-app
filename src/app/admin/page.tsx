@@ -353,6 +353,15 @@ export default function AdminPage() {
       badgeLabel: 'Analytics',
       decoration: 'none',
     },
+    {
+      title: 'Configuracoes',
+      description: 'Email templates e ajustes',
+      icon: FiSettings,
+      href: APP_CONFIG.routes.adminSettings,
+      stat: 0,
+      badgeLabel: 'Config',
+      decoration: 'none',
+    },
   ]
 
   const quickActions = [

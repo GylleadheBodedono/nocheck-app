@@ -7,7 +7,8 @@ import { FiSave, FiFileText } from 'react-icons/fi'
 import { APP_CONFIG } from '@/lib/config'
 import { LoadingPage, Header } from '@/components/ui'
 import { getAuthCache, getUserCache } from '@/lib/offlineCache'
-import { createNotification } from '@/lib/notificationService'
+import { createNotification, sendEmailNotification } from '@/lib/notificationService'
+import { buildEmailFromTemplate, SEVERITY_COLORS, type EmailTemplateVariables } from '@/lib/emailTemplateEngine'
 import Link from 'next/link'
 
 type StoreOption = {
@@ -178,6 +179,57 @@ export default function NovoPlanoDeAcaoPage() {
           link: `/admin/planos-de-acao/${plan.id}`,
           metadata: { plan_id: plan.id, severity, deadline: deadlineDate, assignee_name: assigneeName },
         }).catch(err => console.warn('[PlanoDeAcao] Erro ao criar notificacao:', err))
+
+        // Enviar email ao responsavel
+        try {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const sb = supabase as any
+          const [assigneeRes, emailTplRes, emailSubjRes, creatorRes] = await Promise.all([
+            sb.from('users').select('email, full_name').eq('id', assigneeId).single(),
+            sb.from('app_settings').select('value').eq('key', 'action_plan_email_template').maybeSingle(),
+            sb.from('app_settings').select('value').eq('key', 'action_plan_email_subject').maybeSingle(),
+            sb.from('users').select('full_name').eq('id', userId).single(),
+          ])
+
+          const assigneeEmail = assigneeRes.data?.email
+          if (assigneeEmail) {
+            const storeNames = selectedStoreIds.map(sid => stores.find(s => s.id === sid)?.name || `Loja #${sid}`).join(', ')
+            const creatorName = creatorRes.data?.full_name || 'Admin'
+
+            const emailVars: EmailTemplateVariables = {
+              plan_title: title,
+              field_name: 'N/A (plano manual)',
+              store_name: storeNames,
+              sector_name: '',
+              template_name: 'Manual',
+              respondent_name: creatorName,
+              respondent_time: new Date().toLocaleString('pt-BR'),
+              assignee_name: assigneeName,
+              severity,
+              severity_label: severity.charAt(0).toUpperCase() + severity.slice(1),
+              severity_color: SEVERITY_COLORS[severity] || '#f59e0b',
+              deadline: new Date(deadlineDate).toLocaleDateString('pt-BR'),
+              non_conformity_value: 'N/A',
+              description: description || '',
+              plan_url: `${window.location.origin}/admin/planos-de-acao/${plan.id}`,
+              plan_id: String(plan.id),
+              is_reincidencia: 'Nao',
+              reincidencia_count: '0',
+              reincidencia_prefix: '',
+              app_name: 'NoCheck',
+            }
+
+            const { html, subject } = buildEmailFromTemplate(
+              emailTplRes.data?.value || null,
+              emailSubjRes.data?.value || null,
+              emailVars
+            )
+
+            await sendEmailNotification(assigneeEmail, subject, html)
+          }
+        } catch (emailErr) {
+          console.warn('[PlanoDeAcao] Erro ao enviar email:', emailErr)
+        }
       }
 
       router.push(`/admin/planos-de-acao/${plan.id}`)
