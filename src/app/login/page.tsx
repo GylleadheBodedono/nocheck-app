@@ -88,11 +88,11 @@ function LoginForm() {
   }
 
   return (
-    <div className="h-screen w-screen p-2 bg-[#0a0a0a]">
-      <div className="h-full w-full flex rounded-2xl overflow-hidden">
+    <div className="h-screen w-screen p-4">
+      <div className="h-full w-full flex  overflow-hidden">
 
         {/* Left Side - Decorative Panel */}
-        <div className="hidden lg:flex lg:w-[55%] relative overflow-hidden rounded-2xl">
+        <div className="hidden lg:flex lg:w-[55%] relative overflow-hidden rounded-[20px]">
           {/* Animated gradient background */}
           <div className="absolute inset-0 bg-gradient-to-br from-[#B8935A] via-[#8B6E3B] to-[#2C1810] animate-gradient" />
 
@@ -164,22 +164,22 @@ function LoginForm() {
         </div>
 
         {/* Right Side - Login Form */}
-        <div className="flex-1 flex flex-col relative bg-page rounded-2xl lg:rounded-l-none">
+        <div className="flex-1 flex flex-col relative bg-page rounded-[20px] ">
           {/* Theme toggle */}
           <div className="absolute top-5 right-5 z-10">
             <ThemeToggle />
           </div>
 
           {/* Form container */}
-          <div className="flex-1 flex items-center justify-center px-6 sm:px-12 lg:px-16">
+          <div className="flex-1 flex items-center rounded-[20px] justify-center px-6 sm:px-12 lg:px-16">
             <div className="w-full max-w-[400px]">
               {/* Logo */}
               <div className="mb-10">
-                <div className="flex justify-start mb-6">
+                <div className="flex justify-center mb-6">
                   <Image
                     src="/Logo-dark.png"
                     alt={APP_CONFIG.name}
-                    width={200}
+                    width={300}
                     height={75}
                     className="logo-for-light"
                     priority
@@ -187,16 +187,13 @@ function LoginForm() {
                   <Image
                     src="/Logo.png"
                     alt={APP_CONFIG.name}
-                    width={200}
+                    width={300}
                     height={75}
                     className="logo-for-dark"
                     priority
                   />
                 </div>
-                <h2 className="text-2xl font-bold text-main tracking-tight">
-                  Bem-vindo de volta
-                </h2>
-                <p className="text-muted mt-1.5 text-[15px]">
+                <p className="text-muted text-center mt-1.5 text-[15px]">
                   Entre com suas credenciais para acessar o painel
                 </p>
               </div>
@@ -209,9 +206,7 @@ function LoginForm() {
                     Email
                   </label>
                   <div className="relative">
-                    <div className="absolute left-4 top-1/2 -translate-y-1/2 text-muted pointer-events-none">
-                      <FiMail className="w-[18px] h-[18px]" />
-                    </div>
+                    <FiMail className="absolute left-4 top-1/2 -translate-y-1/2 w-[18px] h-[18px] text-muted pointer-events-none" />
                     <input
                       id="email"
                       type="email"
@@ -219,7 +214,8 @@ function LoginForm() {
                       onChange={(e) => setEmail(e.target.value)}
                       required
                       autoComplete="email"
-                      className="input pl-11"
+                      className="input"
+                      style={{ paddingLeft: '2.75rem' }}
                       placeholder="seu@email.com"
                     />
                   </div>
@@ -231,9 +227,7 @@ function LoginForm() {
                     Senha
                   </label>
                   <div className="relative">
-                    <div className="absolute left-4 top-1/2 -translate-y-1/2 text-muted pointer-events-none">
-                      <FiLock className="w-[18px] h-[18px]" />
-                    </div>
+                    <FiLock className="absolute left-4 top-1/2 -translate-y-1/2 w-[18px] h-[18px] text-muted pointer-events-none" />
                     <input
                       id="password"
                       type="password"
@@ -241,7 +235,8 @@ function LoginForm() {
                       onChange={(e) => setPassword(e.target.value)}
                       required
                       autoComplete="current-password"
-                      className="input pl-11"
+                      className="input"
+                      style={{ paddingLeft: '2.75rem' }}
                       placeholder="••••••••"
                     />
                   </div>

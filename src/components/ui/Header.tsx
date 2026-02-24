@@ -277,7 +277,7 @@ export function Header({
                   </button>
 
                   {notifOpen && (
-                    <div className="absolute right-0 top-full mt-2 w-80 sm:w-96 rounded-xl border border-subtle shadow-theme-lg bg-surface z-50 overflow-hidden">
+                    <div className="fixed sm:absolute left-4 right-4 sm:left-auto sm:right-0 top-[5.5rem] sm:top-full sm:mt-2 sm:w-96 rounded-xl border border-subtle shadow-theme-lg bg-surface z-50 overflow-hidden">
                       <div className="flex items-center justify-between px-4 py-3 border-b border-subtle">
                         <h3 className="text-sm font-semibold text-main">Notificacoes</h3>
                         {unreadCount > 0 && (
