@@ -8,6 +8,7 @@ import {
   type PendingChecklist,
 } from './offlineStorage'
 import { processarValidacaoCruzada } from './crossValidation'
+import { processarNaoConformidades } from './actionPlanEngine'
 
 /**
  * Aguarda um tempo antes de continuar
@@ -360,6 +361,28 @@ async function syncChecklist(checklist: PendingChecklist): Promise<boolean> {
           value_json: r.valueJson,
         })),
         template.fields || []
+      )
+
+      await processarNaoConformidades(
+        supabase,
+        newChecklist.id,
+        checklist.templateId,
+        checklist.storeId,
+        null,
+        checklist.userId,
+        processedResponses.map(r => ({
+          field_id: r.fieldId,
+          value_text: r.valueText,
+          value_number: r.valueNumber,
+          value_json: r.valueJson,
+        })),
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        template.fields.map((f: any) => ({
+          id: f.id,
+          name: f.name,
+          field_type: f.field_type,
+          options: f.options,
+        }))
       )
     }
 

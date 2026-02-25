@@ -1081,11 +1081,12 @@ export async function cacheAllDataForOffline(userId: string): Promise<void> {
       console.log('[OfflineCache] Lojas salvas:', storesData.length)
     }
 
-    // 4. Busca e salva TODOS os templates (não só ativos, para admin)
+    // 4. Busca e salva templates ativos
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data: templatesData } = await (supabase as any)
       .from('checklist_templates')
       .select('*')
+      .eq('is_active', true)
       .order('name')
 
     if (templatesData && templatesData.length > 0) {

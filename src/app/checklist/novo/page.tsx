@@ -341,9 +341,6 @@ function ChecklistForm() {
             sections: sectionEntries,
           })
 
-          // Don't sync until all sections are complete - set to 'syncing' so syncAll skips it
-          await updateChecklistStatus(offlineId, 'syncing')
-
           setOfflineChecklistId(offlineId)
           setSectionProgress(sortedSections.map(s => ({
             section_id: s.id,
@@ -663,7 +660,7 @@ function ChecklistForm() {
           c.storeId === Number(storeId) &&
           c.userId === userId &&
           (!c.sections || c.sections.length === 0) &&
-          c.syncStatus === 'syncing'
+          c.syncStatus === 'draft'
         )
 
         if (existingOffline) {
@@ -679,7 +676,6 @@ function ChecklistForm() {
             userId,
             responses: [],
           })
-          await updateChecklistStatus(offlineId, 'syncing') // guard: don't sync prematurely
           setOfflineChecklistId(offlineId)
         }
         return
@@ -914,14 +910,20 @@ function ChecklistForm() {
     }
   }, 1500)
 
-  // Flush auto-save on page unload or component unmount
+  // Flush auto-save on page unload, back button, or component unmount
   useEffect(() => {
-    const handleBeforeUnload = () => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      autoSaveField.flush()
+      e.preventDefault()
+    }
+    const handlePopState = () => {
       autoSaveField.flush()
     }
     window.addEventListener('beforeunload', handleBeforeUnload)
+    window.addEventListener('popstate', handlePopState)
     return () => {
       window.removeEventListener('beforeunload', handleBeforeUnload)
+      window.removeEventListener('popstate', handlePopState)
       autoSaveField.flush()
     }
   }, [autoSaveField])

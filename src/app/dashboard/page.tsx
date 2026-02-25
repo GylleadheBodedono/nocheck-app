@@ -6,8 +6,8 @@ import { createClient } from '@/lib/supabase'
 import { APP_CONFIG } from '@/lib/config'
 import type { User } from '@supabase/supabase-js'
 import type { Store, ChecklistTemplate, Checklist, Sector, FunctionRow } from '@/types/database'
-import { LoadingPage, Header, OfflineIndicator } from '@/components/ui'
-import { FiClipboard, FiClock, FiCheckCircle, FiUser, FiCalendar, FiAlertCircle, FiWifiOff, FiX, FiRefreshCw, FiAlertTriangle, FiUploadCloud, FiLayers, FiPlay, FiArrowRight } from 'react-icons/fi'
+import { LoadingPage, Header } from '@/components/ui'
+import { FiClipboard, FiClock, FiCheckCircle, FiUser, FiCalendar, FiAlertCircle, FiRefreshCw, FiAlertTriangle, FiUploadCloud, FiLayers, FiPlay, FiArrowRight } from 'react-icons/fi'
 import Link from 'next/link'
 import {
   getAuthCache,
@@ -119,28 +119,15 @@ export default function DashboardPage() {
   const [todayCompletedSet, setTodayCompletedSet] = useState<Set<string>>(new Set()) // key: templateId-storeId
   const [loading, setLoading] = useState(true)
   const [notLoggedIn, setNotLoggedIn] = useState(false)
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [isOffline, setIsOffline] = useState(false)
-  const [offlineBannerDismissed, setOfflineBannerDismissed] = useState(() => {
-    if (typeof window !== 'undefined') {
-      return sessionStorage.getItem('dashboard-offline-dismissed') === 'true'
-    }
-    return false
-  })
   const router = useRouter()
   const supabase = useMemo(() => createClient(), [])
 
   // Monitora status de conexao
   useEffect(() => {
-    const handleOnline = () => {
-      setIsOffline(false)
-      sessionStorage.removeItem('dashboard-offline-dismissed')
-      setOfflineBannerDismissed(false)
-    }
-    const handleOffline = () => {
-      setIsOffline(true)
-      const wasDismissed = sessionStorage.getItem('dashboard-offline-dismissed') === 'true'
-      setOfflineBannerDismissed(wasDismissed)
-    }
+    const handleOnline = () => setIsOffline(false)
+    const handleOffline = () => setIsOffline(true)
 
     setIsOffline(!navigator.onLine)
     window.addEventListener('online', handleOnline)
@@ -581,7 +568,8 @@ export default function DashboardPage() {
       }
 
       // Templates com visibilidade REAL do cache
-      const cachedTemplates = await getTemplatesCache()
+      const cachedTemplatesRaw = await getTemplatesCache()
+      const cachedTemplates = cachedTemplatesRaw.filter(t => t.is_active)
       const cachedVisibility = await getTemplateVisibilityCache()
 
       if (cachedTemplates.length > 0) {
@@ -894,28 +882,6 @@ export default function DashboardPage() {
         onSignOut={handleSignOut}
       />
 
-      {/* Offline Banner */}
-      {isOffline && !offlineBannerDismissed && (
-        <div className="bg-warning text-warning-foreground py-2 px-4">
-          <div className="max-w-7xl mx-auto flex items-center justify-center gap-2 text-sm font-medium relative">
-            <FiWifiOff className="w-4 h-4" />
-            <span>Voce esta offline - usando dados salvos localmente</span>
-            <button
-              onClick={() => {
-                sessionStorage.setItem('dashboard-offline-dismissed', 'true')
-                setOfflineBannerDismissed(true)
-              }}
-              className="absolute right-0 p-1 hover:bg-black/10 rounded transition-colors"
-              aria-label="Fechar"
-            >
-              <FiX className="w-4 h-4" />
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Offline Indicator (floating badge) */}
-      <OfflineIndicator />
 
       {/* Action Plans Alert */}
       {pendingActionPlans > 0 && (

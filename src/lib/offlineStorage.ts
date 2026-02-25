@@ -31,7 +31,7 @@ type PendingChecklist = {
     valueJson: unknown
   }>
   createdAt: string
-  syncStatus: 'pending' | 'syncing' | 'failed'
+  syncStatus: 'draft' | 'pending' | 'syncing' | 'failed'
   errorMessage?: string
   // Suporte a checklists com etapas (offline)
   sections?: PendingChecklistSection[]
@@ -84,7 +84,7 @@ export async function saveOfflineChecklist(checklist: Omit<PendingChecklist, 'id
     ...checklist,
     id,
     createdAt: new Date().toISOString(),
-    syncStatus: 'pending',
+    syncStatus: 'draft',
   }
 
   return new Promise((resolve, reject) => {
