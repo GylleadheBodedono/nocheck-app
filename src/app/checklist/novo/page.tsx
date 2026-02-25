@@ -21,7 +21,7 @@ import { APP_CONFIG } from '@/lib/config'
 import { LoadingPage, Header } from '@/components/ui'
 import { processarValidacaoCruzada } from '@/lib/crossValidation'
 import { processarNaoConformidades } from '@/lib/actionPlanEngine'
-import { saveOfflineChecklist, updateChecklistStatus, getPendingChecklists, updateOfflineFieldResponse, putOfflineChecklist, getOfflineChecklist, type PendingChecklist } from '@/lib/offlineStorage'
+import { saveOfflineChecklist, updateChecklistStatus, getPendingChecklists, updateOfflineFieldResponse, putOfflineChecklist, getOfflineChecklist, deleteOfflineChecklist, type PendingChecklist } from '@/lib/offlineStorage'
 import { getTemplatesCache, getStoresCache, getTemplateFieldsCache, getAuthCache, getTemplateSectionsCache } from '@/lib/offlineCache'
 import { useDebouncedCallback } from 'use-debounce'
 
@@ -352,6 +352,24 @@ function ChecklistForm() {
       }
 
       // === ONLINE MODE ===
+
+      // Migrar draft offline sectioned se existir
+      const pendingOfflineSec = await getPendingChecklists()
+      const offlineDraftSec = pendingOfflineSec.find(c =>
+        c.templateId === Number(templateId) &&
+        c.storeId === Number(storeId) &&
+        c.userId === userId &&
+        c.sections && c.sections.length > 0 &&
+        c.syncStatus === 'draft'
+      )
+
+      if (offlineDraftSec) {
+        const restoredResponses = restoreOfflineResponses(offlineDraftSec)
+        if (Object.keys(restoredResponses).length > 0) setResponses(restoredResponses)
+        await deleteOfflineChecklist(offlineDraftSec.id)
+        console.log('[Checklist] Draft offline sectioned migrado para online:', offlineDraftSec.id)
+      }
+
       const todayStart = new Date()
       todayStart.setHours(0, 0, 0, 0)
 
@@ -682,6 +700,23 @@ function ChecklistForm() {
       }
 
       // === ONLINE ===
+
+      // Migrar draft offline se existir (usuario preencheu offline e voltou online)
+      const pendingOfflineNS = await getPendingChecklists()
+      const offlineDraftNS = pendingOfflineNS.find(c =>
+        c.templateId === Number(templateId) &&
+        c.storeId === Number(storeId) &&
+        c.userId === userId &&
+        (!c.sections || c.sections.length === 0) &&
+        c.syncStatus === 'draft'
+      )
+
+      if (offlineDraftNS) {
+        const restoredResponses = restoreOfflineResponses(offlineDraftNS)
+        if (Object.keys(restoredResponses).length > 0) setResponses(restoredResponses)
+        await deleteOfflineChecklist(offlineDraftNS.id)
+        console.log('[Checklist] Draft offline migrado para online:', offlineDraftNS.id)
+      }
 
       // If resuming a specific checklist (from dashboard "Continuar" link)
       if (resumeId) {

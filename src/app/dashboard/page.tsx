@@ -1061,7 +1061,13 @@ export default function DashboardPage() {
             {/* In-Progress Sectioned Checklists + Offline Drafts */}
             {(() => {
               const offlineDrafts = pendingChecklists.filter(c => c.syncStatus === 'draft')
-              const hasItems = inProgressChecklists.length > 0 || offlineDrafts.length > 0
+              // Nao mostrar drafts que ja tem um em_andamento no DB (mesmo template+store)
+              const uniqueOfflineDrafts = offlineDrafts.filter(d =>
+                !inProgressChecklists.some(ip =>
+                  ip.template_id === d.templateId && ip.store_id === d.storeId
+                )
+              )
+              const hasItems = inProgressChecklists.length > 0 || uniqueOfflineDrafts.length > 0
               if (!hasItems) return null
               return (
                 <div className="mb-8">
@@ -1114,7 +1120,7 @@ export default function DashboardPage() {
                         </Link>
                       )
                     })}
-                    {offlineDrafts.map(draft => {
+                    {uniqueOfflineDrafts.map(draft => {
                       const tpl = templates.find(t => t.id === draft.templateId)
                       const store = allStores.find(s => s.id === draft.storeId)
                       const totalSections = draft.sections?.length || 0
@@ -1192,6 +1198,8 @@ export default function DashboardPage() {
                     c.syncStatus === 'draft' &&
                     c.templateId === template.id &&
                     c.storeId === selectedStore
+                  ) && !inProgressChecklists.some(ip =>
+                    ip.template_id === template.id && ip.store_id === selectedStore
                   )
                   const isResume = (!!existingChecklistId || hasOfflineDraft) && !isCompleted
 
