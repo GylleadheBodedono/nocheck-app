@@ -7,7 +7,7 @@ import { APP_CONFIG } from '@/lib/config'
 import type { User } from '@supabase/supabase-js'
 import type { Store, ChecklistTemplate, Checklist, Sector, FunctionRow } from '@/types/database'
 import { LoadingPage, Header } from '@/components/ui'
-import { FiClipboard, FiClock, FiCheckCircle, FiUser, FiCalendar, FiAlertCircle, FiRefreshCw, FiAlertTriangle, FiUploadCloud, FiLayers, FiPlay, FiArrowRight } from 'react-icons/fi'
+import { FiClipboard, FiClock, FiCheckCircle, FiUser, FiCalendar, FiAlertCircle, FiRefreshCw, FiAlertTriangle, FiUploadCloud, FiLayers, FiPlay, FiArrowRight, FiCloudOff } from 'react-icons/fi'
 import Link from 'next/link'
 import {
   getAuthCache,
@@ -1058,61 +1058,115 @@ export default function DashboardPage() {
               </div>
             )}
 
-            {/* In-Progress Sectioned Checklists */}
-            {inProgressChecklists.length > 0 && (
-              <div className="mb-8">
-                <h2 className="text-lg font-semibold text-main mb-4 flex items-center gap-2">
-                  <FiPlay className="w-5 h-5 text-warning" />
-                  Continuar Preenchimento
-                </h2>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  {inProgressChecklists.map(item => {
-                    const hasSections = item.totalSections > 0
-                    const pct = hasSections
-                      ? Math.round((item.completedSections / item.totalSections) * 100)
-                      : null
-                    return (
-                      <Link
-                        key={item.id}
-                        href={`${APP_CONFIG.routes.checklistNew}?template=${item.template_id}&store=${item.store_id}&resume=${item.id}`}
-                        className="group card-hover p-5 border-l-4 border-warning"
-                      >
-                        <div className="flex items-start justify-between mb-2">
-                          <div className="w-10 h-10 rounded-xl bg-warning/20 flex items-center justify-center">
-                            <FiLayers className="w-5 h-5 text-warning" />
-                          </div>
-                          <span className="badge-secondary text-xs bg-warning/20 text-warning">
-                            {hasSections ? `${item.completedSections}/${item.totalSections} etapas` : 'Em andamento'}
-                          </span>
-                        </div>
-                        <h3 className="font-semibold text-main mb-1 group-hover:text-primary transition-colors">
-                          {item.template?.name}
-                        </h3>
-                        {item.user_name && (
-                          <p className="text-xs text-primary/80 mb-1">
-                            {item.user_name}
-                          </p>
-                        )}
-                        <p className="text-xs text-muted mb-2">
-                          {item.store?.name} - {formatDate(item.created_at)}
-                        </p>
-                        {hasSections && pct !== null && (
-                          <>
-                            <div className="w-full bg-surface-hover rounded-full h-2">
-                              <div
-                                className="bg-warning h-2 rounded-full transition-all"
-                                style={{ width: `${pct}%` }}
-                              />
+            {/* In-Progress Sectioned Checklists + Offline Drafts */}
+            {(() => {
+              const offlineDrafts = pendingChecklists.filter(c => c.syncStatus === 'draft')
+              const hasItems = inProgressChecklists.length > 0 || offlineDrafts.length > 0
+              if (!hasItems) return null
+              return (
+                <div className="mb-8">
+                  <h2 className="text-lg font-semibold text-main mb-4 flex items-center gap-2">
+                    <FiPlay className="w-5 h-5 text-warning" />
+                    Continuar Preenchimento
+                  </h2>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    {inProgressChecklists.map(item => {
+                      const hasSections = item.totalSections > 0
+                      const pct = hasSections
+                        ? Math.round((item.completedSections / item.totalSections) * 100)
+                        : null
+                      return (
+                        <Link
+                          key={item.id}
+                          href={`${APP_CONFIG.routes.checklistNew}?template=${item.template_id}&store=${item.store_id}&resume=${item.id}`}
+                          className="group card-hover p-5 border-l-4 border-warning"
+                        >
+                          <div className="flex items-start justify-between mb-2">
+                            <div className="w-10 h-10 rounded-xl bg-warning/20 flex items-center justify-center">
+                              <FiLayers className="w-5 h-5 text-warning" />
                             </div>
-                            <p className="text-xs text-muted mt-1">{pct}% concluido</p>
-                          </>
-                        )}
-                      </Link>
-                    )
-                  })}
+                            <span className="badge-secondary text-xs bg-warning/20 text-warning">
+                              {hasSections ? `${item.completedSections}/${item.totalSections} etapas` : 'Em andamento'}
+                            </span>
+                          </div>
+                          <h3 className="font-semibold text-main mb-1 group-hover:text-primary transition-colors">
+                            {item.template?.name}
+                          </h3>
+                          {item.user_name && (
+                            <p className="text-xs text-primary/80 mb-1">
+                              {item.user_name}
+                            </p>
+                          )}
+                          <p className="text-xs text-muted mb-2">
+                            {item.store?.name} - {formatDate(item.created_at)}
+                          </p>
+                          {hasSections && pct !== null && (
+                            <>
+                              <div className="w-full bg-surface-hover rounded-full h-2">
+                                <div
+                                  className="bg-warning h-2 rounded-full transition-all"
+                                  style={{ width: `${pct}%` }}
+                                />
+                              </div>
+                              <p className="text-xs text-muted mt-1">{pct}% concluido</p>
+                            </>
+                          )}
+                        </Link>
+                      )
+                    })}
+                    {offlineDrafts.map(draft => {
+                      const tpl = templates.find(t => t.id === draft.templateId)
+                      const store = allStores.find(s => s.id === draft.storeId)
+                      const totalSections = draft.sections?.length || 0
+                      const completedSections = draft.sections?.filter(s => s.status === 'concluido').length || 0
+                      const hasSections = totalSections > 0
+                      const pct = hasSections
+                        ? Math.round((completedSections / totalSections) * 100)
+                        : null
+                      return (
+                        <Link
+                          key={draft.id}
+                          href={`${APP_CONFIG.routes.checklistNew}?template=${draft.templateId}&store=${draft.storeId}`}
+                          className="group card-hover p-5 border-l-4 border-warning"
+                        >
+                          <div className="flex items-start justify-between mb-2">
+                            <div className="w-10 h-10 rounded-xl bg-warning/20 flex items-center justify-center">
+                              <FiLayers className="w-5 h-5 text-warning" />
+                            </div>
+                            <div className="flex items-center gap-1">
+                              <span className="badge-secondary text-xs bg-surface-hover text-muted flex items-center gap-1">
+                                <FiCloudOff className="w-3 h-3" />
+                                Offline
+                              </span>
+                              <span className="badge-secondary text-xs bg-warning/20 text-warning">
+                                {hasSections ? `${completedSections}/${totalSections} etapas` : 'Em andamento'}
+                              </span>
+                            </div>
+                          </div>
+                          <h3 className="font-semibold text-main mb-1 group-hover:text-primary transition-colors">
+                            {tpl?.name || 'Checklist'}
+                          </h3>
+                          <p className="text-xs text-muted mb-2">
+                            {store?.name || 'Loja'} - {formatDate(draft.createdAt)}
+                          </p>
+                          {hasSections && pct !== null && (
+                            <>
+                              <div className="w-full bg-surface-hover rounded-full h-2">
+                                <div
+                                  className="bg-warning h-2 rounded-full transition-all"
+                                  style={{ width: `${pct}%` }}
+                                />
+                              </div>
+                              <p className="text-xs text-muted mt-1">{pct}% concluido</p>
+                            </>
+                          )}
+                        </Link>
+                      )
+                    })}
+                  </div>
                 </div>
-              </div>
-            )}
+              )
+            })()}
 
             {/* Available Checklists */}
             <h2 className="text-lg font-semibold text-main mb-4 flex items-center gap-2">
@@ -1134,7 +1188,12 @@ export default function DashboardPage() {
                   const key = `${template.id}-${selectedStore}`
                   const existingChecklistId = todayInProgressMap[key]
                   const isCompleted = todayCompletedSet.has(key)
-                  const isResume = !!existingChecklistId && !isCompleted
+                  const hasOfflineDraft = pendingChecklists.some(c =>
+                    c.syncStatus === 'draft' &&
+                    c.templateId === template.id &&
+                    c.storeId === selectedStore
+                  )
+                  const isResume = (!!existingChecklistId || hasOfflineDraft) && !isCompleted
 
                   if (isCompleted) {
                     return (
@@ -1163,7 +1222,7 @@ export default function DashboardPage() {
                   return (
                     <Link
                       key={template.id}
-                      href={isResume
+                      href={isResume && existingChecklistId && !hasOfflineDraft
                         ? `${APP_CONFIG.routes.checklistNew}?template=${template.id}&store=${selectedStore}&resume=${existingChecklistId}`
                         : `${APP_CONFIG.routes.checklistNew}?template=${template.id}&store=${selectedStore}`
                       }
@@ -1219,68 +1278,70 @@ export default function DashboardPage() {
               Historico Recente
             </h2>
 
-            {/* Pending Checklists */}
-            {pendingChecklists.length > 0 && (
-              <div className="mb-4">
-                <p className="text-xs font-medium text-warning mb-2 flex items-center gap-1">
-                  <FiUploadCloud className="w-3 h-3" />
-                  Aguardando Sincronizacao
-                </p>
-                <div className="space-y-2">
-                  {pendingChecklists.map(pending => {
-                    const template = templates.find(t => t.id === pending.templateId)
-                    const store = allStores.find(s => s.id === pending.storeId) ||
-                      stores.find(s => s.id === pending.storeId)
-                    const statusColor = pending.syncStatus === 'failed'
-                      ? 'bg-error/20 text-error border-error/30'
-                      : pending.syncStatus === 'syncing'
-                      ? 'bg-info/20 text-info border-info/30'
-                      : 'bg-warning/20 text-warning border-warning/30'
-                    const statusLabel = pending.syncStatus === 'failed'
-                      ? 'Falhou'
-                      : pending.syncStatus === 'syncing'
-                      ? 'Sincronizando'
-                      : 'Pendente'
-                    const StatusIcon = pending.syncStatus === 'failed'
-                      ? FiAlertTriangle
-                      : pending.syncStatus === 'syncing'
-                      ? FiRefreshCw
-                      : FiUploadCloud
+            {/* Pending Checklists (excluding drafts — those show in "Continuar Preenchimento") */}
+            {(() => {
+              const syncablePending = pendingChecklists.filter(c => c.syncStatus !== 'draft')
+              return syncablePending.length > 0 ? (
+                <div className="mb-4">
+                  <p className="text-xs font-medium text-warning mb-2 flex items-center gap-1">
+                    <FiUploadCloud className="w-3 h-3" />
+                    Aguardando Sincronizacao
+                  </p>
+                  <div className="space-y-2">
+                    {syncablePending.map(pending => {
+                      const template = templates.find(t => t.id === pending.templateId)
+                      const store = allStores.find(s => s.id === pending.storeId)
+                      const statusColor = pending.syncStatus === 'failed'
+                        ? 'bg-error/20 text-error border-error/30'
+                        : pending.syncStatus === 'syncing'
+                        ? 'bg-info/20 text-info border-info/30'
+                        : 'bg-warning/20 text-warning border-warning/30'
+                      const statusLabel = pending.syncStatus === 'failed'
+                        ? 'Falhou'
+                        : pending.syncStatus === 'syncing'
+                        ? 'Sincronizando'
+                        : 'Pendente'
+                      const StatusIcon = pending.syncStatus === 'failed'
+                        ? FiAlertTriangle
+                        : pending.syncStatus === 'syncing'
+                        ? FiRefreshCw
+                        : FiUploadCloud
 
-                    return (
-                      <div
-                        key={pending.id}
-                        className={`card p-3 border ${statusColor.includes('error') ? 'border-error/30' : 'border-warning/30'}`}
-                      >
-                        <div className="flex items-start justify-between mb-1">
-                          <h4 className="font-medium text-main text-sm">
-                            {template?.name || 'Checklist'}
-                          </h4>
-                          <span className={`badge-secondary text-xs flex items-center gap-1 ${statusColor}`}>
-                            <StatusIcon className={`w-3 h-3 ${pending.syncStatus === 'syncing' ? 'animate-spin' : ''}`} />
-                            {statusLabel}
-                          </span>
-                        </div>
-                        <p className="text-xs text-muted mb-1">
-                          {store?.name || 'Loja'}
-                        </p>
-                        <p className="text-xs text-muted">
-                          {formatDate(pending.createdAt)}
-                        </p>
-                        {pending.errorMessage && (
-                          <p className="text-xs text-error mt-1">
-                            {pending.errorMessage}
+                      return (
+                        <div
+                          key={pending.id}
+                          className={`card p-3 border ${statusColor.includes('error') ? 'border-error/30' : 'border-warning/30'}`}
+                        >
+                          <div className="flex items-start justify-between mb-1">
+                            <h4 className="font-medium text-main text-sm">
+                              {template?.name || 'Checklist'}
+                            </h4>
+                            <span className={`badge-secondary text-xs flex items-center gap-1 ${statusColor}`}>
+                              <StatusIcon className={`w-3 h-3 ${pending.syncStatus === 'syncing' ? 'animate-spin' : ''}`} />
+                              {statusLabel}
+                            </span>
+                          </div>
+                          <p className="text-xs text-muted mb-1">
+                            {store?.name || 'Loja'}
                           </p>
-                        )}
-                      </div>
-                    )
-                  })}
+                          <p className="text-xs text-muted">
+                            {formatDate(pending.createdAt)}
+                          </p>
+                          {pending.errorMessage && (
+                            <p className="text-xs text-error mt-1">
+                              {pending.errorMessage}
+                            </p>
+                          )}
+                        </div>
+                      )
+                    })}
+                  </div>
                 </div>
-              </div>
-            )}
+              ) : null
+            })()}
 
             {/* Synced Checklists */}
-            {recentChecklists.length === 0 && pendingChecklists.length === 0 ? (
+            {recentChecklists.length === 0 && pendingChecklists.filter(c => c.syncStatus !== 'draft').length === 0 ? (
               <div className="card p-6 text-center">
                 <FiClipboard className="w-10 h-10 text-muted mx-auto mb-3" />
                 <p className="text-muted text-sm">
@@ -1289,7 +1350,7 @@ export default function DashboardPage() {
               </div>
             ) : recentChecklists.length > 0 ? (
               <div className="space-y-3">
-                {pendingChecklists.length > 0 && (
+                {pendingChecklists.filter(c => c.syncStatus !== 'draft').length > 0 && (
                   <p className="text-xs font-medium text-success flex items-center gap-1">
                     <FiCheckCircle className="w-3 h-3" />
                     Sincronizados

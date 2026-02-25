@@ -278,6 +278,9 @@ async function syncChecklist(checklist: PendingChecklist): Promise<boolean> {
     }
 
     // 1. Create the checklist record
+    const isComplete = !checklist.sections || checklist.sections.length === 0 ||
+      checklist.sections.every(s => s.status === 'concluido')
+
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data: newChecklist, error: checklistError } = await (supabase as any)
       .from('checklists')
@@ -286,8 +289,9 @@ async function syncChecklist(checklist: PendingChecklist): Promise<boolean> {
         store_id: checklist.storeId,
         sector_id: checklist.sectorId,
         created_by: checklist.userId,
-        status: 'concluido',
-        completed_at: new Date().toISOString(),
+        status: isComplete ? 'concluido' : 'em_andamento',
+        completed_at: isComplete ? new Date().toISOString() : null,
+        started_at: checklist.createdAt,
       })
       .select()
       .single()
