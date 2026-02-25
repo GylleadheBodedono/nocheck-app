@@ -137,5 +137,42 @@ export function useNotifications() {
     }
   }, [supabase, userId])
 
-  return { notifications, unreadCount, markAsRead, markAllAsRead }
+  const deleteNotification = useCallback(async (notificationId: number) => {
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await (supabase as any)
+        .from('notifications')
+        .delete()
+        .eq('id', notificationId)
+
+      setNotifications(prev => {
+        const target = prev.find(n => n.id === notificationId)
+        if (target && !target.is_read) {
+          setUnreadCount(c => Math.max(0, c - 1))
+        }
+        return prev.filter(n => n.id !== notificationId)
+      })
+    } catch (err) {
+      console.error('[useNotifications] Erro ao excluir notificacao:', err)
+    }
+  }, [supabase])
+
+  const deleteAllNotifications = useCallback(async () => {
+    if (!userId) return
+
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await (supabase as any)
+        .from('notifications')
+        .delete()
+        .eq('user_id', userId)
+
+      setNotifications([])
+      setUnreadCount(0)
+    } catch (err) {
+      console.error('[useNotifications] Erro ao excluir todas notificacoes:', err)
+    }
+  }, [supabase, userId])
+
+  return { notifications, unreadCount, markAsRead, markAllAsRead, deleteNotification, deleteAllNotifications }
 }

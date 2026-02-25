@@ -13,7 +13,7 @@
  *    e. Se reincidencia, notifica admins
  */
 
-import { createNotification, sendEmailNotification, sendActionPlanTeamsAlert } from './notificationService'
+import { createNotification, sendActionPlanEmail, sendActionPlanTeamsAlert } from './notificationService'
 import { buildEmailFromTemplate, SEVERITY_COLORS, type EmailTemplateVariables } from './emailTemplateEngine'
 import type { FieldCondition } from '@/types/database'
 
@@ -270,8 +270,11 @@ export async function processarNaoConformidades(
     try {
       const { data: { session } } = await supabase.auth.getSession()
       accessToken = session?.access_token || undefined
-    } catch {
-      console.warn('[ActionPlan] Nao foi possivel obter access token da sessao')
+      if (!accessToken) {
+        console.warn('[ActionPlan] access_token NAO encontrado na sessao — emails podem falhar (session:', session ? 'existe' : 'null', ')')
+      }
+    } catch (tokenErr) {
+      console.warn('[ActionPlan] Erro ao obter access token:', tokenErr)
     }
 
     // Buscar contexto com resiliencia - falhas aqui NAO devem impedir criacao do plano
@@ -427,11 +430,11 @@ export async function processarNaoConformidades(
 
       // 7b. Notificar quem respondeu o checklist (se nao for o mesmo que o responsavel)
       if (userId !== assigneeId) {
-        const assigneeNameForNotif = (await sb.from('users').select('full_name').eq('id', assigneeId).single()).data?.full_name || 'o responsavel'
+        // Nao buscar assignee name via client (RLS bloqueia) — usar fallback
         await createNotification(supabase, userId, {
           type: 'action_plan_created',
           title: `Plano de acao gerado: ${field.name}`,
-          message: `Voce respondeu "${templateName}" e o campo "${field.name}" foi marcado como "${nonConformityValue}". ${assigneeNameForNotif} ja foi notificado.`,
+          message: `Voce respondeu "${templateName}" e o campo "${field.name}" foi marcado como "${nonConformityValue}". O responsavel ja foi notificado.`,
           link: `/admin/planos-de-acao/${plan.id}`,
           metadata: {
             action_plan_id: plan.id,
@@ -442,55 +445,45 @@ export async function processarNaoConformidades(
         })
       }
 
-      // 8. Buscar dados do responsavel e enviar email + Teams
+      // 8. Enviar email + Teams (busca do email do assignee e feita server-side para contornar RLS)
       try {
-        const { data: assignee, error: assigneeErr } = await sb
-          .from('users')
-          .select('email, full_name')
-          .eq('id', assigneeId)
-          .single()
-
-        if (assigneeErr) {
-          console.error('[ActionPlan] Erro ao buscar assignee:', assigneeErr)
+        const emailVars: EmailTemplateVariables = {
+          plan_title: title,
+          field_name: field.name,
+          store_name: storeName,
+          sector_name: sectorName,
+          template_name: templateName,
+          respondent_name: respondentName,
+          respondent_time: new Date(respondentTime).toLocaleString('pt-BR'),
+          assignee_name: 'Responsavel',
+          severity,
+          severity_label: severity.charAt(0).toUpperCase() + severity.slice(1),
+          severity_color: SEVERITY_COLORS[severity] || '#f59e0b',
+          deadline: new Date(deadlineStr).toLocaleDateString('pt-BR'),
+          non_conformity_value: nonConformityValue,
+          description: condition.description_template || '',
+          plan_url: `${appUrl}/admin/planos-de-acao/${plan.id}`,
+          plan_id: String(plan.id),
+          is_reincidencia: reincidencia.isReincidencia ? 'Sim' : 'Nao',
+          reincidencia_count: String(reincidencia.count),
+          reincidencia_prefix: reincidencia.isReincidencia ? `REINCIDENCIA #${reincidencia.count + 1} - ` : '',
+          app_name: 'NoCheck',
         }
 
-        const assigneeName = assignee?.full_name || 'Nao atribuido'
+        const { html: htmlBody, subject: emailSubject } = buildEmailFromTemplate(
+          emailTemplateHtml,
+          emailSubjectTemplate,
+          emailVars
+        )
 
-        // Email com template configuravel
-        if (assignee?.email) {
-          const emailVars: EmailTemplateVariables = {
-            plan_title: title,
-            field_name: field.name,
-            store_name: storeName,
-            sector_name: sectorName,
-            template_name: templateName,
-            respondent_name: respondentName,
-            respondent_time: new Date(respondentTime).toLocaleString('pt-BR'),
-            assignee_name: assigneeName,
-            severity,
-            severity_label: severity.charAt(0).toUpperCase() + severity.slice(1),
-            severity_color: SEVERITY_COLORS[severity] || '#f59e0b',
-            deadline: new Date(deadlineStr).toLocaleDateString('pt-BR'),
-            non_conformity_value: nonConformityValue,
-            description: condition.description_template || '',
-            plan_url: `${appUrl}/admin/planos-de-acao/${plan.id}`,
-            plan_id: String(plan.id),
-            is_reincidencia: reincidencia.isReincidencia ? 'Sim' : 'Nao',
-            reincidencia_count: String(reincidencia.count),
-            reincidencia_prefix: reincidencia.isReincidencia ? `REINCIDENCIA #${reincidencia.count + 1} - ` : '',
-            app_name: 'NoCheck',
-          }
+        // Envia email via API route (resolve email do assignee server-side com service role)
+        const emailResult = await sendActionPlanEmail(assigneeId, emailSubject, htmlBody, accessToken)
+        const assigneeName = emailResult.assigneeName || 'Nao atribuido'
 
-          const { html: htmlBody, subject: emailSubject } = buildEmailFromTemplate(
-            emailTemplateHtml,
-            emailSubjectTemplate,
-            emailVars
-          )
-
-          const emailResult = await sendEmailNotification(assignee.email, emailSubject, htmlBody, accessToken)
-          console.log('[ActionPlan] Email para', assignee.email, ':', emailResult.success ? 'OK' : emailResult.error)
+        if (emailResult.success) {
+          console.log(`[ActionPlan] Email enviado com sucesso para assignee ${assigneeId} (${assigneeName})`)
         } else {
-          console.warn('[ActionPlan] Assignee sem email, pulando envio')
+          console.error(`[ActionPlan] FALHA ao enviar email para assignee ${assigneeId}:`, emailResult.error)
         }
 
         // Teams alert

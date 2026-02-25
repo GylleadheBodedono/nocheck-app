@@ -58,12 +58,24 @@ export async function sendEmailNotification(
   accessToken?: string
 ): Promise<{ success: boolean; error?: string }> {
   try {
+    if (!accessToken) {
+      console.warn('[Email] accessToken nao disponivel — autenticacao pode falhar')
+    }
+
     const headers: Record<string, string> = { 'Content-Type': 'application/json' }
     if (accessToken) {
       headers['Authorization'] = `Bearer ${accessToken}`
     }
 
-    const response = await fetch('/api/notifications/email', {
+    // Usar URL absoluta para evitar problemas com relative fetch
+    const baseUrl = typeof window !== 'undefined'
+      ? window.location.origin
+      : process.env.NEXT_PUBLIC_APP_URL || ''
+    const emailUrl = `${baseUrl}/api/notifications/email`
+
+    console.log(`[Email] Enviando para ${to} via ${emailUrl} (token: ${accessToken ? 'presente' : 'ausente'})`)
+
+    const response = await fetch(emailUrl, {
       method: 'POST',
       headers,
       credentials: 'include',
@@ -72,14 +84,64 @@ export async function sendEmailNotification(
 
     if (!response.ok) {
       const text = await response.text()
-      console.error('[Email] Erro ao enviar para', to, ':', response.status, text)
+      console.error(`[Email] FALHA ao enviar para ${to}: status=${response.status}, body=${text}`)
       return { success: false, error: `${response.status}: ${text}` }
     }
 
-    console.log('[Email] Enviado com sucesso para', to)
+    const result = await response.json()
+    console.log('[Email] Enviado com sucesso para', to, result)
     return { success: true }
   } catch (err) {
-    console.error('[Email] Erro ao chamar API:', err)
+    console.error('[Email] ERRO ao chamar API de email:', err)
+    return { success: false, error: err instanceof Error ? err.message : 'Erro' }
+  }
+}
+
+/**
+ * Envia email de plano de acao via API route, passando assigneeId para resolucao server-side.
+ * Resolve o email do assignee server-side (service role) para contornar RLS.
+ */
+export async function sendActionPlanEmail(
+  assigneeId: string,
+  subject: string,
+  htmlBody: string,
+  accessToken?: string
+): Promise<{ success: boolean; assigneeName?: string; error?: string }> {
+  try {
+    if (!accessToken) {
+      console.warn('[Email] accessToken nao disponivel — autenticacao pode falhar')
+    }
+
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+    if (accessToken) {
+      headers['Authorization'] = `Bearer ${accessToken}`
+    }
+
+    const baseUrl = typeof window !== 'undefined'
+      ? window.location.origin
+      : process.env.NEXT_PUBLIC_APP_URL || ''
+    const emailUrl = `${baseUrl}/api/notifications/email`
+
+    console.log(`[Email] Enviando email para assignee ${assigneeId} via ${emailUrl}`)
+
+    const response = await fetch(emailUrl, {
+      method: 'POST',
+      headers,
+      credentials: 'include',
+      body: JSON.stringify({ assigneeId, subject, htmlBody }),
+    })
+
+    if (!response.ok) {
+      const text = await response.text()
+      console.error(`[Email] FALHA ao enviar para assignee ${assigneeId}: status=${response.status}, body=${text}`)
+      return { success: false, error: `${response.status}: ${text}` }
+    }
+
+    const result = await response.json() as { success: boolean; assigneeName?: string }
+    console.log(`[Email] Enviado com sucesso para assignee ${assigneeId}`, result)
+    return { success: true, assigneeName: result.assigneeName || undefined }
+  } catch (err) {
+    console.error('[Email] ERRO ao chamar API de email:', err)
     return { success: false, error: err instanceof Error ? err.message : 'Erro' }
   }
 }

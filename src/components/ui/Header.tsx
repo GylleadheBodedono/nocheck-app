@@ -4,7 +4,7 @@ import { useEffect, useState, useMemo, useRef, useCallback } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
 import { useRouter } from 'next/navigation'
-import { FiArrowLeft, FiLogOut, FiUser, FiSearch, FiBell, FiSettings, FiCheck, FiAlertTriangle, FiCheckCircle, FiClock } from 'react-icons/fi'
+import { FiArrowLeft, FiLogOut, FiUser, FiSearch, FiBell, FiSettings, FiCheck, FiAlertTriangle, FiCheckCircle, FiClock, FiTrash2, FiX } from 'react-icons/fi'
 import { APP_CONFIG } from '@/lib/config'
 import { ThemeToggle } from './ThemeToggle'
 import { createClient } from '@/lib/supabase'
@@ -156,7 +156,7 @@ export function Header({
   }
 
   // Notifications
-  const { notifications, unreadCount, markAsRead, markAllAsRead } = useNotifications()
+  const { notifications, unreadCount, markAsRead, markAllAsRead, deleteNotification, deleteAllNotifications } = useNotifications()
   const [notifOpen, setNotifOpen] = useState(false)
   const notifRef = useRef<HTMLDivElement>(null)
 
@@ -280,15 +280,26 @@ export function Header({
                     <div className="fixed sm:absolute left-4 right-4 sm:left-auto sm:right-0 top-[5.5rem] sm:top-full sm:mt-2 sm:w-96 rounded-xl border border-subtle shadow-theme-lg bg-surface z-50 overflow-hidden">
                       <div className="flex items-center justify-between px-4 py-3 border-b border-subtle">
                         <h3 className="text-sm font-semibold text-main">Notificacoes</h3>
-                        {unreadCount > 0 && (
-                          <button
-                            onClick={() => markAllAsRead()}
-                            className="text-xs text-primary hover:text-primary/80 flex items-center gap-1 transition-colors"
-                          >
-                            <FiCheck className="w-3 h-3" />
-                            Marcar todas como lidas
-                          </button>
-                        )}
+                        <div className="flex items-center gap-2">
+                          {unreadCount > 0 && (
+                            <button
+                              onClick={() => markAllAsRead()}
+                              className="text-xs text-primary hover:text-primary/80 flex items-center gap-1 transition-colors"
+                            >
+                              <FiCheck className="w-3 h-3" />
+                              Marcar lidas
+                            </button>
+                          )}
+                          {notifications.length > 0 && (
+                            <button
+                              onClick={() => deleteAllNotifications()}
+                              className="text-xs text-error hover:text-error/80 flex items-center gap-1 transition-colors"
+                            >
+                              <FiTrash2 className="w-3 h-3" />
+                              Limpar todas
+                            </button>
+                          )}
+                        </div>
                       </div>
 
                       <div className="max-h-80 overflow-y-auto">
@@ -308,7 +319,7 @@ export function Header({
                                   if (!notif.is_read) markAsRead(notif.id)
                                   setNotifOpen(false)
                                 }}
-                                className={`flex items-start gap-3 px-4 py-3 hover:bg-surface-hover transition-colors border-b border-subtle last:border-b-0 ${
+                                className={`group flex items-start gap-3 px-4 py-3 hover:bg-surface-hover transition-colors border-b border-subtle last:border-b-0 ${
                                   !notif.is_read ? 'bg-primary/5' : ''
                                 }`}
                               >
@@ -336,9 +347,17 @@ export function Header({
                                   )}
                                   <p className="text-xs text-muted mt-1">{formatTimeAgo(notif.created_at)}</p>
                                 </div>
-                                {!notif.is_read && (
-                                  <div className="w-2 h-2 rounded-full bg-primary shrink-0 mt-2" />
-                                )}
+                                <button
+                                  onClick={(e) => {
+                                    e.preventDefault()
+                                    e.stopPropagation()
+                                    deleteNotification(notif.id)
+                                  }}
+                                  className="shrink-0 p-1 text-muted hover:text-error rounded transition-colors opacity-0 group-hover:opacity-100 sm:opacity-100"
+                                  title="Excluir notificacao"
+                                >
+                                  <FiX className="w-3.5 h-3.5" />
+                                </button>
                               </Link>
                             )
                           })

@@ -1,6 +1,7 @@
 export const runtime = 'edge'
 
 import { NextRequest, NextResponse } from 'next/server'
+import { createClient } from '@supabase/supabase-js'
 import { verifyApiAuth } from '@/lib/api-auth'
 
 const RESEND_API_KEY = process.env.RESEND_API_KEY
@@ -11,17 +12,66 @@ const FROM_EMAIL = process.env.RESEND_FROM_EMAIL || 'onboarding@resend.dev'
  * Envia email via Resend API
  *
  * Body: { to: string, subject: string, htmlBody: string }
+ *   OU: { assigneeId: string, subject: string, htmlBody: string }
+ *
+ * Quando assigneeId e fornecido (em vez de to), busca o email do usuario
+ * server-side usando service role (bypassa RLS).
  */
 export async function POST(request: NextRequest) {
   const auth = await verifyApiAuth(request)
   if (auth.error) return auth.error
 
   try {
-    const { to, subject, htmlBody } = await request.json()
+    const { to: directTo, assigneeId, subject, htmlBody } = await request.json()
 
-    if (!to || !subject || !htmlBody) {
+    if (!subject || !htmlBody) {
       return NextResponse.json(
-        { success: false, error: 'Campos obrigatorios: to, subject, htmlBody' },
+        { success: false, error: 'Campos obrigatorios: subject, htmlBody' },
+        { status: 400 }
+      )
+    }
+
+    // Resolver email: direto ou via assigneeId
+    let to = directTo
+    let assigneeName: string | null = null
+
+    if (!to && assigneeId) {
+      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+      const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+
+      if (!supabaseUrl || !supabaseServiceKey) {
+        return NextResponse.json(
+          { success: false, error: 'Configuracao do servidor incompleta para buscar assignee' },
+          { status: 500 }
+        )
+      }
+
+      const serviceClient = createClient(supabaseUrl, supabaseServiceKey, {
+        auth: { autoRefreshToken: false, persistSession: false },
+      })
+
+      const { data: user, error: userError } = await serviceClient
+        .from('users')
+        .select('email, full_name')
+        .eq('id', assigneeId)
+        .single()
+
+      if (userError || !user?.email) {
+        console.error('[Email] Erro ao buscar email do assignee:', userError || 'email nao encontrado')
+        return NextResponse.json(
+          { success: false, error: `Assignee ${assigneeId} nao encontrado ou sem email` },
+          { status: 404 }
+        )
+      }
+
+      to = user.email
+      assigneeName = user.full_name || null
+      console.log(`[Email] Assignee resolvido: ${assigneeName} <${to}>`)
+    }
+
+    if (!to) {
+      return NextResponse.json(
+        { success: false, error: 'Necessario: to (email) ou assigneeId' },
         { status: 400 }
       )
     }
@@ -52,7 +102,7 @@ export async function POST(request: NextRequest) {
     if (response.ok) {
       const result = await response.json()
       console.log(`[Email] Enviado via Resend para ${to}, from: ${FROM_EMAIL}, id: ${(result as { id?: string }).id}`)
-      return NextResponse.json({ success: true, emailId: (result as { id?: string }).id })
+      return NextResponse.json({ success: true, emailId: (result as { id?: string }).id, assigneeName })
     }
 
     // Fallback: se dominio customizado falhou, tenta com onboarding@resend.dev
@@ -79,7 +129,7 @@ export async function POST(request: NextRequest) {
       if (fallbackRes.ok) {
         const fallbackResult = await fallbackRes.json()
         console.log(`[Email] Enviado via fallback para ${to}, id: ${(fallbackResult as { id?: string }).id}`)
-        return NextResponse.json({ success: true, emailId: (fallbackResult as { id?: string }).id, fallback: true })
+        return NextResponse.json({ success: true, emailId: (fallbackResult as { id?: string }).id, fallback: true, assigneeName })
       }
 
       const fallbackError = await fallbackRes.json().catch(() => ({}))
