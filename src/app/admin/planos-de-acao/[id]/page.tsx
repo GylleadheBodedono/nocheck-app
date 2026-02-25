@@ -57,6 +57,10 @@ type PlanDetail = {
   reincidencia_count: number
   parent_action_plan_id: number | null
   non_conformity_value: string | null
+  require_photo_on_completion: boolean
+  require_text_on_completion: boolean
+  completion_max_chars: number
+  completion_text: string | null
   created_by: string | null
   created_at: string
   updated_at: string
@@ -158,7 +162,16 @@ export default function ActionPlanDetailPage() {
   const [accessLevel, setAccessLevel] = useState<'admin' | 'assignee' | 'viewer'>('admin')
   const [isAdminUser, setIsAdminUser] = useState(false)
 
+  // Completion modal state
+  const [showCompletionModal, setShowCompletionModal] = useState(false)
+  const [completionText, setCompletionText] = useState('')
+  const [completionPhoto, setCompletionPhoto] = useState<File | null>(null)
+  const [completionPhotoPreview, setCompletionPhotoPreview] = useState<string | null>(null)
+  const [submittingCompletion, setSubmittingCompletion] = useState(false)
+  const [completionError, setCompletionError] = useState<string | null>(null)
+
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const completionFileInputRef = useRef<HTMLInputElement>(null)
   const router = useRouter()
   const params = useParams()
   const planId = params.id as string
@@ -300,6 +313,16 @@ export default function ActionPlanDetailPage() {
   const handleStatusChange = async (newStatus: ActionPlanStatus) => {
     if (!plan || !currentUserId) return
 
+    // Se for concluir e tem exigencia de foto/texto, abrir modal
+    if (newStatus === 'concluido' && (plan.require_photo_on_completion || plan.require_text_on_completion)) {
+      setCompletionError(null)
+      setCompletionText('')
+      setCompletionPhoto(null)
+      setCompletionPhotoPreview(null)
+      setShowCompletionModal(true)
+      return
+    }
+
     const confirmMsg = newStatus === 'cancelado'
       ? 'Tem certeza que deseja cancelar este plano de acao?'
       : newStatus === 'em_andamento'
@@ -365,6 +388,161 @@ export default function ActionPlanDetailPage() {
       setError('Erro ao alterar status do plano.')
     } finally {
       setStatusChanging(false)
+    }
+  }
+
+  // ============================================
+  // COMPLETION WITH PHOTO/TEXT
+  // ============================================
+
+  const handleCompletionPhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setCompletionPhoto(file)
+    const reader = new FileReader()
+    reader.onload = () => setCompletionPhotoPreview(reader.result as string)
+    reader.readAsDataURL(file)
+  }
+
+  const handleCompletionSubmit = async () => {
+    if (!plan || !currentUserId) return
+
+    // Validacoes
+    if (plan.require_photo_on_completion && !completionPhoto) {
+      setCompletionError('Foto obrigatoria para concluir o plano.')
+      return
+    }
+    if (plan.require_text_on_completion && !completionText.trim()) {
+      setCompletionError('Texto obrigatorio para concluir o plano.')
+      return
+    }
+    if (plan.require_text_on_completion && completionText.length > (plan.completion_max_chars || 800)) {
+      setCompletionError(`Texto excede o limite de ${plan.completion_max_chars || 800} caracteres.`)
+      return
+    }
+
+    setSubmittingCompletion(true)
+    setCompletionError(null)
+
+    try {
+      const oldStatus = plan.status
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const sb = supabase as any
+
+      // 1. Upload da foto se necessario
+      let photoUrl: string | null = null
+      let photoPath: string | null = null
+      if (completionPhoto) {
+        const reader = new FileReader()
+        const base64 = await new Promise<string>((resolve, reject) => {
+          reader.onload = () => resolve(reader.result as string)
+          reader.onerror = reject
+          reader.readAsDataURL(completionPhoto)
+        })
+
+        const timestamp = Date.now()
+        const ext = completionPhoto.name.split('.').pop() || 'jpg'
+        const fileName = `completion_${plan.id}_${timestamp}.${ext}`
+
+        const uploadRes = await fetch('/api/upload', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ image: base64, fileName, folder: 'action-plans' }),
+        })
+        const uploadData = await uploadRes.json()
+        if (!uploadData.success) throw new Error(uploadData.error || 'Erro no upload da foto')
+        photoUrl = uploadData.url
+        photoPath = uploadData.path
+      }
+
+      // 2. Atualizar status do plano
+      const updatePayload: Record<string, unknown> = {
+        status: 'concluido',
+        completed_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        completion_text: completionText.trim() || null,
+      }
+      const { error: updateError } = await sb
+        .from('action_plans')
+        .update(updatePayload)
+        .eq('id', plan.id)
+      if (updateError) throw updateError
+
+      // 3. Criar registro de status_change
+      const { error: statusInsertError } = await sb
+        .from('action_plan_updates')
+        .insert({
+          action_plan_id: plan.id,
+          user_id: currentUserId,
+          update_type: 'status_change',
+          content: `Status alterado de ${getStatusLabel(oldStatus)} para ${getStatusLabel('concluido')}`,
+          old_status: oldStatus,
+          new_status: 'concluido',
+        })
+      if (statusInsertError) throw statusInsertError
+
+      // 4. Se tem foto, criar evidence
+      if (completionPhoto && photoUrl) {
+        const { data: evidenceUpdate, error: evidUpdateErr } = await sb
+          .from('action_plan_updates')
+          .insert({
+            action_plan_id: plan.id,
+            user_id: currentUserId,
+            update_type: 'evidence',
+            content: `Foto de conclusao: ${completionPhoto.name}`,
+          })
+          .select('id')
+          .single()
+        if (evidUpdateErr) throw evidUpdateErr
+
+        const { error: evidenceError } = await sb
+          .from('action_plan_evidence')
+          .insert({
+            action_plan_id: plan.id,
+            update_id: evidenceUpdate?.id || null,
+            file_name: completionPhoto.name,
+            file_type: completionPhoto.type,
+            file_size: completionPhoto.size,
+            storage_path: photoPath,
+            storage_url: photoUrl,
+            uploaded_by: currentUserId,
+          })
+        if (evidenceError) throw evidenceError
+      }
+
+      // 5. Se tem texto, criar comment update
+      if (completionText.trim()) {
+        await sb
+          .from('action_plan_updates')
+          .insert({
+            action_plan_id: plan.id,
+            user_id: currentUserId,
+            update_type: 'comment',
+            content: `[Texto de conclusao] ${completionText.trim()}`,
+          })
+      }
+
+      // 6. Notificar
+      if (plan.assigned_to && plan.assigned_to !== currentUserId) {
+        await createNotification(supabase, plan.assigned_to, {
+          type: 'action_plan_completed',
+          title: 'Plano de Acao: Concluido',
+          message: `"${plan.title}" foi concluido`,
+          link: `/admin/planos-de-acao/${plan.id}`,
+          metadata: { plan_id: plan.id, old_status: oldStatus, new_status: 'concluido' },
+        }).catch(err => console.warn('[ActionPlan] Erro ao notificar conclusao:', err))
+      }
+
+      // 7. Refresh
+      setShowCompletionModal(false)
+      const [planData, updatesData] = await Promise.all([fetchPlan(), fetchUpdates()])
+      if (planData) setPlan(planData)
+      if (updatesData) setUpdates(updatesData)
+    } catch (err) {
+      console.error('[ActionPlan] Erro ao concluir plano:', err)
+      setCompletionError('Erro ao concluir o plano. Tente novamente.')
+    } finally {
+      setSubmittingCompletion(false)
     }
   }
 
@@ -900,6 +1078,115 @@ export default function ActionPlanDetailPage() {
           )}
         </div>
       </main>
+
+      {/* ============================================ */}
+      {/* COMPLETION MODAL */}
+      {/* ============================================ */}
+      {showCompletionModal && plan && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="bg-card rounded-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto shadow-xl border border-subtle">
+            <div className="p-6 space-y-5">
+              <div>
+                <h3 className="text-lg font-bold text-main">Concluir Plano de Acao</h3>
+                <p className="text-sm text-muted mt-1">&quot;{plan.title}&quot;</p>
+              </div>
+
+              {completionError && (
+                <div className="p-3 bg-error/10 border border-error/30 rounded-lg">
+                  <p className="text-error text-sm">{completionError}</p>
+                </div>
+              )}
+
+              {/* Foto */}
+              {plan.require_photo_on_completion && (
+                <div>
+                  <label className="block text-sm font-medium text-secondary mb-2">
+                    Foto de conclusao <span className="text-error">*</span>
+                  </label>
+                  <input
+                    ref={completionFileInputRef}
+                    type="file"
+                    accept="image/*"
+                    onChange={handleCompletionPhotoChange}
+                    className="hidden"
+                  />
+                  {completionPhotoPreview ? (
+                    <div className="relative">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={completionPhotoPreview}
+                        alt="Preview"
+                        className="w-full h-48 object-cover rounded-lg border border-subtle"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setCompletionPhoto(null)
+                          setCompletionPhotoPreview(null)
+                          if (completionFileInputRef.current) completionFileInputRef.current.value = ''
+                        }}
+                        className="absolute top-2 right-2 p-1.5 bg-black/70 rounded-full text-white hover:bg-black/90 transition-colors"
+                      >
+                        <FiXCircle className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => completionFileInputRef.current?.click()}
+                      className="w-full h-32 border-2 border-dashed border-subtle rounded-lg flex flex-col items-center justify-center gap-2 text-muted hover:border-primary hover:text-primary transition-colors"
+                    >
+                      <FiUpload className="w-6 h-6" />
+                      <span className="text-sm">Clique para selecionar uma foto</span>
+                    </button>
+                  )}
+                </div>
+              )}
+
+              {/* Texto */}
+              {plan.require_text_on_completion && (
+                <div>
+                  <label className="block text-sm font-medium text-secondary mb-2">
+                    Descricao da conclusao <span className="text-error">*</span>
+                  </label>
+                  <textarea
+                    value={completionText}
+                    onChange={(e) => setCompletionText(e.target.value)}
+                    maxLength={plan.completion_max_chars || 800}
+                    placeholder="Descreva o que foi feito para resolver o plano de acao..."
+                    rows={4}
+                    className="input w-full resize-none"
+                  />
+                  <div className="flex justify-end mt-1">
+                    <span className={`text-xs ${completionText.length > (plan.completion_max_chars || 800) ? 'text-error' : 'text-muted'}`}>
+                      {completionText.length}/{plan.completion_max_chars || 800}
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              {/* Botoes */}
+              <div className="flex items-center gap-3 pt-2">
+                <button
+                  onClick={handleCompletionSubmit}
+                  disabled={submittingCompletion}
+                  className="flex items-center gap-2 px-5 py-2.5 rounded-xl font-medium text-sm bg-success/20 text-success hover:bg-success/30 transition-colors disabled:opacity-50"
+                >
+                  <FiCheckCircle className="w-4 h-4" />
+                  {submittingCompletion ? 'Concluindo...' : 'Concluir'}
+                </button>
+                <button
+                  onClick={() => setShowCompletionModal(false)}
+                  disabled={submittingCompletion}
+                  className="px-5 py-2.5 rounded-xl font-medium text-sm text-muted hover:text-main hover:bg-surface-hover transition-colors disabled:opacity-50"
+                >
+                  Cancelar
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

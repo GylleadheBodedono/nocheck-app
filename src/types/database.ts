@@ -679,6 +679,9 @@ export type Database = {
           deadline_days: number
           description_template: string | null
           is_active: boolean
+          require_photo_on_completion: boolean
+          require_text_on_completion: boolean
+          completion_max_chars: number
           created_at: string
         }
         Insert: {
@@ -691,6 +694,9 @@ export type Database = {
           deadline_days?: number
           description_template?: string | null
           is_active?: boolean
+          require_photo_on_completion?: boolean
+          require_text_on_completion?: boolean
+          completion_max_chars?: number
           created_at?: string
         }
         Update: {
@@ -703,6 +709,9 @@ export type Database = {
           deadline_days?: number
           description_template?: string | null
           is_active?: boolean
+          require_photo_on_completion?: boolean
+          require_text_on_completion?: boolean
+          completion_max_chars?: number
           created_at?: string
         }
       }
@@ -752,6 +761,10 @@ export type Database = {
           reincidencia_count: number
           parent_action_plan_id: number | null
           non_conformity_value: string | null
+          require_photo_on_completion: boolean
+          require_text_on_completion: boolean
+          completion_max_chars: number
+          completion_text: string | null
           created_by: string | null
           created_at: string
           updated_at: string
@@ -778,6 +791,10 @@ export type Database = {
           reincidencia_count?: number
           parent_action_plan_id?: number | null
           non_conformity_value?: string | null
+          require_photo_on_completion?: boolean
+          require_text_on_completion?: boolean
+          completion_max_chars?: number
+          completion_text?: string | null
           created_by?: string | null
           created_at?: string
           updated_at?: string
@@ -804,6 +821,10 @@ export type Database = {
           reincidencia_count?: number
           parent_action_plan_id?: number | null
           non_conformity_value?: string | null
+          require_photo_on_completion?: boolean
+          require_text_on_completion?: boolean
+          completion_max_chars?: number
+          completion_text?: string | null
           created_by?: string | null
           created_at?: string
           updated_at?: string

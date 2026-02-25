@@ -399,6 +399,9 @@ export async function processarNaoConformidades(
           reincidencia_count: reincidencia.count,
           parent_action_plan_id: reincidencia.parentPlanId,
           non_conformity_value: nonConformityValue,
+          require_photo_on_completion: condition.require_photo_on_completion || false,
+          require_text_on_completion: condition.require_text_on_completion || false,
+          completion_max_chars: condition.completion_max_chars || 800,
           created_by: userId,
         })
         .select('id')
@@ -546,7 +549,8 @@ export async function processarNaoConformidades(
  */
 export async function checkOverduePlans(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  supabase: any
+  supabase: any,
+  accessToken?: string
 ): Promise<number> {
   try {
     const today = new Date().toISOString().split('T')[0]
@@ -594,6 +598,44 @@ export async function checkOverduePlans(
           link: `/admin/planos-de-acao/${plan.id}`,
           metadata: { action_plan_id: plan.id },
         })
+      }
+
+      // Enviar email de vencimento ao responsavel
+      if (accessToken) {
+        try {
+          const appUrl = typeof window !== 'undefined'
+            ? window.location.origin
+            : process.env.NEXT_PUBLIC_APP_URL || 'https://nocheck-app.vercel.app'
+          const planUrl = `${appUrl}/admin/planos-de-acao/${plan.id}`
+          const deadlineFormatted = new Date(plan.deadline).toLocaleDateString('pt-BR')
+
+          const htmlBody = `
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+              <div style="background: #dc2626; color: white; padding: 20px; border-radius: 12px 12px 0 0;">
+                <h2 style="margin: 0;">Plano de Acao Vencido</h2>
+              </div>
+              <div style="padding: 24px; background: #1a1a2e; color: #e0e0e0; border-radius: 0 0 12px 12px;">
+                <p style="font-size: 16px; margin-bottom: 16px;">
+                  O plano de acao <strong>"${plan.title}"</strong> venceu em <strong style="color: #ef4444;">${deadlineFormatted}</strong>.
+                </p>
+                <p style="font-size: 14px; color: #a0a0a0; margin-bottom: 24px;">
+                  Por favor, acesse o sistema para tomar as providencias necessarias.
+                </p>
+                <a href="${planUrl}" style="display: inline-block; background: #6366f1; color: white; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: 600;">
+                  Ver Plano de Acao
+                </a>
+              </div>
+            </div>
+          `
+          await sendActionPlanEmail(
+            plan.assigned_to,
+            `Plano de Acao Vencido: "${plan.title}"`,
+            htmlBody,
+            accessToken
+          )
+        } catch (emailErr) {
+          console.error(`[ActionPlan] Erro ao enviar email de vencimento para plano #${plan.id}:`, emailErr)
+        }
       }
     }
 

@@ -473,7 +473,8 @@ export default function DashboardPage() {
     if (profileData?.is_admin) {
       try {
         const { checkOverduePlans } = await import('@/lib/actionPlanEngine')
-        await checkOverduePlans(supabase)
+        const { data: { session } } = await supabase.auth.getSession()
+        await checkOverduePlans(supabase, session?.access_token)
       } catch {
         // Engine pode nao estar disponivel
       }

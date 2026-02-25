@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { FiAlertTriangle, FiChevronDown, FiChevronUp, FiTrash2, FiLayers } from 'react-icons/fi'
+import { FiAlertTriangle, FiChevronDown, FiChevronUp, FiTrash2, FiLayers, FiCamera, FiFileText } from 'react-icons/fi'
 import type { ConditionType, Severity } from '@/types/database'
 
 export type ConditionConfig = {
@@ -12,6 +12,9 @@ export type ConditionConfig = {
   defaultAssigneeId: string | null
   deadlineDays: number
   descriptionTemplate: string
+  requirePhotoOnCompletion: boolean
+  requireTextOnCompletion: boolean
+  completionMaxChars: number
 }
 
 export type PresetOption = {
@@ -21,6 +24,9 @@ export type PresetOption = {
   deadlineDays: number
   defaultAssigneeId: string | null
   descriptionTemplate: string
+  requirePhotoOnCompletion: boolean
+  requireTextOnCompletion: boolean
+  completionMaxChars: number
 }
 
 type UserOption = {
@@ -55,6 +61,9 @@ const DEFAULT_CONDITION: ConditionConfig = {
   defaultAssigneeId: null,
   deadlineDays: 7,
   descriptionTemplate: '',
+  requirePhotoOnCompletion: false,
+  requireTextOnCompletion: false,
+  completionMaxChars: 800,
 }
 
 export function FieldConditionEditor({
@@ -130,6 +139,9 @@ export function FieldConditionEditor({
       deadlineDays: preset.deadlineDays,
       defaultAssigneeId: preset.defaultAssigneeId,
       descriptionTemplate: preset.descriptionTemplate || condition.descriptionTemplate,
+      requirePhotoOnCompletion: preset.requirePhotoOnCompletion,
+      requireTextOnCompletion: preset.requireTextOnCompletion,
+      completionMaxChars: preset.completionMaxChars,
     })
   }
 
@@ -483,6 +495,46 @@ export function FieldConditionEditor({
               <p className="text-xs text-muted mt-1">
                 Variaveis: {'{field_name}'}, {'{value}'}, {'{store_name}'}
               </p>
+            </div>
+
+            {/* Exigencias para conclusao */}
+            <div className="border-t border-subtle pt-3 mt-1">
+              <label className="block text-xs font-medium text-secondary mb-2">Exigencias para Conclusao</label>
+              <div className="space-y-2">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={condition.requirePhotoOnCompletion}
+                    onChange={(e) => update({ requirePhotoOnCompletion: e.target.checked })}
+                    className="w-4 h-4 rounded border-gray-600 text-primary focus:ring-primary bg-surface"
+                  />
+                  <FiCamera className="w-3.5 h-3.5 text-muted" />
+                  <span className="text-xs text-main">Exigir foto ao concluir</span>
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={condition.requireTextOnCompletion}
+                    onChange={(e) => update({ requireTextOnCompletion: e.target.checked })}
+                    className="w-4 h-4 rounded border-gray-600 text-primary focus:ring-primary bg-surface"
+                  />
+                  <FiFileText className="w-3.5 h-3.5 text-muted" />
+                  <span className="text-xs text-main">Exigir texto ao concluir</span>
+                </label>
+                {condition.requireTextOnCompletion && (
+                  <div className="ml-6">
+                    <label className="block text-xs text-muted mb-1">Max. caracteres</label>
+                    <input
+                      type="number"
+                      min={50}
+                      max={5000}
+                      value={condition.completionMaxChars}
+                      onChange={(e) => update({ completionMaxChars: Number(e.target.value) || 800 })}
+                      className="input w-28 text-sm"
+                    />
+                  </div>
+                )}
+              </div>
             </div>
 
             {/* Salvar como modelo */}

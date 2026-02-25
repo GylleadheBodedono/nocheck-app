@@ -161,17 +161,20 @@ export default function NovoTemplatePage() {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { data: presetsData } = await (supabase as any)
         .from('action_plan_presets')
-        .select('id, name, severity, deadline_days, default_assignee_id, description_template')
+        .select('id, name, severity, deadline_days, default_assignee_id, description_template, require_photo_on_completion, require_text_on_completion, completion_max_chars')
         .eq('is_active', true)
         .order('name')
       if (presetsData) {
-        setConditionPresets((presetsData as { id: number; name: string; severity: string; deadline_days: number; default_assignee_id: string | null; description_template: string | null }[]).map((p) => ({
+        setConditionPresets((presetsData as { id: number; name: string; severity: string; deadline_days: number; default_assignee_id: string | null; description_template: string | null; require_photo_on_completion?: boolean; require_text_on_completion?: boolean; completion_max_chars?: number }[]).map((p) => ({
           id: p.id,
           name: p.name,
           severity: p.severity as PresetOption['severity'],
           deadlineDays: p.deadline_days,
           defaultAssigneeId: p.default_assignee_id,
           descriptionTemplate: p.description_template || '',
+          requirePhotoOnCompletion: p.require_photo_on_completion || false,
+          requireTextOnCompletion: p.require_text_on_completion || false,
+          completionMaxChars: p.completion_max_chars || 800,
         })))
       }
     }
@@ -387,7 +390,7 @@ export default function NovoTemplatePage() {
           description_template: data.descriptionTemplate,
           is_active: true,
         })
-        .select('id, name, severity, deadline_days, default_assignee_id, description_template')
+        .select('id, name, severity, deadline_days, default_assignee_id, description_template, require_photo_on_completion, require_text_on_completion, completion_max_chars')
         .single()
 
       if (presetErr) throw presetErr
@@ -399,6 +402,9 @@ export default function NovoTemplatePage() {
         deadlineDays: preset.deadline_days,
         defaultAssigneeId: preset.default_assignee_id,
         descriptionTemplate: preset.description_template || '',
+        requirePhotoOnCompletion: preset.require_photo_on_completion || false,
+        requireTextOnCompletion: preset.require_text_on_completion || false,
+        completionMaxChars: preset.completion_max_chars || 800,
       }])
 
       alert('Modelo salvo com sucesso!')
@@ -498,7 +504,7 @@ export default function NovoTemplatePage() {
 
       // 3b. Save field conditions
       if (insertedFields) {
-        const conditionsToInsert: { field_id: number; condition_type: string; condition_value: Record<string, unknown>; severity: string; default_assignee_id: string | null; deadline_days: number; description_template: string | null; is_active: boolean }[] = []
+        const conditionsToInsert: { field_id: number; condition_type: string; condition_value: Record<string, unknown>; severity: string; default_assignee_id: string | null; deadline_days: number; description_template: string | null; is_active: boolean; require_photo_on_completion: boolean; require_text_on_completion: boolean; completion_max_chars: number }[] = []
         fields.forEach((f, idx) => {
           const cond = fieldConditions[f.id]
           if (cond && insertedFields[idx]) {
@@ -511,6 +517,9 @@ export default function NovoTemplatePage() {
               deadline_days: cond.deadlineDays,
               description_template: cond.descriptionTemplate || null,
               is_active: true,
+              require_photo_on_completion: cond.requirePhotoOnCompletion || false,
+              require_text_on_completion: cond.requireTextOnCompletion || false,
+              completion_max_chars: cond.completionMaxChars || 800,
             })
           }
         })

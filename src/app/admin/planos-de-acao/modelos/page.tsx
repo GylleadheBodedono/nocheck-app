@@ -11,6 +11,8 @@ import {
   FiX,
   FiLayers,
   FiAlertTriangle,
+  FiCamera,
+  FiFileText,
 } from 'react-icons/fi'
 import { APP_CONFIG } from '@/lib/config'
 import { LoadingPage, Header } from '@/components/ui'
@@ -29,6 +31,9 @@ type Preset = {
   default_assignee_id: string | null
   deadline_days: number
   is_active: boolean
+  require_photo_on_completion: boolean
+  require_text_on_completion: boolean
+  completion_max_chars: number
   created_at: string
 }
 
@@ -43,6 +48,9 @@ type PresetForm = {
   severity: Severity
   default_assignee_id: string
   deadline_days: number
+  require_photo_on_completion: boolean
+  require_text_on_completion: boolean
+  completion_max_chars: number
 }
 
 const EMPTY_FORM: PresetForm = {
@@ -51,6 +59,9 @@ const EMPTY_FORM: PresetForm = {
   severity: 'media',
   default_assignee_id: '',
   deadline_days: 7,
+  require_photo_on_completion: false,
+  require_text_on_completion: false,
+  completion_max_chars: 800,
 }
 
 const SEVERITY_OPTIONS: { value: Severity; label: string; color: string }[] = [
@@ -176,6 +187,9 @@ export default function ModelosPlanoDeAcaoPage() {
       severity: preset.severity,
       default_assignee_id: preset.default_assignee_id || '',
       deadline_days: preset.deadline_days,
+      require_photo_on_completion: preset.require_photo_on_completion || false,
+      require_text_on_completion: preset.require_text_on_completion || false,
+      completion_max_chars: preset.completion_max_chars || 800,
     })
     setEditingId(preset.id)
     setShowForm(true)
@@ -207,6 +221,9 @@ export default function ModelosPlanoDeAcaoPage() {
         severity: form.severity,
         default_assignee_id: form.default_assignee_id || null,
         deadline_days: form.deadline_days,
+        require_photo_on_completion: form.require_photo_on_completion,
+        require_text_on_completion: form.require_text_on_completion,
+        completion_max_chars: form.completion_max_chars,
         updated_at: new Date().toISOString(),
       }
 
@@ -397,6 +414,50 @@ export default function ModelosPlanoDeAcaoPage() {
               </p>
             </div>
 
+            {/* Exigencias para conclusao */}
+            <div className="border-t border-subtle pt-4 mt-2">
+              <label className="block text-xs font-medium text-secondary mb-3">Exigencias para Conclusao</label>
+              <div className="space-y-3">
+                <label className="flex items-center gap-3 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={form.require_photo_on_completion}
+                    onChange={(e) => setForm(f => ({ ...f, require_photo_on_completion: e.target.checked }))}
+                    className="w-4 h-4 rounded border-gray-600 text-primary focus:ring-primary bg-surface"
+                  />
+                  <div className="flex items-center gap-2">
+                    <FiCamera className="w-4 h-4 text-muted" />
+                    <span className="text-sm text-main">Exigir foto ao concluir</span>
+                  </div>
+                </label>
+                <label className="flex items-center gap-3 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={form.require_text_on_completion}
+                    onChange={(e) => setForm(f => ({ ...f, require_text_on_completion: e.target.checked }))}
+                    className="w-4 h-4 rounded border-gray-600 text-primary focus:ring-primary bg-surface"
+                  />
+                  <div className="flex items-center gap-2">
+                    <FiFileText className="w-4 h-4 text-muted" />
+                    <span className="text-sm text-main">Exigir texto ao concluir</span>
+                  </div>
+                </label>
+                {form.require_text_on_completion && (
+                  <div className="ml-7">
+                    <label className="block text-xs font-medium text-secondary mb-1">Maximo de caracteres</label>
+                    <input
+                      type="number"
+                      min={50}
+                      max={5000}
+                      value={form.completion_max_chars}
+                      onChange={(e) => setForm(f => ({ ...f, completion_max_chars: Number(e.target.value) || 800 }))}
+                      className="input w-32"
+                    />
+                  </div>
+                )}
+              </div>
+            </div>
+
             <div className="flex items-center gap-3 pt-2">
               <button
                 onClick={handleSave}
@@ -457,6 +518,13 @@ export default function ModelosPlanoDeAcaoPage() {
                           : 'Quem preencheu'
                       }
                     </span>
+                    {(preset.require_photo_on_completion || preset.require_text_on_completion) && (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs bg-primary/10 text-primary">
+                        {preset.require_photo_on_completion && <FiCamera className="w-3 h-3" />}
+                        {preset.require_text_on_completion && <FiFileText className="w-3 h-3" />}
+                        Exigencia
+                      </span>
+                    )}
                   </div>
                   {preset.description_template && (
                     <p className="text-xs text-muted mt-1 truncate">{preset.description_template}</p>
