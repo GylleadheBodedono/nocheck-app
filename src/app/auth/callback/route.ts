@@ -59,12 +59,16 @@ export async function GET(request: NextRequest) {
 
     // Se é recovery (reset de senha), redireciona para definir nova senha
     const type = searchParams.get('type')
-    if (type === 'recovery') {
-      return NextResponse.redirect(new URL('/auth/reset-password', origin))
-    }
+    const redirectUrl = type === 'recovery'
+      ? new URL('/auth/reset-password', origin)
+      : new URL('/auth/confirmed', origin)
 
-    // Sucesso - redireciona para tela de confirmacao
-    return NextResponse.redirect(new URL('/auth/confirmed', origin))
+    const response = NextResponse.redirect(redirectUrl)
+    // Copiar cookies de sessao do supabaseResponse para o redirect
+    supabaseResponse.cookies.getAll().forEach(cookie => {
+      response.cookies.set(cookie.name, cookie.value)
+    })
+    return response
   }
 
   // Sem código, redireciona para login
