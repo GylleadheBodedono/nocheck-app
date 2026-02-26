@@ -57,13 +57,9 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(confirmUrl)
   }
 
-  if (hasCode) {
+  if (hasCode && pathname !== '/auth/callback') {
     // code vai para /auth/callback (que troca por sessao)
     const callbackUrl = request.nextUrl.clone()
-    // Se veio de /auth/reset-password, preserva type=recovery para o callback saber redirecionar
-    if (pathname === '/auth/reset-password') {
-      callbackUrl.searchParams.set('type', 'recovery')
-    }
     callbackUrl.pathname = '/auth/callback'
     return NextResponse.redirect(callbackUrl)
   }

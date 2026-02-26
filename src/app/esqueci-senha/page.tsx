@@ -19,6 +19,20 @@ export default function EsqueciSenhaPage() {
     setLoading(true)
 
     try {
+      // Verificar se o email existe no banco
+      const checkRes = await fetch('/api/auth/check-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }),
+      })
+      const { exists } = await checkRes.json()
+
+      if (!exists) {
+        setError('Este email nao existe no nosso banco de dados. Primeiro crie sua conta.')
+        setLoading(false)
+        return
+      }
+
       const supabase = createClient()
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
         redirectTo: `${window.location.origin}/auth/reset-password`,
