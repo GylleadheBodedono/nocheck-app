@@ -60,6 +60,10 @@ export async function middleware(request: NextRequest) {
   if (hasCode) {
     // code vai para /auth/callback (que troca por sessao)
     const callbackUrl = request.nextUrl.clone()
+    // Se veio de /auth/reset-password, preserva type=recovery para o callback saber redirecionar
+    if (pathname === '/auth/reset-password') {
+      callbackUrl.searchParams.set('type', 'recovery')
+    }
     callbackUrl.pathname = '/auth/callback'
     return NextResponse.redirect(callbackUrl)
   }
@@ -76,7 +80,7 @@ export async function middleware(request: NextRequest) {
   }
 
   // Rotas publicas - sempre permite acesso
-  const publicRoutes = ['/login', '/', '/offline']
+  const publicRoutes = ['/login', '/', '/offline', '/cadastro', '/esqueci-senha']
   const isPublicRoute = publicRoutes.includes(pathname) || pathname.startsWith('/auth')
 
   // Rotas que funcionam offline ou precisam de auth
@@ -106,8 +110,9 @@ export async function middleware(request: NextRequest) {
       return NextResponse.redirect(url)
     }
 
-    // Se está autenticado e tenta acessar login, redireciona para dashboard
-    if (user && pathname === '/login') {
+    // Se está autenticado e tenta acessar login/cadastro/esqueci-senha, redireciona para dashboard
+    // (exceto /auth/reset-password que precisa de sessao ativa para funcionar)
+    if (user && (pathname === '/login' || pathname === '/cadastro' || pathname === '/esqueci-senha')) {
       const url = request.nextUrl.clone()
       url.pathname = '/dashboard'
       return NextResponse.redirect(url)

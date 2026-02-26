@@ -34,6 +34,9 @@ export const APP_CONFIG = {
     adminActionPlanPresets: '/admin/planos-de-acao/modelos',
     adminSettings: '/admin/configuracoes',
     checklistNew: '/checklist/novo',
+    cadastro: '/cadastro',
+    esqueciSenha: '/esqueci-senha',
+    resetPassword: '/auth/reset-password',
   },
 
   // Mensagens padrao
@@ -48,6 +51,10 @@ export const APP_CONFIG = {
     redirecting: 'Redirecionando...',
     loginError: 'Email ou senha incorretos',
     loginErrorGeneric: 'Erro ao fazer login. Tente novamente.',
+    signupSuccess: 'Conta criada! Verifique seu email para confirmar.',
+    passwordResetSent: 'Se existe uma conta com esse email, voce recebera um link para redefinir sua senha.',
+    passwordResetSuccess: 'Senha alterada com sucesso! Faca login com a nova senha.',
+    passwordResetError: 'Erro ao redefinir senha. Tente novamente.',
   },
 
   // Configuracoes de storage

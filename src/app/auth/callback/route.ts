@@ -57,6 +57,12 @@ export async function GET(request: NextRequest) {
       return NextResponse.redirect(redirectUrl)
     }
 
+    // Se é recovery (reset de senha), redireciona para definir nova senha
+    const type = searchParams.get('type')
+    if (type === 'recovery') {
+      return NextResponse.redirect(new URL('/auth/reset-password', origin))
+    }
+
     // Sucesso - redireciona para tela de confirmacao
     return NextResponse.redirect(new URL('/auth/confirmed', origin))
   }

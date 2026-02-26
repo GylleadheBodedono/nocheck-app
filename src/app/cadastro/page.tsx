@@ -1,103 +1,109 @@
 'use client'
 
-import { useState, useEffect, Suspense } from 'react'
-import { useSearchParams } from 'next/navigation'
+import { useState } from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase'
 import { APP_CONFIG } from '@/lib/config'
 import { ThemeToggle, LoadingInline } from '@/components/ui'
-import { triggerPrecache } from '@/hooks/usePrecache'
-import { cacheAllDataForOffline } from '@/lib/offlineCache'
-import { FiLock, FiMail } from 'react-icons/fi'
+import { FiLock, FiMail, FiUser, FiPhone, FiCheckCircle } from 'react-icons/fi'
 
-function LoginForm() {
-  const searchParams = useSearchParams()
+export default function CadastroPage() {
+  const [fullName, setFullName] = useState('')
   const [email, setEmail] = useState('')
+  const [phone, setPhone] = useState('')
   const [password, setPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
-  const [successMsg, setSuccessMsg] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
-  const [status, setStatus] = useState<string>('')
+  const [success, setSuccess] = useState(false)
 
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const hash = window.location.hash
-      if (hash && (hash.includes('type=signup') || hash.includes('type=invite'))) {
-        window.location.href = '/auth/confirmed'
-        return
-      }
-    }
-  }, [])
-
-  useEffect(() => {
-    const errorParam = searchParams.get('error')
-    const messageParam = searchParams.get('message')
-    if (errorParam) setError(decodeURIComponent(errorParam))
-    if (messageParam) setSuccessMsg(decodeURIComponent(messageParam))
-  }, [searchParams])
+  const formatPhone = (value: string) => {
+    const digits = value.replace(/\D/g, '').slice(0, 11)
+    if (digits.length <= 2) return digits
+    if (digits.length <= 7) return `(${digits.slice(0, 2)}) ${digits.slice(2)}`
+    return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7)}`
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError(null)
+
+    if (password.length < 6) {
+      setError('A senha deve ter no minimo 6 caracteres.')
+      return
+    }
+
+    if (password !== confirmPassword) {
+      setError('As senhas nao coincidem.')
+      return
+    }
+
     setLoading(true)
-    setStatus('Autenticando...')
 
     try {
       const supabase = createClient()
-      const { error } = await supabase.auth.signInWithPassword({ email, password })
+      const { error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: {
+            full_name: fullName,
+            phone: phone.replace(/\D/g, ''),
+          },
+          emailRedirectTo: `${window.location.origin}/auth/callback`,
+        },
+      })
 
       if (error) {
-        if (error.message.includes('Invalid login')) {
-          setError(APP_CONFIG.messages.loginError)
+        if (error.message.includes('already registered')) {
+          setError('Este email ja esta cadastrado. Tente fazer login.')
         } else {
           setError(error.message)
         }
         setLoading(false)
-        setStatus('')
         return
       }
 
-      setStatus('Verificando sessao...')
-      const { data: session } = await supabase.auth.getSession()
-
-      if (session?.session) {
-        setStatus('Salvando dados para modo offline...')
-        try {
-          await cacheAllDataForOffline(session.session.user.id)
-        } catch (err) {
-          console.error('[Login] Erro ao cachear dados:', err)
-        }
-
-        setStatus('Preparando aplicacao offline...')
-        try {
-          await triggerPrecache()
-        } catch (err) {
-          console.error('[Login] Erro no precache:', err)
-        }
-
-        setStatus('Redirecionando...')
-        window.location.href = APP_CONFIG.routes.dashboard
-      } else {
-        window.location.href = APP_CONFIG.routes.dashboard
-      }
+      setSuccess(true)
     } catch {
-      setError(APP_CONFIG.messages.loginErrorGeneric)
+      setError('Erro ao criar conta. Tente novamente.')
+    } finally {
       setLoading(false)
-      setStatus('')
     }
+  }
+
+  if (success) {
+    return (
+      <div className="min-h-screen bg-page flex items-center justify-center p-4">
+        <div className="card p-8 max-w-md w-full text-center">
+          <div className="w-20 h-20 rounded-full bg-success/20 flex items-center justify-center mx-auto mb-6">
+            <FiCheckCircle className="w-10 h-10 text-success" />
+          </div>
+          <h1 className="text-2xl font-bold text-main mb-2">
+            Verifique seu email
+          </h1>
+          <p className="text-muted mb-8">
+            Enviamos um link de confirmacao para <strong className="text-main">{email}</strong>. Clique no link para ativar sua conta.
+          </p>
+          <Link
+            href={APP_CONFIG.routes.login}
+            className="btn-primary inline-flex items-center gap-2 px-6 py-3 text-base"
+          >
+            Voltar para Login
+          </Link>
+        </div>
+      </div>
+    )
   }
 
   return (
     <div className="h-screen w-screen p-4">
-      <div className="h-full w-full flex  overflow-hidden">
+      <div className="h-full w-full flex overflow-hidden">
 
         {/* Left Side - Decorative Panel */}
         <div className="hidden lg:flex lg:w-[55%] relative overflow-hidden rounded-[20px]">
-          {/* Animated gradient background */}
           <div className="absolute inset-0 bg-gradient-to-br from-[#B8935A] via-[#8B6E3B] to-[#2C1810] animate-gradient" />
-
-          {/* Mesh overlay */}
           <div className="absolute inset-0 opacity-30"
             style={{
               backgroundImage: `radial-gradient(at 20% 30%, rgba(255,255,255,0.15) 0%, transparent 50%),
@@ -105,22 +111,15 @@ function LoginForm() {
                                 radial-gradient(at 50% 10%, rgba(255,255,255,0.1) 0%, transparent 40%)`
             }}
           />
-
-          {/* Floating glass orbs */}
           <div className="absolute top-[15%] left-[10%] w-64 h-64 rounded-full bg-white/5 backdrop-blur-3xl border border-white/10 animate-float-slow" />
           <div className="absolute bottom-[20%] right-[15%] w-48 h-48 rounded-full bg-white/5 backdrop-blur-3xl border border-white/10 animate-float-delayed" />
           <div className="absolute top-[60%] left-[30%] w-32 h-32 rounded-full bg-white/8 backdrop-blur-3xl border border-white/5 animate-float-slow-reverse" />
-
-          {/* Grain texture overlay */}
           <div className="absolute inset-0 opacity-[0.03]"
             style={{
               backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E")`,
             }}
           />
-
-          {/* Content */}
           <div className="relative z-10 flex flex-col justify-between p-12 w-full">
-            {/* Top */}
             <div>
               <div className="flex items-center gap-3 mb-2">
                 <div className="w-10 h-10 rounded-xl bg-white/10 backdrop-blur-sm border border-white/20 flex items-center justify-center">
@@ -129,22 +128,18 @@ function LoginForm() {
                 <span className="text-white/90 font-semibold text-lg tracking-tight">NoCheck</span>
               </div>
             </div>
-
-            {/* Center */}
             <div className="max-w-md">
               <h1 className="text-5xl xl:text-6xl font-bold text-white leading-[1.1] tracking-tight mb-6">
-                Gestao
+                Crie sua
                 <br />
-                inteligente
+                conta
                 <br />
-                <span className="text-white/50">de checklists</span>
+                <span className="text-white/50">agora</span>
               </h1>
               <p className="text-white/60 text-lg leading-relaxed max-w-sm">
-                Controle completo das operacoes da sua empresa com checklists digitais, validacoes e planos de acao.
+                Cadastre-se para acessar o sistema de checklists digitais da sua empresa.
               </p>
             </div>
-
-            {/* Bottom stats */}
             <div className="flex gap-8">
               <div>
                 <p className="text-3xl font-bold text-white">100%</p>
@@ -164,18 +159,16 @@ function LoginForm() {
           </div>
         </div>
 
-        {/* Right Side - Login Form */}
-        <div className="flex-1 flex flex-col relative bg-page rounded-[20px] ">
-          {/* Theme toggle */}
+        {/* Right Side - Signup Form */}
+        <div className="flex-1 flex flex-col relative bg-page rounded-[20px]">
           <div className="absolute top-5 right-5 z-10">
             <ThemeToggle />
           </div>
 
-          {/* Form container */}
           <div className="flex-1 flex items-center rounded-[20px] justify-center px-6 sm:px-12 lg:px-16">
             <div className="w-full max-w-[400px]">
               {/* Logo */}
-              <div className="mb-10">
+              <div className="mb-8">
                 <div className="flex justify-center mb-6">
                   <Image
                     src="/Logo-dark.png"
@@ -195,12 +188,33 @@ function LoginForm() {
                   />
                 </div>
                 <p className="text-muted text-center mt-1.5 text-[15px]">
-                  Entre com suas credenciais para acessar o painel
+                  Preencha os dados abaixo para criar sua conta
                 </p>
               </div>
 
               {/* Form */}
-              <form onSubmit={handleSubmit} className="space-y-5">
+              <form onSubmit={handleSubmit} className="space-y-4">
+                {/* Nome */}
+                <div>
+                  <label htmlFor="fullName" className="block text-sm font-medium text-secondary mb-2">
+                    Nome completo
+                  </label>
+                  <div className="relative">
+                    <FiUser className="absolute left-4 top-1/2 -translate-y-1/2 w-[18px] h-[18px] text-muted pointer-events-none" />
+                    <input
+                      id="fullName"
+                      type="text"
+                      value={fullName}
+                      onChange={(e) => setFullName(e.target.value)}
+                      required
+                      autoComplete="name"
+                      className="input"
+                      style={{ paddingLeft: '2.75rem' }}
+                      placeholder="Seu nome completo"
+                    />
+                  </div>
+                </div>
+
                 {/* Email */}
                 <div>
                   <label htmlFor="email" className="block text-sm font-medium text-secondary mb-2">
@@ -222,16 +236,32 @@ function LoginForm() {
                   </div>
                 </div>
 
-                {/* Password */}
+                {/* Telefone */}
                 <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <label htmlFor="password" className="block text-sm font-medium text-secondary">
-                      Senha
-                    </label>
-                    <Link href={APP_CONFIG.routes.esqueciSenha} className="text-sm text-primary hover:underline">
-                      Esqueci minha senha
-                    </Link>
+                  <label htmlFor="phone" className="block text-sm font-medium text-secondary mb-2">
+                    Telefone
+                  </label>
+                  <div className="relative">
+                    <FiPhone className="absolute left-4 top-1/2 -translate-y-1/2 w-[18px] h-[18px] text-muted pointer-events-none" />
+                    <input
+                      id="phone"
+                      type="tel"
+                      value={phone}
+                      onChange={(e) => setPhone(formatPhone(e.target.value))}
+                      required
+                      autoComplete="tel"
+                      className="input"
+                      style={{ paddingLeft: '2.75rem' }}
+                      placeholder="(00) 00000-0000"
+                    />
                   </div>
+                </div>
+
+                {/* Senha */}
+                <div>
+                  <label htmlFor="password" className="block text-sm font-medium text-secondary mb-2">
+                    Senha
+                  </label>
                   <div className="relative">
                     <FiLock className="absolute left-4 top-1/2 -translate-y-1/2 w-[18px] h-[18px] text-muted pointer-events-none" />
                     <input
@@ -240,20 +270,36 @@ function LoginForm() {
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
                       required
-                      autoComplete="current-password"
+                      minLength={6}
+                      autoComplete="new-password"
                       className="input"
                       style={{ paddingLeft: '2.75rem' }}
-                      placeholder="••••••••"
+                      placeholder="Minimo 6 caracteres"
                     />
                   </div>
                 </div>
 
-                {/* Success */}
-                {successMsg && (
-                  <div className="p-3.5 bg-success/10 rounded-xl border border-success/20">
-                    <p className="text-success text-sm text-center">{successMsg}</p>
+                {/* Confirmar Senha */}
+                <div>
+                  <label htmlFor="confirmPassword" className="block text-sm font-medium text-secondary mb-2">
+                    Confirmar senha
+                  </label>
+                  <div className="relative">
+                    <FiLock className="absolute left-4 top-1/2 -translate-y-1/2 w-[18px] h-[18px] text-muted pointer-events-none" />
+                    <input
+                      id="confirmPassword"
+                      type="password"
+                      value={confirmPassword}
+                      onChange={(e) => setConfirmPassword(e.target.value)}
+                      required
+                      minLength={6}
+                      autoComplete="new-password"
+                      className="input"
+                      style={{ paddingLeft: '2.75rem' }}
+                      placeholder="Repita a senha"
+                    />
                   </div>
-                )}
+                </div>
 
                 {/* Error */}
                 {error && (
@@ -271,24 +317,24 @@ function LoginForm() {
                   {loading ? (
                     <>
                       <LoadingInline />
-                      {status || 'Entrando...'}
+                      Criando conta...
                     </>
                   ) : (
-                    'Entrar'
+                    'Criar conta'
                   )}
                 </button>
               </form>
 
-              {/* Link para cadastro */}
+              {/* Link para login */}
               <p className="text-center text-sm text-muted mt-6">
-                Nao tem conta?{' '}
-                <Link href={APP_CONFIG.routes.cadastro} className="text-primary font-medium hover:underline">
-                  Criar conta
+                Ja tem conta?{' '}
+                <Link href={APP_CONFIG.routes.login} className="text-primary font-medium hover:underline">
+                  Entrar
                 </Link>
               </p>
 
               {/* Footer */}
-              <p className="text-center text-muted text-xs mt-10">
+              <p className="text-center text-muted text-xs mt-8">
                 {APP_CONFIG.company} &middot; {APP_CONFIG.year}
               </p>
             </div>
@@ -299,17 +345,5 @@ function LoginForm() {
         </div>
       </div>
     </div>
-  )
-}
-
-export default function LoginPage() {
-  return (
-    <Suspense fallback={
-      <div className="h-screen w-screen flex items-center justify-center bg-[#0a0a0a]">
-        <div className="w-8 h-8 border-2 border-[#B8935A] border-t-transparent rounded-full animate-spin" />
-      </div>
-    }>
-      <LoginForm />
-    </Suspense>
   )
 }
