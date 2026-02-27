@@ -79,6 +79,11 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(loginUrl)
   }
 
+  // Landing page (/) sempre renderiza sem verificar auth
+  if (pathname === '/') {
+    return supabaseResponse
+  }
+
   // Rotas publicas - sempre permite acesso
   const publicRoutes = ['/login', '/', '/offline', '/cadastro', '/esqueci-senha']
   const isPublicRoute = publicRoutes.includes(pathname) || pathname.startsWith('/auth')
