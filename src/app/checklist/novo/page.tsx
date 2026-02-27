@@ -99,6 +99,8 @@ function ChecklistForm() {
   const [offlineChecklistId, setOfflineChecklistId] = useState<string | null>(null) // Offline UUID for sectioned mode
   const checklistIdRef = useRef<number | null>(null)
   const offlineChecklistIdRef = useRef<string | null>(null)
+  const responsesRef = useRef(responses)
+  useEffect(() => { responsesRef.current = responses }, [responses])
 
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [savedOffline, _setSavedOffline] = useState(false)
@@ -940,8 +942,8 @@ function ChecklistForm() {
             valueJson: row.valueJson,
           })
         } else {
-          console.error('[AutoSave] Falha: nenhum ID disponivel apos aguardar inicializacao')
-          setAutoSaveStatus('error')
+          console.warn('[AutoSave] IDs nao disponiveis ainda, resposta mantida em memoria')
+          setAutoSaveStatus('idle')
           return
         }
       }
@@ -1169,7 +1171,7 @@ function ChecklistForm() {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const rows: any[] = sectionFields
           .map(f => {
-            const row = buildSingleResponseRow(f.id, responses[f.id])
+            const row = buildSingleResponseRow(f.id, responsesRef.current[f.id])
             if (!row) return null
             return {
               checklist_id: checklistIdRef.current,
@@ -1198,7 +1200,7 @@ function ChecklistForm() {
           }
         }
         for (const f of sectionFields) {
-          const row = buildSingleResponseRow(f.id, responses[f.id])
+          const row = buildSingleResponseRow(f.id, responsesRef.current[f.id])
           if (!row) continue
           await updateOfflineFieldResponse(offlineChecklistIdRef.current, activeSection, f.id, {
             valueText: row.valueText,
@@ -1216,8 +1218,9 @@ function ChecklistForm() {
       .map(f => f.id)
 
     // Check if all required fields are filled
+    const currentResponses = responsesRef.current
     const allRequiredFilled = requiredFieldIds.every(id => {
-      const v = responses[id]
+      const v = currentResponses[id]
       if (v === undefined || v === null || v === '' || (Array.isArray(v) && v.length === 0)) return false
       if (typeof v === 'object' && v !== null && 'answer' in (v as Record<string, unknown>)) {
         const ans = (v as Record<string, unknown>).answer
@@ -1228,7 +1231,7 @@ function ChecklistForm() {
 
     // Has at least one response in this section
     const hasAnyResponse = sectionFields.some(f => {
-      const v = responses[f.id]
+      const v = currentResponses[f.id]
       return v !== undefined && v !== null && v !== '' && !(Array.isArray(v) && v.length === 0)
     })
 
@@ -1273,29 +1276,33 @@ function ChecklistForm() {
 
     setActiveSection(null)
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [autoSaveField, activeSection, getFieldsForSection, buildSingleResponseRow, responses, supabase, checklistId, offlineChecklistId, sectionProgress])
+  }, [autoSaveField, activeSection, getFieldsForSection, buildSingleResponseRow, supabase, checklistId, offlineChecklistId, sectionProgress])
 
   // Handle Android back button and navigation
+  // Ref estavel para o handler (evita re-registrar listener a cada campo preenchido)
+  const popStateHandlerRef = useRef<() => Promise<void>>()
+
+  // Atualiza a ref quando as dependencias mudam (sem re-registrar o listener)
   useEffect(() => {
-    const handlePopState = async () => {
+    popStateHandlerRef.current = async () => {
       if (hasSections && activeSection !== null) {
-        // Prevent navigation — push state back and run proper section save
         window.history.pushState(null, '', window.location.href)
         await handleSectionBack()
       } else {
-        // On section list or non-sectioned: flush and go to dashboard
         autoSaveField.flush()
         await new Promise(resolve => setTimeout(resolve, 300))
         router.push(APP_CONFIG.routes.dashboard)
       }
     }
-    // Push synthetic history entry so popstate fires before actual navigation
+  }, [hasSections, activeSection, handleSectionBack, autoSaveField, router])
+
+  // Registra listener UMA VEZ no mount + pushState UMA VEZ
+  useEffect(() => {
+    const handler = () => { popStateHandlerRef.current?.() }
     window.history.pushState(null, '', window.location.href)
-    window.addEventListener('popstate', handlePopState)
-    return () => {
-      window.removeEventListener('popstate', handlePopState)
-    }
-  }, [autoSaveField, hasSections, activeSection, handleSectionBack, router])
+    window.addEventListener('popstate', handler)
+    return () => window.removeEventListener('popstate', handler)
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   // === UPLOAD PENDING PHOTOS (base64 → cloud) ===
   const uploadPendingPhotos = async (clId: number) => {
