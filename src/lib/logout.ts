@@ -1,4 +1,5 @@
-import type { SupabaseClient } from '@supabase/supabase-js'
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type AnySupabaseClient = { auth: { signOut: () => Promise<any> } }
 import { clearAllCache } from './offlineCache'
 import { clearOfflineData } from './offlineStorage'
 
@@ -29,7 +30,7 @@ function clearServiceWorkerCache(): Promise<void> {
  * Logout completo: limpa TODOS os caches e storages antes de deslogar.
  * Usa window.location.href para hard redirect (ignora cache do Next.js router).
  */
-export async function fullLogout(supabase: SupabaseClient): Promise<void> {
+export async function fullLogout(supabase: AnySupabaseClient): Promise<void> {
   // 1. Limpar IndexedDB (nocheck-cache) — dados offline do app
   try {
     await clearAllCache()
