@@ -25,6 +25,7 @@ import {
 } from '@/lib/offlineCache'
 import { getPendingChecklists, type PendingChecklist } from '@/lib/offlineStorage'
 import { syncAll, subscribeSyncStatus } from '@/lib/syncService'
+import { fullLogout } from '@/lib/logout'
 
 type TemplateSection = {
   id: number
@@ -713,13 +714,7 @@ export default function DashboardPage() {
   }
 
   const handleSignOut = async () => {
-    try {
-      if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
-        navigator.serviceWorker.controller.postMessage({ type: 'CLEAR_CACHE' })
-      }
-    } catch { /* ignore */ }
-    await supabase.auth.signOut()
-    router.push(APP_CONFIG.routes.login)
+    await fullLogout(supabase)
   }
 
   const handleSyncNow = async () => {

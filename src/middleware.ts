@@ -91,19 +91,8 @@ export async function middleware(request: NextRequest) {
   try {
     const { data: { user } } = await supabase.auth.getUser()
 
-    // Se não está autenticado e tenta acessar rota protegida
+    // Se não está autenticado e tenta acessar rota protegida → redireciona sempre
     if (!user && isProtectedRoute) {
-      // Verifica se tem cookie de sessão (pode estar offline)
-      const hasSessionCookie = request.cookies.getAll().some(
-        cookie => cookie.name.includes('supabase') && cookie.name.includes('auth')
-      )
-
-      // Se tem cookie, permite (funcionalidade offline)
-      if (hasSessionCookie) {
-        return supabaseResponse
-      }
-
-      // Sem sessão, redireciona para login
       const url = request.nextUrl.clone()
       url.pathname = '/login'
       return NextResponse.redirect(url)

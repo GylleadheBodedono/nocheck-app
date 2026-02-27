@@ -20,6 +20,7 @@ import {
   getFunctionsCache,
   getSectorsCache,
 } from '@/lib/offlineCache'
+import { fullLogout } from '@/lib/logout'
 import type { TemplateVisibility } from '@/types/database'
 
 export type UserWithProfile = DBUser & {
@@ -310,35 +311,11 @@ export function useAuth() {
 
   const signOut = async () => {
     setLoading(true)
-
-    // Limpa cache offline
-    try {
-      await clearAllCache()
-      console.log('[useAuth] Offline cache cleared')
-    } catch (error) {
-      console.error('[useAuth] Error clearing cache:', error)
-    }
-
-    // Limpa cache do Service Worker
-    try {
-      if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator && navigator.serviceWorker.controller) {
-        navigator.serviceWorker.controller.postMessage({ type: 'CLEAR_CACHE' })
-        console.log('[useAuth] SW cache clear requested')
-      }
-    } catch (error) {
-      console.error('[useAuth] Error clearing SW cache:', error)
-    }
-
-    const { error } = await supabase.auth.signOut()
-    if (error) {
-      setLoading(false)
-      return { error }
-    }
-
     setUser(null)
     setUserProfile(null)
     setSession(null)
-    setLoading(false)
+    await fullLogout(supabase)
+    // fullLogout faz hard redirect, código abaixo não executa
     return { error: null }
   }
 

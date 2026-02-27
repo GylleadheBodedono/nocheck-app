@@ -339,6 +339,10 @@ self.addEventListener('message', async (event) => {
       const keys = await caches.keys()
       await Promise.all(keys.map(key => caches.delete(key)))
       console.log('[SW v11] All caches cleared')
+      // Confirmar de volta para o client via MessageChannel
+      if (event.ports && event.ports[0]) {
+        event.ports[0].postMessage({ type: 'CACHE_CLEARED' })
+      }
       break
 
     case 'PRECACHE_APP':

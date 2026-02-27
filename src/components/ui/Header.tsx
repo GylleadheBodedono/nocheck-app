@@ -8,6 +8,7 @@ import { FiArrowLeft, FiLogOut, FiUser, FiSearch, FiBell, FiSettings, FiCheck, F
 import { APP_CONFIG } from '@/lib/config'
 import { ThemeToggle } from './ThemeToggle'
 import { createClient } from '@/lib/supabase'
+import { fullLogout } from '@/lib/logout'
 import { getAuthCache, getUserCache } from '@/lib/offlineCache'
 import { useNotifications, type AppNotification } from '@/hooks/useNotifications'
 import type { IconType } from 'react-icons'
@@ -127,13 +128,7 @@ export function Header({
     if (onSignOut) {
       onSignOut()
     } else {
-      try {
-        if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
-          navigator.serviceWorker.controller.postMessage({ type: 'CLEAR_CACHE' })
-        }
-      } catch { /* ignore */ }
-      await supabase.auth.signOut()
-      router.push(APP_CONFIG.routes.login)
+      await fullLogout(supabase)
     }
   }
 
