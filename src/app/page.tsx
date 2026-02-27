@@ -318,7 +318,7 @@ function ProcessGraph() {
   const isInView = useInView(ref, { once: true, margin: '-80px' })
 
   return (
-    <section className="py-28 px-6 relative">
+    <section id="processo" className="py-28 px-6 relative scroll-mt-20">
       <div className="absolute inset-0 overflow-hidden">
         <div
           className="absolute top-0 left-1/2 -translate-x-1/2 w-[800px] h-[400px] rounded-full opacity-[0.04]"
@@ -553,9 +553,28 @@ export default function LandingPage() {
           boxShadow: '0 8px 32px rgba(0,0,0,0.4), inset 0 0.5px 0 rgba(255,255,255,0.06)',
         }}
       >
-        <div className="flex items-center gap-2 px-3">
+        <div className="flex items-center gap-1 sm:gap-2 px-2 sm:px-3">
           <Image src="/Logo.png" alt="NoCheck" width={100} height={28} className="opacity-90" />
-          <div className="w-px h-5 bg-white/[0.08]" />
+          <div className="w-px h-5 bg-white/[0.08] mx-1" />
+          <a
+            href="#recursos"
+            className="text-sm text-[#a1a1aa] hover:text-[#fafafa] transition-colors duration-300 px-3 py-1.5 rounded-full hover:bg-white/[0.06] whitespace-nowrap hidden sm:inline-block"
+          >
+            Recursos
+          </a>
+          <a
+            href="#processo"
+            className="text-sm text-[#a1a1aa] hover:text-[#fafafa] transition-colors duration-300 px-3 py-1.5 rounded-full hover:bg-white/[0.06] whitespace-nowrap hidden sm:inline-block"
+          >
+            Processo
+          </a>
+          <a
+            href="#contato"
+            className="text-sm text-[#a1a1aa] hover:text-[#fafafa] transition-colors duration-300 px-3 py-1.5 rounded-full hover:bg-white/[0.06] whitespace-nowrap hidden sm:inline-block"
+          >
+            Contato
+          </a>
+          <div className="w-px h-5 bg-white/[0.08] mx-1" />
           <Link
             href="/login"
             className="text-sm text-[#a1a1aa] hover:text-[#fafafa] transition-colors duration-300 px-3 py-1.5 rounded-full hover:bg-white/[0.06] whitespace-nowrap"
@@ -728,7 +747,7 @@ export default function LandingPage() {
       </section>
 
       {/* ═══════════════════ FEATURES ═══════════════════ */}
-      <section className="px-6 py-28">
+      <section id="recursos" className="px-6 py-28 scroll-mt-20">
         <div className="max-w-6xl mx-auto">
           <div className="mb-16">
             <AnimatedTitle label="Recursos">
@@ -831,7 +850,7 @@ export default function LandingPage() {
       </section>
 
       {/* ═══════════════════ CTA FINAL ═══════════════════ */}
-      <section className="py-28 px-6 relative">
+      <section id="contato" className="py-28 px-6 relative scroll-mt-20">
         {/* Background glow */}
         <div className="absolute inset-0 overflow-hidden">
           <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-[1000px] h-[500px] rounded-full opacity-[0.08]"
