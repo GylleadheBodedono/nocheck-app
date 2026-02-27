@@ -470,17 +470,7 @@ export default function TemplatesPage() {
                 <div className="flex items-start justify-between mb-4">
                   <div className="flex-1">
                     <div className="flex items-center gap-2 mb-1">
-                      <button
-                        onClick={() => toggleFavorite(template.id)}
-                        className={`p-0.5 transition-colors ${
-                          favoriteIds.has(template.id)
-                            ? 'text-amber-400'
-                            : 'text-muted hover:text-amber-400'
-                        }`}
-                        title={favoriteIds.has(template.id) ? 'Remover favorito' : 'Favoritar'}
-                      >
-                        <FiStar className={`w-4 h-4 ${favoriteIds.has(template.id) ? 'fill-amber-400' : ''}`} />
-                      </button>
+                     
                       <h3 className="text-lg font-semibold text-main">{template.name}</h3>
                       {!template.is_active && (
                         <span className="px-2 py-0.5 text-xs bg-red-500/20 text-red-400 rounded">
@@ -545,6 +535,17 @@ export default function TemplatesPage() {
 
                 {/* Actions */}
                 <div className="flex items-center justify-end gap-2 pt-4 border-t border-subtle">
+                   <button
+                        onClick={() => toggleFavorite(template.id)}
+                        className={`p-0.5 transition-colors ${
+                          favoriteIds.has(template.id)
+                            ? 'text-amber-400'
+                            : 'text-muted hover:text-amber-400'
+                        }`}
+                        title={favoriteIds.has(template.id) ? 'Remover favorito' : 'Favoritar'}
+                      >
+                        <FiStar className={`w-5 h-5 ${favoriteIds.has(template.id) ? 'fill-amber-400' : ''}`} />
+                      </button>
                   <button
                     onClick={() => duplicateTemplate(template)}
                     className="p-2 text-muted hover:text-main hover:bg-surface rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
