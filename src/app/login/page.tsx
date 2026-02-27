@@ -21,7 +21,6 @@ function LoginForm() {
   const [status, setStatus] = useState<string>('')
 
   useEffect(() => {
-    console.log('[LoginPage] MOUNTED at', window.location.href)
     if (typeof window !== 'undefined') {
       const hash = window.location.hash
       if (hash && (hash.includes('type=signup') || hash.includes('type=invite'))) {

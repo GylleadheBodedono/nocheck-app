@@ -453,6 +453,7 @@ function FloatingParticles() {
 export default function LandingPage() {
   const [scrolled, setScrolled] = useState(false)
   const { scrollYProgress } = useScroll()
+  const lenisRef = useRef<InstanceType<typeof Lenis> | null>(null)
   const tabletRef = useRef(null)
   const { scrollYProgress: tabletScrollProgress } = useScroll({
     target: tabletRef,
@@ -463,11 +464,6 @@ export default function LandingPage() {
   const tabletScale = useSpring(useTransform(tabletScrollProgress, [0, 0.5], [0.85, 1]), tabletSpring)
   const tabletOpacity = useTransform(tabletScrollProgress, [0, 0.25], [0, 1])
   const tabletY = useSpring(useTransform(tabletScrollProgress, [0, 0.5], [60, 0]), tabletSpring)
-
-  // Debug: verificar se a landing page esta montando
-  useEffect(() => {
-    console.log('[LandingPage] MOUNTED at', window.location.href)
-  }, [])
 
   // Detect email confirmation hash
   useEffect(() => {
@@ -486,13 +482,22 @@ export default function LandingPage() {
       easing: (t: number) => Math.min(1, 1.001 - Math.pow(2, -10 * t)),
       smoothWheel: true,
     })
+    lenisRef.current = lenis
     function raf(time: number) {
       lenis.raf(time)
       requestAnimationFrame(raf)
     }
     requestAnimationFrame(raf)
-    return () => lenis.destroy()
+    return () => { lenis.destroy(); lenisRef.current = null }
   }, [])
+
+  const scrollToSection = (e: React.MouseEvent<HTMLAnchorElement>, id: string) => {
+    e.preventDefault()
+    const el = document.getElementById(id)
+    if (el && lenisRef.current) {
+      lenisRef.current.scrollTo(el, { offset: -80 })
+    }
+  }
 
   // Scroll detection for nav
   useEffect(() => {
@@ -541,48 +546,53 @@ export default function LandingPage() {
       </div>
 
       {/* ═══════════════════ NAV (floating pill) ═══════════════════ */}
-      <motion.nav
-        initial={{ y: -80, opacity: 0 }}
-        animate={{ y: scrolled ? 0 : -80, opacity: scrolled ? 1 : 0 }}
-        transition={{ duration: 0.4, ease: easeOut }}
-        className="fixed top-5 left-1/2 -translate-x-1/2 z-50 rounded-full border border-white/[0.08] px-2 py-1.5"
-        style={{
-          background: 'rgba(9, 9, 11, 0.6)',
-          backdropFilter: 'blur(24px)',
-          WebkitBackdropFilter: 'blur(24px)',
-          boxShadow: '0 8px 32px rgba(0,0,0,0.4), inset 0 0.5px 0 rgba(255,255,255,0.06)',
-        }}
-      >
-        <div className="flex items-center gap-1 sm:gap-2 px-2 sm:px-3">
-          <Image src="/Logo.png" alt="NoCheck" width={100} height={28} className="opacity-90" />
-          <div className="w-px h-5 bg-white/[0.08] mx-1" />
-          <a
-            href="#recursos"
-            className="text-sm text-[#a1a1aa] hover:text-[#fafafa] transition-colors duration-300 px-3 py-1.5 rounded-full hover:bg-white/[0.06] whitespace-nowrap hidden sm:inline-block"
-          >
-            Recursos
-          </a>
-          <a
-            href="#processo"
-            className="text-sm text-[#a1a1aa] hover:text-[#fafafa] transition-colors duration-300 px-3 py-1.5 rounded-full hover:bg-white/[0.06] whitespace-nowrap hidden sm:inline-block"
-          >
-            Processo
-          </a>
-          <a
-            href="#contato"
-            className="text-sm text-[#a1a1aa] hover:text-[#fafafa] transition-colors duration-300 px-3 py-1.5 rounded-full hover:bg-white/[0.06] whitespace-nowrap hidden sm:inline-block"
-          >
-            Contato
-          </a>
-          <div className="w-px h-5 bg-white/[0.08] mx-1" />
-          <Link
-            href="/login"
-            className="text-sm text-[#a1a1aa] hover:text-[#fafafa] transition-colors duration-300 px-3 py-1.5 rounded-full hover:bg-white/[0.06] whitespace-nowrap"
-          >
-            Entrar
-          </Link>
-        </div>
-      </motion.nav>
+      <div className="fixed top-5 inset-x-0 z-50 flex justify-center pointer-events-none">
+        <motion.nav
+          initial={{ y: -80, opacity: 0 }}
+          animate={{ y: scrolled ? 0 : -80, opacity: scrolled ? 1 : 0 }}
+          transition={{ duration: 0.4, ease: easeOut }}
+          className="pointer-events-auto rounded-full border border-white/[0.08] px-2 py-1.5"
+          style={{
+            background: 'rgba(9, 9, 11, 0.6)',
+            backdropFilter: 'blur(24px)',
+            WebkitBackdropFilter: 'blur(24px)',
+            boxShadow: '0 8px 32px rgba(0,0,0,0.4), inset 0 0.5px 0 rgba(255,255,255,0.06)',
+          }}
+        >
+          <div className="flex items-center gap-1 sm:gap-2 px-2 sm:px-3">
+            <Image src="/Logo.png" alt="NoCheck" width={100} height={28} className="opacity-90" />
+            <div className="w-px h-5 bg-white/[0.08] mx-1" />
+            <a
+              href="#recursos"
+              onClick={(e) => scrollToSection(e, 'recursos')}
+              className="text-sm text-[#a1a1aa] hover:text-[#fafafa] transition-colors duration-300 px-3 py-1.5 rounded-full hover:bg-white/[0.06] whitespace-nowrap hidden sm:inline-block"
+            >
+              Recursos
+            </a>
+            <a
+              href="#processo"
+              onClick={(e) => scrollToSection(e, 'processo')}
+              className="text-sm text-[#a1a1aa] hover:text-[#fafafa] transition-colors duration-300 px-3 py-1.5 rounded-full hover:bg-white/[0.06] whitespace-nowrap hidden sm:inline-block"
+            >
+              Processo
+            </a>
+            <a
+              href="#contato"
+              onClick={(e) => scrollToSection(e, 'contato')}
+              className="text-sm text-[#a1a1aa] hover:text-[#fafafa] transition-colors duration-300 px-3 py-1.5 rounded-full hover:bg-white/[0.06] whitespace-nowrap hidden sm:inline-block"
+            >
+              Contato
+            </a>
+            <div className="w-px h-5 bg-white/[0.08] mx-1" />
+            <Link
+              href="/login"
+              className="text-sm text-[#a1a1aa] hover:text-[#fafafa] transition-colors duration-300 px-3 py-1.5 rounded-full hover:bg-white/[0.06] whitespace-nowrap"
+            >
+              Entrar
+            </Link>
+          </div>
+        </motion.nav>
+      </div>
 
       {/* ═══════════════════ HERO ═══════════════════ */}
       <section className="relative min-h-screen flex flex-col items-center justify-center px-6 overflow-hidden pt-24 pb-12">
