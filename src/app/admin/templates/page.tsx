@@ -14,6 +14,7 @@ import {
   FiSearch,
   FiClipboard,
   FiWifiOff,
+  FiStar,
 } from 'react-icons/fi'
 import { APP_CONFIG } from '@/lib/config'
 import { LoadingPage, Header } from '@/components/ui'
@@ -31,6 +32,9 @@ export default function TemplatesPage() {
   const [searchTerm, setSearchTerm] = useState('')
   const [filterCategory, setFilterCategory] = useState<string | null>(null)
   const [isOffline, setIsOffline] = useState(false)
+  const [favoriteIds, setFavoriteIds] = useState<Set<number>>(new Set())
+  const [showFavoritesOnly, setShowFavoritesOnly] = useState(false)
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null)
   const router = useRouter()
   const supabase = useMemo(() => createClient(), [])
 
@@ -81,6 +85,24 @@ export default function TemplatesPage() {
     if (!isAdmin) {
       router.push(APP_CONFIG.routes.dashboard)
       return
+    }
+
+    setCurrentUserId(userId)
+
+    // Buscar favoritos
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data: favs } = await (supabase as any)
+        .from('admin_favorites')
+        .select('entity_id')
+        .eq('user_id', userId)
+        .eq('entity_type', 'template')
+
+      if (favs) {
+        setFavoriteIds(new Set(favs.map((f: { entity_id: string }) => Number(f.entity_id))))
+      }
+    } catch {
+      // Favoritos não são críticos
     }
 
     // Tenta buscar online
@@ -260,15 +282,60 @@ export default function TemplatesPage() {
     }
   }
 
-  const filteredTemplates = templates.filter(template => {
-    const matchesSearch =
-      template.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      template.description?.toLowerCase().includes(searchTerm.toLowerCase())
+  const toggleFavorite = async (templateId: number) => {
+    if (!currentUserId) return
+    const isFav = favoriteIds.has(templateId)
 
-    const matchesCategory = !filterCategory || template.category === filterCategory
+    // Otimistic update
+    setFavoriteIds(prev => {
+      const next = new Set(prev)
+      if (isFav) next.delete(templateId)
+      else next.add(templateId)
+      return next
+    })
 
-    return matchesSearch && matchesCategory
-  })
+    try {
+      if (isFav) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        await (supabase as any)
+          .from('admin_favorites')
+          .delete()
+          .eq('user_id', currentUserId)
+          .eq('entity_type', 'template')
+          .eq('entity_id', String(templateId))
+      } else {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        await (supabase as any)
+          .from('admin_favorites')
+          .insert({ user_id: currentUserId, entity_type: 'template', entity_id: String(templateId) })
+      }
+    } catch {
+      // Reverter em caso de erro
+      setFavoriteIds(prev => {
+        const next = new Set(prev)
+        if (isFav) next.add(templateId)
+        else next.delete(templateId)
+        return next
+      })
+    }
+  }
+
+  const filteredTemplates = templates
+    .filter(template => {
+      const matchesSearch =
+        template.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        template.description?.toLowerCase().includes(searchTerm.toLowerCase())
+
+      const matchesCategory = !filterCategory || template.category === filterCategory
+      const matchesFavorite = !showFavoritesOnly || favoriteIds.has(template.id)
+
+      return matchesSearch && matchesCategory && matchesFavorite
+    })
+    .sort((a, b) => {
+      const aFav = favoriteIds.has(a.id) ? 1 : 0
+      const bFav = favoriteIds.has(b.id) ? 1 : 0
+      return bFav - aFav
+    })
 
   const categories = ['recebimento', 'limpeza', 'abertura', 'fechamento', 'outros']
 
@@ -346,6 +413,18 @@ export default function TemplatesPage() {
 
           <div className="flex gap-2 flex-wrap">
             <button
+              onClick={() => setShowFavoritesOnly(!showFavoritesOnly)}
+              className={`px-3 py-2 rounded-xl text-sm font-medium transition-colors flex items-center gap-1.5 ${
+                showFavoritesOnly
+                  ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
+                  : 'btn-secondary'
+              }`}
+              title="Filtrar favoritos"
+            >
+              <FiStar className={`w-3.5 h-3.5 ${showFavoritesOnly ? 'fill-amber-400' : ''}`} />
+              Favoritos
+            </button>
+            <button
               onClick={() => setFilterCategory(null)}
               className={`px-3 py-2 rounded-xl text-sm font-medium transition-colors ${
                 filterCategory === null
@@ -391,6 +470,17 @@ export default function TemplatesPage() {
                 <div className="flex items-start justify-between mb-4">
                   <div className="flex-1">
                     <div className="flex items-center gap-2 mb-1">
+                      <button
+                        onClick={() => toggleFavorite(template.id)}
+                        className={`p-0.5 transition-colors ${
+                          favoriteIds.has(template.id)
+                            ? 'text-amber-400'
+                            : 'text-muted hover:text-amber-400'
+                        }`}
+                        title={favoriteIds.has(template.id) ? 'Remover favorito' : 'Favoritar'}
+                      >
+                        <FiStar className={`w-4 h-4 ${favoriteIds.has(template.id) ? 'fill-amber-400' : ''}`} />
+                      </button>
                       <h3 className="text-lg font-semibold text-main">{template.name}</h3>
                       {!template.is_active && (
                         <span className="px-2 py-0.5 text-xs bg-red-500/20 text-red-400 rounded">

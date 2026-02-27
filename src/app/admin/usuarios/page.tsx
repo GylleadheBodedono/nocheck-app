@@ -13,6 +13,7 @@ import {
   FiSearch,
   FiUsers,
   FiWifiOff,
+  FiStar,
 } from 'react-icons/fi'
 import type { User, Store, Sector, FunctionRow, UserStoreWithDetails } from '@/types/database'
 import { APP_CONFIG } from '@/lib/config'
@@ -32,6 +33,9 @@ export default function UsuariosPage() {
   const [searchTerm, setSearchTerm] = useState('')
   const [filterActive, setFilterActive] = useState<boolean | null>(null)
   const [isOffline, setIsOffline] = useState(false)
+  const [favoriteUserIds, setFavoriteUserIds] = useState<Set<string>>(new Set())
+  const [showFavoritesOnly, setShowFavoritesOnly] = useState(false)
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null)
   const router = useRouter()
   const supabase = useMemo(() => createClient(), [])
 
@@ -83,6 +87,24 @@ export default function UsuariosPage() {
     if (!isAdmin) {
       router.push(APP_CONFIG.routes.dashboard)
       return
+    }
+
+    setCurrentUserId(userId)
+
+    // Buscar favoritos
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data: favs } = await (supabase as any)
+        .from('admin_favorites')
+        .select('entity_id')
+        .eq('user_id', userId)
+        .eq('entity_type', 'user')
+
+      if (favs) {
+        setFavoriteUserIds(new Set(favs.map((f: { entity_id: string }) => f.entity_id)))
+      }
+    } catch {
+      // Favoritos não são críticos
     }
 
     // === BUSCAR USUARIOS ===
@@ -219,15 +241,60 @@ export default function UsuariosPage() {
     }
   }
 
-  const filteredUsers = users.filter(user => {
-    const matchesSearch =
-      user.full_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      user.email.toLowerCase().includes(searchTerm.toLowerCase())
+  const toggleFavoriteUser = async (targetUserId: string) => {
+    if (!currentUserId) return
+    const isFav = favoriteUserIds.has(targetUserId)
 
-    const matchesFilter = filterActive === null || user.is_active === filterActive
+    // Otimistic update
+    setFavoriteUserIds(prev => {
+      const next = new Set(prev)
+      if (isFav) next.delete(targetUserId)
+      else next.add(targetUserId)
+      return next
+    })
 
-    return matchesSearch && matchesFilter
-  })
+    try {
+      if (isFav) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        await (supabase as any)
+          .from('admin_favorites')
+          .delete()
+          .eq('user_id', currentUserId)
+          .eq('entity_type', 'user')
+          .eq('entity_id', targetUserId)
+      } else {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        await (supabase as any)
+          .from('admin_favorites')
+          .insert({ user_id: currentUserId, entity_type: 'user', entity_id: targetUserId })
+      }
+    } catch {
+      // Reverter em caso de erro
+      setFavoriteUserIds(prev => {
+        const next = new Set(prev)
+        if (isFav) next.add(targetUserId)
+        else next.delete(targetUserId)
+        return next
+      })
+    }
+  }
+
+  const filteredUsers = users
+    .filter(user => {
+      const matchesSearch =
+        user.full_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        user.email.toLowerCase().includes(searchTerm.toLowerCase())
+
+      const matchesFilter = filterActive === null || user.is_active === filterActive
+      const matchesFavorite = !showFavoritesOnly || favoriteUserIds.has(user.id)
+
+      return matchesSearch && matchesFilter && matchesFavorite
+    })
+    .sort((a, b) => {
+      const aFav = favoriteUserIds.has(a.id) ? 1 : 0
+      const bFav = favoriteUserIds.has(b.id) ? 1 : 0
+      return bFav - aFav
+    })
 
   if (loading) {
     return <LoadingPage />
@@ -274,7 +341,19 @@ export default function UsuariosPage() {
             />
           </div>
 
-          <div className="flex gap-2">
+          <div className="flex gap-2 flex-wrap">
+            <button
+              onClick={() => setShowFavoritesOnly(!showFavoritesOnly)}
+              className={`px-4 py-2 rounded-xl font-medium transition-colors flex items-center gap-1.5 ${
+                showFavoritesOnly
+                  ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
+                  : 'btn-secondary'
+              }`}
+              title="Filtrar favoritos"
+            >
+              <FiStar className={`w-3.5 h-3.5 ${showFavoritesOnly ? 'fill-amber-400' : ''}`} />
+              Favoritos
+            </button>
             <button
               onClick={() => setFilterActive(null)}
               className={`px-4 py-2 rounded-xl font-medium transition-colors ${
@@ -333,9 +412,22 @@ export default function UsuariosPage() {
                   filteredUsers.map((user) => (
                     <tr key={user.id} className="hover:bg-surface-hover transition-colors">
                       <td className="px-6 py-4">
-                        <div>
-                          <p className="font-medium text-main">{user.full_name}</p>
-                          <p className="text-sm text-muted">{user.email}</p>
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => toggleFavoriteUser(user.id)}
+                            className={`p-0.5 transition-colors shrink-0 ${
+                              favoriteUserIds.has(user.id)
+                                ? 'text-amber-400'
+                                : 'text-muted hover:text-amber-400'
+                            }`}
+                            title={favoriteUserIds.has(user.id) ? 'Remover favorito' : 'Favoritar'}
+                          >
+                            <FiStar className={`w-4 h-4 ${favoriteUserIds.has(user.id) ? 'fill-amber-400' : ''}`} />
+                          </button>
+                          <div>
+                            <p className="font-medium text-main">{user.full_name}</p>
+                            <p className="text-sm text-muted">{user.email}</p>
+                          </div>
                         </div>
                       </td>
                       <td className="px-6 py-4">
