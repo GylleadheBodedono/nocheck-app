@@ -410,7 +410,7 @@ export default function TemplatesPage() {
                 {/* Stats */}
                 <div className="flex items-center gap-4 mb-4 text-sm text-muted">
                   <span>{template.fields.length} campos</span>
-                  <span>{template.visibility.length} lojas</span>
+                  <span>{new Set(template.visibility.map(v => v.store_id)).size} lojas</span>
                   <span>v{template.version}</span>
                 </div>
 
@@ -427,26 +427,31 @@ export default function TemplatesPage() {
                 </div>
 
                 {/* Visibility */}
-                {template.visibility.length > 0 && (
-                  <div className="mb-4">
-                    <p className="text-xs text-muted mb-1">Visível em:</p>
-                    <div className="flex flex-wrap gap-1">
-                      {template.visibility.slice(0, 4).map(v => (
-                        <span
-                          key={v.id}
-                          className="px-2 py-1 text-xs bg-emerald-500/10 text-emerald-400 rounded"
-                        >
-                          {v.store.name.split(' ').slice(1).join(' ') || v.store.name}
-                        </span>
-                      ))}
-                      {template.visibility.length > 4 && (
-                        <span className="px-2 py-1 text-xs bg-surface text-muted rounded">
-                          +{template.visibility.length - 4}
-                        </span>
-                      )}
+                {template.visibility.length > 0 && (() => {
+                  const uniqueStores = Array.from(
+                    new Map(template.visibility.map(v => [v.store_id, v])).values()
+                  )
+                  return (
+                    <div className="mb-4">
+                      <p className="text-xs text-muted mb-1">Visível em:</p>
+                      <div className="flex flex-wrap gap-1">
+                        {uniqueStores.slice(0, 4).map(v => (
+                          <span
+                            key={v.store_id}
+                            className="px-2 py-1 text-xs bg-emerald-500/10 text-emerald-400 rounded"
+                          >
+                            {v.store.name.split(' ').slice(1).join(' ') || v.store.name}
+                          </span>
+                        ))}
+                        {uniqueStores.length > 4 && (
+                          <span className="px-2 py-1 text-xs bg-surface text-muted rounded">
+                            +{uniqueStores.length - 4}
+                          </span>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                )}
+                  )
+                })()}
 
                 {/* Actions */}
                 <div className="flex items-center justify-end gap-2 pt-4 border-t border-subtle">
