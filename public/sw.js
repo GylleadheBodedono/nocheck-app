@@ -111,10 +111,13 @@ self.addEventListener('fetch', (event) => {
 
   // Navegacao (paginas HTML) - Network First com fallback para cache
   if (request.mode === 'navigate') {
+    console.log('[SW v11] Navigate:', url.pathname, url.search)
     // NUNCA cachear: auth params, landing page (/) ou rotas de auth
     if (url.search.includes('error=') || url.search.includes('code=') || url.search.includes('token') || url.pathname.startsWith('/auth') || url.pathname === '/') {
+      console.log('[SW v11] BYPASS (not cached):', url.pathname)
       return // Deixa o browser lidar normalmente
     }
+    console.log('[SW v11] networkFirst:', url.pathname)
     event.respondWith(networkFirstForNavigation(request))
     return
   }

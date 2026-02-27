@@ -9,6 +9,8 @@ const COOKIE_MAX_AGE = 60 * 60 * 24 * 7
 export async function middleware(request: NextRequest) {
   const { pathname, searchParams } = request.nextUrl
 
+  console.log('[Middleware] pathname:', pathname, 'search:', request.nextUrl.search)
+
   // ── Auth params: redireciona antes de qualquer processamento ──
   // O Supabase redireciona para a Site URL (raiz) com esses params
   const hasCode = searchParams.has('code')
@@ -41,6 +43,7 @@ export async function middleware(request: NextRequest) {
 
   // ── Landing page: sempre renderiza, sem Supabase, sem auth check ──
   if (pathname === '/') {
+    console.log('[Middleware] / → NextResponse.next() (landing page)')
     return NextResponse.next()
   }
 
