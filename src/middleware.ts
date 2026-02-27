@@ -7,10 +7,47 @@ type CookieToSet = { name: string; value: string; options: CookieOptions }
 const COOKIE_MAX_AGE = 60 * 60 * 24 * 7
 
 export async function middleware(request: NextRequest) {
+  const { pathname, searchParams } = request.nextUrl
+
+  // ── Auth params: redireciona antes de qualquer processamento ──
+  // O Supabase redireciona para a Site URL (raiz) com esses params
+  const hasCode = searchParams.has('code')
+  const hasError = searchParams.get('error') === 'access_denied' || searchParams.has('error_code')
+  const hasTokenHash = searchParams.has('token_hash')
+
+  if (hasTokenHash) {
+    const confirmUrl = request.nextUrl.clone()
+    confirmUrl.pathname = '/auth/confirm'
+    return NextResponse.redirect(confirmUrl)
+  }
+
+  if (hasCode && pathname !== '/auth/callback') {
+    const callbackUrl = request.nextUrl.clone()
+    if (pathname === '/auth/reset-password') {
+      callbackUrl.searchParams.set('type', 'recovery')
+    }
+    callbackUrl.pathname = '/auth/callback'
+    return NextResponse.redirect(callbackUrl)
+  }
+
+  if (hasError && !pathname.startsWith('/auth') && pathname !== '/login') {
+    const loginUrl = request.nextUrl.clone()
+    loginUrl.pathname = '/login'
+    const errorDesc = searchParams.get('error_description') || 'Link expirado ou invalido. Solicite um novo.'
+    loginUrl.search = ''
+    loginUrl.searchParams.set('error', errorDesc)
+    return NextResponse.redirect(loginUrl)
+  }
+
+  // ── Landing page: sempre renderiza, sem Supabase, sem auth check ──
+  if (pathname === '/') {
+    return NextResponse.next()
+  }
+
+  // ── Daqui pra baixo: precisa do Supabase client ──
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
   const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 
-  // Se o Supabase nao esta configurado, deixa passar
   if (!supabaseUrl || !supabaseKey) {
     return NextResponse.next()
   }
@@ -28,7 +65,6 @@ export async function middleware(request: NextRequest) {
         )
         supabaseResponse = NextResponse.next({ request })
         cookiesToSet.forEach(({ name, value, options }: CookieToSet) => {
-          // Garante que os cookies tenham longa duração
           const enhancedOptions: CookieOptions = {
             ...options,
             maxAge: options.maxAge || COOKIE_MAX_AGE,
@@ -42,50 +78,8 @@ export async function middleware(request: NextRequest) {
     },
   })
 
-  const { pathname, searchParams } = request.nextUrl
-
-  // Intercepta parâmetros de auth do Supabase em QUALQUER URL
-  // O Supabase redireciona para a Site URL (raiz) com esses params
-  const hasCode = searchParams.has('code')
-  const hasError = searchParams.get('error') === 'access_denied' || searchParams.has('error_code')
-  const hasTokenHash = searchParams.has('token_hash')
-
-  if (hasTokenHash) {
-    // token_hash vai para /auth/confirm (que verifica no Supabase e retorna com code)
-    const confirmUrl = request.nextUrl.clone()
-    confirmUrl.pathname = '/auth/confirm'
-    return NextResponse.redirect(confirmUrl)
-  }
-
-  if (hasCode && pathname !== '/auth/callback') {
-    // code vai para /auth/callback (que troca por sessao)
-    const callbackUrl = request.nextUrl.clone()
-    // Se veio de /auth/reset-password, preserva type=recovery para o callback redirecionar corretamente
-    if (pathname === '/auth/reset-password') {
-      callbackUrl.searchParams.set('type', 'recovery')
-    }
-    callbackUrl.pathname = '/auth/callback'
-    return NextResponse.redirect(callbackUrl)
-  }
-
-  if (hasError && !pathname.startsWith('/auth') && pathname !== '/login') {
-    // Redireciona erros de auth para login com mensagem
-    const loginUrl = request.nextUrl.clone()
-    loginUrl.pathname = '/login'
-    const errorDesc = searchParams.get('error_description') || 'Link expirado ou invalido. Solicite um novo.'
-    // Limpa params antigos e coloca só o erro
-    loginUrl.search = ''
-    loginUrl.searchParams.set('error', errorDesc)
-    return NextResponse.redirect(loginUrl)
-  }
-
-  // Landing page (/) sempre renderiza sem verificar auth
-  if (pathname === '/') {
-    return supabaseResponse
-  }
-
   // Rotas publicas - sempre permite acesso
-  const publicRoutes = ['/login', '/', '/offline', '/cadastro', '/esqueci-senha']
+  const publicRoutes = ['/login', '/offline', '/cadastro', '/esqueci-senha']
   const isPublicRoute = publicRoutes.includes(pathname) || pathname.startsWith('/auth')
 
   // Rotas que funcionam offline ou precisam de auth
