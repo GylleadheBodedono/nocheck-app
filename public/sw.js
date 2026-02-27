@@ -1,7 +1,7 @@
-// NoCheck Service Worker v10.0.0
+// NoCheck Service Worker v11.0.0
 // Estrategia: Precache COMPLETO de todos os assets para funcionamento 100% offline
 
-const CACHE_VERSION = 'v10'
+const CACHE_VERSION = 'v11'
 const APP_CACHE = `nocheck-app-${CACHE_VERSION}`
 const STATIC_CACHE = `nocheck-static-${CACHE_VERSION}`
 
@@ -25,7 +25,7 @@ const NEVER_CACHE = [
 // INSTALL - Precache imediato dos assets essenciais
 // ============================================
 self.addEventListener('install', (event) => {
-  console.log('[SW v8] Installing...')
+  console.log('[SW v11] Installing...')
 
   event.waitUntil(
     caches.open(STATIC_CACHE)
@@ -39,11 +39,11 @@ self.addEventListener('install', (event) => {
           '/Logo.png',
           '/Logo-dark.png',
         ]).catch(err => {
-          console.log('[SW v8] Some static assets failed to cache:', err)
+          console.log('[SW v11] Some static assets failed to cache:', err)
         })
       })
       .then(() => {
-        console.log('[SW v8] Install complete')
+        console.log('[SW v11] Install complete')
         return self.skipWaiting()
       })
   )
@@ -53,7 +53,7 @@ self.addEventListener('install', (event) => {
 // ACTIVATE - Limpa caches antigos e assume controle
 // ============================================
 self.addEventListener('activate', (event) => {
-  console.log('[SW v8] Activating...')
+  console.log('[SW v11] Activating...')
 
   event.waitUntil(
     caches.keys()
@@ -62,13 +62,13 @@ self.addEventListener('activate', (event) => {
           keys
             .filter((key) => key.startsWith('nocheck-') && key !== APP_CACHE && key !== STATIC_CACHE)
             .map((key) => {
-              console.log('[SW v8] Deleting old cache:', key)
+              console.log('[SW v11] Deleting old cache:', key)
               return caches.delete(key)
             })
         )
       })
       .then(() => {
-        console.log('[SW v8] Taking control of all clients')
+        console.log('[SW v11] Taking control of all clients')
         return self.clients.claim()
       })
   )
@@ -111,8 +111,8 @@ self.addEventListener('fetch', (event) => {
 
   // Navegacao (paginas HTML) - Network First com fallback para cache
   if (request.mode === 'navigate') {
-    // NUNCA cachear URLs com parâmetros de auth/erro
-    if (url.search.includes('error=') || url.search.includes('code=') || url.search.includes('token') || url.pathname.startsWith('/auth')) {
+    // NUNCA cachear: auth params, landing page (/) ou rotas de auth
+    if (url.search.includes('error=') || url.search.includes('code=') || url.search.includes('token') || url.pathname.startsWith('/auth') || url.pathname === '/') {
       return // Deixa o browser lidar normalmente
     }
     event.respondWith(networkFirstForNavigation(request))
@@ -145,7 +145,7 @@ async function cacheFirst(request) {
 
     return networkResponse
   } catch (error) {
-    console.log('[SW v8] Fetch failed:', request.url)
+    console.log('[SW v11] Fetch failed:', request.url)
 
     // Retorna uma resposta de erro generica
     return new Response('Offline - recurso nao disponivel', {
@@ -173,21 +173,21 @@ async function networkFirstForNavigation(request) {
 
     return networkResponse
   } catch (error) {
-    console.log('[SW v8] Network failed for navigation:', url.pathname)
+    console.log('[SW v11] Network failed for navigation:', url.pathname)
 
     // Tenta o cache
     const cachedResponse = await caches.match(request)
     if (cachedResponse) {
-      console.log('[SW v8] Serving from cache:', url.pathname)
+      console.log('[SW v11] Serving from cache:', url.pathname)
       return cachedResponse
     }
 
     // Tenta caches alternativos
-    const alternatives = ['/dashboard', '/', '/offline']
+    const alternatives = ['/dashboard', '/offline']
     for (const alt of alternatives) {
       const cached = await caches.match(alt)
       if (cached) {
-        console.log('[SW v8] Serving alternative:', alt)
+        console.log('[SW v11] Serving alternative:', alt)
         return cached
       }
     }
@@ -236,7 +236,7 @@ async function cacheAssetsFromHtml(response, origin) {
           const assetResponse = await fetch(url)
           if (assetResponse.ok) {
             await cache.put(url, assetResponse)
-            console.log('[SW v8] Cached asset:', url)
+            console.log('[SW v11] Cached asset:', url)
           }
         }
       } catch {
@@ -244,7 +244,7 @@ async function cacheAssetsFromHtml(response, origin) {
       }
     }
   } catch (error) {
-    console.log('[SW v8] Error caching assets from HTML:', error)
+    console.log('[SW v11] Error caching assets from HTML:', error)
   }
 }
 
@@ -335,7 +335,7 @@ self.addEventListener('message', async (event) => {
     case 'CLEAR_CACHE':
       const keys = await caches.keys()
       await Promise.all(keys.map(key => caches.delete(key)))
-      console.log('[SW v8] All caches cleared')
+      console.log('[SW v11] All caches cleared')
       break
 
     case 'PRECACHE_APP':
@@ -362,13 +362,12 @@ self.addEventListener('message', async (event) => {
 // PRECACHE COMPLETO - Cacheia toda a aplicacao
 // ============================================
 async function precacheApp() {
-  console.log('[SW v8] Starting FULL app precache...')
+  console.log('[SW v11] Starting FULL app precache...')
 
   const cache = await caches.open(APP_CACHE)
 
-  // Paginas essenciais - TODAS as rotas do app
+  // Paginas essenciais - TODAS as rotas do app (exceto / que e landing page publica)
   const pages = [
-    '/',
     '/login',
     '/dashboard',
     '/offline',
@@ -401,10 +400,10 @@ async function precacheApp() {
       if (response.ok) {
         await cache.put(asset, response)
         totalCached++
-        console.log('[SW v8] Cached static:', asset)
+        console.log('[SW v11] Cached static:', asset)
       }
     } catch {
-      console.log('[SW v8] Failed static:', asset)
+      console.log('[SW v11] Failed static:', asset)
     }
   }
 
@@ -419,7 +418,7 @@ async function precacheApp() {
 
         await cache.put(pageUrl, responseToCache)
         totalCached++
-        console.log('[SW v8] Cached page:', pageUrl)
+        console.log('[SW v11] Cached page:', pageUrl)
 
         // Extrai e cacheia todos os assets desta pagina
         const html = await responseToProcess.text()
@@ -443,7 +442,7 @@ async function precacheApp() {
           }
         }
 
-        console.log('[SW v8] Found', assetUrls.size, 'assets in', pageUrl)
+        console.log('[SW v11] Found', assetUrls.size, 'assets in', pageUrl)
 
         // Cacheia cada asset
         for (const assetUrl of assetUrls) {
@@ -462,15 +461,15 @@ async function precacheApp() {
         }
       }
     } catch (err) {
-      console.log('[SW v8] Failed page:', pageUrl, err)
+      console.log('[SW v11] Failed page:', pageUrl, err)
     }
   }
 
-  console.log('[SW v8] Precache COMPLETE! Total items:', totalCached)
+  console.log('[SW v11] Precache COMPLETE! Total items:', totalCached)
 
   // Lista todos os items no cache
   const cachedItems = await cache.keys()
-  console.log('[SW v8] Cache now contains', cachedItems.length, 'items')
+  console.log('[SW v11] Cache now contains', cachedItems.length, 'items')
 }
 
 // ============================================
@@ -478,7 +477,7 @@ async function precacheApp() {
 // ============================================
 self.addEventListener('sync', (event) => {
   if (event.tag === 'sync-checklists') {
-    console.log('[SW v8] Background sync triggered')
+    console.log('[SW v11] Background sync triggered')
     event.waitUntil(
       self.clients.matchAll().then((clients) => {
         clients.forEach((client) => {
@@ -489,4 +488,4 @@ self.addEventListener('sync', (event) => {
   }
 })
 
-console.log('[SW v8] Service Worker loaded')
+console.log('[SW v11] Service Worker loaded')
