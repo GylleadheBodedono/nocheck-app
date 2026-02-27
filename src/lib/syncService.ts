@@ -277,30 +277,78 @@ async function syncChecklist(checklist: PendingChecklist): Promise<boolean> {
       console.warn('[Sync] Algumas imagens falharam no upload, mas o checklist será sincronizado mesmo assim.')
     }
 
-    // 1. Create the checklist record
+    // 1. Determine target checklist (dedup: UPDATE existing or INSERT new)
     const isComplete = !checklist.sections || checklist.sections.length === 0 ||
       checklist.sections.every(s => s.status === 'concluido')
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: newChecklist, error: checklistError } = await (supabase as any)
-      .from('checklists')
-      .insert({
-        template_id: checklist.templateId,
-        store_id: checklist.storeId,
-        sector_id: checklist.sectorId,
-        created_by: checklist.userId,
-        status: isComplete ? 'concluido' : 'em_andamento',
-        completed_at: isComplete ? new Date().toISOString() : null,
-        started_at: checklist.createdAt,
-      })
-      .select()
-      .single()
+    const now = new Date().toISOString()
+    let targetChecklistId: number
 
-    if (checklistError) throw checklistError
+    if (checklist.dbChecklistId) {
+      // We know the exact DB record — update it
+      targetChecklistId = checklist.dbChecklistId
+      console.log('[Sync] Updating existing DB checklist (stored ID):', targetChecklistId)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await (supabase as any)
+        .from('checklists')
+        .update({
+          status: isComplete ? 'concluido' : 'em_andamento',
+          completed_at: isComplete ? now : null,
+        })
+        .eq('id', targetChecklistId)
+    } else {
+      // Check if a matching em_andamento checklist exists today
+      const todayStart = new Date()
+      todayStart.setHours(0, 0, 0, 0)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data: existing } = await (supabase as any)
+        .from('checklists')
+        .select('id')
+        .eq('template_id', checklist.templateId)
+        .eq('store_id', checklist.storeId)
+        .eq('created_by', checklist.userId)
+        .eq('status', 'em_andamento')
+        .gte('created_at', todayStart.toISOString())
+        .order('created_at', { ascending: false })
+        .limit(1)
 
-    // 2. Create responses (imagens podem ser URLs ou base64 se upload falhou)
+      if (existing && existing.length > 0) {
+        targetChecklistId = existing[0].id
+        console.log('[Sync] Updating existing DB checklist (found by query):', targetChecklistId)
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        await (supabase as any)
+          .from('checklists')
+          .update({
+            status: isComplete ? 'concluido' : 'em_andamento',
+            completed_at: isComplete ? now : null,
+          })
+          .eq('id', targetChecklistId)
+      } else {
+        // No existing record — INSERT new one
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const { data: newChecklist, error: checklistError } = await (supabase as any)
+          .from('checklists')
+          .insert({
+            template_id: checklist.templateId,
+            store_id: checklist.storeId,
+            sector_id: checklist.sectorId,
+            created_by: checklist.userId,
+            status: isComplete ? 'concluido' : 'em_andamento',
+            completed_at: isComplete ? now : null,
+            started_at: checklist.createdAt,
+          })
+          .select()
+          .single()
+
+        if (checklistError) throw checklistError
+        targetChecklistId = newChecklist.id
+        console.log('[Sync] Created new DB checklist:', targetChecklistId)
+      }
+    }
+
+    // 2. UPSERT responses (handles both new and existing records)
     const responseRows = processedResponses.map(r => ({
-      checklist_id: newChecklist.id,
+      checklist_id: targetChecklistId,
       field_id: r.fieldId,
       value_text: r.valueText,
       value_number: r.valueNumber,
@@ -311,18 +359,25 @@ async function syncChecklist(checklist: PendingChecklist): Promise<boolean> {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { error: responsesError } = await (supabase as any)
         .from('checklist_responses')
-        .insert(responseRows)
+        .upsert(responseRows, { onConflict: 'checklist_id,field_id' })
 
       if (responsesError) throw responsesError
     }
 
-    // 2.5. If sectioned checklist, create checklist_sections entries
+    // 2.5. Sync checklist_sections (delete existing + re-insert)
     if (checklist.sections && checklist.sections.length > 0) {
+      // Remove existing section entries to avoid duplicates
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await (supabase as any)
+        .from('checklist_sections')
+        .delete()
+        .eq('checklist_id', targetChecklistId)
+
       const sectionRows = checklist.sections.map(s => ({
-        checklist_id: newChecklist.id,
+        checklist_id: targetChecklistId,
         section_id: s.sectionId,
         status: 'concluido',
-        completed_at: s.completedAt || new Date().toISOString(),
+        completed_at: s.completedAt || now,
       }))
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -338,7 +393,7 @@ async function syncChecklist(checklist: PendingChecklist): Promise<boolean> {
     await (supabase as any).from('activity_log').insert({
       user_id: checklist.userId,
       store_id: checklist.storeId,
-      checklist_id: newChecklist.id,
+      checklist_id: targetChecklistId,
       action: 'checklist_synced',
       details: { synced_from: 'offline', original_date: checklist.createdAt },
     })
@@ -354,7 +409,7 @@ async function syncChecklist(checklist: PendingChecklist): Promise<boolean> {
     if (template) {
       await processarValidacaoCruzada(
         supabase,
-        newChecklist.id,
+        targetChecklistId,
         checklist.templateId,
         checklist.storeId,
         checklist.userId,
@@ -369,7 +424,7 @@ async function syncChecklist(checklist: PendingChecklist): Promise<boolean> {
 
       await processarNaoConformidades(
         supabase,
-        newChecklist.id,
+        targetChecklistId,
         checklist.templateId,
         checklist.storeId,
         null,

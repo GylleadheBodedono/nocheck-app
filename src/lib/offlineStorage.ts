@@ -24,6 +24,7 @@ type PendingChecklist = {
   storeId: number
   sectorId: number | null
   userId: string
+  dbChecklistId?: number | null // ID do checklist no DB (quando iniciado online)
   responses: Array<{
     fieldId: number
     valueText: string | null

@@ -106,6 +106,13 @@ function ChecklistForm() {
   const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const initializingRef = useRef(false) // Guard against double-init (StrictMode / fast re-renders)
 
+  // Reset initializing guard on mount (handles case where previous unmount
+  // interrupted async initialization, leaving ref stuck at true)
+  useEffect(() => {
+    initializingRef.current = false
+    return () => { initializingRef.current = false }
+  }, [])
+
   useEffect(() => { checklistIdRef.current = checklistId }, [checklistId])
   useEffect(() => { offlineChecklistIdRef.current = offlineChecklistId }, [offlineChecklistId])
 
@@ -114,6 +121,9 @@ function ChecklistForm() {
   const [timeBlockedMessage, setTimeBlockedMessage] = useState('')
   const [justificationExpired, setJustificationExpired] = useState(false)
   const [justificationExpiredMessage, setJustificationExpiredMessage] = useState('')
+
+  // Offline finalization modal
+  const [showOfflineModal, setShowOfflineModal] = useState(false)
 
   // Justification states (for incomplete checklist finalization)
   const [showIncompleteModal, setShowIncompleteModal] = useState(false)
@@ -945,20 +955,37 @@ function ChecklistForm() {
     }
   }, 1500)
 
-  // Flush auto-save on page unload, back button, or component unmount
+  // Immediate offline save (IndexedDB is near-instant, no need for 1.5s debounce)
+  const saveFieldOfflineImmediate = useCallback(async (fieldId: number, value: unknown) => {
+    const row = buildSingleResponseRow(fieldId, value)
+    if (!row || !offlineChecklistIdRef.current) return
+    setAutoSaveStatus('saving')
+    try {
+      const field = template?.fields.find(f => f.id === fieldId)
+      const sectionId = field?.section_id ?? null
+      await updateOfflineFieldResponse(offlineChecklistIdRef.current, sectionId, fieldId, {
+        valueText: row.valueText,
+        valueNumber: row.valueNumber,
+        valueJson: row.valueJson,
+      })
+      setAutoSaveStatus('saved')
+      if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current)
+      autoSaveTimerRef.current = setTimeout(() => setAutoSaveStatus('idle'), 2000)
+    } catch (err) {
+      console.error('[AutoSave] Offline immediate error:', err)
+      setAutoSaveStatus('error')
+    }
+  }, [buildSingleResponseRow, template])
+
+  // Flush auto-save on page unload
   useEffect(() => {
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
       autoSaveField.flush()
       e.preventDefault()
     }
-    const handlePopState = () => {
-      autoSaveField.flush()
-    }
     window.addEventListener('beforeunload', handleBeforeUnload)
-    window.addEventListener('popstate', handlePopState)
     return () => {
       window.removeEventListener('beforeunload', handleBeforeUnload)
-      window.removeEventListener('popstate', handlePopState)
       autoSaveField.flush()
     }
   }, [autoSaveField])
@@ -968,8 +995,13 @@ function ChecklistForm() {
     if (errors[fieldId]) {
       setErrors(prev => { const n = { ...prev }; delete n[fieldId]; return n })
     }
-    // Trigger debounced auto-save
-    autoSaveField(fieldId, value)
+    // Offline: save immediately to IndexedDB (near-instant)
+    if (!navigator.onLine && offlineChecklistIdRef.current) {
+      saveFieldOfflineImmediate(fieldId, value)
+    } else {
+      // Online: debounced save to Supabase
+      autoSaveField(fieldId, value)
+    }
   }
 
   // Navigate back to dashboard, ensuring pending auto-save completes
@@ -1116,7 +1148,8 @@ function ChecklistForm() {
   }
 
   // === SECTION BACK: auto-mark section as complete if all required fields are filled ===
-  const handleSectionBack = async () => {
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const handleSectionBack = useCallback(async () => {
     // Flush pending auto-save
     autoSaveField.flush()
 
@@ -1156,6 +1189,14 @@ function ChecklistForm() {
             .upsert(rows, { onConflict: 'checklist_id,field_id' })
         }
       } else if (offlineChecklistIdRef.current) {
+        // Propagate DB checklist ID to offline record (started online, now offline)
+        if (checklistIdRef.current) {
+          const cl = await getOfflineChecklist(offlineChecklistIdRef.current)
+          if (cl && !cl.dbChecklistId) {
+            cl.dbChecklistId = checklistIdRef.current
+            await putOfflineChecklist(cl)
+          }
+        }
         for (const f of sectionFields) {
           const row = buildSingleResponseRow(f.id, responses[f.id])
           if (!row) continue
@@ -1231,7 +1272,30 @@ function ChecklistForm() {
     }
 
     setActiveSection(null)
-  }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoSaveField, activeSection, getFieldsForSection, buildSingleResponseRow, responses, supabase, checklistId, offlineChecklistId, sectionProgress])
+
+  // Handle Android back button and navigation
+  useEffect(() => {
+    const handlePopState = async () => {
+      if (hasSections && activeSection !== null) {
+        // Prevent navigation — push state back and run proper section save
+        window.history.pushState(null, '', window.location.href)
+        await handleSectionBack()
+      } else {
+        // On section list or non-sectioned: flush and go to dashboard
+        autoSaveField.flush()
+        await new Promise(resolve => setTimeout(resolve, 300))
+        router.push(APP_CONFIG.routes.dashboard)
+      }
+    }
+    // Push synthetic history entry so popstate fires before actual navigation
+    window.history.pushState(null, '', window.location.href)
+    window.addEventListener('popstate', handlePopState)
+    return () => {
+      window.removeEventListener('popstate', handlePopState)
+    }
+  }, [autoSaveField, hasSections, activeSection, handleSectionBack, router])
 
   // === UPLOAD PENDING PHOTOS (base64 → cloud) ===
   const uploadPendingPhotos = async (clId: number) => {
@@ -1292,9 +1356,14 @@ function ChecklistForm() {
 
   // === FINALIZE CHECKLIST (both sectioned and non-sectioned) ===
   const handleFinalizeChecklist = async () => {
-    // Finalizar exige internet
+    // Finalizar exige internet — show modal if offline
     if (!navigator.onLine) {
-      setErrors({ 0: 'Voce precisa estar conectado a internet para finalizar o checklist. Suas respostas estao salvas e voce pode finalizar quando estiver online.' })
+      // Mark offline checklist as ready for sync when connectivity returns
+      if (offlineChecklistIdRef.current) {
+        try { await updateChecklistStatus(offlineChecklistIdRef.current, 'pending') }
+        catch (e) { console.error('[Checklist] Error marking offline as pending:', e) }
+      }
+      setShowOfflineModal(true)
       return
     }
 
@@ -1387,7 +1456,7 @@ function ChecklistForm() {
     if (missing.length > 0) return
 
     if (!navigator.onLine || !checklistId) {
-      setErrors({ 0: 'Voce precisa estar conectado para finalizar com justificativas.' })
+      setShowOfflineModal(true)
       return
     }
 
@@ -1494,6 +1563,39 @@ function ChecklistForm() {
   // ========== RENDER ==========
 
   if (loading) return <LoadingPage />
+
+  // Offline finalization modal
+  if (showOfflineModal) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-page px-4">
+        <div className="card w-full max-w-sm p-6 text-center">
+          <div className="w-16 h-16 rounded-full bg-warning/20 flex items-center justify-center mx-auto mb-4">
+            <FiCloudOff className="w-8 h-8 text-warning" />
+          </div>
+          <h2 className="text-lg font-bold text-main mb-2">Sem conexao</h2>
+          <p className="text-sm text-secondary mb-6">
+            Suas respostas estao salvas e serao sincronizadas automaticamente quando voce estiver online.
+          </p>
+          <div className="space-y-3">
+            <button
+              type="button"
+              onClick={() => setShowOfflineModal(false)}
+              className="btn-primary w-full py-3"
+            >
+              Continuar preenchendo
+            </button>
+            <button
+              type="button"
+              onClick={() => router.push(APP_CONFIG.routes.dashboard)}
+              className="btn-ghost w-full py-3"
+            >
+              Voltar ao Dashboard
+            </button>
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   if (timeBlocked) {
     return (
