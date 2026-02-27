@@ -171,7 +171,40 @@ export default function TemplatesPage() {
       return
     }
 
-    // Copy fields
+    // Copy sections (etapas) and build old→new ID map
+    const sectionIdMap: Record<number, number> = {}
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: originalSections } = await (supabase as any)
+      .from('template_sections')
+      .select('*')
+      .eq('template_id', template.id)
+      .order('sort_order')
+
+    if (originalSections && originalSections.length > 0) {
+      for (const section of originalSections) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const { data: newSection, error: sectionError } = await (supabase as any)
+          .from('template_sections')
+          .insert({
+            template_id: newTemplate.id,
+            name: section.name,
+            description: section.description,
+            sort_order: section.sort_order,
+          })
+          .select()
+          .single()
+
+        if (sectionError || !newSection) {
+          console.error('Error copying section:', sectionError)
+          continue
+        }
+
+        sectionIdMap[section.id] = newSection.id
+      }
+    }
+
+    // Copy fields (remapping section_id to new sections)
     if (template.fields.length > 0) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { error: fieldsError } = await (supabase as any)
@@ -188,6 +221,7 @@ export default function TemplatesPage() {
             calculation: f.calculation,
             placeholder: f.placeholder,
             help_text: f.help_text,
+            section_id: f.section_id ? sectionIdMap[f.section_id] || null : null,
           }))
         )
 
