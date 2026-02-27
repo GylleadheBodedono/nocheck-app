@@ -497,7 +497,7 @@ export default function ValidacoesPage() {
             <option value="">Todas as lojas</option>
             {stores.map(store => (
               <option key={store.id} value={store.id}>
-                {store.name.split(' ').slice(1).join(' ') || store.name}
+                {store.name}
               </option>
             ))}
           </select>
@@ -623,7 +623,7 @@ export default function ValidacoesPage() {
                         {statusBadge.label}
                       </span>
                       <span className="text-sm text-muted">
-                        {primary.store.name.split(' ').slice(1).join(' ') || primary.store.name}
+                        {primary.store.name}
                       </span>
                       {primary.sector?.name && (
                         <span className="text-xs px-2 py-0.5 rounded-lg bg-primary/10 text-primary">

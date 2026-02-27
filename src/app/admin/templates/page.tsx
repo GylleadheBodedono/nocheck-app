@@ -440,7 +440,7 @@ export default function TemplatesPage() {
                             key={v.store_id}
                             className="px-2 py-1 text-xs bg-emerald-500/10 text-emerald-400 rounded"
                           >
-                            {v.store.name.split(' ').slice(1).join(' ') || v.store.name}
+                            {v.store.name}
                           </span>
                         ))}
                         {uniqueStores.length > 4 && (
