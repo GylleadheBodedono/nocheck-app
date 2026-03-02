@@ -1326,11 +1326,13 @@ function ChecklistForm() {
 
       const updatedJson: Record<string, unknown> = { ...json }
 
+      const folder = templateId ? `uploads/t${templateId}/cl${clId}` : undefined
+
       if (photos && hasBase64Photos) {
         const uploadedUrls: string[] = []
         for (let i = 0; i < photos.length; i++) {
           if (photos[i].startsWith('data:')) {
-            const url = await uploadPhoto(photos[i], `checklist_${clId}_field_${r.field_id}_foto_${i + 1}.jpg`)
+            const url = await uploadPhoto(photos[i], `field_${r.field_id}_foto_${i + 1}.jpg`, folder)
             uploadedUrls.push(url || photos[i])
           } else {
             uploadedUrls.push(photos[i])
@@ -1344,7 +1346,7 @@ function ChecklistForm() {
         const uploadedUrls: string[] = []
         for (let i = 0; i < condPhotos.length; i++) {
           if (condPhotos[i].startsWith('data:')) {
-            const url = await uploadPhoto(condPhotos[i], `checklist_${clId}_field_${r.field_id}_cond_foto_${i + 1}.jpg`)
+            const url = await uploadPhoto(condPhotos[i], `field_${r.field_id}_cond_foto_${i + 1}.jpg`, folder)
             uploadedUrls.push(url || condPhotos[i])
           } else {
             uploadedUrls.push(condPhotos[i])

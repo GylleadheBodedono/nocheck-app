@@ -26,6 +26,7 @@ export const APP_CONFIG = {
     adminSectors: '/admin/setores',
     adminFunctions: '/admin/funcoes',
     adminReports: '/admin/relatorios',
+    adminNCPhotoReport: '/admin/relatorios/fotos-nc',
     adminValidations: '/admin/validacoes',
     adminChecklists: '/admin/checklists',
     adminGallery: '/admin/galeria',

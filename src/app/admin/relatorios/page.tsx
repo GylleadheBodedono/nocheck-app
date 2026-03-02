@@ -17,6 +17,7 @@ import {
   FiChevronRight,
   FiAlertTriangle,
   FiRepeat,
+  FiCamera,
 } from 'react-icons/fi'
 import Link from 'next/link'
 import { APP_CONFIG } from '@/lib/config'
@@ -439,6 +440,16 @@ export default function RelatoriosPage() {
               Reincidencias
             </span>
           </button>
+
+          <div className="flex-1" />
+
+          <Link
+            href={APP_CONFIG.routes.adminNCPhotoReport}
+            className="px-4 py-2 rounded-xl font-medium transition-colors btn-secondary flex items-center gap-2"
+          >
+            <FiCamera className="w-4 h-4" />
+            Fotos NC
+          </Link>
         </div>
 
         {activeTab === 'responses' && (

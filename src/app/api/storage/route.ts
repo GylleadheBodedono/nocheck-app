@@ -21,7 +21,7 @@ export async function GET(request: NextRequest) {
   try {
     const folder = request.nextUrl.searchParams.get('folder') || 'uploads'
 
-    if (!['uploads', 'anexos'].includes(folder)) {
+    if (!folder.startsWith('uploads') && !folder.startsWith('anexos')) {
       return NextResponse.json({ success: false, error: 'Pasta invalida' }, { status: 400 })
     }
 
