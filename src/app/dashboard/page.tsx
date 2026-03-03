@@ -7,7 +7,7 @@ import { APP_CONFIG } from '@/lib/config'
 import type { User } from '@supabase/supabase-js'
 import type { Store, ChecklistTemplate, Checklist, Sector, FunctionRow } from '@/types/database'
 import { LoadingPage, Header } from '@/components/ui'
-import { FiClipboard, FiClock, FiCheckCircle, FiUser, FiCalendar, FiAlertCircle, FiRefreshCw, FiAlertTriangle, FiUploadCloud, FiLayers, FiPlay, FiArrowRight, FiCloudOff } from 'react-icons/fi'
+import { FiClipboard, FiClock, FiCheckCircle, FiUser, FiCalendar, FiAlertCircle, FiRefreshCw, FiAlertTriangle, FiUploadCloud, FiLayers, FiPlay, FiArrowRight, FiCloudOff, FiBell, FiTool, FiExternalLink } from 'react-icons/fi'
 import Link from 'next/link'
 import {
   getAuthCache,
@@ -97,6 +97,33 @@ type UserStats = {
   pendingSync: number
 }
 
+type ActionPlanItem = {
+  id: number
+  title: string
+  severity: string
+  status: string
+  deadline: string | null
+  created_at: string
+  is_reincidencia: boolean
+  store: { id: number; name: string } | null
+}
+
+type NotificationItem = {
+  id: number
+  title: string
+  message: string | null
+  type: string
+  is_read: boolean
+  created_at: string
+  action_url: string | null
+}
+
+const TECH_FUNCTIONS = ['ti', 'manutencao', 'manutenção']
+
+function normalizeName(s: string) {
+  return s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+}
+
 export default function DashboardPage() {
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [_user, setUser] = useState<User | null>(null)
@@ -116,6 +143,8 @@ export default function DashboardPage() {
     pendingSync: 0,
   })
   const [pendingActionPlans, setPendingActionPlans] = useState(0)
+  const [myActionPlans, setMyActionPlans] = useState<ActionPlanItem[]>([])
+  const [myNotifications, setMyNotifications] = useState<NotificationItem[]>([])
   const [todayInProgressMap, setTodayInProgressMap] = useState<Record<string, number>>({}) // key: templateId-storeId -> checklistId
   const [todayCompletedSet, setTodayCompletedSet] = useState<Set<string>>(new Set()) // key: templateId-storeId
   const [loading, setLoading] = useState(true)
@@ -470,6 +499,36 @@ export default function DashboardPage() {
       // Tabela pode nao existir ainda
     }
 
+    // Dados extras para usuarios tecnicos (TI / Manutencao)
+    const isTechProfile = !profileData?.is_admin &&
+      TECH_FUNCTIONS.includes(normalizeName(profileData?.function_ref?.name ?? ''))
+    if (isTechProfile) {
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const [apRes, notifRes] = await Promise.all([
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          (supabase as any)
+            .from('action_plans')
+            .select(`id, title, severity, status, deadline, created_at, is_reincidencia, store:stores!action_plans_store_id_fkey(id, name)`)
+            .eq('assigned_to', user.id)
+            .neq('status', 'cancelado')
+            .order('created_at', { ascending: false })
+            .limit(20),
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          (supabase as any)
+            .from('notifications')
+            .select('id, title, message, type, is_read, created_at, action_url')
+            .eq('user_id', user.id)
+            .order('created_at', { ascending: false })
+            .limit(10),
+        ])
+        if (apRes.data) setMyActionPlans(apRes.data as ActionPlanItem[])
+        if (notifRes.data) setMyNotifications(notifRes.data as NotificationItem[])
+      } catch {
+        // Tabelas podem nao existir ainda
+      }
+    }
+
     // Verificar planos vencidos (piggyback no login do admin)
     if (profileData?.is_admin) {
       try {
@@ -815,6 +874,9 @@ export default function DashboardPage() {
   const stores = getUserStores()
   const availableTemplates = getAvailableTemplates()
 
+  const isTechUser = !profile?.is_admin &&
+    TECH_FUNCTIONS.includes(normalizeName(profile?.function_ref?.name ?? ''))
+
   if (loading) {
     return <LoadingPage />
   }
@@ -909,57 +971,120 @@ export default function DashboardPage() {
         {/* Stats */}
         <div className="flex items-center justify-between mb-3">
           <p className="text-sm font-medium text-muted">
-            {profile?.is_admin ? 'Dados do sistema' : 'Seus dados'}
+            {profile?.is_admin ? 'Dados do sistema' : isTechUser ? 'Meus planos de acao' : 'Seus dados'}
           </p>
         </div>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-          <div className="card p-4">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-success/20 flex items-center justify-center">
-                <FiCheckCircle className="w-5 h-5 text-success" />
+          {isTechUser ? (
+            <>
+              <div className="card p-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-error/20 flex items-center justify-center">
+                    <FiAlertCircle className="w-5 h-5 text-error" />
+                  </div>
+                  <div>
+                    <p className="text-2xl font-bold text-main">
+                      {myActionPlans.filter(p => p.status === 'aberto').length}
+                    </p>
+                    <p className="text-xs text-muted">Abertos</p>
+                  </div>
+                </div>
               </div>
-              <div>
-                <p className="text-2xl font-bold text-main">{stats.completedToday}</p>
-                <p className="text-xs text-muted">Hoje</p>
+              <div className="card p-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-warning/20 flex items-center justify-center">
+                    <FiClock className="w-5 h-5 text-warning" />
+                  </div>
+                  <div>
+                    <p className="text-2xl font-bold text-main">
+                      {myActionPlans.filter(p => p.status === 'em_andamento').length}
+                    </p>
+                    <p className="text-xs text-muted">Em Andamento</p>
+                  </div>
+                </div>
               </div>
-            </div>
-          </div>
+              <div className="card p-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-success/20 flex items-center justify-center">
+                    <FiCheckCircle className="w-5 h-5 text-success" />
+                  </div>
+                  <div>
+                    <p className="text-2xl font-bold text-main">
+                      {myActionPlans.filter(p => p.status === 'concluido').length}
+                    </p>
+                    <p className="text-xs text-muted">Concluidos</p>
+                  </div>
+                </div>
+              </div>
+              <div className="card p-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-error/10 flex items-center justify-center">
+                    <FiAlertTriangle className="w-5 h-5 text-error" />
+                  </div>
+                  <div>
+                    <p className="text-2xl font-bold text-main">
+                      {myActionPlans.filter(p =>
+                        p.deadline &&
+                        new Date(p.deadline) < new Date() &&
+                        p.status !== 'concluido'
+                      ).length}
+                    </p>
+                    <p className="text-xs text-muted">Vencidos</p>
+                  </div>
+                </div>
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="card p-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-success/20 flex items-center justify-center">
+                    <FiCheckCircle className="w-5 h-5 text-success" />
+                  </div>
+                  <div>
+                    <p className="text-2xl font-bold text-main">{stats.completedToday}</p>
+                    <p className="text-xs text-muted">Hoje</p>
+                  </div>
+                </div>
+              </div>
 
-          <div className="card p-4">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-warning/20 flex items-center justify-center">
-                <FiClock className="w-5 h-5 text-warning" />
+              <div className="card p-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-warning/20 flex items-center justify-center">
+                    <FiClock className="w-5 h-5 text-warning" />
+                  </div>
+                  <div>
+                    <p className="text-2xl font-bold text-main">{stats.inProgress}</p>
+                    <p className="text-xs text-muted">Em Andamento</p>
+                  </div>
+                </div>
               </div>
-              <div>
-                <p className="text-2xl font-bold text-main">{stats.inProgress}</p>
-                <p className="text-xs text-muted">Em Andamento</p>
-              </div>
-            </div>
-          </div>
 
-          <div className="card p-4">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-info/20 flex items-center justify-center">
-                <FiCalendar className="w-5 h-5 text-info" />
+              <div className="card p-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-info/20 flex items-center justify-center">
+                    <FiCalendar className="w-5 h-5 text-info" />
+                  </div>
+                  <div>
+                    <p className="text-2xl font-bold text-main">{stats.completedThisWeek}</p>
+                    <p className="text-xs text-muted">Esta Semana</p>
+                  </div>
+                </div>
               </div>
-              <div>
-                <p className="text-2xl font-bold text-main">{stats.completedThisWeek}</p>
-                <p className="text-xs text-muted">Esta Semana</p>
-              </div>
-            </div>
-          </div>
 
-          <div className="card p-4">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-accent/20 flex items-center justify-center">
-                <FiClipboard className="w-5 h-5 text-accent" />
+              <div className="card p-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-accent/20 flex items-center justify-center">
+                    <FiClipboard className="w-5 h-5 text-accent" />
+                  </div>
+                  <div>
+                    <p className="text-2xl font-bold text-main">{stats.completedThisMonth}</p>
+                    <p className="text-xs text-muted">Este Mes</p>
+                  </div>
+                </div>
               </div>
-              <div>
-                <p className="text-2xl font-bold text-main">{stats.completedThisMonth}</p>
-                <p className="text-xs text-muted">Este Mes</p>
-              </div>
-            </div>
-          </div>
+            </>
+          )}
         </div>
 
         {/* Pending Sync Alert */}
@@ -1170,7 +1295,9 @@ export default function DashboardPage() {
               )
             })()}
 
-            {/* Available Checklists */}
+            {/* Available Checklists — hidden for tech users */}
+            {!isTechUser && (
+            <>
             <h2 className="text-lg font-semibold text-main mb-4 flex items-center gap-2">
               <FiClipboard className="w-5 h-5 text-primary" />
               Iniciar Novo Checklist
@@ -1273,10 +1400,138 @@ export default function DashboardPage() {
                 })}
               </div>
             )}
+            </>
+            )}
+
           </div>
 
-          {/* Right Column - Recent Checklists */}
+          {/* Right Column - Recent Checklists + Tech sections */}
           <div>
+
+            {/* ── Tech user: Notifications ── */}
+            {isTechUser && (
+              <div className="mb-8">
+                <h2 className="text-lg font-semibold text-main mb-4 flex items-center gap-2">
+                  <FiBell className="w-5 h-5 text-primary" />
+                  Notificacoes
+                </h2>
+                {myNotifications.length === 0 ? (
+                  <div className="card p-4 text-center">
+                    <p className="text-sm text-muted">Nenhuma notificacao recente</p>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {[...myNotifications]
+                      .sort((a, b) => (a.is_read === b.is_read ? 0 : a.is_read ? 1 : -1))
+                      .map(notif => (
+                        <div
+                          key={notif.id}
+                          className={`card p-3 ${!notif.is_read ? 'border-l-4 border-primary bg-primary/5' : ''}`}
+                        >
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="flex items-start gap-2 min-w-0">
+                              {!notif.is_read && (
+                                <span className="mt-1.5 w-2 h-2 rounded-full bg-primary shrink-0" />
+                              )}
+                              <div className="min-w-0">
+                                <p className="text-sm font-medium text-main truncate">{notif.title}</p>
+                                {notif.message && (
+                                  <p className="text-xs text-muted line-clamp-2">{notif.message}</p>
+                                )}
+                                <p className="text-xs text-muted mt-1">
+                                  {new Date(notif.created_at).toLocaleString('pt-BR')}
+                                </p>
+                              </div>
+                            </div>
+                            {notif.action_url && (
+                              <a
+                                href={notif.action_url}
+                                className="shrink-0 text-primary hover:underline"
+                              >
+                                <FiExternalLink className="w-4 h-4" />
+                              </a>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* ── Tech user: My Action Plans ── */}
+            {isTechUser && (
+              <div className="mb-8">
+                <h2 className="text-lg font-semibold text-main mb-4 flex items-center gap-2">
+                  <FiTool className="w-5 h-5 text-primary" />
+                  Meus Planos de Acao
+                </h2>
+                {myActionPlans.length === 0 ? (
+                  <div className="card p-4 text-center">
+                    <p className="text-sm text-muted">Nenhum plano de acao atribuido</p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {myActionPlans.map(plan => {
+                      const sevConfig: Record<string, { label: string; cls: string }> = {
+                        critica: { label: 'CRITICA', cls: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' },
+                        alta:    { label: 'ALTA',    cls: 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400' },
+                        media:   { label: 'MEDIA',   cls: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400' },
+                        baixa:   { label: 'BAIXA',   cls: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' },
+                      }
+                      const statusConfig: Record<string, { label: string; cls: string }> = {
+                        aberto:       { label: 'Aberto',       cls: 'bg-error/20 text-error' },
+                        em_andamento: { label: 'Em Andamento', cls: 'bg-warning/20 text-warning' },
+                        concluido:    { label: 'Concluido',    cls: 'bg-success/20 text-success' },
+                        vencido:      { label: 'Vencido',      cls: 'bg-error/20 text-error' },
+                      }
+                      const sev = sevConfig[plan.severity] || sevConfig.media
+                      const st = statusConfig[plan.status] || statusConfig.aberto
+                      const isOverdue = plan.deadline &&
+                        new Date(plan.deadline) < new Date() &&
+                        plan.status !== 'concluido'
+                      return (
+                        <a
+                          key={plan.id}
+                          href={`/admin/planos-de-acao/${plan.id}`}
+                          className="card p-4 hover:shadow-theme-md transition-shadow block"
+                        >
+                          <div className="flex items-start gap-2 mb-2 flex-wrap">
+                            <span className={`px-2 py-0.5 rounded text-xs font-bold ${sev.cls}`}>
+                              {sev.label}
+                            </span>
+                            <span className={`px-2 py-0.5 rounded text-xs font-medium ${st.cls}`}>
+                              {st.label}
+                            </span>
+                            {plan.is_reincidencia && (
+                              <span className="px-2 py-0.5 rounded text-xs font-bold bg-error/20 text-error">
+                                Reincidencia
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-sm font-medium text-main mb-1 line-clamp-2">{plan.title}</p>
+                          <p className="text-xs text-muted">
+                            {plan.store?.name}
+                            {plan.deadline && (
+                              <span style={{ color: isOverdue ? 'var(--color-error)' : undefined }}>
+                                {` • Prazo: ${new Date(plan.deadline).toLocaleDateString('pt-BR')}${isOverdue ? ' (vencido)' : ''}`}
+                              </span>
+                            )}
+                          </p>
+                        </a>
+                      )
+                    })}
+                    <a
+                      href="/admin/planos-de-acao"
+                      className="block text-sm text-primary hover:underline text-center py-2"
+                    >
+                      Ver todos os planos →
+                    </a>
+                  </div>
+                )}
+              </div>
+            )}
+
             <h2 className="text-lg font-semibold text-main mb-4 flex items-center gap-2">
               <FiClock className="w-5 h-5 text-primary" />
               Historico Recente

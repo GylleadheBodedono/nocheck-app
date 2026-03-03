@@ -26,7 +26,7 @@ import {
   type NCPhotoSummary,
   type NCPhotoReportFilters,
 } from '@/lib/ncPhotoReportQueries'
-import { exportToCSV, exportToTXT, exportToExcel } from '@/lib/exportUtils'
+import { exportToCSV, exportToTXT, exportToExcel, exportToPDF } from '@/lib/exportUtils'
 
 type ViewMode = 'date' | 'week'
 type PeriodPreset = 'this_week' | 'last_week' | '30d' | 'custom'
@@ -110,6 +110,7 @@ export default function FotosNCPage() {
 
   // Exporting state
   const [exporting, setExporting] = useState(false)
+  const [exportingPdf, setExportingPdf] = useState(false)
 
   const fetchData = useCallback(async () => {
     if (!isSupabaseConfigured || !supabase) {
@@ -220,6 +221,34 @@ export default function FotosNCPage() {
       console.error('[FotosNC] Erro ao exportar:', err)
     } finally {
       setExporting(false)
+    }
+  }
+
+  const handleExportPdf = async () => {
+    if (exportingPdf || items.length === 0) return
+    setExportMenuOpen(false)
+    setExportingPdf(true)
+    try {
+      let dateFrom: string, dateTo: string
+      if (periodPreset === 'custom' && customFrom && customTo) {
+        dateFrom = new Date(customFrom + 'T00:00:00').toISOString()
+        dateTo = new Date(customTo + 'T23:59:59').toISOString()
+      } else {
+        const range = getDateRange(periodPreset as Exclude<PeriodPreset, 'custom'>)
+        dateFrom = range.from
+        dateTo = range.to
+      }
+      await exportToPDF(items, {
+        dateFrom,
+        dateTo,
+        storeName: stores.find(s => s.id === storeFilter)?.name,
+        templateName: templates.find(t => t.id === templateFilter)?.name,
+        severityLabel: severityFilter ?? undefined,
+      })
+    } catch (err) {
+      console.error('[FotosNC] Erro ao exportar PDF:', err)
+    } finally {
+      setExportingPdf(false)
     }
   }
 
@@ -339,18 +368,26 @@ export default function FotosNCPage() {
             <div className="relative">
               <button
                 onClick={() => setExportMenuOpen(!exportMenuOpen)}
-                disabled={items.length === 0 || exporting}
+                disabled={items.length === 0 || exporting || exportingPdf}
                 className="btn-primary text-sm flex items-center gap-1.5 disabled:opacity-50"
               >
                 <FiDownload className="text-base" />
-                {exporting ? 'Exportando...' : 'Exportar'}
+                {exportingPdf ? 'Gerando PDF...' : exporting ? 'Exportando...' : 'Exportar'}
                 <FiChevronDown className="text-xs" />
               </button>
               {exportMenuOpen && (
-                <div className="absolute right-0 top-full mt-1 bg-surface border border-subtle rounded-lg shadow-lg z-20 min-w-[140px]">
+                <div className="absolute right-0 top-full mt-1 bg-surface border border-subtle rounded-lg shadow-lg z-20 min-w-[160px]">
                   <button onClick={() => handleExport('csv')} className="w-full px-4 py-2 text-sm text-left hover:bg-surface-hover">CSV</button>
                   <button onClick={() => handleExport('xlsx')} className="w-full px-4 py-2 text-sm text-left hover:bg-surface-hover">Excel</button>
                   <button onClick={() => handleExport('txt')} className="w-full px-4 py-2 text-sm text-left hover:bg-surface-hover">TXT</button>
+                  <button
+                    onClick={handleExportPdf}
+                    disabled={exportingPdf}
+                    className="w-full px-4 py-2 text-sm text-left hover:bg-surface-hover flex items-center gap-2 disabled:opacity-50"
+                  >
+                    <FiDownload className="text-sm" />
+                    {exportingPdf ? 'Gerando PDF...' : 'PDF (com fotos)'}
+                  </button>
                 </div>
               )}
             </div>
