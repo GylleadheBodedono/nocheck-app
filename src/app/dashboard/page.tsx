@@ -82,7 +82,7 @@ type InProgressChecklist = {
   template_id: number
   store_id: number
   created_at: string
-  template: { id: number; name: string; category: string | null }
+  template: { id: number; name: string; category: string | null; allowed_start_time?: string | null; allowed_end_time?: string | null }
   store: { id: number; name: string }
   totalSections: number
   completedSections: number
@@ -122,6 +122,16 @@ const TECH_FUNCTIONS = ['ti', 'manutencao', 'manutenção']
 
 function normalizeName(s: string) {
   return s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+}
+
+/** Retorna true se o template nao tem restricao de horario ou se a hora atual esta dentro da janela permitida */
+function isTemplateWithinAllowedTime(template: { allowed_start_time?: string | null; allowed_end_time?: string | null }): boolean {
+  if (!template?.allowed_start_time || !template?.allowed_end_time) return true
+  const now = new Date()
+  const current = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:00`
+  const start = String(template.allowed_start_time).substring(0, 8)
+  const end = String(template.allowed_end_time).substring(0, 8)
+  return current >= start && current <= end
 }
 
 export default function DashboardPage() {
@@ -351,7 +361,7 @@ export default function DashboardPage() {
       .from('checklists')
       .select(`
         id, template_id, store_id, created_at,
-        template:checklist_templates(id, name, category),
+        template:checklist_templates(id, name, category, allowed_start_time, allowed_end_time),
         store:stores(id, name),
         checklist_sections(id, section_id, status),
         user:users!checklists_created_by_fkey(full_name)
@@ -1243,12 +1253,9 @@ export default function DashboardPage() {
                       const pct = hasSections
                         ? Math.round((item.completedSections / item.totalSections) * 100)
                         : null
-                      return (
-                        <Link
-                          key={item.id}
-                          href={`${APP_CONFIG.routes.checklistNew}?template=${item.template_id}&store=${item.store_id}&resume=${item.id}`}
-                          className="group card-hover p-5 border-l-4 border-warning"
-                        >
+                      const withinTime = isTemplateWithinAllowedTime(item.template)
+                      const cardContent = (
+                        <>
                           <div className="flex items-start justify-between mb-2">
                             <div className="w-10 h-10 rounded-xl bg-warning/20 flex items-center justify-center">
                               <FiLayers className="w-5 h-5 text-warning" />
@@ -1268,6 +1275,9 @@ export default function DashboardPage() {
                           <p className="text-xs text-muted mb-2">
                             {item.store?.name} - {formatDate(item.created_at)}
                           </p>
+                          {!withinTime && (
+                            <p className="text-xs text-warning font-medium mb-2">Fora do horario permitido</p>
+                          )}
                           {hasSections && pct !== null && (
                             <>
                               <div className="w-full bg-surface-hover rounded-full h-2">
@@ -1279,6 +1289,26 @@ export default function DashboardPage() {
                               <p className="text-xs text-muted mt-1">{pct}% concluido</p>
                             </>
                           )}
+                        </>
+                      )
+                      if (!withinTime) {
+                        return (
+                          <div
+                            key={item.id}
+                            className="p-5 border-l-4 border-warning rounded-xl border border-subtle bg-surface opacity-75 cursor-not-allowed"
+                            title="Fora do horario permitido para preenchimento"
+                          >
+                            {cardContent}
+                          </div>
+                        )
+                      }
+                      return (
+                        <Link
+                          key={item.id}
+                          href={`${APP_CONFIG.routes.checklistNew}?template=${item.template_id}&store=${item.store_id}&resume=${item.id}`}
+                          className="group card-hover p-5 border-l-4 border-warning"
+                        >
+                          {cardContent}
                         </Link>
                       )
                     })}

@@ -271,6 +271,11 @@ function ChecklistForm() {
       if (initializingRef.current) return
       initializingRef.current = true
 
+      if (timeBlocked) {
+        initializingRef.current = false
+        return
+      }
+
       try {
       let userId: string | null = null
       try {
@@ -490,7 +495,7 @@ function ChecklistForm() {
 
     initSectionedChecklist()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hasSections, template, loading, store])
+  }, [hasSections, template, loading, store, timeBlocked])
 
   // Restaurar respostas de um checklist offline (sectioned ou non-sectioned)
   const restoreOfflineResponses = (checklist: PendingChecklist): Record<number, unknown> => {
@@ -670,6 +675,11 @@ function ChecklistForm() {
       if (initializingRef.current) return
       initializingRef.current = true
 
+      if (timeBlocked) {
+        initializingRef.current = false
+        return
+      }
+
       try {
       let userId: string | null = null
       try {
@@ -819,7 +829,7 @@ function ChecklistForm() {
 
     initNonSectionedChecklist()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hasSections, template, loading, store])
+  }, [hasSections, template, loading, store, timeBlocked])
 
   // Build response data for a single field (no photo upload - photos stay as base64 during auto-save)
   const buildSingleResponseRow = useCallback((fieldId: number, value: unknown) => {
