@@ -32,6 +32,7 @@ import {
   FiUserPlus,
   FiPlusCircle,
   FiArrowRight,
+  FiBell,
 } from 'react-icons/fi'
 import type { IconType } from 'react-icons'
 
@@ -61,6 +62,8 @@ export default function AdminPage() {
   const [userName, setUserName] = useState('Admin User')
   const [ignoreTimeRestrictions, setIgnoreTimeRestrictions] = useState(false)
   const [togglingTime, setTogglingTime] = useState(false)
+  const [notificationPermission, setNotificationPermission] = useState<'default' | 'granted' | 'denied'>('default')
+  const [notificationBannerMounted, setNotificationBannerMounted] = useState(false)
   const router = useRouter()
   const supabase = useMemo(() => createClient(), [])
 
@@ -196,6 +199,14 @@ export default function AdminPage() {
 
     fetchStats()
   }, [supabase, router])
+
+  // Permissao de notificacoes do sistema (para o banner)
+  useEffect(() => {
+    if (typeof window !== 'undefined' && 'Notification' in window) {
+      setNotificationPermission(Notification.permission as 'default' | 'granted' | 'denied')
+    }
+    setNotificationBannerMounted(true)
+  }, [])
 
   const handleToggleTimeRestrictions = async () => {
     setTogglingTime(true)
@@ -406,6 +417,34 @@ export default function AdminPage() {
         isAdmin={true}
         onSignOut={handleSignOut}
       />
+
+      {/* Aviso para ativar notificacoes do sistema (PWA) */}
+      {notificationBannerMounted && typeof window !== 'undefined' && 'Notification' in window && notificationPermission === 'default' && (
+        <div className="max-w-[1400px] mx-auto px-4 sm:px-6 pt-4">
+          <div className="card p-4 bg-primary/10 border border-primary/30 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-primary/20 flex items-center justify-center shrink-0">
+                <FiBell className="w-5 h-5 text-primary" />
+              </div>
+              <div>
+                <p className="font-medium text-main text-sm">Receba avisos no celular</p>
+                <p className="text-xs text-muted">Planos de acao, vencimentos e alertas como notificacao do sistema.</p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={async () => {
+                if (typeof window === 'undefined' || !('Notification' in window)) return
+                const result = await Notification.requestPermission()
+                setNotificationPermission(result as 'default' | 'granted' | 'denied')
+              }}
+              className="btn-primary text-sm shrink-0 self-start sm:self-center"
+            >
+              Ativar notificacoes
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Main Content */}
       <div className="max-w-[1400px] mx-auto px-4 sm:px-6 py-6">
