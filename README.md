@@ -225,10 +225,6 @@ SUPABASE_SERVICE_ROLE_KEY=xxx
 
 # Microsoft Teams (opcional)
 TEAMS_WEBHOOK_URL=https://xxx.webhook.office.com/...
-
-# Google Drive (opcional)
-GOOGLE_SERVICE_ACCOUNT_KEY={"type":"service_account",...}
-GOOGLE_DRIVE_FOLDER_ID=xxx
 ```
 
 ### 3. Executar migrations no Supabase
