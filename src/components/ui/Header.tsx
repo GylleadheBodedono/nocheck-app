@@ -155,6 +155,16 @@ export function Header({
   const { notifications, unreadCount, markAsRead, markAllAsRead, deleteNotification, deleteAllNotifications } = useNotifications()
   const [notifOpen, setNotifOpen] = useState(false)
   const notifRef = useRef<HTMLDivElement>(null)
+  const [notificationPermission, setNotificationPermission] = useState<'default' | 'granted' | 'denied'>(() =>
+    typeof window !== 'undefined' && 'Notification' in window ? (Notification.permission as 'default' | 'granted' | 'denied') : 'default'
+  )
+  const [notificationFeedback, setNotificationFeedback] = useState<'granted' | 'denied' | null>(null)
+
+  useEffect(() => {
+    if (typeof window !== 'undefined' && 'Notification' in window) {
+      setNotificationPermission(Notification.permission as 'default' | 'granted' | 'denied')
+    }
+  }, [])
 
   // Close dropdown on click outside
   const handleClickOutside = useCallback((e: MouseEvent) => {
@@ -169,6 +179,21 @@ export function Header({
     }
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [notifOpen, handleClickOutside])
+
+  // Sincronizar permissao de notificacoes do sistema ao abrir o dropdown
+  useEffect(() => {
+    if (notifOpen && typeof window !== 'undefined' && 'Notification' in window) {
+      setNotificationPermission(Notification.permission as 'default' | 'granted' | 'denied')
+    }
+  }, [notifOpen])
+
+  const handleRequestNotificationPermission = useCallback(async () => {
+    if (typeof window === 'undefined' || !('Notification' in window)) return
+    const result = await Notification.requestPermission()
+    setNotificationPermission(result)
+    setNotificationFeedback(result === 'granted' ? 'granted' : 'denied')
+    setTimeout(() => setNotificationFeedback(null), 3000)
+  }, [])
 
   const getNotifIcon = (type: string) => {
     if (type.includes('overdue') || type.includes('reincidencia')) return FiAlertTriangle
@@ -289,6 +314,33 @@ export function Header({
                           )}
                         </div>
                       </div>
+
+                      {/* Permissao de notificacoes do sistema */}
+                      {typeof window !== 'undefined' && 'Notification' in window && (notificationPermission !== 'granted' || notificationFeedback) && (
+                        <div className="px-4 py-3 border-b border-subtle bg-surface-hover/50">
+                          {notificationPermission === 'default' && (
+                            <div className="flex flex-col gap-2">
+                              <p className="text-xs text-muted">Receba avisos no celular como notificacao do sistema.</p>
+                              <button
+                                type="button"
+                                onClick={handleRequestNotificationPermission}
+                                className="btn-primary text-xs w-full py-2"
+                              >
+                                Ativar notificacoes
+                              </button>
+                            </div>
+                          )}
+                          {notificationPermission === 'denied' && (
+                            <p className="text-xs text-muted">Notificacoes bloqueadas. Ative nas configuracoes do navegador.</p>
+                          )}
+                          {notificationFeedback === 'granted' && (
+                            <p className="text-xs text-success font-medium">Notificacoes ativadas.</p>
+                          )}
+                          {notificationFeedback === 'denied' && (
+                            <p className="text-xs text-error">Permissao negada. Ative depois nas configuracoes.</p>
+                          )}
+                        </div>
+                      )}
 
                       <div className="max-h-80 overflow-y-auto">
                         {notifications.length === 0 ? (

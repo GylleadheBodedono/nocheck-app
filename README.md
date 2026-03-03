@@ -40,6 +40,7 @@
 
 ### 🔔 Notificações
 - Notificações in-app com badge de contagem no header
+- **Notificações do sistema (PWA)** — planos de ação, vencimentos e demais avisos podem ser exibidos como notificação nativa no celular/navegador; o usuário precisa permitir notificações no prompt do navegador (ícone do sino > "Ativar notificações")
 - Tipos: `action_plan_assigned`, `action_plan_overdue`, `checklist_submitted`, etc.
 - Integração com **Microsoft Teams** via Webhook para alertas de divergências
 - Envio de **email** via Edge Function do Supabase com templates HTML customizáveis configurados no painel admin

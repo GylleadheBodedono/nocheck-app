@@ -91,6 +91,28 @@ export function useNotifications() {
           const newNotification = payload.new as AppNotification
           setNotifications(prev => [newNotification, ...prev].slice(0, 20))
           setUnreadCount(prev => prev + 1)
+
+          // Notificacao do sistema (celular/navegador) quando permissao concedida
+          if (typeof window === 'undefined' || !('Notification' in window) || Notification.permission !== 'granted') return
+          const title = newNotification.title || 'NoCheck'
+          const body = newNotification.message || ''
+          const link = newNotification.link || '/dashboard'
+          const id = newNotification.id
+          const payloadMsg = { title, body, link, id }
+          if (navigator.serviceWorker?.controller) {
+            navigator.serviceWorker.controller.postMessage({ type: 'SHOW_NOTIFICATION', payload: payloadMsg })
+          } else {
+            const n = new Notification(title, {
+              body,
+              icon: '/web-app-manifest-192x192.png',
+              tag: 'nocheck-' + id,
+              data: { url: link.startsWith('http') ? link : window.location.origin + (link.startsWith('/') ? link : '/' + link) },
+            })
+            n.onclick = () => {
+              window.focus()
+              window.location.href = link.startsWith('http') ? link : (window.location.origin + (link.startsWith('/') ? link : '/' + link))
+            }
+          }
         }
       )
       .subscribe()
