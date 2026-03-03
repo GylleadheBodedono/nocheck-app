@@ -4,7 +4,8 @@ import { useEffect, useState, useMemo, useRef, useCallback } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
 import { useRouter } from 'next/navigation'
-import { FiArrowLeft, FiLogOut, FiUser, FiSearch, FiBell, FiSettings, FiCheck, FiAlertTriangle, FiCheckCircle, FiClock, FiTrash2, FiX } from 'react-icons/fi'
+import { FiArrowLeft, FiLogOut, FiUser, FiBell, FiSettings, FiCheck, FiAlertTriangle, FiCheckCircle, FiClock, FiTrash2, FiX } from 'react-icons/fi'
+import { GlobalSearch } from './GlobalSearch'
 import { APP_CONFIG } from '@/lib/config'
 import { ThemeToggle } from './ThemeToggle'
 import { createClient } from '@/lib/supabase'
@@ -242,15 +243,7 @@ export function Header({
             {/* Center: Search bar (desktop only) */}
             {showSearch && (
               <div className="flex-1 max-w-xl hidden md:block">
-                <div className="relative">
-                  <FiSearch className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted" />
-                  <input
-                    type="text"
-                    placeholder={searchPlaceholder}
-                    className="w-full pl-10 pr-4 py-2 rounded-xl bg-surface-hover border border-subtle text-sm text-main placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-primary/30 transition-all"
-                    readOnly
-                  />
-                </div>
+                <GlobalSearch placeholder={searchPlaceholder} />
               </div>
             )}
 
