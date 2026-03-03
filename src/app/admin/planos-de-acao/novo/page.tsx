@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { createClient, isSupabaseConfigured } from '@/lib/supabase'
 import { FiSave, FiFileText } from 'react-icons/fi'
 import { APP_CONFIG } from '@/lib/config'
-import { LoadingPage, Header } from '@/components/ui'
+import { LoadingPage, Header, Select } from '@/components/ui'
 import { getAuthCache, getUserCache } from '@/lib/offlineCache'
 import { createNotification, sendEmailNotification } from '@/lib/notificationService'
 import { buildEmailFromTemplate, SEVERITY_COLORS, type EmailTemplateVariables } from '@/lib/emailTemplateEngine'
@@ -327,16 +327,16 @@ export default function NovoPlanoDeAcaoPage() {
                 <label className="block text-sm font-medium text-main mb-1">
                   Severidade
                 </label>
-                <select
+                <Select
                   value={severity}
-                  onChange={(e) => setSeverity(e.target.value)}
-                  className="input"
-                >
-                  <option value="baixa">Baixa</option>
-                  <option value="media">Media</option>
-                  <option value="alta">Alta</option>
-                  <option value="critica">Critica</option>
-                </select>
+                  onChange={setSeverity}
+                  options={[
+                    { value: 'baixa',  label: 'Baixa' },
+                    { value: 'media',  label: 'Media' },
+                    { value: 'alta',   label: 'Alta' },
+                    { value: 'critica', label: 'Critica' },
+                  ]}
+                />
               </div>
 
               {/* Responsavel */}
@@ -344,19 +344,12 @@ export default function NovoPlanoDeAcaoPage() {
                 <label className="block text-sm font-medium text-main mb-1">
                   Responsavel *
                 </label>
-                <select
+                <Select
                   value={assigneeId}
-                  onChange={(e) => setAssigneeId(e.target.value)}
-                  required
-                  className="input"
-                >
-                  <option value="">Selecione o responsavel</option>
-                  {users.map((user) => (
-                    <option key={user.id} value={user.id}>
-                      {user.full_name}
-                    </option>
-                  ))}
-                </select>
+                  onChange={setAssigneeId}
+                  placeholder="Selecione o responsavel"
+                  options={users.map(user => ({ value: user.id, label: user.full_name }))}
+                />
               </div>
 
               {/* Prazo */}

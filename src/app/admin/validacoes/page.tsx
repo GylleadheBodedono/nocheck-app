@@ -4,7 +4,7 @@ import { useEffect, useState, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient, isSupabaseConfigured } from '@/lib/supabase'
 import { APP_CONFIG } from '@/lib/config'
-import { LoadingPage, Header } from '@/components/ui'
+import { LoadingPage, Header, Select } from '@/components/ui'
 import {
   FiCheckCircle,
   FiXCircle,
@@ -489,34 +489,22 @@ export default function ValidacoesPage() {
 
         {/* Filters */}
         <div className="flex flex-wrap gap-4 mb-6">
-          <select
-            value={filterStore || ''}
-            onChange={(e) => setFilterStore(e.target.value ? Number(e.target.value) : null)}
-            className="input px-4 py-2"
-          >
-            <option value="">Todas as lojas</option>
-            {stores.map(store => (
-              <option key={store.id} value={store.id}>
-                {store.name}
-              </option>
-            ))}
-          </select>
+          <Select
+            value={String(filterStore ?? '')}
+            onChange={(v) => setFilterStore(v ? Number(v) : null)}
+            placeholder="Todas as lojas"
+            options={stores.map(store => ({ value: String(store.id), label: store.name }))}
+          />
 
-          <select
-            value={filterSector || ''}
-            onChange={(e) => setFilterSector(e.target.value ? Number(e.target.value) : null)}
-            className="input px-4 py-2"
-          >
-            <option value="">Todos os setores</option>
-            {sectors
+          <Select
+            value={String(filterSector ?? '')}
+            onChange={(v) => setFilterSector(v ? Number(v) : null)}
+            placeholder="Todos os setores"
+            options={sectors
               .filter(s => !filterStore || s.store_id === filterStore)
-              .map(sector => (
-                <option key={sector.id} value={sector.id}>
-                  {sector.name}
-                </option>
-              ))
+              .map(sector => ({ value: String(sector.id), label: sector.name }))
             }
-          </select>
+          />
 
           <button
             onClick={() => { setFilterStatus(null); setFilterStore(null); setFilterSector(null); }}
@@ -529,22 +517,23 @@ export default function ValidacoesPage() {
           {/* Expiration config */}
           <div className="flex items-center gap-2">
             <FiClock className="w-4 h-4 text-muted" />
-            <select
-              value={expirationMinutes}
-              onChange={(e) => handleExpirationChange(Number(e.target.value))}
+            <Select
+              value={String(expirationMinutes)}
+              onChange={(v) => handleExpirationChange(Number(v))}
               disabled={savingExpiration}
-              className="input px-3 py-2 text-sm"
+              className="text-sm"
               title="Tempo para expirar validacoes pendentes"
-            >
-              <option value={5}>Expira em 5 min</option>
-              <option value={15}>Expira em 15 min</option>
-              <option value={30}>Expira em 30 min</option>
-              <option value={60}>Expira em 1h</option>
-              <option value={120}>Expira em 2h</option>
-              <option value={240}>Expira em 4h</option>
-              <option value={720}>Expira em 12h</option>
-              <option value={1440}>Expira em 24h</option>
-            </select>
+              options={[
+                { value: '5',    label: 'Expira em 5 min' },
+                { value: '15',   label: 'Expira em 15 min' },
+                { value: '30',   label: 'Expira em 30 min' },
+                { value: '60',   label: 'Expira em 1h' },
+                { value: '120',  label: 'Expira em 2h' },
+                { value: '240',  label: 'Expira em 4h' },
+                { value: '720',  label: 'Expira em 12h' },
+                { value: '1440', label: 'Expira em 24h' },
+              ]}
+            />
             {savingExpiration && (
               <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
             )}

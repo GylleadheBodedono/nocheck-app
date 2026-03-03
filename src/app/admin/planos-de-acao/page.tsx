@@ -19,7 +19,7 @@ import {
 } from 'react-icons/fi'
 import Link from 'next/link'
 import { APP_CONFIG } from '@/lib/config'
-import { LoadingPage, Header } from '@/components/ui'
+import { LoadingPage, Header, Select } from '@/components/ui'
 import { getAuthCache, getUserCache, getActionPlansCache, getStoresCache, getAllUsersCache } from '@/lib/offlineCache'
 
 type ActionPlan = {
@@ -391,52 +391,44 @@ export default function PlanoDeAcaoPage() {
             <h3 className="font-semibold text-main">Filtros</h3>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            <select
+            <Select
               value={filterStatus}
-              onChange={(e) => { setFilterStatus(e.target.value); setPage(1) }}
-              className="input"
-            >
-              <option value="">Todos os status</option>
-              <option value="aberto">Aberto</option>
-              <option value="em_andamento">Em Andamento</option>
-              <option value="concluido">Concluido</option>
-              <option value="vencido">Vencido</option>
-              <option value="cancelado">Cancelado</option>
-            </select>
+              onChange={(v) => { setFilterStatus(v); setPage(1) }}
+              placeholder="Todos os status"
+              options={[
+                { value: 'aberto',       label: 'Aberto' },
+                { value: 'em_andamento', label: 'Em Andamento' },
+                { value: 'concluido',    label: 'Concluido' },
+                { value: 'vencido',      label: 'Vencido' },
+                { value: 'cancelado',    label: 'Cancelado' },
+              ]}
+            />
 
-            <select
+            <Select
               value={filterSeverity}
-              onChange={(e) => { setFilterSeverity(e.target.value); setPage(1) }}
-              className="input"
-            >
-              <option value="">Todas as severidades</option>
-              <option value="baixa">Baixa</option>
-              <option value="media">Media</option>
-              <option value="alta">Alta</option>
-              <option value="critica">Critica</option>
-            </select>
+              onChange={(v) => { setFilterSeverity(v); setPage(1) }}
+              placeholder="Todas as severidades"
+              options={[
+                { value: 'baixa',  label: 'Baixa' },
+                { value: 'media',  label: 'Media' },
+                { value: 'alta',   label: 'Alta' },
+                { value: 'critica', label: 'Critica' },
+              ]}
+            />
 
-            <select
+            <Select
               value={filterStore}
-              onChange={(e) => { setFilterStore(e.target.value); setPage(1) }}
-              className="input"
-            >
-              <option value="">Todas as lojas</option>
-              {stores.map(s => (
-                <option key={s.id} value={s.name}>{s.name}</option>
-              ))}
-            </select>
+              onChange={(v) => { setFilterStore(v); setPage(1) }}
+              placeholder="Todas as lojas"
+              options={stores.map(s => ({ value: s.name, label: s.name }))}
+            />
 
-            <select
+            <Select
               value={filterAssignee}
-              onChange={(e) => { setFilterAssignee(e.target.value); setPage(1) }}
-              className="input"
-            >
-              <option value="">Todos os responsaveis</option>
-              {users.map(u => (
-                <option key={u.id} value={u.full_name}>{u.full_name}</option>
-              ))}
-            </select>
+              onChange={(v) => { setFilterAssignee(v); setPage(1) }}
+              placeholder="Todos os responsaveis"
+              options={users.map(u => ({ value: u.full_name, label: u.full_name }))}
+            />
           </div>
         </div>
 

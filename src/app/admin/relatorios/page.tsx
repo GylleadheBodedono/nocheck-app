@@ -21,7 +21,7 @@ import {
 } from 'react-icons/fi'
 import Link from 'next/link'
 import { APP_CONFIG } from '@/lib/config'
-import { LoadingPage, Header } from '@/components/ui'
+import { LoadingPage, Header, Select } from '@/components/ui'
 import { getAuthCache, getUserCache } from '@/lib/offlineCache'
 import { fetchComplianceData, fetchReincidenciaData, fetchStoreHeatmap, type ComplianceSummary, type FieldComplianceRow, type StoreComplianceRow, type ReincidenciaSummary, type ReincidenciaRow, type AssigneeStats, type HeatmapCell } from '@/lib/analyticsQueries'
 
@@ -461,36 +461,24 @@ export default function RelatoriosPage() {
                 <h3 className="font-semibold text-main">Filtros</h3>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <select
+                <Select
                   value={responseFilterUser}
-                  onChange={(e) => { setResponseFilterUser(e.target.value); setResponsePage(1) }}
-                  className="input"
-                >
-                  <option value="">Todos os usuarios</option>
-                  {allUsers.map(u => (
-                    <option key={u.id} value={u.id}>{u.name}</option>
-                  ))}
-                </select>
-                <select
+                  onChange={(v) => { setResponseFilterUser(v); setResponsePage(1) }}
+                  placeholder="Todos os usuarios"
+                  options={allUsers.map(u => ({ value: u.id, label: u.name }))}
+                />
+                <Select
                   value={responseFilterStore}
-                  onChange={(e) => { setResponseFilterStore(e.target.value); setResponsePage(1) }}
-                  className="input"
-                >
-                  <option value="">Todas as lojas</option>
-                  {allStoresSimple.map(s => (
-                    <option key={s.name} value={s.name}>{s.name}</option>
-                  ))}
-                </select>
-                <select
+                  onChange={(v) => { setResponseFilterStore(v); setResponsePage(1) }}
+                  placeholder="Todas as lojas"
+                  options={allStoresSimple.map(s => ({ value: s.name, label: s.name }))}
+                />
+                <Select
                   value={responseFilterTemplate}
-                  onChange={(e) => { setResponseFilterTemplate(e.target.value); setResponsePage(1) }}
-                  className="input"
-                >
-                  <option value="">Todos os checklists</option>
-                  {allTemplatesSimple.map(t => (
-                    <option key={t.name} value={t.name}>{t.name}</option>
-                  ))}
-                </select>
+                  onChange={(v) => { setResponseFilterTemplate(v); setResponsePage(1) }}
+                  placeholder="Todos os checklists"
+                  options={allTemplatesSimple.map(t => ({ value: t.name, label: t.name }))}
+                />
               </div>
             </div>
 

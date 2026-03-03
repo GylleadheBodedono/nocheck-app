@@ -9,7 +9,7 @@ import Link from 'next/link'
 import { FiSave, FiUserCheck } from 'react-icons/fi'
 import type { User, Store, Sector, FunctionRow, UserStoreWithDetails } from '@/types/database'
 import { APP_CONFIG } from '@/lib/config'
-import { LoadingPage, Header } from '@/components/ui'
+import { LoadingPage, Header, Select } from '@/components/ui'
 
 type UserWithAssignment = User & {
   store: Store | null
@@ -372,18 +372,13 @@ export default function EditarUsuarioPage() {
                           </div>
                           {isSelected && storeSectors.length > 0 && (
                             <div className="mt-2 ml-8">
-                              <select
-                                value={assignment.sector_id || ''}
-                                onChange={(e) => setSectorForStore(store.id, e.target.value ? Number(e.target.value) : null)}
-                                className="input text-sm py-1"
-                              >
-                                <option value="">Setor (opcional)</option>
-                                {storeSectors.map(sector => (
-                                  <option key={sector.id} value={sector.id}>
-                                    {sector.name}
-                                  </option>
-                                ))}
-                              </select>
+                              <Select
+                                value={String(assignment.sector_id ?? '')}
+                                onChange={(v) => setSectorForStore(store.id, v ? Number(v) : null)}
+                                placeholder="Setor (opcional)"
+                                className="text-sm"
+                                options={storeSectors.map(sector => ({ value: String(sector.id), label: sector.name }))}
+                              />
                             </div>
                           )}
                         </div>
@@ -402,18 +397,12 @@ export default function EditarUsuarioPage() {
                   <label className="block text-sm font-medium text-secondary mb-2">
                     Funcao
                   </label>
-                  <select
-                    value={functionId || ''}
-                    onChange={(e) => setFunctionId(e.target.value ? Number(e.target.value) : null)}
-                    className="input"
-                  >
-                    <option value="">Selecione a funcao</option>
-                    {functions.map(fn => (
-                      <option key={fn.id} value={fn.id}>
-                        {fn.name}
-                      </option>
-                    ))}
-                  </select>
+                  <Select
+                    value={String(functionId ?? '')}
+                    onChange={(v) => setFunctionId(v ? Number(v) : null)}
+                    placeholder="Selecione a funcao"
+                    options={functions.map(fn => ({ value: String(fn.id), label: fn.name }))}
+                  />
                 </div>
               </div>
             </div>

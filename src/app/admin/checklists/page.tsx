@@ -4,7 +4,7 @@ import { useEffect, useState, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { APP_CONFIG } from '@/lib/config'
-import { LoadingPage, Header } from '@/components/ui'
+import { LoadingPage, Header, Select } from '@/components/ui'
 import {
   FiTrash2,
   FiSearch,
@@ -375,53 +375,41 @@ export default function AdminChecklistsPage() {
             </div>
 
             {/* Store filter */}
-            <select
-              value={filterStore}
-              onChange={(e) => { setFilterStore(e.target.value ? Number(e.target.value) : ''); setPage(1) }}
-              className="input"
-            >
-              <option value="">Todas as lojas</option>
-              {stores.map(store => (
-                <option key={store.id} value={store.id}>{store.name}</option>
-              ))}
-            </select>
+            <Select
+              value={String(filterStore)}
+              onChange={(v) => { setFilterStore(v ? Number(v) : ''); setPage(1) }}
+              placeholder="Todas as lojas"
+              options={stores.map(store => ({ value: String(store.id), label: store.name }))}
+            />
 
             {/* Template filter */}
-            <select
-              value={filterTemplate}
-              onChange={(e) => { setFilterTemplate(e.target.value ? Number(e.target.value) : ''); setPage(1) }}
-              className="input"
-            >
-              <option value="">Todos os checklists</option>
-              {templates.map(template => (
-                <option key={template.id} value={template.id}>{template.name}</option>
-              ))}
-            </select>
+            <Select
+              value={String(filterTemplate)}
+              onChange={(v) => { setFilterTemplate(v ? Number(v) : ''); setPage(1) }}
+              placeholder="Todos os checklists"
+              options={templates.map(template => ({ value: String(template.id), label: template.name }))}
+            />
 
             {/* User filter */}
-            <select
+            <Select
               value={filterUser}
-              onChange={(e) => { setFilterUser(e.target.value); setPage(1) }}
-              className="input"
-            >
-              <option value="">Todos os usuários</option>
-              {users.map(user => (
-                <option key={user.id} value={user.id}>{user.full_name || user.email}</option>
-              ))}
-            </select>
+              onChange={(v) => { setFilterUser(v); setPage(1) }}
+              placeholder="Todos os usuários"
+              options={users.map(user => ({ value: user.id, label: user.full_name || user.email }))}
+            />
 
             {/* Status filter */}
-            <select
+            <Select
               value={filterStatus}
-              onChange={(e) => { setFilterStatus(e.target.value); setPage(1) }}
-              className="input"
-            >
-              <option value="">Todos os status</option>
-              <option value="rascunho">Rascunho</option>
-              <option value="em_andamento">Em Andamento</option>
-              <option value="concluido">Concluído</option>
-              <option value="validado">Validado</option>
-            </select>
+              onChange={(v) => { setFilterStatus(v); setPage(1) }}
+              placeholder="Todos os status"
+              options={[
+                { value: 'rascunho', label: 'Rascunho' },
+                { value: 'em_andamento', label: 'Em Andamento' },
+                { value: 'concluido', label: 'Concluído' },
+                { value: 'validado', label: 'Validado' },
+              ]}
+            />
 
             {/* Date from */}
             <input

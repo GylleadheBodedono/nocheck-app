@@ -15,7 +15,7 @@ import {
   FiFileText,
 } from 'react-icons/fi'
 import { APP_CONFIG } from '@/lib/config'
-import { LoadingPage, Header } from '@/components/ui'
+import { LoadingPage, Header, Select } from '@/components/ui'
 import { getAuthCache, getUserCache } from '@/lib/offlineCache'
 import type { Severity } from '@/types/database'
 
@@ -360,15 +360,11 @@ export default function ModelosPlanoDeAcaoPage() {
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-xs font-medium text-secondary mb-1">Severidade</label>
-                <select
+                <Select
                   value={form.severity}
-                  onChange={(e) => setForm(f => ({ ...f, severity: e.target.value as Severity }))}
-                  className="input"
-                >
-                  {SEVERITY_OPTIONS.map(s => (
-                    <option key={s.value} value={s.value}>{s.label}</option>
-                  ))}
-                </select>
+                  onChange={(v) => setForm(f => ({ ...f, severity: v as Severity }))}
+                  options={SEVERITY_OPTIONS.map(s => ({ value: s.value, label: s.label }))}
+                />
               </div>
               <div>
                 <label className="block text-xs font-medium text-secondary mb-1">Prazo (dias)</label>
@@ -385,16 +381,12 @@ export default function ModelosPlanoDeAcaoPage() {
 
             <div>
               <label className="block text-xs font-medium text-secondary mb-1">Responsavel padrao</label>
-              <select
+              <Select
                 value={form.default_assignee_id}
-                onChange={(e) => setForm(f => ({ ...f, default_assignee_id: e.target.value }))}
-                className="input"
-              >
-                <option value="">Quem preencheu o checklist</option>
-                {users.map(u => (
-                  <option key={u.id} value={u.id}>{u.full_name}</option>
-                ))}
-              </select>
+                onChange={(v) => setForm(f => ({ ...f, default_assignee_id: v }))}
+                placeholder="Quem preencheu o checklist"
+                options={users.map(u => ({ value: u.id, label: u.full_name }))}
+              />
               <p className="text-xs text-muted mt-1">
                 Se nao selecionado, o plano sera atribuido a quem preencheu o checklist.
               </p>

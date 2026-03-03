@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { FiAlertTriangle, FiChevronDown, FiChevronUp, FiTrash2, FiLayers, FiCamera, FiFileText } from 'react-icons/fi'
 import type { ConditionType, Severity } from '@/types/database'
+import { Select } from '@/components/ui/Select'
 
 export type ConditionConfig = {
   enabled: boolean
@@ -80,6 +81,7 @@ export function FieldConditionEditor({
   const [expanded, setExpanded] = useState(false)
   const [showSavePreset, setShowSavePreset] = useState(false)
   const [presetName, setPresetName] = useState('')
+  const [selectedPreset, setSelectedPreset] = useState('')
 
   const handleToggle = () => {
     if (!condition) {
@@ -191,17 +193,14 @@ export function FieldConditionEditor({
               <label className="block text-xs font-medium text-secondary mb-1">
                 Valor que indica nao conformidade
               </label>
-              <select
+              <Select
                 value={(condition.conditionValue.value as string) || 'Nao'}
-                onChange={(e) => update({
-                  conditionType: 'equals',
-                  conditionValue: { value: e.target.value },
-                })}
-                className="input"
-              >
-                <option value="Nao">Quando resposta for &quot;Nao&quot;</option>
-                <option value="Sim">Quando resposta for &quot;Sim&quot;</option>
-              </select>
+                onChange={(v) => update({ conditionType: 'equals', conditionValue: { value: v } })}
+                options={[
+                  { value: 'Nao', label: 'Quando resposta for "Nao"' },
+                  { value: 'Sim', label: 'Quando resposta for "Sim"' },
+                ]}
+              />
             </div>
           )}
 
@@ -210,21 +209,22 @@ export function FieldConditionEditor({
               <label className="block text-xs font-medium text-secondary mb-1">
                 Tipo de condicao
               </label>
-              <select
+              <Select
                 value={condition.conditionType}
-                onChange={(e) => {
-                  const ct = e.target.value as ConditionType
+                onChange={(v) => {
+                  const ct = v as ConditionType
                   update({
                     conditionType: ct,
                     conditionValue: ct === 'between' ? { min: 0, max: 100 } : ct === 'less_than' ? { min: 0 } : { max: 100 },
                   })
                 }}
-                className="input mb-2"
-              >
-                <option value="less_than">Menor que (valor minimo)</option>
-                <option value="greater_than">Maior que (valor maximo)</option>
-                <option value="between">Fora da faixa (min-max)</option>
-              </select>
+                className="mb-2"
+                options={[
+                  { value: 'less_than', label: 'Menor que (valor minimo)' },
+                  { value: 'greater_than', label: 'Maior que (valor maximo)' },
+                  { value: 'between', label: 'Fora da faixa (min-max)' },
+                ]}
+              />
               <div className="grid grid-cols-2 gap-2">
                 {(condition.conditionType === 'less_than' || condition.conditionType === 'between') && (
                   <div>
@@ -385,18 +385,18 @@ export function FieldConditionEditor({
               <label className="block text-xs font-medium text-secondary mb-1">
                 Tipo de condicao
               </label>
-              <select
+              <Select
                 value={condition.conditionType}
-                onChange={(e) => {
-                  const ct = e.target.value as ConditionType
+                onChange={(v) => {
+                  const ct = v as ConditionType
                   update({ conditionType: ct, conditionValue: ct === 'empty' ? {} : { value: '' } })
                 }}
-                className="input"
-              >
-                <option value="empty">Campo vazio</option>
-                <option value="equals">Igual a valor especifico</option>
-                <option value="not_equals">Diferente de valor especifico</option>
-              </select>
+                options={[
+                  { value: 'empty', label: 'Campo vazio' },
+                  { value: 'equals', label: 'Igual a valor especifico' },
+                  { value: 'not_equals', label: 'Diferente de valor especifico' },
+                ]}
+              />
               {(condition.conditionType === 'equals' || condition.conditionType === 'not_equals') && (
                 <input
                   type="text"
@@ -419,21 +419,19 @@ export function FieldConditionEditor({
                   <FiLayers className="w-3.5 h-3.5" />
                   Usar modelo
                 </label>
-                <select
-                  defaultValue=""
-                  onChange={(e) => {
-                    handlePresetSelect(e.target.value)
-                    e.target.value = ''
+                <Select
+                  value={selectedPreset}
+                  onChange={(v) => {
+                    if (!v) return
+                    handlePresetSelect(v)
+                    setSelectedPreset('')
                   }}
-                  className="input"
-                >
-                  <option value="">-- Selecione um modelo para preencher --</option>
-                  {presets.map((p) => (
-                    <option key={p.id} value={String(p.id)}>
-                      {p.name} ({SEVERITY_OPTIONS.find(s => s.value === p.severity)?.label}, {p.deadlineDays}d)
-                    </option>
-                  ))}
-                </select>
+                  placeholder="-- Selecione um modelo para preencher --"
+                  options={presets.map((p) => ({
+                    value: String(p.id),
+                    label: `${p.name} (${SEVERITY_OPTIONS.find(s => s.value === p.severity)?.label}, ${p.deadlineDays}d)`,
+                  }))}
+                />
                 <p className="text-xs text-muted mt-1">
                   Selecionar um modelo preenche severidade, prazo, responsavel e descricao automaticamente.
                 </p>
@@ -443,15 +441,11 @@ export function FieldConditionEditor({
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="block text-xs font-medium text-secondary mb-1">Severidade</label>
-                <select
+                <Select
                   value={condition.severity}
-                  onChange={(e) => update({ severity: e.target.value as Severity })}
-                  className="input"
-                >
-                  {SEVERITY_OPTIONS.map((s) => (
-                    <option key={s.value} value={s.value}>{s.label}</option>
-                  ))}
-                </select>
+                  onChange={(v) => update({ severity: v as Severity })}
+                  options={SEVERITY_OPTIONS.map(s => ({ value: s.value, label: s.label }))}
+                />
               </div>
               <div>
                 <label className="block text-xs font-medium text-secondary mb-1">Prazo (dias)</label>
@@ -468,16 +462,12 @@ export function FieldConditionEditor({
 
             <div>
               <label className="block text-xs font-medium text-secondary mb-1">Responsavel padrao</label>
-              <select
+              <Select
                 value={condition.defaultAssigneeId || ''}
-                onChange={(e) => update({ defaultAssigneeId: e.target.value || null })}
-                className="input"
-              >
-                <option value="">Quem preencheu o checklist</option>
-                {users.map((u) => (
-                  <option key={u.id} value={u.id}>{u.name}</option>
-                ))}
-              </select>
+                onChange={(v) => update({ defaultAssigneeId: v || null })}
+                placeholder="Quem preencheu o checklist"
+                options={users.map(u => ({ value: u.id, label: u.name }))}
+              />
               <p className="text-xs text-muted mt-1">
                 Se nao selecionado, o plano sera atribuido ao usuario que preencheu o checklist.
               </p>

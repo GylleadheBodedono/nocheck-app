@@ -21,7 +21,7 @@ import {
 } from 'react-icons/fi'
 import type { Store, Sector } from '@/types/database'
 import { APP_CONFIG } from '@/lib/config'
-import { LoadingPage, Header } from '@/components/ui'
+import { LoadingPage, Header, Select } from '@/components/ui'
 import { getAuthCache, getUserCache, getStoresCache, getSectorsCache } from '@/lib/offlineCache'
 
 type SectorUser = {
@@ -477,16 +477,13 @@ export default function SetoresPage() {
             />
           </div>
 
-          <select
-            value={filterStore ?? ''}
-            onChange={(e) => setFilterStore(e.target.value ? Number(e.target.value) : null)}
-            className="input w-full sm:w-48"
-          >
-            <option value="">Todas as lojas</option>
-            {stores.map(store => (
-              <option key={store.id} value={store.id}>{store.name}</option>
-            ))}
-          </select>
+          <Select
+            value={String(filterStore ?? '')}
+            onChange={(v) => setFilterStore(v ? Number(v) : null)}
+            placeholder="Todas as lojas"
+            className="w-full sm:w-48"
+            options={stores.map(store => ({ value: String(store.id), label: store.name }))}
+          />
         </div>
 
         {/* Sectors by Store */}

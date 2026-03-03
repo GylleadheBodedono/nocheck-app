@@ -17,7 +17,7 @@ import {
 } from 'react-icons/fi'
 import Link from 'next/link'
 import { APP_CONFIG } from '@/lib/config'
-import { LoadingPage, Header } from '@/components/ui'
+import { LoadingPage, Header, Select } from '@/components/ui'
 import { getAuthCache, getUserCache } from '@/lib/offlineCache'
 import {
   fetchNCPhotoReport,
@@ -288,39 +288,34 @@ export default function FotosNCPage() {
 
           {/* Filter dropdowns + view mode + export */}
           <div className="flex flex-wrap gap-2 items-center">
-            <select
-              value={storeFilter || ''}
-              onChange={e => setStoreFilter(e.target.value ? Number(e.target.value) : undefined)}
-              className="input text-sm min-w-[140px]"
-            >
-              <option value="">Todas as lojas</option>
-              {stores.map(s => (
-                <option key={s.id} value={s.id}>{s.name}</option>
-              ))}
-            </select>
+            <Select
+              value={String(storeFilter ?? '')}
+              onChange={v => setStoreFilter(v ? Number(v) : undefined)}
+              placeholder="Todas as lojas"
+              className="text-sm min-w-[140px]"
+              options={stores.map(s => ({ value: String(s.id), label: s.name }))}
+            />
 
-            <select
-              value={templateFilter || ''}
-              onChange={e => setTemplateFilter(e.target.value ? Number(e.target.value) : undefined)}
-              className="input text-sm min-w-[140px]"
-            >
-              <option value="">Todos templates</option>
-              {templates.map(t => (
-                <option key={t.id} value={t.id}>{t.name}</option>
-              ))}
-            </select>
+            <Select
+              value={String(templateFilter ?? '')}
+              onChange={v => setTemplateFilter(v ? Number(v) : undefined)}
+              placeholder="Todos templates"
+              className="text-sm min-w-[140px]"
+              options={templates.map(t => ({ value: String(t.id), label: t.name }))}
+            />
 
-            <select
-              value={severityFilter || ''}
-              onChange={e => setSeverityFilter(e.target.value || undefined)}
-              className="input text-sm min-w-[120px]"
-            >
-              <option value="">Severidade</option>
-              <option value="critica">Critica</option>
-              <option value="alta">Alta</option>
-              <option value="media">Media</option>
-              <option value="baixa">Baixa</option>
-            </select>
+            <Select
+              value={severityFilter ?? ''}
+              onChange={v => setSeverityFilter(v || undefined)}
+              placeholder="Severidade"
+              className="text-sm min-w-[120px]"
+              options={[
+                { value: 'critica', label: 'Critica' },
+                { value: 'alta',    label: 'Alta' },
+                { value: 'media',   label: 'Media' },
+                { value: 'baixa',   label: 'Baixa' },
+              ]}
+            />
 
             <div className="flex-1" />
 

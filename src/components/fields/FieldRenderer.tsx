@@ -7,6 +7,7 @@ import {
   FiMapPin,
   FiX,
 } from 'react-icons/fi'
+import { Select } from '@/components/ui/Select'
 
 interface FieldRendererProps {
   field: TemplateField
@@ -264,16 +265,12 @@ function DropdownField({ field, value, onChange }: { field: TemplateField; value
   const options = (field.options as string[] | null) || []
 
   return (
-    <select
+    <Select
       value={value || ''}
-      onChange={(e) => onChange(e.target.value)}
-      className="input w-full px-4 py-3 rounded-xl"
-    >
-      <option value="">Selecione...</option>
-      {options.map((opt, i) => (
-        <option key={i} value={opt}>{opt}</option>
-      ))}
-    </select>
+      onChange={onChange}
+      placeholder="Selecione..."
+      options={options.map(opt => ({ value: opt, label: opt }))}
+    />
   )
 }
 
