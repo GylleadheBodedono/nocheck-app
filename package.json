@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "next lint",
     "pages:build": "npx @cloudflare/next-on-pages",
-    "setup": "bun scripts/setup-webhooks.ts"
+    "setup": "bun scripts/setup-webhooks.ts",
+    "seed:nc": "bun scripts/seed-nc-report-data.ts"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

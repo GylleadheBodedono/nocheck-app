@@ -237,7 +237,17 @@ Execute os arquivos em `supabase/migrations/` no SQL Editor do Supabase, na orde
 npm run dev
 ```
 
-### 5. Build para Cloudflare Pages
+### 5. Seed de dados de teste (Relatório Fotográfico NC)
+
+Para testar o **Relatório Fotográfico de Não-Conformidades** com volume de dados e fotos fictícias:
+
+```bash
+bun run seed:nc
+```
+
+Requisitos: `.env.local` com `NEXT_PUBLIC_SUPABASE_URL` e `SUPABASE_SERVICE_ROLE_KEY`; ao menos **uma loja ativa**, um **template com campo Sim/Não** e **um usuário** cadastrado. O script cria checklists concluídos com resposta "Não" e fotos placeholder (Picsum), além de planos de ação ligados — visíveis em **Admin > Relatórios > Relatório Fotográfico NC** (filtro "Últimos 30 dias"). Para alterar a quantidade: `SEED_NC_COUNT=50 bun run seed:nc` (máx. 200).
+
+### 6. Build para Cloudflare Pages
 
 ```bash
 npm run build
