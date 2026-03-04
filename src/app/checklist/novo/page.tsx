@@ -1143,9 +1143,16 @@ function ChecklistForm() {
       }
 
       // 2. Validacoes especificas de yes_no (sub-campos obrigatorios)
-      if (field.field_type === 'yes_no' && typeof value === 'object' && value !== null) {
-        const obj = value as Record<string, unknown>
-        const ans = obj.answer as string | undefined
+      // Valor pode ser string ("sim"/"nao") ou objeto ({answer:"sim", photos:[...]})
+      if (field.field_type === 'yes_no' && value !== undefined && value !== null && value !== '') {
+        let ans: string | undefined
+        let obj: Record<string, unknown> = {}
+        if (typeof value === 'string') {
+          ans = value
+        } else if (typeof value === 'object') {
+          obj = value as Record<string, unknown>
+          ans = obj.answer as string | undefined
+        }
 
         // Se is_required e nao respondeu
         if (field.is_required && (!ans || ans === '')) return true
@@ -1297,9 +1304,16 @@ function ChecklistForm() {
         }
 
         // Validacoes yes_no (sub-campos obrigatorios)
-        if (field.field_type === 'yes_no' && typeof v === 'object' && v !== null) {
-          const obj = v as Record<string, unknown>
-          const ans = obj.answer as string | undefined
+        // Valor pode ser string ("sim"/"nao") ou objeto ({answer:"sim", photos:[...]})
+        if (field.field_type === 'yes_no' && v !== undefined && v !== null && v !== '') {
+          let ans: string | undefined
+          let obj: Record<string, unknown> = {}
+          if (typeof v === 'string') {
+            ans = v
+          } else if (typeof v === 'object') {
+            obj = v as Record<string, unknown>
+            ans = obj.answer as string | undefined
+          }
           if (field.is_required && (!ans || ans === '')) return false
 
           if (ans) {
