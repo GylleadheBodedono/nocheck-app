@@ -404,8 +404,8 @@ export async function processarNaoConformidades(
           reincidencia_count: reincidencia.count,
           parent_action_plan_id: reincidencia.parentPlanId,
           non_conformity_value: nonConformityValue,
-          require_photo_on_completion: condition.require_photo_on_completion || false,
-          require_text_on_completion: condition.require_text_on_completion || false,
+          require_photo_on_completion: true,
+          require_text_on_completion: true,
           completion_max_chars: condition.completion_max_chars || 800,
           created_by: userId,
         })

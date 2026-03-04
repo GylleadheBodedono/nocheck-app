@@ -62,8 +62,8 @@ const DEFAULT_CONDITION: ConditionConfig = {
   defaultAssigneeId: null,
   deadlineDays: 7,
   descriptionTemplate: '',
-  requirePhotoOnCompletion: false,
-  requireTextOnCompletion: false,
+  requirePhotoOnCompletion: true,
+  requireTextOnCompletion: true,
   completionMaxChars: 800,
 }
 
@@ -490,40 +490,23 @@ export function FieldConditionEditor({
             {/* Exigencias para conclusao */}
             <div className="border-t border-subtle pt-3 mt-1">
               <label className="block text-xs font-medium text-secondary mb-2">Exigencias para Conclusao</label>
-              <div className="space-y-2">
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={condition.requirePhotoOnCompletion}
-                    onChange={(e) => update({ requirePhotoOnCompletion: e.target.checked })}
-                    className="w-4 h-4 rounded border-gray-600 text-primary focus:ring-primary bg-surface"
-                  />
-                  <FiCamera className="w-3.5 h-3.5 text-muted" />
-                  <span className="text-xs text-main">Exigir foto ao concluir</span>
-                </label>
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={condition.requireTextOnCompletion}
-                    onChange={(e) => update({ requireTextOnCompletion: e.target.checked })}
-                    className="w-4 h-4 rounded border-gray-600 text-primary focus:ring-primary bg-surface"
-                  />
-                  <FiFileText className="w-3.5 h-3.5 text-muted" />
-                  <span className="text-xs text-main">Exigir texto ao concluir</span>
-                </label>
-                {condition.requireTextOnCompletion && (
-                  <div className="ml-6">
-                    <label className="block text-xs text-muted mb-1">Max. caracteres</label>
-                    <input
-                      type="number"
-                      min={50}
-                      max={5000}
-                      value={condition.completionMaxChars}
-                      onChange={(e) => update({ completionMaxChars: Number(e.target.value) || 800 })}
-                      className="input w-28 text-sm"
-                    />
-                  </div>
-                )}
+              <div className="p-3 bg-primary/5 border border-primary/20 rounded-lg mb-3">
+                <div className="flex items-center gap-2 text-xs text-primary">
+                  <FiCamera className="w-3.5 h-3.5" />
+                  <FiFileText className="w-3.5 h-3.5" />
+                  <span>Foto e texto sao obrigatorios para concluir o plano de acao.</span>
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs text-muted mb-1">Max. caracteres do texto</label>
+                <input
+                  type="number"
+                  min={50}
+                  max={5000}
+                  value={condition.completionMaxChars}
+                  onChange={(e) => update({ completionMaxChars: Number(e.target.value) || 800 })}
+                  className="input w-28 text-sm"
+                />
               </div>
             </div>
 

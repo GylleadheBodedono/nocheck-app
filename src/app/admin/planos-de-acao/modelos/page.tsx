@@ -59,8 +59,8 @@ const EMPTY_FORM: PresetForm = {
   severity: 'media',
   default_assignee_id: '',
   deadline_days: 7,
-  require_photo_on_completion: false,
-  require_text_on_completion: false,
+  require_photo_on_completion: true,
+  require_text_on_completion: true,
   completion_max_chars: 800,
 }
 
@@ -409,44 +409,23 @@ export default function ModelosPlanoDeAcaoPage() {
             {/* Exigencias para conclusao */}
             <div className="border-t border-subtle pt-4 mt-2">
               <label className="block text-xs font-medium text-secondary mb-3">Exigencias para Conclusao</label>
-              <div className="space-y-3">
-                <label className="flex items-center gap-3 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={form.require_photo_on_completion}
-                    onChange={(e) => setForm(f => ({ ...f, require_photo_on_completion: e.target.checked }))}
-                    className="w-4 h-4 rounded border-gray-600 text-primary focus:ring-primary bg-surface"
-                  />
-                  <div className="flex items-center gap-2">
-                    <FiCamera className="w-4 h-4 text-muted" />
-                    <span className="text-sm text-main">Exigir foto ao concluir</span>
-                  </div>
-                </label>
-                <label className="flex items-center gap-3 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={form.require_text_on_completion}
-                    onChange={(e) => setForm(f => ({ ...f, require_text_on_completion: e.target.checked }))}
-                    className="w-4 h-4 rounded border-gray-600 text-primary focus:ring-primary bg-surface"
-                  />
-                  <div className="flex items-center gap-2">
-                    <FiFileText className="w-4 h-4 text-muted" />
-                    <span className="text-sm text-main">Exigir texto ao concluir</span>
-                  </div>
-                </label>
-                {form.require_text_on_completion && (
-                  <div className="ml-7">
-                    <label className="block text-xs font-medium text-secondary mb-1">Maximo de caracteres</label>
-                    <input
-                      type="number"
-                      min={50}
-                      max={5000}
-                      value={form.completion_max_chars}
-                      onChange={(e) => setForm(f => ({ ...f, completion_max_chars: Number(e.target.value) || 800 }))}
-                      className="input w-32"
-                    />
-                  </div>
-                )}
+              <div className="p-3 bg-primary/5 border border-primary/20 rounded-lg mb-3">
+                <div className="flex items-center gap-2 text-sm text-primary">
+                  <FiCamera className="w-4 h-4" />
+                  <FiFileText className="w-4 h-4" />
+                  <span>Foto e texto sao obrigatorios para concluir o plano de acao.</span>
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-secondary mb-1">Maximo de caracteres</label>
+                <input
+                  type="number"
+                  min={50}
+                  max={5000}
+                  value={form.completion_max_chars}
+                  onChange={(e) => setForm(f => ({ ...f, completion_max_chars: Number(e.target.value) || 800 }))}
+                  className="input w-32"
+                />
               </div>
             </div>
 
@@ -510,13 +489,11 @@ export default function ModelosPlanoDeAcaoPage() {
                           : 'Quem preencheu'
                       }
                     </span>
-                    {(preset.require_photo_on_completion || preset.require_text_on_completion) && (
-                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs bg-primary/10 text-primary">
-                        {preset.require_photo_on_completion && <FiCamera className="w-3 h-3" />}
-                        {preset.require_text_on_completion && <FiFileText className="w-3 h-3" />}
-                        Exigencia
-                      </span>
-                    )}
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs bg-primary/10 text-primary">
+                      <FiCamera className="w-3 h-3" />
+                      <FiFileText className="w-3 h-3" />
+                      Foto + Texto
+                    </span>
                   </div>
                   {preset.description_template && (
                     <p className="text-xs text-muted mt-1 truncate">{preset.description_template}</p>

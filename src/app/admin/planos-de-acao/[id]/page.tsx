@@ -313,8 +313,8 @@ export default function ActionPlanDetailPage() {
   const handleStatusChange = async (newStatus: ActionPlanStatus) => {
     if (!plan || !currentUserId) return
 
-    // Se for concluir e tem exigencia de foto/texto, abrir modal
-    if (newStatus === 'concluido' && (plan.require_photo_on_completion || plan.require_text_on_completion)) {
+    // Sempre abrir modal ao concluir (foto e texto obrigatorios)
+    if (newStatus === 'concluido') {
       setCompletionError(null)
       setCompletionText('')
       setCompletionPhoto(null)
@@ -325,9 +325,7 @@ export default function ActionPlanDetailPage() {
 
     const confirmMsg = newStatus === 'cancelado'
       ? 'Tem certeza que deseja cancelar este plano de acao?'
-      : newStatus === 'em_andamento'
-        ? 'Deseja iniciar este plano de acao?'
-        : 'Deseja marcar este plano de acao como concluido?'
+      : 'Deseja iniciar este plano de acao?'
 
     if (!confirm(confirmMsg)) return
 
@@ -341,8 +339,6 @@ export default function ActionPlanDetailPage() {
       const updatePayload: Record<string, unknown> = { status: newStatus, updated_at: new Date().toISOString() }
       if (newStatus === 'em_andamento') {
         updatePayload.started_at = new Date().toISOString()
-      } else if (newStatus === 'concluido') {
-        updatePayload.completed_at = new Date().toISOString()
       }
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -371,7 +367,7 @@ export default function ActionPlanDetailPage() {
       // Notificar usuario assignado sobre mudanca de status
       if (plan.assigned_to && plan.assigned_to !== currentUserId) {
         await createNotification(supabase, plan.assigned_to, {
-          type: newStatus === 'concluido' ? 'action_plan_completed' : 'action_plan_assigned',
+          type: 'action_plan_assigned',
           title: `Plano de Acao: ${getStatusLabel(newStatus)}`,
           message: `"${plan.title}" mudou de ${getStatusLabel(oldStatus)} para ${getStatusLabel(newStatus)}`,
           link: `/admin/planos-de-acao/${plan.id}`,
@@ -407,16 +403,16 @@ export default function ActionPlanDetailPage() {
   const handleCompletionSubmit = async () => {
     if (!plan || !currentUserId) return
 
-    // Validacoes
-    if (plan.require_photo_on_completion && !completionPhoto) {
+    // Validacoes (foto e texto sempre obrigatorios)
+    if (!completionPhoto) {
       setCompletionError('Foto obrigatoria para concluir o plano.')
       return
     }
-    if (plan.require_text_on_completion && !completionText.trim()) {
+    if (!completionText.trim()) {
       setCompletionError('Texto obrigatorio para concluir o plano.')
       return
     }
-    if (plan.require_text_on_completion && completionText.length > (plan.completion_max_chars || 800)) {
+    if (completionText.length > (plan.completion_max_chars || 800)) {
       setCompletionError(`Texto excede o limite de ${plan.completion_max_chars || 800} caracteres.`)
       return
     }
@@ -1103,73 +1099,69 @@ export default function ActionPlanDetailPage() {
                 </div>
               )}
 
-              {/* Foto */}
-              {plan.require_photo_on_completion && (
-                <div>
-                  <label className="block text-sm font-medium text-secondary mb-2">
-                    Foto de conclusao <span className="text-error">*</span>
-                  </label>
-                  <input
-                    ref={completionFileInputRef}
-                    type="file"
-                    accept="image/*"
-                    onChange={handleCompletionPhotoChange}
-                    className="hidden"
-                  />
-                  {completionPhotoPreview ? (
-                    <div className="relative">
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
-                        src={completionPhotoPreview}
-                        alt="Preview"
-                        className="w-full h-48 object-cover rounded-lg border border-subtle"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setCompletionPhoto(null)
-                          setCompletionPhotoPreview(null)
-                          if (completionFileInputRef.current) completionFileInputRef.current.value = ''
-                        }}
-                        className="absolute top-2 right-2 p-1.5 bg-black/70 rounded-full text-white hover:bg-black/90 transition-colors"
-                      >
-                        <FiXCircle className="w-4 h-4" />
-                      </button>
-                    </div>
-                  ) : (
+              {/* Foto (sempre obrigatoria) */}
+              <div>
+                <label className="block text-sm font-medium text-secondary mb-2">
+                  Foto de conclusao <span className="text-error">*</span>
+                </label>
+                <input
+                  ref={completionFileInputRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={handleCompletionPhotoChange}
+                  className="hidden"
+                />
+                {completionPhotoPreview ? (
+                  <div className="relative">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={completionPhotoPreview}
+                      alt="Preview"
+                      className="w-full h-48 object-cover rounded-lg border border-subtle"
+                    />
                     <button
                       type="button"
-                      onClick={() => completionFileInputRef.current?.click()}
-                      className="w-full h-32 border-2 border-dashed border-subtle rounded-lg flex flex-col items-center justify-center gap-2 text-muted hover:border-primary hover:text-primary transition-colors"
+                      onClick={() => {
+                        setCompletionPhoto(null)
+                        setCompletionPhotoPreview(null)
+                        if (completionFileInputRef.current) completionFileInputRef.current.value = ''
+                      }}
+                      className="absolute top-2 right-2 p-1.5 bg-black/70 rounded-full text-white hover:bg-black/90 transition-colors"
                     >
-                      <FiUpload className="w-6 h-6" />
-                      <span className="text-sm">Clique para selecionar uma foto</span>
+                      <FiXCircle className="w-4 h-4" />
                     </button>
-                  )}
-                </div>
-              )}
-
-              {/* Texto */}
-              {plan.require_text_on_completion && (
-                <div>
-                  <label className="block text-sm font-medium text-secondary mb-2">
-                    Descricao da conclusao <span className="text-error">*</span>
-                  </label>
-                  <textarea
-                    value={completionText}
-                    onChange={(e) => setCompletionText(e.target.value)}
-                    maxLength={plan.completion_max_chars || 800}
-                    placeholder="Descreva o que foi feito para resolver o plano de acao..."
-                    rows={4}
-                    className="input w-full resize-none"
-                  />
-                  <div className="flex justify-end mt-1">
-                    <span className={`text-xs ${completionText.length > (plan.completion_max_chars || 800) ? 'text-error' : 'text-muted'}`}>
-                      {completionText.length}/{plan.completion_max_chars || 800}
-                    </span>
                   </div>
-                </div>
-              )}
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => completionFileInputRef.current?.click()}
+                    className="w-full h-32 border-2 border-dashed border-subtle rounded-lg flex flex-col items-center justify-center gap-2 text-muted hover:border-primary hover:text-primary transition-colors"
+                  >
+                    <FiUpload className="w-6 h-6" />
+                    <span className="text-sm">Clique para selecionar uma foto</span>
+                  </button>
+                )}
+              </div>
+
+              {/* Texto (sempre obrigatorio) */}
+              <div>
+                <label className="block text-sm font-medium text-secondary mb-2">
+                  Descricao da conclusao <span className="text-error">*</span>
+                </label>
+                <textarea
+                  value={completionText}
+                  onChange={(e) => setCompletionText(e.target.value)}
+                  maxLength={plan.completion_max_chars || 800}
+                  placeholder="Descreva o que foi feito para resolver o plano de acao..."
+                  rows={4}
+                  className="input w-full resize-none"
+                />
+                <div className="flex justify-end mt-1">
+                  <span className={`text-xs ${completionText.length > (plan.completion_max_chars || 800) ? 'text-error' : 'text-muted'}`}>
+                    {completionText.length}/{plan.completion_max_chars || 800}
+                  </span>
+                  </div>
+              </div>
 
               {/* Botoes */}
               <div className="flex items-center gap-3 pt-2">
