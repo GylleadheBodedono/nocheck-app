@@ -536,7 +536,10 @@ export default function ActionPlanDetailPage() {
       if (updatesData) setUpdates(updatesData)
     } catch (err) {
       console.error('[ActionPlan] Erro ao concluir plano:', err)
-      setCompletionError('Erro ao concluir o plano. Tente novamente.')
+      const msg = err instanceof Error ? err.message : 'Erro desconhecido'
+      setCompletionError(msg.includes('muito grande') || msg.includes('máx') || msg.includes('upload')
+        ? msg
+        : `Erro ao concluir o plano: ${msg}`)
     } finally {
       setSubmittingCompletion(false)
     }

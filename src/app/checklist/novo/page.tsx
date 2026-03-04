@@ -1132,31 +1132,51 @@ function ChecklistForm() {
   const getEmptyRequiredFields = (): FieldWithSection[] => {
     if (!template) return []
     return template.fields.filter(field => {
-      if (!field.is_required || field.field_type === 'gps') return false
+      if (field.field_type === 'gps') return false
       const value = responses[field.id]
-      if (value === undefined || value === null || value === '' || (Array.isArray(value) && value.length === 0)) {
-        return true
+
+      // 1. Campo marcado is_required sem valor algum
+      if (field.is_required) {
+        if (value === undefined || value === null || value === '' || (Array.isArray(value) && value.length === 0)) {
+          return true
+        }
       }
-      // Check yes_no object with empty answer or unfilled required conditional fields
+
+      // 2. Validacoes especificas de yes_no (sub-campos obrigatorios)
       if (field.field_type === 'yes_no' && typeof value === 'object' && value !== null) {
         const obj = value as Record<string, unknown>
         const ans = obj.answer as string | undefined
-        if (!ans || ans === '') return true
-        // Verificar campos condicionais obrigatorios (onNo/onYes)
-        const opts = field.options as Record<string, unknown> | null
-        const condConfig = (ans === 'nao' ? opts?.onNo : ans === 'sim' ? opts?.onYes : undefined) as
-          { showTextField?: boolean; textFieldRequired?: boolean; showPhotoField?: boolean; photoFieldRequired?: boolean } | undefined
-        if (condConfig) {
-          if (condConfig.showTextField && condConfig.textFieldRequired) {
-            const text = obj.conditionalText as string | undefined
-            if (!text || !text.trim()) return true
-          }
-          if (condConfig.showPhotoField && condConfig.photoFieldRequired) {
-            const photos = obj.conditionalPhotos as string[] | undefined
+
+        // Se is_required e nao respondeu
+        if (field.is_required && (!ans || ans === '')) return true
+
+        // Se respondeu, verificar sub-campos obrigatorios
+        if (ans) {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const opts = field.options as any
+
+          // Foto principal obrigatoria (photoRequired)
+          if (opts?.photoRequired === true) {
+            const photos = obj.photos as string[] | undefined
             if (!photos || photos.length === 0) return true
+          }
+
+          // Campos condicionais obrigatorios (independente de is_required do campo pai)
+          const condConfig = (ans === 'nao' ? opts?.onNo : ans === 'sim' ? opts?.onYes : undefined) as
+            { showTextField?: boolean; textFieldRequired?: boolean; showPhotoField?: boolean; photoFieldRequired?: boolean } | undefined
+          if (condConfig) {
+            if (condConfig.showTextField && condConfig.textFieldRequired) {
+              const text = obj.conditionalText as string | undefined
+              if (!text || !text.trim()) return true
+            }
+            if (condConfig.showPhotoField && condConfig.photoFieldRequired) {
+              const photos = obj.conditionalPhotos as string[] | undefined
+              if (!photos || photos.length === 0) return true
+            }
           }
         }
       }
+
       return false
     })
   }
@@ -1264,39 +1284,52 @@ function ChecklistForm() {
       console.error('[Checklist] Erro no bulk save da secao:', err)
     }
 
-    const requiredFieldIds = sectionFields
-      .filter(f => f.is_required && f.field_type !== 'gps')
-      .map(f => f.id)
-
-    // Check if all required fields are filled
+    // Check if all required fields and required sub-fields are filled
     const currentResponses = responsesRef.current
-    const allRequiredFilled = requiredFieldIds.every(id => {
-      const v = currentResponses[id]
-      if (v === undefined || v === null || v === '' || (Array.isArray(v) && v.length === 0)) return false
-      if (typeof v === 'object' && v !== null && 'answer' in (v as Record<string, unknown>)) {
-        const obj = v as Record<string, unknown>
-        const ans = obj.answer as string | undefined
-        if (!ans || ans === '') return false
-        // Verificar campos condicionais obrigatorios
-        const field = sectionFields.find(f => f.id === id)
-        if (field) {
-          const opts = field.options as Record<string, unknown> | null
-          const condConfig = (ans === 'nao' ? opts?.onNo : ans === 'sim' ? opts?.onYes : undefined) as
-            { showTextField?: boolean; textFieldRequired?: boolean; showPhotoField?: boolean; photoFieldRequired?: boolean } | undefined
-          if (condConfig) {
-            if (condConfig.showTextField && condConfig.textFieldRequired) {
-              const text = obj.conditionalText as string | undefined
-              if (!text || !text.trim()) return false
-            }
-            if (condConfig.showPhotoField && condConfig.photoFieldRequired) {
-              const photos = obj.conditionalPhotos as string[] | undefined
+    const allRequiredFilled = sectionFields
+      .filter(f => f.field_type !== 'gps')
+      .every(field => {
+        const v = currentResponses[field.id]
+
+        // Campo is_required sem valor
+        if (field.is_required) {
+          if (v === undefined || v === null || v === '' || (Array.isArray(v) && v.length === 0)) return false
+        }
+
+        // Validacoes yes_no (sub-campos obrigatorios)
+        if (field.field_type === 'yes_no' && typeof v === 'object' && v !== null) {
+          const obj = v as Record<string, unknown>
+          const ans = obj.answer as string | undefined
+          if (field.is_required && (!ans || ans === '')) return false
+
+          if (ans) {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const opts = field.options as any
+
+            // Foto principal obrigatoria
+            if (opts?.photoRequired === true) {
+              const photos = obj.photos as string[] | undefined
               if (!photos || photos.length === 0) return false
+            }
+
+            // Campos condicionais obrigatorios
+            const condConfig = (ans === 'nao' ? opts?.onNo : ans === 'sim' ? opts?.onYes : undefined) as
+              { showTextField?: boolean; textFieldRequired?: boolean; showPhotoField?: boolean; photoFieldRequired?: boolean } | undefined
+            if (condConfig) {
+              if (condConfig.showTextField && condConfig.textFieldRequired) {
+                const text = obj.conditionalText as string | undefined
+                if (!text || !text.trim()) return false
+              }
+              if (condConfig.showPhotoField && condConfig.photoFieldRequired) {
+                const photos = obj.conditionalPhotos as string[] | undefined
+                if (!photos || photos.length === 0) return false
+              }
             }
           }
         }
-      }
-      return true
-    })
+
+        return true
+      })
 
     // Has at least one response in this section
     const hasAnyResponse = sectionFields.some(f => {
