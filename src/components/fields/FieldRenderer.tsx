@@ -597,7 +597,7 @@ function YesNoField({ field, value, onChange }: { field: TemplateField; value: u
   // Get active conditional config based on current answer
   const activeConditionalConfig = answer === 'nao' ? onNoConfig : answer === 'sim' ? onYesConfig : undefined
   const hasConditional = activeConditionalConfig && (activeConditionalConfig.showTextField || activeConditionalConfig.showPhotoField)
-  const showUserActionPlan = answer === 'nao' && onNoConfig?.allowUserActionPlan === true
+  const showUserActionPlan = answer === 'nao' && !!onNoConfig
 
   const [assignableUsers, setAssignableUsers] = useState<AssignableUser[]>(_usersCache || [])
   const [usersLoading, setUsersLoading] = useState(false)
@@ -638,7 +638,7 @@ function YesNoField({ field, value, onChange }: { field: TemplateField; value: u
         delete merged.conditionalText
         delete merged.conditionalPhotos
       }
-      if (newAnswer !== 'nao' || !onNoConfig?.allowUserActionPlan) {
+      if (newAnswer !== 'nao' || !onNoConfig) {
         delete merged.selectedAssigneeId
         delete merged.selectedSeverity
       }
