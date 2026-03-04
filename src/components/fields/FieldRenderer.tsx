@@ -8,7 +8,6 @@ import {
   FiX,
 } from 'react-icons/fi'
 import { Select } from '@/components/ui/Select'
-import { createClient } from '@/lib/supabase'
 
 type AssignableUser = {
   id: string
@@ -597,7 +596,7 @@ function YesNoField({ field, value, onChange }: { field: TemplateField; value: u
   // Get active conditional config based on current answer
   const activeConditionalConfig = answer === 'nao' ? onNoConfig : answer === 'sim' ? onYesConfig : undefined
   const hasConditional = activeConditionalConfig && (activeConditionalConfig.showTextField || activeConditionalConfig.showPhotoField)
-  const showUserActionPlan = answer === 'nao' && !!onNoConfig
+  const showUserActionPlan = answer === 'nao' && onNoConfig?.allowUserActionPlan === true
 
   const [assignableUsers, setAssignableUsers] = useState<AssignableUser[]>(_usersCache || [])
   const [usersLoading, setUsersLoading] = useState(false)
@@ -607,12 +606,11 @@ function YesNoField({ field, value, onChange }: { field: TemplateField; value: u
     if (_usersCache) { setAssignableUsers(_usersCache); return }
     let cancelled = false
     setUsersLoading(true)
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const sb = createClient() as any
-    sb.from('users').select('id, full_name').eq('is_active', true).order('full_name')
-      .then(({ data }: { data: AssignableUser[] | null }) => {
+    fetch('/api/users/assignable')
+      .then(res => res.ok ? res.json() : Promise.reject(res.status))
+      .then(({ users }: { users: AssignableUser[] }) => {
         if (cancelled) return
-        const list = data || []
+        const list = users || []
         _usersCache = list
         setAssignableUsers(list)
         setUsersLoading(false)
@@ -638,7 +636,7 @@ function YesNoField({ field, value, onChange }: { field: TemplateField; value: u
         delete merged.conditionalText
         delete merged.conditionalPhotos
       }
-      if (newAnswer !== 'nao' || !onNoConfig) {
+      if (newAnswer !== 'nao' || !onNoConfig?.allowUserActionPlan) {
         delete merged.selectedAssigneeId
         delete merged.selectedSeverity
       }
