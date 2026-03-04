@@ -1108,6 +1108,10 @@ function ChecklistForm() {
           } else if (yesNoObj.conditionalPhotos && yesNoObj.conditionalPhotos.length > 0) {
             jsonParts.conditionalPhotos = yesNoObj.conditionalPhotos
           }
+          // Preservar selectedAssigneeId e selectedSeverity para processarNaoConformidades
+          const fullObj = value as Record<string, unknown>
+          if (fullObj.selectedAssigneeId) jsonParts.selectedAssigneeId = fullObj.selectedAssigneeId
+          if (fullObj.selectedSeverity) jsonParts.selectedSeverity = fullObj.selectedSeverity
           if (Object.keys(jsonParts).length > 0) valueJson = jsonParts
         } else {
           valueText = value as string
@@ -1133,10 +1137,25 @@ function ChecklistForm() {
       if (value === undefined || value === null || value === '' || (Array.isArray(value) && value.length === 0)) {
         return true
       }
-      // Check yes_no object with empty answer
+      // Check yes_no object with empty answer or unfilled required conditional fields
       if (field.field_type === 'yes_no' && typeof value === 'object' && value !== null) {
-        const ans = (value as Record<string, unknown>).answer
+        const obj = value as Record<string, unknown>
+        const ans = obj.answer as string | undefined
         if (!ans || ans === '') return true
+        // Verificar campos condicionais obrigatorios (onNo/onYes)
+        const opts = field.options as Record<string, unknown> | null
+        const condConfig = (ans === 'nao' ? opts?.onNo : ans === 'sim' ? opts?.onYes : undefined) as
+          { showTextField?: boolean; textFieldRequired?: boolean; showPhotoField?: boolean; photoFieldRequired?: boolean } | undefined
+        if (condConfig) {
+          if (condConfig.showTextField && condConfig.textFieldRequired) {
+            const text = obj.conditionalText as string | undefined
+            if (!text || !text.trim()) return true
+          }
+          if (condConfig.showPhotoField && condConfig.photoFieldRequired) {
+            const photos = obj.conditionalPhotos as string[] | undefined
+            if (!photos || photos.length === 0) return true
+          }
+        }
       }
       return false
     })
@@ -1255,8 +1274,26 @@ function ChecklistForm() {
       const v = currentResponses[id]
       if (v === undefined || v === null || v === '' || (Array.isArray(v) && v.length === 0)) return false
       if (typeof v === 'object' && v !== null && 'answer' in (v as Record<string, unknown>)) {
-        const ans = (v as Record<string, unknown>).answer
+        const obj = v as Record<string, unknown>
+        const ans = obj.answer as string | undefined
         if (!ans || ans === '') return false
+        // Verificar campos condicionais obrigatorios
+        const field = sectionFields.find(f => f.id === id)
+        if (field) {
+          const opts = field.options as Record<string, unknown> | null
+          const condConfig = (ans === 'nao' ? opts?.onNo : ans === 'sim' ? opts?.onYes : undefined) as
+            { showTextField?: boolean; textFieldRequired?: boolean; showPhotoField?: boolean; photoFieldRequired?: boolean } | undefined
+          if (condConfig) {
+            if (condConfig.showTextField && condConfig.textFieldRequired) {
+              const text = obj.conditionalText as string | undefined
+              if (!text || !text.trim()) return false
+            }
+            if (condConfig.showPhotoField && condConfig.photoFieldRequired) {
+              const photos = obj.conditionalPhotos as string[] | undefined
+              if (!photos || photos.length === 0) return false
+            }
+          }
+        }
       }
       return true
     })
