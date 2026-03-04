@@ -10,14 +10,12 @@ import {
 import { Select } from '@/components/ui/Select'
 import { createClient } from '@/lib/supabase'
 
-type ActionPlanPreset = {
-  id: number
-  name: string
-  severity: string
-  is_active: boolean
+type AssignableUser = {
+  id: string
+  full_name: string
 }
 
-let _presetsCache: ActionPlanPreset[] | null = null
+let _usersCache: AssignableUser[] | null = null
 
 interface FieldRendererProps {
   field: TemplateField
@@ -589,8 +587,8 @@ function YesNoField({ field, value, onChange }: { field: TemplateField; value: u
   const conditionalPhotos: string[] = typeof value === 'object' && value !== null && 'conditionalPhotos' in (value as Record<string, unknown>)
     ? (value as Record<string, unknown>).conditionalPhotos as string[] || []
     : []
-  const selectedPresetId: number | null = typeof value === 'object' && value !== null && 'selectedPresetId' in (value as Record<string, unknown>)
-    ? (value as Record<string, unknown>).selectedPresetId as number | null
+  const selectedAssigneeId: string | null = typeof value === 'object' && value !== null && 'selectedAssigneeId' in (value as Record<string, unknown>)
+    ? (value as Record<string, unknown>).selectedAssigneeId as string | null
     : null
   const selectedSeverity: string = typeof value === 'object' && value !== null && 'selectedSeverity' in (value as Record<string, unknown>)
     ? (value as Record<string, unknown>).selectedSeverity as string || ''
@@ -601,25 +599,25 @@ function YesNoField({ field, value, onChange }: { field: TemplateField; value: u
   const hasConditional = activeConditionalConfig && (activeConditionalConfig.showTextField || activeConditionalConfig.showPhotoField)
   const showUserActionPlan = answer === 'nao' && onNoConfig?.allowUserActionPlan === true
 
-  const [presets, setPresets] = useState<ActionPlanPreset[]>(_presetsCache || [])
-  const [presetsLoading, setPresetsLoading] = useState(false)
+  const [assignableUsers, setAssignableUsers] = useState<AssignableUser[]>(_usersCache || [])
+  const [usersLoading, setUsersLoading] = useState(false)
 
   useEffect(() => {
     if (!showUserActionPlan) return
-    if (_presetsCache) { setPresets(_presetsCache); return }
+    if (_usersCache) { setAssignableUsers(_usersCache); return }
     let cancelled = false
-    setPresetsLoading(true)
+    setUsersLoading(true)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const sb = createClient() as any
-    sb.from('action_plan_presets').select('id, name, severity, is_active').eq('is_active', true).order('name')
-      .then(({ data }: { data: ActionPlanPreset[] | null }) => {
+    sb.from('users').select('id, full_name').eq('is_active', true).order('full_name')
+      .then(({ data }: { data: AssignableUser[] | null }) => {
         if (cancelled) return
         const list = data || []
-        _presetsCache = list
-        setPresets(list)
-        setPresetsLoading(false)
+        _usersCache = list
+        setAssignableUsers(list)
+        setUsersLoading(false)
       })
-      .catch(() => { if (!cancelled) setPresetsLoading(false) })
+      .catch(() => { if (!cancelled) setUsersLoading(false) })
     return () => { cancelled = true }
   }, [showUserActionPlan])
 
@@ -629,7 +627,7 @@ function YesNoField({ field, value, onChange }: { field: TemplateField; value: u
     if (photos.length > 0) base.photos = photos
     if (conditionalText) base.conditionalText = conditionalText
     if (conditionalPhotos.length > 0) base.conditionalPhotos = conditionalPhotos
-    if (selectedPresetId) base.selectedPresetId = selectedPresetId
+    if (selectedAssigneeId) base.selectedAssigneeId = selectedAssigneeId
     if (selectedSeverity) base.selectedSeverity = selectedSeverity
     const merged = { ...base, ...updates }
     // If switching answer and the new answer has no conditional config, clear conditional data
@@ -641,7 +639,7 @@ function YesNoField({ field, value, onChange }: { field: TemplateField; value: u
         delete merged.conditionalPhotos
       }
       if (newAnswer !== 'nao' || !onNoConfig?.allowUserActionPlan) {
-        delete merged.selectedPresetId
+        delete merged.selectedAssigneeId
         delete merged.selectedSeverity
       }
     }
@@ -864,20 +862,20 @@ function YesNoField({ field, value, onChange }: { field: TemplateField; value: u
       {showUserActionPlan && (
         <div className="p-3 rounded-xl border-2 border-orange-500/20 bg-orange-500/5 space-y-3">
           <p className="text-sm font-medium text-orange-400">Plano de Acao</p>
-          {presetsLoading ? (
+          {usersLoading ? (
             <div className="flex items-center gap-2 text-sm text-muted">
               <div className="w-4 h-4 border-2 border-secondary border-t-transparent rounded-full animate-spin" />
-              Carregando modelos...
+              Carregando responsaveis...
             </div>
           ) : (
             <>
               <div>
-                <label className="block text-sm font-medium text-secondary mb-1">Modelo do plano de acao</label>
+                <label className="block text-sm font-medium text-secondary mb-1">Responsavel</label>
                 <Select
-                  value={selectedPresetId ? String(selectedPresetId) : ''}
-                  onChange={(v) => onChange(buildValue({ selectedPresetId: v ? Number(v) : null }))}
-                  placeholder="Selecione o modelo..."
-                  options={presets.map(p => ({ value: String(p.id), label: p.name }))}
+                  value={selectedAssigneeId || ''}
+                  onChange={(v) => onChange(buildValue({ selectedAssigneeId: v || null }))}
+                  placeholder="Selecione o responsavel..."
+                  options={assignableUsers.map(u => ({ value: u.id, label: u.full_name }))}
                 />
               </div>
               <div>

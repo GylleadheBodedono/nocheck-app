@@ -317,7 +317,7 @@ export default function ChecklistViewPage() {
           if (yJson.photos && (yJson.photos as string[]).length > 0) result.photos = yJson.photos
           if (yJson.conditionalText) result.conditionalText = yJson.conditionalText
           if (yJson.conditionalPhotos && (yJson.conditionalPhotos as string[]).length > 0) result.conditionalPhotos = yJson.conditionalPhotos
-          if (yJson.selectedPresetId) result.selectedPresetId = yJson.selectedPresetId
+          if (yJson.selectedAssigneeId) result.selectedAssigneeId = yJson.selectedAssigneeId
           if (yJson.selectedSeverity) result.selectedSeverity = yJson.selectedSeverity
           if (Object.keys(result).length === 1 && result.answer) return result.answer
           return result

@@ -345,43 +345,30 @@ export async function processarNaoConformidades(
       // 4. Nao-conformidade detectada! Verificar reincidencia
       const reincidencia = await checkReincidencia(supabase, field.id, storeId, templateId)
 
-      // Verificar se o usuario selecionou um preset de plano de acao
+      // Verificar se o usuario selecionou um responsavel e severidade
       const valueJson = response.value_json as Record<string, unknown> | null
-      const userSelectedPresetId = valueJson?.selectedPresetId as number | null
+      const userSelectedAssigneeId = valueJson?.selectedAssigneeId as string | null
       const userSelectedSeverity = valueJson?.selectedSeverity as string | null
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      let presetData: any = null
-      if (userSelectedPresetId) {
-        try {
-          const { data } = await sb.from('action_plan_presets').select('*').eq('id', userSelectedPresetId).single()
-          if (data) presetData = data
-        } catch (err) {
-          console.warn('[ActionPlan] Erro ao buscar preset selecionado pelo usuario:', err)
-        }
-      }
-
-      // Determinar responsavel
-      const assigneeId = presetData?.default_assignee_id || condition.default_assignee_id || userId
+      // Determinar responsavel: prioridade para o selecionado pelo preenchedor
+      const assigneeId = userSelectedAssigneeId || condition.default_assignee_id || userId
 
       // Calcular deadline
       const deadline = new Date()
-      deadline.setDate(deadline.getDate() + (presetData?.deadline_days ?? condition.deadline_days))
+      deadline.setDate(deadline.getDate() + condition.deadline_days)
       const deadlineStr = deadline.toISOString().split('T')[0]
 
       // Gerar titulo e descricao
       const nonConformityValue = getNonConformityValueStr(field, response)
-      const planTitle = presetData
-        ? presetData.name
-        : (condition.description_template
-            ? condition.description_template
-                .replace('{field_name}', field.name)
-                .replace('{value}', nonConformityValue)
-                .replace('{store_name}', storeName)
-            : `Nao conformidade: ${field.name} - ${storeName}`)
+      const planTitle = condition.description_template
+        ? condition.description_template
+            .replace('{field_name}', field.name)
+            .replace('{value}', nonConformityValue)
+            .replace('{store_name}', storeName)
+        : `Nao conformidade: ${field.name} - ${storeName}`
 
-      // Severidade: prioridade para a selecionada pelo usuario, depois preset, depois condition
-      let severity = (userSelectedSeverity || presetData?.severity || condition.severity) as string
+      // Severidade: prioridade para a selecionada pelo usuario, depois condition
+      let severity = (userSelectedSeverity || condition.severity) as string
       if (reincidencia.isReincidencia && reincidencia.count >= 3) {
         const escalation: Record<string, string> = { baixa: 'media', media: 'alta', alta: 'critica' }
         severity = (escalation[severity] || severity) as typeof severity
@@ -407,7 +394,7 @@ export async function processarNaoConformidades(
           store_id: storeId,
           sector_id: sectorId,
           title: planTitle,
-          description: presetData?.description_template || condition.description_template || null,
+          description: condition.description_template || null,
           severity,
           status: 'aberto',
           assigned_to: assigneeId,
@@ -417,9 +404,9 @@ export async function processarNaoConformidades(
           reincidencia_count: reincidencia.count,
           parent_action_plan_id: reincidencia.parentPlanId,
           non_conformity_value: nonConformityValue,
-          require_photo_on_completion: presetData?.require_photo_on_completion || condition.require_photo_on_completion || false,
-          require_text_on_completion: presetData?.require_text_on_completion || condition.require_text_on_completion || false,
-          completion_max_chars: presetData?.completion_max_chars || condition.completion_max_chars || 800,
+          require_photo_on_completion: condition.require_photo_on_completion || false,
+          require_text_on_completion: condition.require_text_on_completion || false,
+          completion_max_chars: condition.completion_max_chars || 800,
           created_by: userId,
         })
         .select('id')
