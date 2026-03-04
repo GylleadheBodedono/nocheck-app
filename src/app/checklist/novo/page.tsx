@@ -1112,6 +1112,7 @@ function ChecklistForm() {
           const fullObj = value as Record<string, unknown>
           if (fullObj.selectedAssigneeId) jsonParts.selectedAssigneeId = fullObj.selectedAssigneeId
           if (fullObj.selectedSeverity) jsonParts.selectedSeverity = fullObj.selectedSeverity
+          if (fullObj.selectedPresetId) jsonParts.selectedPresetId = fullObj.selectedPresetId
           if (Object.keys(jsonParts).length > 0) valueJson = jsonParts
         } else {
           valueText = value as string

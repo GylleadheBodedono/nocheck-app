@@ -14,7 +14,15 @@ type AssignableUser = {
   full_name: string
 }
 
+type ActionPlanPreset = {
+  id: number
+  name: string
+  severity: string
+  deadline_days: number
+}
+
 let _usersCache: AssignableUser[] | null = null
+let _presetsCache: ActionPlanPreset[] | null = null
 
 interface FieldRendererProps {
   field: TemplateField
@@ -592,6 +600,9 @@ function YesNoField({ field, value, onChange }: { field: TemplateField; value: u
   const selectedSeverity: string = typeof value === 'object' && value !== null && 'selectedSeverity' in (value as Record<string, unknown>)
     ? (value as Record<string, unknown>).selectedSeverity as string || ''
     : ''
+  const selectedPresetId: number | null = typeof value === 'object' && value !== null && 'selectedPresetId' in (value as Record<string, unknown>)
+    ? (value as Record<string, unknown>).selectedPresetId as number | null
+    : null
 
   // Get active conditional config based on current answer
   const activeConditionalConfig = answer === 'nao' ? onNoConfig : answer === 'sim' ? onYesConfig : undefined
@@ -600,6 +611,8 @@ function YesNoField({ field, value, onChange }: { field: TemplateField; value: u
 
   const [assignableUsers, setAssignableUsers] = useState<AssignableUser[]>(_usersCache || [])
   const [usersLoading, setUsersLoading] = useState(false)
+  const [presets, setPresets] = useState<ActionPlanPreset[]>(_presetsCache || [])
+  const [presetsLoading, setPresetsLoading] = useState(false)
 
   useEffect(() => {
     if (!showUserActionPlan) return
@@ -619,6 +632,24 @@ function YesNoField({ field, value, onChange }: { field: TemplateField; value: u
     return () => { cancelled = true }
   }, [showUserActionPlan])
 
+  useEffect(() => {
+    if (!showUserActionPlan) return
+    if (_presetsCache) { setPresets(_presetsCache); return }
+    let cancelled = false
+    setPresetsLoading(true)
+    fetch('/api/presets/active')
+      .then(res => res.ok ? res.json() : Promise.reject(res.status))
+      .then(({ presets: list }: { presets: ActionPlanPreset[] }) => {
+        if (cancelled) return
+        const items = list || []
+        _presetsCache = items
+        setPresets(items)
+        setPresetsLoading(false)
+      })
+      .catch(() => { if (!cancelled) setPresetsLoading(false) })
+    return () => { cancelled = true }
+  }, [showUserActionPlan])
+
   // Build full value object preserving all data
   const buildValue = (updates: Record<string, unknown>) => {
     const base: Record<string, unknown> = { answer }
@@ -627,6 +658,7 @@ function YesNoField({ field, value, onChange }: { field: TemplateField; value: u
     if (conditionalPhotos.length > 0) base.conditionalPhotos = conditionalPhotos
     if (selectedAssigneeId) base.selectedAssigneeId = selectedAssigneeId
     if (selectedSeverity) base.selectedSeverity = selectedSeverity
+    if (selectedPresetId) base.selectedPresetId = selectedPresetId
     const merged = { ...base, ...updates }
     // If switching answer and the new answer has no conditional config, clear conditional data
     if (updates.answer) {
@@ -639,6 +671,7 @@ function YesNoField({ field, value, onChange }: { field: TemplateField; value: u
       if (newAnswer !== 'nao' || !onNoConfig?.allowUserActionPlan) {
         delete merged.selectedAssigneeId
         delete merged.selectedSeverity
+        delete merged.selectedPresetId
       }
     }
     // Simplify to string if only answer
@@ -860,6 +893,27 @@ function YesNoField({ field, value, onChange }: { field: TemplateField; value: u
       {showUserActionPlan && (
         <div className="p-3 rounded-xl border-2 border-orange-500/20 bg-orange-500/5 space-y-3">
           <p className="text-sm font-medium text-orange-400">Plano de Acao</p>
+          <div>
+            <label className="block text-sm font-medium text-secondary mb-1">Modelo</label>
+            {presetsLoading ? (
+              <p className="text-sm text-muted">Carregando modelos...</p>
+            ) : presets.length === 0 ? (
+              <p className="text-sm text-muted italic">Nao existem modelos criados</p>
+            ) : (
+              <Select
+                value={selectedPresetId ? String(selectedPresetId) : ''}
+                onChange={(v) => {
+                  const presetId = v ? Number(v) : null
+                  const preset = presets.find(p => p.id === presetId)
+                  const updates: Record<string, unknown> = { selectedPresetId: presetId }
+                  if (preset) updates.selectedSeverity = preset.severity
+                  onChange(buildValue(updates))
+                }}
+                placeholder="Selecione um modelo (opcional)..."
+                options={presets.map(p => ({ value: String(p.id), label: `${p.name} (${p.deadline_days}d)` }))}
+              />
+            )}
+          </div>
           {usersLoading ? (
             <div className="flex items-center gap-2 text-sm text-muted">
               <div className="w-4 h-4 border-2 border-secondary border-t-transparent rounded-full animate-spin" />
