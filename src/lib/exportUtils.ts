@@ -25,10 +25,12 @@ const severityLabel: Record<string, string> = {
 }
 
 const statusLabel: Record<string, string> = {
+  aberto: 'Aberto',
   pendente: 'Pendente',
   em_andamento: 'Em Andamento',
   concluido: 'Concluido',
   vencido: 'Vencido',
+  cancelado: 'Cancelado',
 }
 
 function allPhotoUrls(item: NCPhotoItem): string {
@@ -45,7 +47,7 @@ function evidenceUrls(item: NCPhotoItem): string {
 export function exportToCSV(items: NCPhotoItem[], filename: string) {
   const headers = [
     'Data', 'Loja', 'Template', 'Campo', 'Severidade', 'Valor NC',
-    'Reincidencia', 'Status', 'Responsavel', 'Fotos NC', 'Fotos Evidencia',
+    'Texto da Resposta', 'Reincidencia', 'Status', 'Responsavel', 'Fotos NC', 'Fotos Evidencia',
   ]
 
   const rows = items.map(item => [
@@ -55,6 +57,7 @@ export function exportToCSV(items: NCPhotoItem[], filename: string) {
     item.fieldName,
     severityLabel[item.severity] || item.severity,
     `"${(item.nonConformityValue || '').replace(/"/g, '""')}"`,
+    `"${(item.conditionalText || '').replace(/"/g, '""')}"`,
     item.isReincidencia ? `Sim (${item.reincidenciaCount}x)` : 'Nao',
     statusLabel[item.status] || item.status,
     item.assignedUserName,
@@ -91,6 +94,9 @@ export function exportToTXT(items: NCPhotoItem[], filename: string) {
     lines.push(`  Loja: ${item.storeName}`)
     lines.push(`  Template: ${item.templateName}`)
     lines.push(`  Valor: ${item.nonConformityValue || '-'}`)
+    if (item.conditionalText) {
+      lines.push(`  Texto da Resposta: ${item.conditionalText}`)
+    }
     lines.push(`  Data: ${new Date(item.createdAt).toLocaleDateString('pt-BR')}`)
     lines.push(`  Responsavel: ${item.assignedUserName}`)
     lines.push(`  Status: ${statusLabel[item.status] || item.status}`)
@@ -310,6 +316,10 @@ export async function exportToPDF(items: NCPhotoItem[], meta: PdfMeta): Promise<
       doc.text(n(`Valor: ${item.nonConformityValue}`), MARGIN, y)
       y += 4
     }
+    if (item.conditionalText) {
+      doc.text(n(`Texto da Resposta: ${item.conditionalText}`), MARGIN, y)
+      y += 4
+    }
     if (item.isReincidencia) {
       doc.text(n(`Reincidencia: ${item.reincidenciaCount}x`), MARGIN, y)
       y += 4
@@ -355,6 +365,7 @@ export async function exportToExcel(items: NCPhotoItem[], filename: string) {
     'Campo': item.fieldName,
     'Severidade': severityLabel[item.severity] || item.severity,
     'Valor NC': item.nonConformityValue || '-',
+    'Texto da Resposta': item.conditionalText || '-',
     'Reincidencia': item.isReincidencia ? `Sim (${item.reincidenciaCount}x)` : 'Nao',
     'Status': statusLabel[item.status] || item.status,
     'Responsavel': item.assignedUserName,

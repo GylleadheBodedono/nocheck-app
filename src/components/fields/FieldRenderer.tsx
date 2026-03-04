@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import type { TemplateField, GPSValue, SignatureValue } from '@/types/database'
 import {
   FiCamera,
@@ -8,6 +8,16 @@ import {
   FiX,
 } from 'react-icons/fi'
 import { Select } from '@/components/ui/Select'
+import { createClient } from '@/lib/supabase'
+
+type ActionPlanPreset = {
+  id: number
+  name: string
+  severity: string
+  is_active: boolean
+}
+
+let _presetsCache: ActionPlanPreset[] | null = null
 
 interface FieldRendererProps {
   field: TemplateField
@@ -563,7 +573,7 @@ function YesNoField({ field, value, onChange }: { field: TemplateField; value: u
 
   // Parse conditional field config from options
   const opts = field.options as Record<string, unknown> | null
-  const onNoConfig = opts?.onNo as { showTextField?: boolean; textFieldLabel?: string; textFieldRequired?: boolean; showPhotoField?: boolean; photoFieldLabel?: string; photoFieldRequired?: boolean } | undefined
+  const onNoConfig = opts?.onNo as { showTextField?: boolean; textFieldLabel?: string; textFieldRequired?: boolean; showPhotoField?: boolean; photoFieldLabel?: string; photoFieldRequired?: boolean; allowUserActionPlan?: boolean } | undefined
   const onYesConfig = opts?.onYes as { showTextField?: boolean; textFieldLabel?: string; textFieldRequired?: boolean; showPhotoField?: boolean; photoFieldLabel?: string; photoFieldRequired?: boolean } | undefined
 
   // Parse value - can be string (legacy) or { answer, photos, conditionalText, conditionalPhotos }
@@ -579,10 +589,39 @@ function YesNoField({ field, value, onChange }: { field: TemplateField; value: u
   const conditionalPhotos: string[] = typeof value === 'object' && value !== null && 'conditionalPhotos' in (value as Record<string, unknown>)
     ? (value as Record<string, unknown>).conditionalPhotos as string[] || []
     : []
+  const selectedPresetId: number | null = typeof value === 'object' && value !== null && 'selectedPresetId' in (value as Record<string, unknown>)
+    ? (value as Record<string, unknown>).selectedPresetId as number | null
+    : null
+  const selectedSeverity: string = typeof value === 'object' && value !== null && 'selectedSeverity' in (value as Record<string, unknown>)
+    ? (value as Record<string, unknown>).selectedSeverity as string || ''
+    : ''
 
   // Get active conditional config based on current answer
   const activeConditionalConfig = answer === 'nao' ? onNoConfig : answer === 'sim' ? onYesConfig : undefined
   const hasConditional = activeConditionalConfig && (activeConditionalConfig.showTextField || activeConditionalConfig.showPhotoField)
+  const showUserActionPlan = answer === 'nao' && onNoConfig?.allowUserActionPlan === true
+
+  const [presets, setPresets] = useState<ActionPlanPreset[]>(_presetsCache || [])
+  const [presetsLoading, setPresetsLoading] = useState(false)
+
+  useEffect(() => {
+    if (!showUserActionPlan) return
+    if (_presetsCache) { setPresets(_presetsCache); return }
+    let cancelled = false
+    setPresetsLoading(true)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const sb = createClient() as any
+    sb.from('action_plan_presets').select('id, name, severity, is_active').eq('is_active', true).order('name')
+      .then(({ data }: { data: ActionPlanPreset[] | null }) => {
+        if (cancelled) return
+        const list = data || []
+        _presetsCache = list
+        setPresets(list)
+        setPresetsLoading(false)
+      })
+      .catch(() => { if (!cancelled) setPresetsLoading(false) })
+    return () => { cancelled = true }
+  }, [showUserActionPlan])
 
   // Build full value object preserving all data
   const buildValue = (updates: Record<string, unknown>) => {
@@ -590,6 +629,8 @@ function YesNoField({ field, value, onChange }: { field: TemplateField; value: u
     if (photos.length > 0) base.photos = photos
     if (conditionalText) base.conditionalText = conditionalText
     if (conditionalPhotos.length > 0) base.conditionalPhotos = conditionalPhotos
+    if (selectedPresetId) base.selectedPresetId = selectedPresetId
+    if (selectedSeverity) base.selectedSeverity = selectedSeverity
     const merged = { ...base, ...updates }
     // If switching answer and the new answer has no conditional config, clear conditional data
     if (updates.answer) {
@@ -598,6 +639,10 @@ function YesNoField({ field, value, onChange }: { field: TemplateField; value: u
       if (!newConfig || (!newConfig.showTextField && !newConfig.showPhotoField)) {
         delete merged.conditionalText
         delete merged.conditionalPhotos
+      }
+      if (newAnswer !== 'nao' || !onNoConfig?.allowUserActionPlan) {
+        delete merged.selectedPresetId
+        delete merged.selectedSeverity
       }
     }
     // Simplify to string if only answer
@@ -811,6 +856,45 @@ function YesNoField({ field, value, onChange }: { field: TemplateField; value: u
                 className="hidden"
               />
             </div>
+          )}
+        </div>
+      )}
+
+      {/* User action plan selection */}
+      {showUserActionPlan && (
+        <div className="p-3 rounded-xl border-2 border-orange-500/20 bg-orange-500/5 space-y-3">
+          <p className="text-sm font-medium text-orange-400">Plano de Acao</p>
+          {presetsLoading ? (
+            <div className="flex items-center gap-2 text-sm text-muted">
+              <div className="w-4 h-4 border-2 border-secondary border-t-transparent rounded-full animate-spin" />
+              Carregando modelos...
+            </div>
+          ) : (
+            <>
+              <div>
+                <label className="block text-sm font-medium text-secondary mb-1">Modelo do plano de acao</label>
+                <Select
+                  value={selectedPresetId ? String(selectedPresetId) : ''}
+                  onChange={(v) => onChange(buildValue({ selectedPresetId: v ? Number(v) : null }))}
+                  placeholder="Selecione o modelo..."
+                  options={presets.map(p => ({ value: String(p.id), label: p.name }))}
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-secondary mb-1">Severidade</label>
+                <Select
+                  value={selectedSeverity}
+                  onChange={(v) => onChange(buildValue({ selectedSeverity: v || '' }))}
+                  placeholder="Selecione a severidade..."
+                  options={[
+                    { value: 'baixa', label: 'Baixa' },
+                    { value: 'media', label: 'Media' },
+                    { value: 'alta', label: 'Alta' },
+                    { value: 'critica', label: 'Critica' },
+                  ]}
+                />
+              </div>
+            </>
           )}
         </div>
       )}

@@ -39,6 +39,19 @@ type SectionProgress = {
   db_id?: number
 }
 
+function parseTimeToMinutes(timeStr: string): number {
+  const parts = timeStr.split(':')
+  return parseInt(parts[0], 10) * 60 + parseInt(parts[1], 10)
+}
+
+function isWithinTimeRange(startTime: string, endTime: string): boolean {
+  const now = new Date()
+  const currentMinutes = now.getHours() * 60 + now.getMinutes()
+  const startMinutes = parseTimeToMinutes(startTime)
+  const endMinutes = parseTimeToMinutes(endTime)
+  return currentMinutes >= startMinutes && currentMinutes <= endMinutes
+}
+
 // Upload photo helper
 async function uploadPhoto(base64Image: string, fileName: string, folder?: string): Promise<string | null> {
   try {
@@ -194,11 +207,9 @@ function ChecklistForm() {
           } catch { /* ignore */ }
 
           if (!ignoreTime) {
-            const now = new Date()
-            const currentTime = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:00`
             const startTime = rawTemplate.allowed_start_time as string
             const endTime = rawTemplate.allowed_end_time as string
-            if (currentTime < startTime || currentTime > endTime) {
+            if (!isWithinTimeRange(startTime, endTime)) {
               setTimeBlocked(true)
               setTimeBlockedMessage(`Este checklist so pode ser respondido entre ${startTime.substring(0, 5)} e ${endTime.substring(0, 5)}`)
             }
@@ -248,6 +259,17 @@ function ChecklistForm() {
           if (templateSections.length > 0) {
             setHasSections(true)
             setSortedSections(templateSections as TemplateSection[])
+          }
+
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const ct = cachedTemplate as any
+          if (ct.allowed_start_time && ct.allowed_end_time) {
+            const startTime = ct.allowed_start_time as string
+            const endTime = ct.allowed_end_time as string
+            if (!isWithinTimeRange(startTime, endTime)) {
+              setTimeBlocked(true)
+              setTimeBlockedMessage(`Este checklist so pode ser respondido entre ${startTime.substring(0, 5)} e ${endTime.substring(0, 5)}`)
+            }
           }
         }
         const cachedStores = await getStoresCache()

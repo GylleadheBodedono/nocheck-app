@@ -909,6 +909,10 @@ export default function NovoTemplatePage() {
                                               </label>
                                             </div>
                                           )}
+                                          <label className="flex items-center gap-2 text-sm text-secondary cursor-pointer">
+                                            <input type="checkbox" checked={(field.options as Record<string, unknown>)?.onNo ? ((field.options as Record<string, unknown>).onNo as Record<string, unknown>)?.allowUserActionPlan === true : false} onChange={(e) => { const opts = { ...((field.options as Record<string, unknown>) || {})}; const onNo: Record<string, unknown> = { ...((opts.onNo as Record<string, unknown>) || {}), allowUserActionPlan: e.target.checked }; updateField(field.id, { options: { ...opts, onNo } }) }} className="rounded border-default bg-surface text-primary focus:ring-primary" />
+                                            Permitir planos de acoes para preenchedor
+                                          </label>
                                         </div>
                                       </div>
                                     )}

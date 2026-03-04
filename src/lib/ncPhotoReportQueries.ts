@@ -24,6 +24,7 @@ export type NCPhotoItem = {
   severity: string
   status: string
   nonConformityValue: string
+  conditionalText: string
   isReincidencia: boolean
   reincidenciaCount: number
   createdAt: string
@@ -89,10 +90,9 @@ export async function fetchNCPhotoReport(
   )] as number[]
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const responsesMap = new Map<number, { photos: string[]; conditionalPhotos: string[] }>()
+  const responsesMap = new Map<number, { photos: string[]; conditionalPhotos: string[]; conditionalText: string }>()
 
   if (responseIds.length > 0) {
-    // Supabase .in() supports up to 300 items, batch if needed
     const batches = chunkArray(responseIds, 200)
     for (const batch of batches) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -108,9 +108,8 @@ export async function fetchNCPhotoReport(
           if (!json) continue
           const photos = (json.photos as string[] || []).filter(isValidPhotoUrl)
           const condPhotos = (json.conditionalPhotos as string[] || []).filter(isValidPhotoUrl)
-          if (photos.length > 0 || condPhotos.length > 0) {
-            responsesMap.set(r.id, { photos, conditionalPhotos: condPhotos })
-          }
+          const condText = (json.conditionalText as string) || ''
+          responsesMap.set(r.id, { photos, conditionalPhotos: condPhotos, conditionalText: condText })
         }
       }
     }
@@ -173,6 +172,7 @@ export async function fetchNCPhotoReport(
     const resp = p.response_id ? responsesMap.get(p.response_id) : undefined
     const photos = resp?.photos || []
     const conditionalPhotos = resp?.conditionalPhotos || []
+    const conditionalText = resp?.conditionalText || ''
     const evidencePhotos = evidenceMap.get(p.id) || []
 
     return {
@@ -185,6 +185,7 @@ export async function fetchNCPhotoReport(
       severity: p.severity || 'media',
       status: p.status || 'pendente',
       nonConformityValue: p.non_conformity_value || '',
+      conditionalText,
       isReincidencia: p.is_reincidencia || false,
       reincidenciaCount: p.reincidencia_count || 0,
       createdAt: p.created_at,

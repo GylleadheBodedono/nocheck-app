@@ -18,7 +18,8 @@
       "Bash(grep:*)",
       "Bash(npx supabase:*)",
       "Bash(curl:*)",
-      "Bash(git:*)"
+      "Bash(git:*)",
+      "Bash(npm install:*)"
     ]
   }
 }

@@ -74,10 +74,12 @@ const SEVERITY_CONFIG: Record<string, { label: string; color: string; bg: string
 }
 
 const STATUS_CONFIG: Record<string, { label: string; color: string }> = {
+  aberto: { label: 'Aberto', color: 'text-yellow-600' },
   pendente: { label: 'Pendente', color: 'text-yellow-600' },
   em_andamento: { label: 'Em Andamento', color: 'text-blue-600' },
   concluido: { label: 'Concluido', color: 'text-green-600' },
   vencido: { label: 'Vencido', color: 'text-red-600' },
+  cancelado: { label: 'Cancelado', color: 'text-gray-500' },
 }
 
 const PAGE_SIZE = 20
@@ -96,6 +98,7 @@ export default function FotosNCPage() {
   const [storeFilter, setStoreFilter] = useState<number | undefined>()
   const [templateFilter, setTemplateFilter] = useState<number | undefined>()
   const [severityFilter, setSeverityFilter] = useState<string | undefined>()
+  const [statusFilter, setStatusFilter] = useState<string | undefined>()
   const [viewMode, setViewMode] = useState<ViewMode>('date')
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE)
   const [exportMenuOpen, setExportMenuOpen] = useState(false)
@@ -198,14 +201,20 @@ export default function FotosNCPage() {
     fetchData()
   }, [fetchData])
 
+  // Client-side status filter
+  const filteredItems = useMemo(() => {
+    if (!statusFilter) return items
+    return items.filter(i => i.status === statusFilter)
+  }, [items, statusFilter])
+
   // Grouped by week
   const weekGroups = useMemo(() => {
     if (viewMode !== 'week') return null
-    return groupByWeek(items)
-  }, [items, viewMode])
+    return groupByWeek(filteredItems)
+  }, [filteredItems, viewMode])
 
   // Visible items for "date" mode
-  const visibleItems = viewMode === 'date' ? items.slice(0, visibleCount) : items
+  const visibleItems = viewMode === 'date' ? filteredItems.slice(0, visibleCount) : filteredItems
 
   // Export handlers
   const handleExport = async (format: 'csv' | 'txt' | 'xlsx') => {
@@ -214,9 +223,9 @@ export default function FotosNCPage() {
     try {
       const timestamp = new Date().toISOString().split('T')[0]
       const filename = `relatorio_fotos_nc_${timestamp}`
-      if (format === 'csv') exportToCSV(items, `${filename}.csv`)
-      else if (format === 'txt') exportToTXT(items, `${filename}.txt`)
-      else await exportToExcel(items, `${filename}.xlsx`)
+      if (format === 'csv') exportToCSV(filteredItems, `${filename}.csv`)
+      else if (format === 'txt') exportToTXT(filteredItems, `${filename}.txt`)
+      else await exportToExcel(filteredItems, `${filename}.xlsx`)
     } catch (err) {
       console.error('[FotosNC] Erro ao exportar:', err)
     } finally {
@@ -225,7 +234,7 @@ export default function FotosNCPage() {
   }
 
   const handleExportPdf = async () => {
-    if (exportingPdf || items.length === 0) return
+    if (exportingPdf || filteredItems.length === 0) return
     setExportMenuOpen(false)
     setExportingPdf(true)
     try {
@@ -238,7 +247,7 @@ export default function FotosNCPage() {
         dateFrom = range.from
         dateTo = range.to
       }
-      await exportToPDF(items, {
+      await exportToPDF(filteredItems, {
         dateFrom,
         dateTo,
         storeName: stores.find(s => s.id === storeFilter)?.name,
@@ -346,6 +355,20 @@ export default function FotosNCPage() {
               ]}
             />
 
+            <Select
+              value={statusFilter ?? ''}
+              onChange={v => setStatusFilter(v || undefined)}
+              placeholder="Status"
+              className="text-sm min-w-[120px]"
+              options={[
+                { value: 'aberto',       label: 'Aberto' },
+                { value: 'em_andamento', label: 'Em Andamento' },
+                { value: 'concluido',    label: 'Concluido' },
+                { value: 'vencido',      label: 'Vencido' },
+                { value: 'cancelado',    label: 'Cancelado' },
+              ]}
+            />
+
             <div className="flex-1" />
 
             {/* View mode toggle */}
@@ -368,7 +391,7 @@ export default function FotosNCPage() {
             <div className="relative">
               <button
                 onClick={() => setExportMenuOpen(!exportMenuOpen)}
-                disabled={items.length === 0 || exporting || exportingPdf}
+                disabled={filteredItems.length === 0 || exporting || exportingPdf}
                 className="btn-primary text-sm flex items-center gap-1.5 disabled:opacity-50"
               >
                 <FiDownload className="text-base" />
@@ -403,7 +426,7 @@ export default function FotosNCPage() {
         </div>
 
         {/* Content */}
-        {items.length === 0 ? (
+        {filteredItems.length === 0 ? (
           <div className="card p-12 text-center">
             <FiCamera className="text-4xl text-muted mx-auto mb-3" />
             <p className="text-muted">Nenhuma nao-conformidade encontrada no periodo selecionado.</p>
@@ -414,12 +437,12 @@ export default function FotosNCPage() {
             {visibleItems.map(item => (
               <NCCard key={item.actionPlanId} item={item} onPhotoClick={setModalPhoto} />
             ))}
-            {visibleCount < items.length && (
+            {visibleCount < filteredItems.length && (
               <button
                 onClick={() => setVisibleCount(c => c + PAGE_SIZE)}
                 className="w-full py-3 text-center text-sm font-medium text-primary hover:bg-surface-hover rounded-lg transition-colors"
               >
-                Carregar mais ({items.length - visibleCount} restantes)
+                Carregar mais ({filteredItems.length - visibleCount} restantes)
               </button>
             )}
           </div>
@@ -529,6 +552,14 @@ function NCCard({ item, onPhotoClick }: { item: NCPhotoItem; onPhotoClick: (url:
         <span className="text-muted">{item.assignedUserName}</span>
         <span className={`font-medium ${stat.color}`}>{stat.label}</span>
       </div>
+
+      {/* Texto da resposta (conditionalText) */}
+      {item.conditionalText && (
+        <div className="p-2.5 rounded-lg bg-red-500/5 border border-red-500/15">
+          <p className="text-xs text-muted mb-0.5">Observacao do preenchedor:</p>
+          <p className="text-sm text-main">{item.conditionalText}</p>
+        </div>
+      )}
 
       {/* Photo grids */}
       {!hasAnyPhotos ? (

@@ -988,10 +988,14 @@ CREATE POLICY "Admins can manage action_plan_stores"
 -- ACTION_PLAN_UPDATES
 CREATE POLICY "apu_select" ON public.action_plan_updates FOR SELECT TO authenticated USING (true);
 CREATE POLICY "apu_insert" ON public.action_plan_updates FOR INSERT TO authenticated WITH CHECK (true);
+CREATE POLICY "apu_delete" ON public.action_plan_updates FOR DELETE TO authenticated
+  USING (EXISTS (SELECT 1 FROM users WHERE id = auth.uid() AND is_admin = true));
 
 -- ACTION_PLAN_EVIDENCE
 CREATE POLICY "ape_select" ON public.action_plan_evidence FOR SELECT TO authenticated USING (true);
 CREATE POLICY "ape_insert" ON public.action_plan_evidence FOR INSERT TO authenticated WITH CHECK (true);
+CREATE POLICY "ape_delete" ON public.action_plan_evidence FOR DELETE TO authenticated
+  USING (EXISTS (SELECT 1 FROM users WHERE id = auth.uid() AND is_admin = true));
 
 -- NOTIFICATIONS
 CREATE POLICY "notif_select" ON public.notifications FOR SELECT TO authenticated

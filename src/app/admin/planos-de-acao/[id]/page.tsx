@@ -691,17 +691,23 @@ export default function ActionPlanDetailPage() {
     try {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const sb = supabase as any
-      // Deletar dependencias primeiro
-      await sb.from('action_plan_updates').delete().eq('action_plan_id', plan.id)
-      await sb.from('action_plan_stores').delete().eq('action_plan_id', plan.id)
-      await sb.from('action_plan_evidence').delete().eq('action_plan_id', plan.id)
-      // Deletar plano
+
+      const { error: updErr } = await sb.from('action_plan_updates').delete().eq('action_plan_id', plan.id)
+      if (updErr) throw new Error(`Erro ao excluir atualizacoes: ${updErr.message}`)
+
+      const { error: storeErr } = await sb.from('action_plan_stores').delete().eq('action_plan_id', plan.id)
+      if (storeErr) throw new Error(`Erro ao excluir lojas vinculadas: ${storeErr.message}`)
+
+      const { error: evErr } = await sb.from('action_plan_evidence').delete().eq('action_plan_id', plan.id)
+      if (evErr) throw new Error(`Erro ao excluir evidencias: ${evErr.message}`)
+
       const { error: deleteError } = await sb.from('action_plans').delete().eq('id', plan.id)
-      if (deleteError) throw deleteError
+      if (deleteError) throw new Error(`Erro ao excluir plano: ${deleteError.message}`)
+
       router.push(APP_CONFIG.routes.adminActionPlans)
     } catch (err) {
       console.error('[ActionPlan] Erro ao excluir plano:', err)
-      setError('Erro ao excluir plano.')
+      setError(err instanceof Error ? err.message : 'Erro ao excluir plano.')
     }
   }
 

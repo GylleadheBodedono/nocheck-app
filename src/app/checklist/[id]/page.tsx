@@ -311,9 +311,16 @@ export default function ChecklistViewPage() {
         return json?.photos || []
       }
       case 'yes_no': {
-        const yJson = response.value_json as { photos?: string[] } | null
-        if (yJson?.photos && yJson.photos.length > 0) {
-          return { answer: response.value_text || '', photos: yJson.photos }
+        const yJson = response.value_json as Record<string, unknown> | null
+        if (yJson && typeof yJson === 'object') {
+          const result: Record<string, unknown> = { answer: yJson.answer || response.value_text || '' }
+          if (yJson.photos && (yJson.photos as string[]).length > 0) result.photos = yJson.photos
+          if (yJson.conditionalText) result.conditionalText = yJson.conditionalText
+          if (yJson.conditionalPhotos && (yJson.conditionalPhotos as string[]).length > 0) result.conditionalPhotos = yJson.conditionalPhotos
+          if (yJson.selectedPresetId) result.selectedPresetId = yJson.selectedPresetId
+          if (yJson.selectedSeverity) result.selectedSeverity = yJson.selectedSeverity
+          if (Object.keys(result).length === 1 && result.answer) return result.answer
+          return result
         }
         return response.value_text
       }
