@@ -450,6 +450,14 @@ export default function RelatoriosPage() {
             <FiCamera className="w-4 h-4" />
             Fotos NC
           </Link>
+
+          <Link
+            href={APP_CONFIG.routes.adminActionPlanReport}
+            className="px-4 py-2 rounded-xl font-medium transition-colors btn-secondary flex items-center gap-2"
+          >
+            <FiClipboard className="w-4 h-4" />
+            Planos de Acao
+          </Link>
         </div>
 
         {activeTab === 'responses' && (
