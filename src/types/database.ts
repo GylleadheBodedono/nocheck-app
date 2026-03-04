@@ -128,6 +128,7 @@ export type Database = {
           allowed_start_time: string | null
           allowed_end_time: string | null
           justification_deadline_hours: number | null
+          admin_only: boolean
         }
         Insert: {
           id?: number
@@ -136,6 +137,7 @@ export type Database = {
           category?: TemplateCategory | null
           version?: number
           is_active?: boolean
+          admin_only?: boolean
           created_by?: string | null
           created_at?: string
           updated_at?: string
@@ -150,6 +152,7 @@ export type Database = {
           category?: TemplateCategory | null
           version?: number
           is_active?: boolean
+          admin_only?: boolean
           created_by?: string | null
           created_at?: string
           updated_at?: string

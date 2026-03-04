@@ -179,6 +179,20 @@ function ChecklistForm() {
         .single()
 
       if (templateData) {
+        // Verificar se template e restrito a administradores
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        if ((templateData as any).admin_only) {
+          const { data: { user } } = await supabase.auth.getUser()
+          if (user) {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const { data: userData } = await (supabase as any).from('users').select('is_admin').eq('id', user.id).single()
+            if (!userData?.is_admin) {
+              setLoading(false)
+              return // template nao sera setado → tela "nao encontrado"
+            }
+          }
+        }
+
         const tData = templateData as TemplateWithFields
         tData.fields.sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0))
         const sections = (tData.sections || []).sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0))

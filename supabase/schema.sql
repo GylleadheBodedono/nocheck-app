@@ -267,6 +267,7 @@ CREATE TABLE IF NOT EXISTS public.checklist_templates (
   allowed_start_time TIME DEFAULT NULL,
   allowed_end_time TIME DEFAULT NULL,
   justification_deadline_hours INTEGER DEFAULT NULL,
+  admin_only BOOLEAN DEFAULT false,
   created_by UUID REFERENCES public.users(id) ON DELETE SET NULL,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()

@@ -17,6 +17,7 @@ import {
   FiBriefcase,
   FiPlus,
   FiLayers,
+  FiShield,
 } from 'react-icons/fi'
 import { RiDraggable } from 'react-icons/ri'
 import { DndContext, closestCenter, PointerSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core'
@@ -79,6 +80,7 @@ export default function NovoTemplatePage() {
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
   const [category, setCategory] = useState<TemplateCategory>('recebimento')
+  const [adminOnly, setAdminOnly] = useState(false)
 
   // Time settings
   const [allowedStartTime, setAllowedStartTime] = useState('')
@@ -446,6 +448,7 @@ export default function NovoTemplatePage() {
           name,
           description: description || null,
           category,
+          admin_only: adminOnly,
           allowed_start_time: allowedStartTime || null,
           allowed_end_time: allowedEndTime || null,
           justification_deadline_hours: justificationDeadlineHours ? Number(justificationDeadlineHours) : null,
@@ -1251,51 +1254,73 @@ export default function NovoTemplatePage() {
           </div>
 
           {/* Function Filter (optional) */}
-          {functions.length > 0 && (
-            <div className="card p-6">
-              <h2 className="text-lg font-semibold text-main mb-2">Restringir por Funcao (Opcional)</h2>
-              <p className="text-sm text-muted mb-4">
-                Se nenhuma funcao for selecionada, o checklist estara disponivel para todas as funcoes.
-                Selecione funcoes especificas para restringir o acesso.
-              </p>
+          <div className="card p-6">
+            <h2 className="text-lg font-semibold text-main mb-2">Restringir por Funcao (Opcional)</h2>
+            <p className="text-sm text-muted mb-4">
+              Se nenhuma funcao for selecionada, o checklist estara disponivel para todas as funcoes.
+              Selecione funcoes especificas para restringir o acesso.
+            </p>
 
-              <div className="flex flex-wrap gap-2">
-                {functions.map(fn => (
-                  <label
-                    key={fn.id}
-                    className={`flex items-center gap-2 px-3 py-2 rounded-lg cursor-pointer transition-all text-sm ${
-                      selectedFunctionIds.includes(fn.id)
-                        ? 'bg-primary/20 text-primary border border-primary/30'
-                        : 'bg-surface-hover text-muted border border-transparent hover:border-subtle'
-                    }`}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={selectedFunctionIds.includes(fn.id)}
-                      onChange={() => {
-                        setSelectedFunctionIds(prev =>
-                          prev.includes(fn.id)
-                            ? prev.filter(id => id !== fn.id)
-                            : [...prev, fn.id]
-                        )
-                      }}
-                      className="sr-only"
-                    />
-                    <FiBriefcase className="w-4 h-4" style={{ color: fn.color }} />
-                    {fn.name}
-                  </label>
-                ))}
-              </div>
-
-              {selectedFunctionIds.length > 0 && (
-                <div className="mt-4 p-3 bg-info/10 rounded-lg">
-                  <p className="text-sm text-info">
-                    Restrito a {selectedFunctionIds.length} funcao{selectedFunctionIds.length > 1 ? 'es' : ''}
-                  </p>
-                </div>
-              )}
+            <div className="flex flex-wrap gap-2">
+              <label
+                className={`flex items-center gap-2 px-3 py-2 rounded-lg cursor-pointer transition-all text-sm ${
+                  adminOnly
+                    ? 'bg-red-500/20 text-red-400 border border-red-500/30'
+                    : 'bg-surface-hover text-muted border border-transparent hover:border-subtle'
+                }`}
+              >
+                <input
+                  type="checkbox"
+                  checked={adminOnly}
+                  onChange={(e) => setAdminOnly(e.target.checked)}
+                  className="sr-only"
+                />
+                <FiShield className="w-4 h-4" />
+                Somente Administradores
+              </label>
+              {!adminOnly && functions.map(fn => (
+                <label
+                  key={fn.id}
+                  className={`flex items-center gap-2 px-3 py-2 rounded-lg cursor-pointer transition-all text-sm ${
+                    selectedFunctionIds.includes(fn.id)
+                      ? 'bg-primary/20 text-primary border border-primary/30'
+                      : 'bg-surface-hover text-muted border border-transparent hover:border-subtle'
+                  }`}
+                >
+                  <input
+                    type="checkbox"
+                    checked={selectedFunctionIds.includes(fn.id)}
+                    onChange={() => {
+                      setSelectedFunctionIds(prev =>
+                        prev.includes(fn.id)
+                          ? prev.filter(id => id !== fn.id)
+                          : [...prev, fn.id]
+                      )
+                    }}
+                    className="sr-only"
+                  />
+                  <FiBriefcase className="w-4 h-4" style={{ color: fn.color }} />
+                  {fn.name}
+                </label>
+              ))}
             </div>
-          )}
+
+            {adminOnly && (
+              <div className="mt-4 p-3 bg-red-500/10 rounded-lg">
+                <p className="text-sm text-red-400">
+                  Este checklist sera visivel apenas para administradores, independente de loja ou setor.
+                </p>
+              </div>
+            )}
+
+            {!adminOnly && selectedFunctionIds.length > 0 && (
+              <div className="mt-4 p-3 bg-info/10 rounded-lg">
+                <p className="text-sm text-info">
+                  Restrito a {selectedFunctionIds.length} funcao{selectedFunctionIds.length > 1 ? 'es' : ''}
+                </p>
+              </div>
+            )}
+          </div>
 
           {/* Error */}
           {error && (

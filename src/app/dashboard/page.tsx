@@ -850,6 +850,9 @@ export default function DashboardPage() {
     return templates
       .filter(template => {
         // Filter by selected store visibility
+        // Admin-only templates: esconder para nao-admins
+        if (template.admin_only && !profile.is_admin) return false
+
         const visibilities = template.template_visibility?.filter(v => v.store_id === selectedStore) || []
         if (visibilities.length === 0) return false
 
