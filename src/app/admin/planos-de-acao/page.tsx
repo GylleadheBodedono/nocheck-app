@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useMemo } from 'react'
+import { useEffect, useState, useMemo, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient, isSupabaseConfigured } from '@/lib/supabase'
 import {
@@ -16,6 +16,7 @@ import {
   FiAlertOctagon,
   FiActivity,
   FiLayers,
+  FiTrash2,
 } from 'react-icons/fi'
 import Link from 'next/link'
 import { APP_CONFIG } from '@/lib/config'
@@ -60,6 +61,10 @@ export default function PlanoDeAcaoPage() {
   // Pagination
   const [page, setPage] = useState(1)
   const perPage = 20
+
+  // Bulk selection
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set())
+  const [deleting, setDeleting] = useState(false)
 
   const router = useRouter()
   const supabase = useMemo(() => createClient(), [])
@@ -248,6 +253,66 @@ export default function PlanoDeAcaoPage() {
   const totalPages = Math.ceil(filteredPlans.length / perPage)
   const paginatedPlans = filteredPlans.slice((page - 1) * perPage, page * perPage)
 
+  const toggleSelect = useCallback((id: number) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }, [])
+
+  const allPageSelected = paginatedPlans.length > 0 && paginatedPlans.every(p => selectedIds.has(p.id))
+
+  const toggleSelectAll = useCallback(() => {
+    const pageIds = paginatedPlans.map(p => p.id)
+    setSelectedIds(prev => {
+      const next = new Set(prev)
+      if (allPageSelected) {
+        pageIds.forEach(id => next.delete(id))
+      } else {
+        pageIds.forEach(id => next.add(id))
+      }
+      return next
+    })
+  }, [paginatedPlans, allPageSelected])
+
+  const handleBulkDelete = async () => {
+    if (selectedIds.size === 0) return
+    if (!confirm(`Tem certeza que deseja EXCLUIR ${selectedIds.size} plano(s) de acao? Esta acao e irreversivel.`)) return
+
+    setDeleting(true)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const sb = supabase as any
+    let errors = 0
+
+    for (const planId of selectedIds) {
+      try {
+        const { error: e1 } = await sb.from('action_plan_updates').delete().eq('action_plan_id', planId)
+        if (e1) throw e1
+        const { error: e2 } = await sb.from('action_plan_stores').delete().eq('action_plan_id', planId)
+        if (e2) throw e2
+        const { error: e3 } = await sb.from('action_plan_evidence').delete().eq('action_plan_id', planId)
+        if (e3) throw e3
+        const { error: e4 } = await sb.from('action_plans').delete().eq('id', planId)
+        if (e4) throw e4
+      } catch (err) {
+        console.error(`[PlanosDeAcao] Erro ao excluir plano #${planId}:`, err)
+        errors++
+      }
+    }
+
+    const total = selectedIds.size
+    setSelectedIds(new Set())
+    setDeleting(false)
+
+    if (errors > 0) {
+      alert(`${total - errors} plano(s) excluido(s) com sucesso. ${errors} falharam.`)
+    }
+
+    fetchData()
+  }
+
   // Helpers
   const getStatusBadge = (status: string) => {
     const badges: Record<string, { label: string; cls: string }> = {
@@ -432,11 +497,21 @@ export default function PlanoDeAcaoPage() {
           </div>
         </div>
 
-        {/* Stats */}
+        {/* Stats + bulk actions */}
         <div className="flex items-center justify-between mb-4">
           <p className="text-sm text-muted">
             {filteredPlans.length} plano(s) de acao encontrado(s)
           </p>
+          {isAdmin && selectedIds.size > 0 && (
+            <button
+              onClick={handleBulkDelete}
+              disabled={deleting}
+              className="flex items-center gap-2 px-4 py-2 rounded-xl font-medium text-sm bg-error/20 text-error hover:bg-error/30 transition-colors disabled:opacity-50"
+            >
+              <FiTrash2 className="w-4 h-4" />
+              {deleting ? 'Excluindo...' : `Excluir ${selectedIds.size} selecionado(s)`}
+            </button>
+          )}
         </div>
 
         {/* Table */}
@@ -445,6 +520,16 @@ export default function PlanoDeAcaoPage() {
             <table className="w-full">
               <thead className="bg-surface-hover">
                 <tr>
+                  {isAdmin && (
+                    <th className="px-4 py-3 w-10">
+                      <input
+                        type="checkbox"
+                        checked={allPageSelected}
+                        onChange={toggleSelectAll}
+                        className="w-4 h-4 rounded border-default bg-surface text-primary focus:ring-primary cursor-pointer"
+                      />
+                    </th>
+                  )}
                   <th className="px-4 py-3 text-left text-sm font-medium text-muted">Titulo</th>
                   <th className="px-4 py-3 text-left text-sm font-medium text-muted">Loja</th>
                   <th className="px-4 py-3 text-left text-sm font-medium text-muted">Severidade</th>
@@ -458,7 +543,7 @@ export default function PlanoDeAcaoPage() {
               <tbody className="divide-y divide-subtle">
                 {paginatedPlans.length === 0 ? (
                   <tr>
-                    <td colSpan={8} className="px-4 py-12 text-center text-muted">
+                    <td colSpan={isAdmin ? 9 : 8} className="px-4 py-12 text-center text-muted">
                       Nenhum plano de acao encontrado
                     </td>
                   </tr>
@@ -469,7 +554,17 @@ export default function PlanoDeAcaoPage() {
                     const overdue = isOverdue(plan)
 
                     return (
-                      <tr key={plan.id} className="hover:bg-surface-hover/50">
+                      <tr key={plan.id} className={`hover:bg-surface-hover/50 ${selectedIds.has(plan.id) ? 'bg-primary/5' : ''}`}>
+                        {isAdmin && (
+                          <td className="px-4 py-3 w-10">
+                            <input
+                              type="checkbox"
+                              checked={selectedIds.has(plan.id)}
+                              onChange={() => toggleSelect(plan.id)}
+                              className="w-4 h-4 rounded border-default bg-surface text-primary focus:ring-primary cursor-pointer"
+                            />
+                          </td>
+                        )}
                         <td className="px-4 py-3">
                           <div>
                             <p className="font-medium text-main text-sm">{plan.title}</p>
