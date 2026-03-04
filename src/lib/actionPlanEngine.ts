@@ -469,7 +469,7 @@ export async function processarNaoConformidades(
       // 8. Enviar email + Teams (busca do email do assignee e feita server-side para contornar RLS)
       try {
         const emailVars: EmailTemplateVariables = {
-          plan_title: title,
+          plan_title: planTitle,
           field_name: field.name,
           store_name: storeName,
           sector_name: sectorName,
@@ -509,7 +509,7 @@ export async function processarNaoConformidades(
 
         // Teams alert
         await sendActionPlanTeamsAlert({
-          title,
+          title: planTitle,
           fieldName: field.name,
           storeName,
           severity,
