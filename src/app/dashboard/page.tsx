@@ -121,7 +121,7 @@ type NotificationItem = {
 const TECH_FUNCTIONS = ['ti', 'manutencao', 'manutenção']
 
 function normalizeName(s: string) {
-  return s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+  return s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim()
 }
 
 /** Retorna true se o template nao tem restricao de horario ou se a hora atual esta dentro da janela permitida */
