@@ -482,6 +482,7 @@ export type Database = {
           color: string
           icon: string
           is_active: boolean
+          teams_webhook_url: string | null
           created_at: string
         }
         Insert: {
@@ -491,6 +492,7 @@ export type Database = {
           color?: string
           icon?: string
           is_active?: boolean
+          teams_webhook_url?: string | null
           created_at?: string
         }
         Update: {
@@ -500,6 +502,7 @@ export type Database = {
           color?: string
           icon?: string
           is_active?: boolean
+          teams_webhook_url?: string | null
           created_at?: string
         }
       }

@@ -5,6 +5,42 @@
 
 import type { NCPhotoItem } from './ncPhotoReportQueries'
 import type { ActionPlanReportItem } from './actionPlanReportQueries'
+import type { ComplianceSummary, FieldComplianceRow, StoreComplianceRow, ReincidenciaSummary, ReincidenciaRow, AssigneeStats } from './analyticsQueries'
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// TIPOS PARA EXPORTACAO DAS TABS DE RELATORIOS
+// ═══════════════════════════════════════════════════════════════════════════════
+
+export type OverviewExportData = {
+  summary: { totalChecklists: number; completedToday: number; avgPerDay: number; activeUsers: number; activeStores: number; activeTemplates: number }
+  storeStats: { store_name: string; total_checklists: number; completed_today: number; completion_rate: number }[]
+  templateStats: { template_name: string; total_uses: number }[]
+  dailyStats: { date: string; count: number }[]
+  period: string
+}
+
+export type UserChecklistExport = {
+  id: number
+  status: string
+  created_at: string
+  completed_at: string | null
+  user_name: string
+  user_email: string
+  store_name: string
+  template_name: string
+}
+
+export type ComplianceExportData = {
+  summary: ComplianceSummary
+  byField: FieldComplianceRow[]
+  byStore: StoreComplianceRow[]
+}
+
+export type ReincidenciaExportData = {
+  summary: ReincidenciaSummary
+  rows: ReincidenciaRow[]
+  assigneeStats: AssigneeStats[]
+}
 
 function downloadFile(content: string | ArrayBuffer, filename: string, mimeType: string) {
   const blob = new Blob([content], { type: mimeType })
@@ -724,4 +760,600 @@ export async function exportActionPlanToPDF(items: ActionPlanReportItem[], meta:
 
   const timestamp = new Date().toISOString().split('T')[0]
   doc.save(`relatorio_planos_acao_${timestamp}.pdf`)
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// EXPORTACOES DAS TABS DE RELATORIOS (VISAO GERAL, RESPOSTAS, CONFORMIDADE, REINCIDENCIAS)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const periodLabel: Record<string, string> = { '7d': '7 dias', '30d': '30 dias', '90d': '90 dias' }
+
+// ─── PDF table helper ────────────────────────────────────────────────────────
+
+type PdfCol = { header: string; width: number; align?: 'right' }
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function drawPdfTable(doc: any, columns: PdfCol[], rows: string[][], startY: number): number {
+  let y = startY
+  const ROW_H = 6
+
+  const ensurePage = (need: number) => {
+    if (y + need > PAGE_BOTTOM) { doc.addPage(); y = MARGIN }
+  }
+
+  // Header row
+  ensurePage(ROW_H + 2)
+  doc.setFillColor('#E0E0E0')
+  doc.rect(MARGIN, y - 4, CONTENT_W, ROW_H, 'F')
+  doc.setFontSize(7)
+  doc.setFont('helvetica', 'bold')
+  doc.setTextColor('#333333')
+  let x = MARGIN + 2
+  for (const col of columns) {
+    doc.text(n(col.header), col.align === 'right' ? x + col.width - 2 : x, y, col.align === 'right' ? { align: 'right' } : undefined)
+    x += col.width
+  }
+  y += ROW_H
+
+  // Data rows
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(7)
+  for (let i = 0; i < rows.length; i++) {
+    ensurePage(ROW_H)
+    if (i % 2 === 1) {
+      doc.setFillColor('#F8F8F8')
+      doc.rect(MARGIN, y - 4, CONTENT_W, ROW_H, 'F')
+    }
+    doc.setTextColor('#444444')
+    x = MARGIN + 2
+    for (let c = 0; c < columns.length; c++) {
+      const val = rows[i][c] || ''
+      const col = columns[c]
+      doc.text(n(val), col.align === 'right' ? x + col.width - 2 : x, y, col.align === 'right' ? { align: 'right' } : undefined)
+      x += col.width
+    }
+    y += ROW_H
+  }
+
+  return y
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function addPdfFooters(doc: any) {
+  const totalPages = doc.getNumberOfPages()
+  for (let p = 1; p <= totalPages; p++) {
+    doc.setPage(p)
+    doc.setFontSize(7)
+    doc.setFont('helvetica', 'normal')
+    doc.setTextColor('#999999')
+    doc.text(n(`Pagina ${p} de ${totalPages}`), MARGIN, 290)
+  }
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function addPdfHeader(doc: any, title: string, meta: string[]): number {
+  let y = MARGIN
+  doc.setFontSize(14)
+  doc.setFont('helvetica', 'bold')
+  doc.setTextColor('#000000')
+  doc.text(n(title), MARGIN, y)
+  y += 7
+  doc.setFontSize(9)
+  doc.setFont('helvetica', 'normal')
+  doc.setTextColor('#333333')
+  for (const line of meta) {
+    doc.text(n(line), MARGIN, y)
+    y += 5
+  }
+  y += 3
+  doc.setDrawColor('#CCCCCC')
+  doc.line(MARGIN, y, MARGIN + CONTENT_W, y)
+  y += 6
+  return y
+}
+
+// ─── VISAO GERAL ─────────────────────────────────────────────────────────────
+
+export function exportOverviewToCSV(data: OverviewExportData, filename: string) {
+  const esc = (v: string) => `"${String(v).replace(/"/g, '""')}"`
+  const lines: string[] = []
+
+  lines.push('=== RESUMO ===')
+  lines.push('Total Checklists,Hoje,Media/Dia,Usuarios Ativos,Lojas Ativas,Templates Ativos')
+  lines.push([data.summary.totalChecklists, data.summary.completedToday, data.summary.avgPerDay, data.summary.activeUsers, data.summary.activeStores, data.summary.activeTemplates].join(','))
+  lines.push('')
+
+  lines.push('=== DESEMPENHO POR LOJA ===')
+  lines.push('Loja,Total Checklists,Hoje,Media/Dia')
+  for (const s of data.storeStats) {
+    lines.push([esc(s.store_name), s.total_checklists, s.completed_today, s.completion_rate].join(','))
+  }
+  lines.push('')
+
+  lines.push('=== USO DE CHECKLISTS ===')
+  lines.push('Template,Utilizacoes')
+  for (const t of data.templateStats) {
+    lines.push([esc(t.template_name), t.total_uses].join(','))
+  }
+  lines.push('')
+
+  lines.push('=== DADOS DIARIOS ===')
+  lines.push('Data,Quantidade')
+  for (const d of data.dailyStats) {
+    lines.push([d.date, d.count].join(','))
+  }
+
+  downloadFile('\uFEFF' + lines.join('\n'), filename, 'text/csv;charset=utf-8')
+}
+
+export function exportOverviewToTXT(data: OverviewExportData, filename: string) {
+  const s = data.summary
+  const lines: string[] = [
+    '═'.repeat(80),
+    'RELATORIO VISAO GERAL',
+    `Periodo: ${periodLabel[data.period] || data.period}`,
+    `Gerado em: ${new Date().toLocaleString('pt-BR')}`,
+    '═'.repeat(80),
+    '',
+    '--- RESUMO ---',
+    `  Total Checklists:  ${s.totalChecklists}`,
+    `  Concluidos Hoje:   ${s.completedToday}`,
+    `  Media por Dia:     ${s.avgPerDay}`,
+    `  Usuarios Ativos:   ${s.activeUsers}`,
+    `  Lojas Ativas:      ${s.activeStores}`,
+    `  Templates Ativos:  ${s.activeTemplates}`,
+    '',
+    '--- DESEMPENHO POR LOJA ---',
+  ]
+  for (const st of data.storeStats) {
+    lines.push(`  ${st.store_name.padEnd(30)} Total: ${String(st.total_checklists).padStart(5)}   Hoje: ${String(st.completed_today).padStart(3)}   Media/dia: ${st.completion_rate}`)
+  }
+  lines.push('')
+  lines.push('--- USO DE CHECKLISTS ---')
+  for (const t of data.templateStats) {
+    lines.push(`  ${t.template_name.padEnd(40)} ${t.total_uses} uso(s)`)
+  }
+  lines.push('')
+  lines.push('--- DADOS DIARIOS ---')
+  for (const d of data.dailyStats) {
+    const bar = '█'.repeat(Math.min(d.count, 50))
+    lines.push(`  ${d.date}  ${String(d.count).padStart(4)}  ${bar}`)
+  }
+
+  downloadFile(lines.join('\n'), filename, 'text/plain;charset=utf-8')
+}
+
+export async function exportOverviewToExcel(data: OverviewExportData, filename: string) {
+  const XLSX = await import('xlsx')
+  const wb = XLSX.utils.book_new()
+
+  // Sheet 1: Store stats
+  const storeData = data.storeStats.map(s => ({
+    'Loja': s.store_name,
+    'Total Checklists': s.total_checklists,
+    'Hoje': s.completed_today,
+    'Media/Dia': s.completion_rate,
+  }))
+  const ws1 = XLSX.utils.json_to_sheet(storeData.length ? storeData : [{ 'Loja': 'Sem dados' }])
+  ws1['!cols'] = [{ wch: 30 }, { wch: 16 }, { wch: 8 }, { wch: 12 }]
+  XLSX.utils.book_append_sheet(wb, ws1, 'Desempenho por Loja')
+
+  // Sheet 2: Template stats
+  const tmplData = data.templateStats.map(t => ({
+    'Template': t.template_name,
+    'Utilizacoes': t.total_uses,
+  }))
+  const ws2 = XLSX.utils.json_to_sheet(tmplData.length ? tmplData : [{ 'Template': 'Sem dados' }])
+  ws2['!cols'] = [{ wch: 40 }, { wch: 14 }]
+  XLSX.utils.book_append_sheet(wb, ws2, 'Uso de Checklists')
+
+  // Sheet 3: Daily stats
+  const dailyData = data.dailyStats.map(d => ({
+    'Data': d.date,
+    'Quantidade': d.count,
+  }))
+  const ws3 = XLSX.utils.json_to_sheet(dailyData.length ? dailyData : [{ 'Data': 'Sem dados' }])
+  ws3['!cols'] = [{ wch: 12 }, { wch: 12 }]
+  XLSX.utils.book_append_sheet(wb, ws3, 'Dados Diarios')
+
+  const buf = XLSX.write(wb, { bookType: 'xlsx', type: 'array' })
+  downloadFile(buf, filename, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+}
+
+export async function exportOverviewToPDF(data: OverviewExportData): Promise<void> {
+  const { jsPDF } = await import('jspdf')
+  const doc = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4' })
+  const s = data.summary
+
+  let y = addPdfHeader(doc, 'RELATORIO VISAO GERAL', [
+    `Periodo: ${periodLabel[data.period] || data.period}`,
+    `Gerado em: ${new Date().toLocaleString('pt-BR')}`,
+    `Total: ${s.totalChecklists}  |  Hoje: ${s.completedToday}  |  Media/dia: ${s.avgPerDay}  |  Usuarios: ${s.activeUsers}  |  Lojas: ${s.activeStores}  |  Templates: ${s.activeTemplates}`,
+  ])
+
+  // Store table
+  doc.setFontSize(10)
+  doc.setFont('helvetica', 'bold')
+  doc.setTextColor('#000000')
+  doc.text(n('Desempenho por Loja'), MARGIN, y)
+  y += 6
+
+  y = drawPdfTable(doc, [
+    { header: 'Loja', width: 80 },
+    { header: 'Total', width: 30, align: 'right' },
+    { header: 'Hoje', width: 30, align: 'right' },
+    { header: 'Media/Dia', width: 42, align: 'right' },
+  ], data.storeStats.map(s => [s.store_name, String(s.total_checklists), String(s.completed_today), String(s.completion_rate)]), y)
+
+  y += 8
+  if (y > PAGE_BOTTOM - 20) { doc.addPage(); y = MARGIN }
+
+  // Template table
+  doc.setFontSize(10)
+  doc.setFont('helvetica', 'bold')
+  doc.setTextColor('#000000')
+  doc.text(n('Uso de Checklists'), MARGIN, y)
+  y += 6
+
+  drawPdfTable(doc, [
+    { header: 'Template', width: 120 },
+    { header: 'Utilizacoes', width: 62, align: 'right' },
+  ], data.templateStats.map(t => [t.template_name, String(t.total_uses)]), y)
+
+  addPdfFooters(doc)
+  const timestamp = new Date().toISOString().split('T')[0]
+  doc.save(`relatorio_visao_geral_${timestamp}.pdf`)
+}
+
+// ─── RESPOSTAS POR USUARIO ──────────────────────────────────────────────────
+
+export function exportResponsesToCSV(items: UserChecklistExport[], filename: string) {
+  const esc = (v: string) => `"${String(v).replace(/"/g, '""')}"`
+  const headers = ['Usuario', 'Email', 'Checklist', 'Loja', 'Status', 'Data Criacao', 'Data Conclusao']
+  const rows = items.map(i => [
+    esc(i.user_name), esc(i.user_email), esc(i.template_name), esc(i.store_name),
+    esc(statusLabel[i.status] || i.status),
+    esc(fmtDateBR(i.created_at)), esc(fmtDateBR(i.completed_at)),
+  ].join(','))
+
+  downloadFile('\uFEFF' + [headers.join(','), ...rows].join('\n'), filename, 'text/csv;charset=utf-8')
+}
+
+export function exportResponsesToTXT(items: UserChecklistExport[], filename: string) {
+  const lines: string[] = [
+    '═'.repeat(80),
+    'RELATORIO DE RESPOSTAS POR USUARIO',
+    `Gerado em: ${new Date().toLocaleString('pt-BR')}`,
+    `Total de respostas: ${items.length}`,
+    '═'.repeat(80),
+    '',
+  ]
+  for (const i of items) {
+    lines.push('─'.repeat(60))
+    lines.push(`  Usuario:    ${i.user_name} (${i.user_email})`)
+    lines.push(`  Checklist:  ${i.template_name}`)
+    lines.push(`  Loja:       ${i.store_name}`)
+    lines.push(`  Status:     ${statusLabel[i.status] || i.status}`)
+    lines.push(`  Criado em:  ${fmtDateBR(i.created_at)}`)
+    if (i.completed_at) lines.push(`  Concluido:  ${fmtDateBR(i.completed_at)}`)
+    lines.push('')
+  }
+
+  downloadFile(lines.join('\n'), filename, 'text/plain;charset=utf-8')
+}
+
+export async function exportResponsesToExcel(items: UserChecklistExport[], filename: string) {
+  const XLSX = await import('xlsx')
+  const data = items.map(i => ({
+    'Usuario': i.user_name,
+    'Email': i.user_email,
+    'Checklist': i.template_name,
+    'Loja': i.store_name,
+    'Status': statusLabel[i.status] || i.status,
+    'Data Criacao': fmtDateBR(i.created_at),
+    'Data Conclusao': fmtDateBR(i.completed_at),
+  }))
+
+  const ws = XLSX.utils.json_to_sheet(data.length ? data : [{ 'Usuario': 'Sem dados' }])
+  ws['!cols'] = [{ wch: 25 }, { wch: 30 }, { wch: 30 }, { wch: 20 }, { wch: 14 }, { wch: 16 }, { wch: 16 }]
+  const wb = XLSX.utils.book_new()
+  XLSX.utils.book_append_sheet(wb, ws, 'Respostas por Usuario')
+
+  const buf = XLSX.write(wb, { bookType: 'xlsx', type: 'array' })
+  downloadFile(buf, filename, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+}
+
+export async function exportResponsesToPDF(items: UserChecklistExport[]): Promise<void> {
+  const { jsPDF } = await import('jspdf')
+  const doc = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4' })
+
+  const y = addPdfHeader(doc, 'RELATORIO DE RESPOSTAS POR USUARIO', [
+    `Gerado em: ${new Date().toLocaleString('pt-BR')}`,
+    `Total de respostas: ${items.length}`,
+  ])
+
+  drawPdfTable(doc, [
+    { header: 'Usuario', width: 45 },
+    { header: 'Checklist', width: 45 },
+    { header: 'Loja', width: 35 },
+    { header: 'Status', width: 25 },
+    { header: 'Data', width: 32, align: 'right' },
+  ], items.map(i => [
+    i.user_name,
+    i.template_name,
+    i.store_name,
+    statusLabel[i.status] || i.status,
+    fmtDateBR(i.created_at),
+  ]), y)
+
+  addPdfFooters(doc)
+  const timestamp = new Date().toISOString().split('T')[0]
+  doc.save(`relatorio_respostas_${timestamp}.pdf`)
+}
+
+// ─── CONFORMIDADE ────────────────────────────────────────────────────────────
+
+export function exportComplianceToCSV(data: ComplianceExportData, filename: string) {
+  const esc = (v: string | number) => `"${String(v).replace(/"/g, '""')}"`
+  const lines: string[] = []
+
+  lines.push('=== RESUMO ===')
+  lines.push('Nao Conformidades,Taxa Conformidade (%),Planos Criados,Resolvidos,Vencidos')
+  lines.push([data.summary.totalNonConformities, data.summary.complianceRate, data.summary.plansCreated, data.summary.plansResolved, data.summary.plansOverdue].join(','))
+  lines.push('')
+
+  lines.push('=== CONFORMIDADE POR CAMPO ===')
+  lines.push('Campo,Template,Total,Resolvidos,Taxa Conformidade (%)')
+  for (const f of data.byField) {
+    lines.push([esc(f.fieldName), esc(f.templateName), f.totalPlans, f.resolvedPlans, f.complianceRate].join(','))
+  }
+  lines.push('')
+
+  lines.push('=== RANKING POR LOJA ===')
+  lines.push('Loja,Total,Resolvidos,Vencidos,Taxa (%)')
+  for (const s of data.byStore) {
+    lines.push([esc(s.storeName), s.totalPlans, s.resolvedPlans, s.overduePlans, s.rate].join(','))
+  }
+
+  downloadFile('\uFEFF' + lines.join('\n'), filename, 'text/csv;charset=utf-8')
+}
+
+export function exportComplianceToTXT(data: ComplianceExportData, filename: string) {
+  const sm = data.summary
+  const lines: string[] = [
+    '═'.repeat(80),
+    'RELATORIO DE CONFORMIDADE',
+    `Gerado em: ${new Date().toLocaleString('pt-BR')}`,
+    '═'.repeat(80),
+    '',
+    '--- RESUMO ---',
+    `  Nao Conformidades:  ${sm.totalNonConformities}`,
+    `  Taxa Conformidade:  ${sm.complianceRate}%`,
+    `  Planos Criados:     ${sm.plansCreated}`,
+    `  Resolvidos:         ${sm.plansResolved}`,
+    `  Vencidos:           ${sm.plansOverdue}`,
+    '',
+    '--- CONFORMIDADE POR CAMPO ---',
+  ]
+  for (const f of data.byField) {
+    lines.push(`  ${f.fieldName.padEnd(30)} (${f.templateName})  Total: ${f.totalPlans}  Resolvidos: ${f.resolvedPlans}  Taxa: ${f.complianceRate}%`)
+  }
+  lines.push('')
+  lines.push('--- RANKING POR LOJA ---')
+  for (const s of data.byStore) {
+    lines.push(`  ${s.storeName.padEnd(30)} Total: ${String(s.totalPlans).padStart(4)}  Resolvidos: ${String(s.resolvedPlans).padStart(4)}  Vencidos: ${String(s.overduePlans).padStart(4)}  Taxa: ${s.rate}%`)
+  }
+
+  downloadFile(lines.join('\n'), filename, 'text/plain;charset=utf-8')
+}
+
+export async function exportComplianceToExcel(data: ComplianceExportData, filename: string) {
+  const XLSX = await import('xlsx')
+  const wb = XLSX.utils.book_new()
+
+  const fieldData = data.byField.map(f => ({
+    'Campo': f.fieldName,
+    'Template': f.templateName,
+    'Total': f.totalPlans,
+    'Resolvidos': f.resolvedPlans,
+    'Taxa Conformidade (%)': f.complianceRate,
+  }))
+  const ws1 = XLSX.utils.json_to_sheet(fieldData.length ? fieldData : [{ 'Campo': 'Sem dados' }])
+  ws1['!cols'] = [{ wch: 30 }, { wch: 30 }, { wch: 8 }, { wch: 12 }, { wch: 20 }]
+  XLSX.utils.book_append_sheet(wb, ws1, 'Por Campo')
+
+  const storeData = data.byStore.map(s => ({
+    'Loja': s.storeName,
+    'Total': s.totalPlans,
+    'Resolvidos': s.resolvedPlans,
+    'Vencidos': s.overduePlans,
+    'Taxa (%)': s.rate,
+  }))
+  const ws2 = XLSX.utils.json_to_sheet(storeData.length ? storeData : [{ 'Loja': 'Sem dados' }])
+  ws2['!cols'] = [{ wch: 30 }, { wch: 8 }, { wch: 12 }, { wch: 10 }, { wch: 10 }]
+  XLSX.utils.book_append_sheet(wb, ws2, 'Por Loja')
+
+  const buf = XLSX.write(wb, { bookType: 'xlsx', type: 'array' })
+  downloadFile(buf, filename, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+}
+
+export async function exportComplianceToPDF(data: ComplianceExportData): Promise<void> {
+  const { jsPDF } = await import('jspdf')
+  const doc = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4' })
+  const sm = data.summary
+
+  let y = addPdfHeader(doc, 'RELATORIO DE CONFORMIDADE', [
+    `Gerado em: ${new Date().toLocaleString('pt-BR')}`,
+    `NCs: ${sm.totalNonConformities}  |  Taxa: ${sm.complianceRate}%  |  Criados: ${sm.plansCreated}  |  Resolvidos: ${sm.plansResolved}  |  Vencidos: ${sm.plansOverdue}`,
+  ])
+
+  doc.setFontSize(10)
+  doc.setFont('helvetica', 'bold')
+  doc.setTextColor('#000000')
+  doc.text(n('Conformidade por Campo'), MARGIN, y)
+  y += 6
+
+  y = drawPdfTable(doc, [
+    { header: 'Campo', width: 55 },
+    { header: 'Template', width: 50 },
+    { header: 'Total', width: 22, align: 'right' },
+    { header: 'Resolvidos', width: 27, align: 'right' },
+    { header: 'Taxa (%)', width: 28, align: 'right' },
+  ], data.byField.map(f => [f.fieldName, f.templateName, String(f.totalPlans), String(f.resolvedPlans), `${f.complianceRate}%`]), y)
+
+  y += 8
+  if (y > PAGE_BOTTOM - 20) { doc.addPage(); y = MARGIN }
+
+  doc.setFontSize(10)
+  doc.setFont('helvetica', 'bold')
+  doc.setTextColor('#000000')
+  doc.text(n('Ranking por Loja'), MARGIN, y)
+  y += 6
+
+  drawPdfTable(doc, [
+    { header: 'Loja', width: 60 },
+    { header: 'Total', width: 25, align: 'right' },
+    { header: 'Resolvidos', width: 30, align: 'right' },
+    { header: 'Vencidos', width: 30, align: 'right' },
+    { header: 'Taxa (%)', width: 37, align: 'right' },
+  ], data.byStore.map(s => [s.storeName, String(s.totalPlans), String(s.resolvedPlans), String(s.overduePlans), `${s.rate}%`]), y)
+
+  addPdfFooters(doc)
+  const timestamp = new Date().toISOString().split('T')[0]
+  doc.save(`relatorio_conformidade_${timestamp}.pdf`)
+}
+
+// ─── REINCIDENCIAS ───────────────────────────────────────────────────────────
+
+export function exportReincidenciasToCSV(data: ReincidenciaExportData, filename: string) {
+  const esc = (v: string | number) => `"${String(v).replace(/"/g, '""')}"`
+  const lines: string[] = []
+
+  lines.push('=== RESUMO ===')
+  lines.push('Total Reincidencias,Media por Campo,Pior Campo,Pior Loja')
+  lines.push([data.summary.totalReincidencias, data.summary.avgReincidenciaRate, esc(data.summary.worstField || '-'), esc(data.summary.worstStore || '-')].join(','))
+  lines.push('')
+
+  lines.push('=== CAMPOS COM REINCIDENCIA ===')
+  lines.push('Campo,Loja,Template,Ocorrencias,Ultima Ocorrencia')
+  for (const r of data.rows) {
+    lines.push([esc(r.fieldName), esc(r.storeName), esc(r.templateName), r.occurrences, esc(fmtDateBR(r.lastOccurrence))].join(','))
+  }
+  lines.push('')
+
+  lines.push('=== DESEMPENHO POR RESPONSAVEL ===')
+  lines.push('Responsavel,Total Planos,Concluidos,Vencidos,Media Dias Resolucao')
+  for (const a of data.assigneeStats) {
+    lines.push([esc(a.userName), a.totalPlans, a.completedPlans, a.overduePlans, a.avgResolutionDays !== null ? a.avgResolutionDays : '-'].join(','))
+  }
+
+  downloadFile('\uFEFF' + lines.join('\n'), filename, 'text/csv;charset=utf-8')
+}
+
+export function exportReincidenciasToTXT(data: ReincidenciaExportData, filename: string) {
+  const sm = data.summary
+  const lines: string[] = [
+    '═'.repeat(80),
+    'RELATORIO DE REINCIDENCIAS',
+    `Gerado em: ${new Date().toLocaleString('pt-BR')}`,
+    '═'.repeat(80),
+    '',
+    '--- RESUMO ---',
+    `  Total Reincidencias:  ${sm.totalReincidencias}`,
+    `  Media por Campo:      ${sm.avgReincidenciaRate}`,
+    `  Pior Campo:           ${sm.worstField || '-'}`,
+    `  Pior Loja:            ${sm.worstStore || '-'}`,
+    '',
+    '--- CAMPOS COM REINCIDENCIA ---',
+  ]
+  for (const r of data.rows) {
+    lines.push(`  ${r.fieldName.padEnd(25)} ${r.storeName.padEnd(20)} ${r.templateName.padEnd(20)} ${String(r.occurrences).padStart(3)}x  Ultima: ${fmtDateBR(r.lastOccurrence)}`)
+  }
+  lines.push('')
+  lines.push('--- DESEMPENHO POR RESPONSAVEL ---')
+  for (const a of data.assigneeStats) {
+    const dias = a.avgResolutionDays !== null ? `${a.avgResolutionDays} dias` : '-'
+    lines.push(`  ${a.userName.padEnd(30)} Total: ${String(a.totalPlans).padStart(4)}  Concl: ${String(a.completedPlans).padStart(4)}  Venc: ${String(a.overduePlans).padStart(4)}  Media: ${dias}`)
+  }
+
+  downloadFile(lines.join('\n'), filename, 'text/plain;charset=utf-8')
+}
+
+export async function exportReincidenciasToExcel(data: ReincidenciaExportData, filename: string) {
+  const XLSX = await import('xlsx')
+  const wb = XLSX.utils.book_new()
+
+  const reincData = data.rows.map(r => ({
+    'Campo': r.fieldName,
+    'Loja': r.storeName,
+    'Template': r.templateName,
+    'Ocorrencias': r.occurrences,
+    'Ultima Ocorrencia': fmtDateBR(r.lastOccurrence),
+  }))
+  const ws1 = XLSX.utils.json_to_sheet(reincData.length ? reincData : [{ 'Campo': 'Sem dados' }])
+  ws1['!cols'] = [{ wch: 30 }, { wch: 25 }, { wch: 25 }, { wch: 14 }, { wch: 18 }]
+  XLSX.utils.book_append_sheet(wb, ws1, 'Reincidencias')
+
+  const assigneeData = data.assigneeStats.map(a => ({
+    'Responsavel': a.userName,
+    'Total Planos': a.totalPlans,
+    'Concluidos': a.completedPlans,
+    'Vencidos': a.overduePlans,
+    'Media Dias Resolucao': a.avgResolutionDays !== null ? a.avgResolutionDays : '-',
+  }))
+  const ws2 = XLSX.utils.json_to_sheet(assigneeData.length ? assigneeData : [{ 'Responsavel': 'Sem dados' }])
+  ws2['!cols'] = [{ wch: 30 }, { wch: 14 }, { wch: 12 }, { wch: 10 }, { wch: 22 }]
+  XLSX.utils.book_append_sheet(wb, ws2, 'Desempenho Responsaveis')
+
+  const buf = XLSX.write(wb, { bookType: 'xlsx', type: 'array' })
+  downloadFile(buf, filename, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+}
+
+export async function exportReincidenciasToPDF(data: ReincidenciaExportData): Promise<void> {
+  const { jsPDF } = await import('jspdf')
+  const doc = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4' })
+  const sm = data.summary
+
+  let y = addPdfHeader(doc, 'RELATORIO DE REINCIDENCIAS', [
+    `Gerado em: ${new Date().toLocaleString('pt-BR')}`,
+    `Total: ${sm.totalReincidencias}  |  Media/campo: ${sm.avgReincidenciaRate}  |  Pior campo: ${sm.worstField || '-'}  |  Pior loja: ${sm.worstStore || '-'}`,
+  ])
+
+  doc.setFontSize(10)
+  doc.setFont('helvetica', 'bold')
+  doc.setTextColor('#000000')
+  doc.text(n('Campos com Reincidencia'), MARGIN, y)
+  y += 6
+
+  y = drawPdfTable(doc, [
+    { header: 'Campo', width: 45 },
+    { header: 'Loja', width: 35 },
+    { header: 'Template', width: 40 },
+    { header: 'Ocorr.', width: 22, align: 'right' },
+    { header: 'Ultima', width: 40, align: 'right' },
+  ], data.rows.map(r => [r.fieldName, r.storeName, r.templateName, String(r.occurrences), fmtDateBR(r.lastOccurrence)]), y)
+
+  y += 8
+  if (y > PAGE_BOTTOM - 20) { doc.addPage(); y = MARGIN }
+
+  doc.setFontSize(10)
+  doc.setFont('helvetica', 'bold')
+  doc.setTextColor('#000000')
+  doc.text(n('Desempenho por Responsavel'), MARGIN, y)
+  y += 6
+
+  drawPdfTable(doc, [
+    { header: 'Responsavel', width: 50 },
+    { header: 'Total', width: 25, align: 'right' },
+    { header: 'Concluidos', width: 30, align: 'right' },
+    { header: 'Vencidos', width: 28, align: 'right' },
+    { header: 'Media Dias', width: 49, align: 'right' },
+  ], data.assigneeStats.map(a => [
+    a.userName, String(a.totalPlans), String(a.completedPlans), String(a.overduePlans),
+    a.avgResolutionDays !== null ? String(a.avgResolutionDays) : '-',
+  ]), y)
+
+  addPdfFooters(doc)
+  const timestamp = new Date().toISOString().split('T')[0]
+  doc.save(`relatorio_reincidencias_${timestamp}.pdf`)
 }

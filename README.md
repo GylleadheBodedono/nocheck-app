@@ -43,12 +43,14 @@
 - **Notificações do sistema (PWA)** — planos de ação, vencimentos e demais avisos podem ser exibidos como notificação nativa no celular/navegador; o usuário precisa permitir notificações no prompt do navegador (ícone do sino > "Ativar notificações")
 - Tipos: `action_plan_assigned`, `action_plan_overdue`, `checklist_submitted`, etc.
 - Integração com **Microsoft Teams** via Webhook para alertas de divergências
+- **Alertas Teams por canal da função** — cada função/cargo pode ter seu próprio webhook do Teams; alertas de plano de ação são enviados para o canal da equipe do responsável com **@menção** do preenchedor e do responsável usando o email cadastrado
+- Fallback automático para canal global se a função não tiver webhook configurado
 - Envio de **email** via Edge Function do Supabase com templates HTML customizáveis configurados no painel admin
 
 ### 📸 Relatório Fotográfico de Não-Conformidades
 - Geração de relatório agrupado por template/campo com fotos das respostas marcadas como não-conformidade
 - Filtros por loja, template, severidade e período
-- Exportação em PDF
+- Exportação em **CSV, Excel, TXT e PDF** (com fotos embutidas no PDF)
 
 ### 🔍 Pesquisa Global no Admin
 - Campo de busca no header do painel admin (atalho `Ctrl+K` / `Cmd+K`)
@@ -64,8 +66,11 @@
 
 ### 📊 Relatórios e Dashboard
 - Dashboard com resumo de checklists do dia, alertas de vencimento e atividade recente
-- Tela de relatórios admin com filtros de usuário, loja, template e período
-- Gráficos de evolução e contagens de conformidade/não-conformidade
+- **Dashboard técnica** — usuários marcados como "técnico" veem dashboard diferenciada com notificações, planos de ação atribuídos e histórico recente
+- Tela de relatórios admin com 4 tabs: **Visão Geral**, **Respostas por Usuário**, **Conformidade** e **Reincidências**
+- **Exportação em cada tab** — botão "Exportar" com 4 formatos: CSV, Excel (XLSX), TXT e PDF
+- Relatório de Planos de Ação com exportação em CSV, Excel, TXT e PDF (com fotos de evidência)
+- Gráficos de evolução, heatmap loja x campo, ranking de conformidade por loja
 
 ---
 
@@ -78,7 +83,7 @@
 | `users` | Perfis de usuário (vinculados ao Supabase Auth) |
 | `stores` | Lojas/unidades do grupo |
 | `sectors` | Setores dentro das lojas |
-| `functions` | Cargos/funções dos usuários |
+| `functions` | Cargos/funções dos usuários (com webhook Teams opcional) |
 | `user_stores` | Vínculo N:N usuário↔loja (com setor e flag `is_primary`) |
 | `checklist_templates` | Templates de checklist (nome, categoria, campos, status) |
 | `template_sections` | Etapas/seções de um template |
@@ -143,8 +148,9 @@ src/
 │   │   ├── setores/              # Gestão de setores
 │   │   ├── funcoes/              # Gestão de cargos
 │   │   ├── validacoes/           # Sessões de validação cruzada
-│   │   ├── relatorios/           # Relatórios de checklists
-│   │   │   └── fotos-nc/         # Relatório fotográfico de não-conformidades
+│   │   ├── relatorios/           # Relatórios de checklists (4 tabs com exportação)
+│   │   │   ├── fotos-nc/         # Relatório fotográfico de não-conformidades
+│   │   │   └── planos-de-acao/   # Relatório de planos de ação
 │   │   └── configuracoes/        # Configurações globais e templates de email
 │   ├── api/                      # API Routes (Next.js)
 │   │   ├── admin/users/          # Criação e edição de usuários (usa service role)
@@ -177,6 +183,9 @@ src/
 │   ├── crossValidation.ts        # Motor de validação cruzada
 │   ├── notificationService.ts    # Criação de notificações in-app
 │   ├── emailTemplateEngine.ts    # Engine de templates de email com variáveis
+│   ├── exportUtils.ts            # Exportação client-side (CSV, Excel, TXT, PDF)
+│   ├── analyticsQueries.ts       # Queries de conformidade e reincidências
+│   ├── actionPlanEngine.ts       # Motor de criação automática de planos de ação
 │   ├── google.ts                 # Integração Google Drive (upload de fotos)
 │   └── teams.ts                  # Alertas Microsoft Teams via Webhook
 ├── hooks/

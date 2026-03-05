@@ -18,12 +18,20 @@ import {
   FiAlertTriangle,
   FiRepeat,
   FiCamera,
+  FiDownload,
+  FiChevronDown,
 } from 'react-icons/fi'
 import Link from 'next/link'
 import { APP_CONFIG } from '@/lib/config'
 import { LoadingPage, Header, Select } from '@/components/ui'
 import { getAuthCache, getUserCache } from '@/lib/offlineCache'
 import { fetchComplianceData, fetchReincidenciaData, fetchStoreHeatmap, type ComplianceSummary, type FieldComplianceRow, type StoreComplianceRow, type ReincidenciaSummary, type ReincidenciaRow, type AssigneeStats, type HeatmapCell } from '@/lib/analyticsQueries'
+import {
+  exportOverviewToCSV, exportOverviewToTXT, exportOverviewToExcel, exportOverviewToPDF,
+  exportResponsesToCSV, exportResponsesToTXT, exportResponsesToExcel, exportResponsesToPDF,
+  exportComplianceToCSV, exportComplianceToTXT, exportComplianceToExcel, exportComplianceToPDF,
+  exportReincidenciasToCSV, exportReincidenciasToTXT, exportReincidenciasToExcel, exportReincidenciasToPDF,
+} from '@/lib/exportUtils'
 
 type StoreStats = {
   store_id: number
@@ -90,6 +98,9 @@ export default function RelatoriosPage() {
   const [reincRows, setReincRows] = useState<ReincidenciaRow[]>([])
   const [assigneeStats, setAssigneeStats] = useState<AssigneeStats[]>([])
   const [responsePage, setResponsePage] = useState(1)
+  const [exportMenuOpen, setExportMenuOpen] = useState(false)
+  const [exporting, setExporting] = useState(false)
+  const [exportingPdf, setExportingPdf] = useState(false)
   const responsePerPage = 20
   const router = useRouter()
   const supabase = useMemo(() => createClient(), [])
@@ -370,6 +381,90 @@ export default function RelatoriosPage() {
     return badges[status] || { label: status, cls: 'bg-surface-hover text-muted' }
   }
 
+  // Close export menu on tab switch
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { setExportMenuOpen(false) }, [activeTab])
+
+  const handleExport = async (format: 'csv' | 'txt' | 'xlsx') => {
+    setExportMenuOpen(false)
+    setExporting(true)
+    try {
+      const timestamp = new Date().toISOString().split('T')[0]
+      const tabName = activeTab === 'overview' ? 'visao_geral' : activeTab === 'responses' ? 'respostas' : activeTab === 'conformidade' ? 'conformidade' : 'reincidencias'
+      const filename = `relatorio_${tabName}_${timestamp}`
+
+      if (activeTab === 'overview') {
+        const data = { summary, storeStats, templateStats, dailyStats, period }
+        if (format === 'csv') exportOverviewToCSV(data, `${filename}.csv`)
+        else if (format === 'txt') exportOverviewToTXT(data, `${filename}.txt`)
+        else await exportOverviewToExcel(data, `${filename}.xlsx`)
+      } else if (activeTab === 'responses') {
+        if (format === 'csv') exportResponsesToCSV(filteredUserChecklists, `${filename}.csv`)
+        else if (format === 'txt') exportResponsesToTXT(filteredUserChecklists, `${filename}.txt`)
+        else await exportResponsesToExcel(filteredUserChecklists, `${filename}.xlsx`)
+      } else if (activeTab === 'conformidade') {
+        const data = { summary: complianceSummary, byField: complianceByField, byStore: complianceByStore }
+        if (format === 'csv') exportComplianceToCSV(data, `${filename}.csv`)
+        else if (format === 'txt') exportComplianceToTXT(data, `${filename}.txt`)
+        else await exportComplianceToExcel(data, `${filename}.xlsx`)
+      } else {
+        const data = { summary: reincSummary, rows: reincRows, assigneeStats }
+        if (format === 'csv') exportReincidenciasToCSV(data, `${filename}.csv`)
+        else if (format === 'txt') exportReincidenciasToTXT(data, `${filename}.txt`)
+        else await exportReincidenciasToExcel(data, `${filename}.xlsx`)
+      }
+    } catch (err) {
+      console.error('[Relatorios] Erro ao exportar:', err)
+    } finally {
+      setExporting(false)
+    }
+  }
+
+  const handleExportPdf = async () => {
+    if (exportingPdf) return
+    setExportMenuOpen(false)
+    setExportingPdf(true)
+    try {
+      if (activeTab === 'overview') {
+        await exportOverviewToPDF({ summary, storeStats, templateStats, dailyStats, period })
+      } else if (activeTab === 'responses') {
+        await exportResponsesToPDF(filteredUserChecklists)
+      } else if (activeTab === 'conformidade') {
+        await exportComplianceToPDF({ summary: complianceSummary, byField: complianceByField, byStore: complianceByStore })
+      } else {
+        await exportReincidenciasToPDF({ summary: reincSummary, rows: reincRows, assigneeStats })
+      }
+    } catch (err) {
+      console.error('[Relatorios] Erro ao exportar PDF:', err)
+    } finally {
+      setExportingPdf(false)
+    }
+  }
+
+  const exportDropdown = (
+    <div className="relative">
+      <button
+        onClick={() => setExportMenuOpen(!exportMenuOpen)}
+        disabled={exporting || exportingPdf}
+        className="btn-primary text-sm flex items-center gap-1.5 disabled:opacity-50"
+      >
+        <FiDownload className="text-base" />
+        {exportingPdf ? 'Gerando PDF...' : exporting ? 'Exportando...' : 'Exportar'}
+        <FiChevronDown className="text-xs" />
+      </button>
+      {exportMenuOpen && (
+        <div className="absolute right-0 top-full mt-1 bg-surface border border-subtle rounded-lg shadow-lg z-20 min-w-[160px]">
+          <button onClick={() => handleExport('csv')} className="w-full px-4 py-2 text-sm text-left text-main hover:bg-surface-hover rounded-t-lg">CSV</button>
+          <button onClick={() => handleExport('xlsx')} className="w-full px-4 py-2 text-sm text-left text-main hover:bg-surface-hover">Excel</button>
+          <button onClick={() => handleExport('txt')} className="w-full px-4 py-2 text-sm text-left text-main hover:bg-surface-hover">TXT</button>
+          <button onClick={handleExportPdf} disabled={exportingPdf} className="w-full px-4 py-2 text-sm text-left text-main hover:bg-surface-hover rounded-b-lg disabled:opacity-50">
+            {exportingPdf ? 'Gerando PDF...' : 'PDF'}
+          </button>
+        </div>
+      )}
+    </div>
+  )
+
   if (loading) {
     return <LoadingPage />
   }
@@ -496,6 +591,7 @@ export default function RelatoriosPage() {
                 {filteredUserChecklists.length} checklist(s)
                 {responseFilterUser && ` de ${allUsers.find(u => u.id === responseFilterUser)?.name || 'usuario'}`}
               </p>
+              {exportDropdown}
             </div>
 
             {/* Table */}
@@ -593,7 +689,7 @@ export default function RelatoriosPage() {
         {/* Period Filter */}
         <div className="flex items-center justify-between mb-6">
           <h2 className="text-lg font-semibold text-main">Visao Geral</h2>
-          <div className="flex gap-2">
+          <div className="flex items-center gap-2">
             {(['7d', '30d', '90d'] as const).map((p) => (
               <button
                 key={p}
@@ -605,6 +701,7 @@ export default function RelatoriosPage() {
                 {p === '7d' ? '7 dias' : p === '30d' ? '30 dias' : '90 dias'}
               </button>
             ))}
+            {exportDropdown}
           </div>
         </div>
 
@@ -777,12 +874,13 @@ export default function RelatoriosPage() {
             {/* Period filter */}
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-lg font-semibold text-main">Conformidade</h2>
-              <div className="flex gap-2">
+              <div className="flex items-center gap-2">
                 {(['7d', '30d', '90d'] as const).map((p) => (
                   <button key={p} onClick={() => setPeriod(p)} className={`px-4 py-2 rounded-xl font-medium transition-colors ${period === p ? 'btn-primary' : 'btn-secondary'}`}>
                     {p === '7d' ? '7 dias' : p === '30d' ? '30 dias' : '90 dias'}
                   </button>
                 ))}
+                {exportDropdown}
               </div>
             </div>
 
@@ -930,12 +1028,13 @@ export default function RelatoriosPage() {
             {/* Period filter */}
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-lg font-semibold text-main">Reincidencias</h2>
-              <div className="flex gap-2">
+              <div className="flex items-center gap-2">
                 {(['7d', '30d', '90d'] as const).map((p) => (
                   <button key={p} onClick={() => setPeriod(p)} className={`px-4 py-2 rounded-xl font-medium transition-colors ${period === p ? 'btn-primary' : 'btn-secondary'}`}>
                     {p === '7d' ? '7 dias' : p === '30d' ? '30 dias' : '90 dias'}
                   </button>
                 ))}
+                {exportDropdown}
               </div>
             </div>
 

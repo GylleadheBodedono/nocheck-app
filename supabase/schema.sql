@@ -153,6 +153,7 @@ CREATE TABLE IF NOT EXISTS public.functions (
   color TEXT DEFAULT '#6366f1',
   icon TEXT DEFAULT 'briefcase',
   is_active BOOLEAN DEFAULT true,
+  teams_webhook_url TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 

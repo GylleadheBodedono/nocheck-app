@@ -29,6 +29,10 @@ type ActionPlanData = {
   nonConformityValue: string | null
   isReincidencia: boolean
   reincidenciaCount: number
+  respondentName?: string
+  respondentEmail?: string
+  assigneeEmail?: string
+  webhookUrl?: string | null
 }
 
 /**
@@ -212,9 +216,10 @@ async function enviarParaTeams(data: ValidationData): Promise<{ success: boolean
 }
 
 async function enviarPlanoAcaoParaTeams(data: ActionPlanData): Promise<{ success: boolean; error?: string }> {
-  if (!TEAMS_WEBHOOK_URL) {
-    console.warn('[Teams] Webhook URL não configurado')
-    return { success: false, error: 'TEAMS_WEBHOOK_URL não configurado' }
+  const webhookUrl = data.webhookUrl || TEAMS_WEBHOOK_URL
+  if (!webhookUrl) {
+    console.warn('[Teams] Webhook URL nao configurado (nem por funcao nem global)')
+    return { success: false, error: 'Webhook nao configurado' }
   }
 
   const severityEmoji: Record<string, string> = {
@@ -240,6 +245,29 @@ async function enviarPlanoAcaoParaTeams(data: ActionPlanData): Promise<{ success
     facts.splice(2, 0, { title: '❌ Valor:', value: data.nonConformityValue })
   }
 
+  // Build @mention entities
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const entities: any[] = []
+  const mentionParts: string[] = []
+
+  if (data.respondentEmail && data.respondentName) {
+    entities.push({
+      type: 'mention',
+      text: `<at>${data.respondentName}</at>`,
+      mentioned: { id: data.respondentEmail, name: data.respondentName },
+    })
+    mentionParts.push(`Preenchido por: <at>${data.respondentName}</at>`)
+  }
+
+  if (data.assigneeEmail && data.assigneeName) {
+    entities.push({
+      type: 'mention',
+      text: `<at>${data.assigneeName}</at>`,
+      mentioned: { id: data.assigneeEmail, name: data.assigneeName },
+    })
+    mentionParts.push(`Responsavel: <at>${data.assigneeName}</at>`)
+  }
+
   const card = {
     type: 'message',
     attachments: [
@@ -260,6 +288,11 @@ async function enviarPlanoAcaoParaTeams(data: ActionPlanData): Promise<{ success
               wrap: true,
               color: 'Attention' as const,
             }] : []),
+            ...(mentionParts.length > 0 ? [{
+              type: 'TextBlock',
+              text: mentionParts.join(' | '),
+              wrap: true,
+            }] : []),
           ],
           actions: [
             {
@@ -268,13 +301,16 @@ async function enviarPlanoAcaoParaTeams(data: ActionPlanData): Promise<{ success
               url: `${process.env.NEXT_PUBLIC_APP_URL || 'https://nocheck-app.vercel.app'}/admin/planos-de-acao`,
             },
           ],
+          ...(entities.length > 0 ? { msteams: { entities } } : {}),
         },
       },
     ],
   }
 
   try {
-    const response = await fetch(TEAMS_WEBHOOK_URL, {
+    console.log('[Teams] Enviando alerta plano de acao para:', webhookUrl.substring(0, 50) + '...')
+
+    const response = await fetch(webhookUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(card),

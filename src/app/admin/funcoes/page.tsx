@@ -37,6 +37,7 @@ export default function FuncoesPage() {
     color: '#6366f1',
     icon: 'briefcase',
     is_active: true,
+    teams_webhook_url: '',
   })
   const [saving, setSaving] = useState(false)
   const [isOffline, setIsOffline] = useState(false)
@@ -157,6 +158,7 @@ export default function FuncoesPage() {
         color: fn.color,
         icon: fn.icon,
         is_active: fn.is_active,
+        teams_webhook_url: fn.teams_webhook_url || '',
       })
     } else {
       setEditingFunction(null)
@@ -166,6 +168,7 @@ export default function FuncoesPage() {
         color: '#6366f1',
         icon: 'briefcase',
         is_active: true,
+        teams_webhook_url: '',
       })
     }
     setShowModal(true)
@@ -193,6 +196,7 @@ export default function FuncoesPage() {
             color: formData.color,
             icon: formData.icon,
             is_active: formData.is_active,
+            teams_webhook_url: formData.teams_webhook_url || null,
           })
           .eq('id', editingFunction.id)
 
@@ -207,6 +211,7 @@ export default function FuncoesPage() {
             color: formData.color,
             icon: formData.icon,
             is_active: formData.is_active,
+            teams_webhook_url: formData.teams_webhook_url || null,
           })
 
         if (error) throw error
@@ -451,6 +456,19 @@ export default function FuncoesPage() {
                 </div>
               </div>
 
+              <div>
+                <label className="block text-sm font-medium text-secondary mb-1">
+                  Webhook Teams
+                </label>
+                <input
+                  type="url"
+                  value={formData.teams_webhook_url}
+                  onChange={(e) => setFormData({ ...formData, teams_webhook_url: e.target.value })}
+                  className="input"
+                  placeholder="https://....webhook.office.com/..."
+                />
+                <p className="text-xs text-muted mt-1">URL do webhook do canal Teams para alertas desta funcao</p>
+              </div>
               <div>
                 <label className="flex items-center gap-2 cursor-pointer">
                   <input

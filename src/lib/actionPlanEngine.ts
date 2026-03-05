@@ -282,6 +282,7 @@ export async function processarNaoConformidades(
     let templateName = `Template #${templateId}`
     let sectorName = ''
     let respondentName = 'Usuario'
+    let respondentEmail = ''
     let respondentTime = new Date().toISOString()
     let emailTemplateHtml: string | null = null
     let emailSubjectTemplate: string | null = null
@@ -294,7 +295,7 @@ export async function processarNaoConformidades(
           sectorId
             ? sb.from('sectors').select('name').eq('id', sectorId).single()
             : Promise.resolve({ data: null }),
-          sb.from('users').select('full_name').eq('id', userId).single(),
+          sb.from('users').select('full_name, email').eq('id', userId).single(),
           sb.from('checklists').select('completed_at, created_at').eq('id', checklistId).single(),
           sb.from('app_settings').select('value').eq('key', 'action_plan_email_template').maybeSingle(),
           sb.from('app_settings').select('value').eq('key', 'action_plan_email_subject').maybeSingle(),
@@ -304,6 +305,7 @@ export async function processarNaoConformidades(
       if (templateResult.data?.name) templateName = templateResult.data.name
       if (sectorResult.data?.name) sectorName = sectorResult.data.name
       if (respondentResult.data?.full_name) respondentName = respondentResult.data.full_name
+      if (respondentResult.data?.email) respondentEmail = respondentResult.data.email
       if (checklistResult.data?.completed_at || checklistResult.data?.created_at) {
         respondentTime = checklistResult.data.completed_at || checklistResult.data.created_at
       }
@@ -510,7 +512,21 @@ export async function processarNaoConformidades(
           console.error(`[ActionPlan] FALHA ao enviar email para assignee ${assigneeId}:`, emailResult.error)
         }
 
-        // Teams alert
+        // Teams alert — busca webhook da funcao do assignee
+        let assigneeWebhookUrl: string | null = null
+        let assigneeEmail = ''
+        try {
+          const { data: assigneeFnData } = await sb
+            .from('users')
+            .select('email, function_ref:functions!users_function_id_fkey(teams_webhook_url)')
+            .eq('id', assigneeId)
+            .single()
+          if (assigneeFnData?.email) assigneeEmail = assigneeFnData.email
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const fnRef = (assigneeFnData as any)?.function_ref
+          if (fnRef?.teams_webhook_url) assigneeWebhookUrl = fnRef.teams_webhook_url
+        } catch { /* ignora erro na busca extra */ }
+
         await sendActionPlanTeamsAlert({
           title: planTitle,
           fieldName: field.name,
@@ -521,6 +537,10 @@ export async function processarNaoConformidades(
           nonConformityValue,
           isReincidencia: reincidencia.isReincidencia,
           reincidenciaCount: reincidencia.count,
+          respondentName,
+          respondentEmail,
+          assigneeEmail,
+          webhookUrl: assigneeWebhookUrl,
         })
       } catch (notifErr) {
         console.error('[ActionPlan] Erro ao enviar notificacoes:', notifErr)

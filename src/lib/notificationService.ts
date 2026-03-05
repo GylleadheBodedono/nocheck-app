@@ -159,6 +159,10 @@ export async function sendActionPlanTeamsAlert(data: {
   nonConformityValue: string | null
   isReincidencia: boolean
   reincidenciaCount: number
+  respondentName?: string
+  respondentEmail?: string
+  assigneeEmail?: string
+  webhookUrl?: string | null
 }): Promise<{ success: boolean; error?: string }> {
   try {
     const response = await fetch('/api/integrations/notify', {
