@@ -488,15 +488,23 @@ export default function UsuariosPage() {
                         })()}
                       </td>
                       <td className="px-6 py-4">
-                        {user.is_admin ? (
-                          <span className="px-2 py-1 text-xs bg-warning text-warning rounded-lg">
-                            Admin
-                          </span>
-                        ) : (
-                          <span className="px-2 py-1 text-xs bg-surface-hover text-muted rounded-lg">
-                            Funcionario
-                          </span>
-                        )}
+                        <div className="flex items-center gap-1 flex-wrap">
+                          {user.is_admin ? (
+                            <span className="px-2 py-1 text-xs bg-warning text-warning rounded-lg">
+                              Admin
+                            </span>
+                          ) : (
+                            <span className="px-2 py-1 text-xs bg-surface-hover text-muted rounded-lg">
+                              Funcionario
+                            </span>
+                          )}
+                          {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+                          {(user as any).is_tech && (
+                            <span className="px-2 py-1 text-xs bg-cyan-500/20 text-cyan-400 rounded-lg">
+                              Tecnico
+                            </span>
+                          )}
+                        </div>
                       </td>
                       <td className="px-6 py-4">
                         <div className="flex items-center justify-end gap-2">

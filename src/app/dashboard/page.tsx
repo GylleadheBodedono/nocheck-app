@@ -61,6 +61,7 @@ type UserProfile = {
   email: string
   full_name: string
   is_admin: boolean
+  is_tech: boolean
   store_id: number | null
   function_id: number | null
   sector_id: number | null
@@ -118,11 +119,6 @@ type NotificationItem = {
   action_url: string | null
 }
 
-const TECH_FUNCTIONS = ['ti', 'manutencao', 'manutenção']
-
-function normalizeName(s: string) {
-  return s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim()
-}
 
 /** Retorna true se o template nao tem restricao de horario ou se a hora atual esta dentro da janela permitida */
 function isTemplateWithinAllowedTime(template: { allowed_start_time?: string | null; allowed_end_time?: string | null }): boolean {
@@ -519,9 +515,8 @@ export default function DashboardPage() {
       // Tabela pode nao existir ainda
     }
 
-    // Dados extras para usuarios tecnicos (TI / Manutencao)
-    const isTechProfile = !profileData?.is_admin &&
-      TECH_FUNCTIONS.includes(normalizeName(profileData?.function_ref?.name ?? ''))
+    // Dados extras para usuarios tecnicos
+    const isTechProfile = profileData?.is_tech === true
     if (isTechProfile) {
       try {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -619,6 +614,7 @@ export default function DashboardPage() {
         email: cachedUser.email,
         full_name: cachedUser.full_name,
         is_admin: cachedUser.is_admin || false,
+        is_tech: cachedUser.is_tech || false,
         store_id: cachedUser.store_id || null,
         function_id: cachedUser.function_id || null,
         sector_id: cachedUser.sector_id || null,
@@ -897,8 +893,7 @@ export default function DashboardPage() {
   const stores = getUserStores()
   const availableTemplates = getAvailableTemplates()
 
-  const isTechUser = !profile?.is_admin &&
-    TECH_FUNCTIONS.includes(normalizeName(profile?.function_ref?.name ?? ''))
+  const isTechUser = profile?.is_tech === true
 
   if (loading) {
     return <LoadingPage />

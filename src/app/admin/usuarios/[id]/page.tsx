@@ -44,6 +44,7 @@ export default function EditarUsuarioPage() {
   const [email, setEmail] = useState('')
   const [phone, setPhone] = useState('')
   const [isAdmin, setIsAdmin] = useState(false)
+  const [isTech, setIsTech] = useState(false)
   const [isActive, setIsActive] = useState(true)
   const [functionId, setFunctionId] = useState<number | null>(null)
   const [storeAssignments, setStoreAssignments] = useState<StoreAssignment[]>([])
@@ -106,6 +107,8 @@ export default function EditarUsuarioPage() {
     setEmail(typedUser.email)
     setPhone(typedUser.phone || '')
     setIsAdmin(typedUser.is_admin)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    setIsTech((typedUser as any).is_tech || false)
     setIsActive(typedUser.is_active)
     setFunctionId(typedUser.function_id || null)
 
@@ -197,6 +200,7 @@ export default function EditarUsuarioPage() {
           fullName,
           phone: phone || null,
           isAdmin,
+          isTech,
           isActive,
           functionId: isAdmin ? null : (functionId || null),
           storeAssignments: isAdmin ? [] : storeAssignments,
@@ -315,6 +319,16 @@ export default function EditarUsuarioPage() {
                     className="w-5 h-5 rounded border-default bg-surface text-primary"
                   />
                   <span className="text-sm text-secondary">Administrador</span>
+                </label>
+
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={isTech}
+                    onChange={(e) => setIsTech(e.target.checked)}
+                    className="w-5 h-5 rounded border-default bg-surface text-primary"
+                  />
+                  <span className="text-sm text-cyan-400">Tecnico</span>
                 </label>
               </div>
             </div>

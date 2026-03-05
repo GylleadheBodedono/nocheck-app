@@ -106,12 +106,13 @@ export async function POST(request: NextRequest) {
 
   try {
     const body = await request.json()
-    const { email, password, fullName, phone, isAdmin, autoConfirm, storeId, functionId, sectorId, storeAssignments, redirectTo } = body as {
+    const { email, password, fullName, phone, isAdmin, isTech, autoConfirm, storeId, functionId, sectorId, storeAssignments, redirectTo } = body as {
       email: string
       password: string
       fullName: string
       phone?: string
       isAdmin: boolean
+      isTech?: boolean
       autoConfirm?: boolean
       storeId?: number
       functionId?: number
@@ -286,6 +287,7 @@ export async function POST(request: NextRequest) {
         full_name: fullName,
         phone: phone || null,
         is_admin: isAdmin,
+        is_tech: isTech || false,
         store_id: isAdmin ? null : (primary?.store_id || null),
         function_id: isAdmin ? null : (functionId || null),
         sector_id: isAdmin ? null : (primary?.sector_id || null),

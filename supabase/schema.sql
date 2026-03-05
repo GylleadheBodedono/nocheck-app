@@ -181,6 +181,7 @@ CREATE TABLE IF NOT EXISTS public.users (
   is_manager BOOLEAN DEFAULT false,
   is_active BOOLEAN DEFAULT true,
   is_admin BOOLEAN DEFAULT false,
+  is_tech BOOLEAN DEFAULT false,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );

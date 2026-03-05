@@ -30,10 +30,11 @@ export async function PUT(
 
     const body = await request.json()
 
-    const { fullName, phone, isAdmin, isActive, functionId, storeAssignments } = body as {
+    const { fullName, phone, isAdmin, isTech, isActive, functionId, storeAssignments } = body as {
       fullName: string
       phone?: string | null
       isAdmin: boolean
+      isTech?: boolean
       isActive: boolean
       functionId?: number | null
       storeAssignments?: { store_id: number; sector_id: number | null; is_primary: boolean }[]
@@ -54,6 +55,7 @@ export async function PUT(
         full_name: fullName,
         phone: phone || null,
         is_admin: isAdmin,
+        is_tech: isTech || false,
         is_active: isActive,
         function_id: isAdmin ? null : (functionId || null),
         store_id: isAdmin ? null : (primary?.store_id || null),

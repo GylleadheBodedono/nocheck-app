@@ -53,6 +53,7 @@ export type Database = {
           avatar_url: string | null
           is_active: boolean
           is_admin: boolean
+          is_tech: boolean
           store_id: number | null
           function_id: number | null
           sector_id: number | null
@@ -67,6 +68,7 @@ export type Database = {
           avatar_url?: string | null
           is_active?: boolean
           is_admin?: boolean
+          is_tech?: boolean
           store_id?: number | null
           function_id?: number | null
           sector_id?: number | null
@@ -81,6 +83,7 @@ export type Database = {
           avatar_url?: string | null
           is_active?: boolean
           is_admin?: boolean
+          is_tech?: boolean
           store_id?: number | null
           function_id?: number | null
           sector_id?: number | null

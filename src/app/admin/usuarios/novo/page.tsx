@@ -25,6 +25,7 @@ export default function NovoUsuarioPage() {
   const [fullName, setFullName] = useState('')
   const [phone, setPhone] = useState('')
   const [isAdmin, setIsAdmin] = useState(false)
+  const [isTech, setIsTech] = useState(false)
   const [autoConfirm, setAutoConfirm] = useState(false)
   const [functionId, setFunctionId] = useState<number | null>(null)
   const [storeAssignments, setStoreAssignments] = useState<{ store_id: number; sector_id: number | null; is_primary: boolean }[]>([])
@@ -104,6 +105,7 @@ export default function NovoUsuarioPage() {
           fullName,
           phone: phone || undefined,
           isAdmin,
+          isTech,
           autoConfirm,
           functionId: isAdmin ? undefined : (functionId || undefined),
           storeAssignments: isAdmin ? [] : storeAssignments,
@@ -135,6 +137,7 @@ export default function NovoUsuarioPage() {
     setFullName('')
     setPhone('')
     setIsAdmin(false)
+    setIsTech(false)
     setAutoConfirm(false)
     setFunctionId(null)
     setStoreAssignments([])
@@ -245,17 +248,32 @@ export default function NovoUsuarioPage() {
                   />
                 </div>
 
-                <div className="flex items-center gap-3 pt-2">
-                  <input
-                    type="checkbox"
-                    id="isAdmin"
-                    checked={isAdmin}
-                    onChange={(e) => setIsAdmin(e.target.checked)}
-                    className="w-5 h-5 rounded border-subtle bg-page text-primary focus:ring-primary"
-                  />
-                  <label htmlFor="isAdmin" className="text-secondary">
-                    Este usuario e <span className="text-amber-400 font-medium">Administrador</span>
-                  </label>
+                <div className="flex items-center gap-6 pt-2">
+                  <div className="flex items-center gap-3">
+                    <input
+                      type="checkbox"
+                      id="isAdmin"
+                      checked={isAdmin}
+                      onChange={(e) => setIsAdmin(e.target.checked)}
+                      className="w-5 h-5 rounded border-subtle bg-page text-primary focus:ring-primary"
+                    />
+                    <label htmlFor="isAdmin" className="text-secondary">
+                      <span className="text-amber-400 font-medium">Administrador</span>
+                    </label>
+                  </div>
+
+                  <div className="flex items-center gap-3">
+                    <input
+                      type="checkbox"
+                      id="isTech"
+                      checked={isTech}
+                      onChange={(e) => setIsTech(e.target.checked)}
+                      className="w-5 h-5 rounded border-subtle bg-page text-primary focus:ring-primary"
+                    />
+                    <label htmlFor="isTech" className="text-secondary">
+                      <span className="text-cyan-400 font-medium">Tecnico</span>
+                    </label>
+                  </div>
                 </div>
 
                 <div className="flex items-center gap-3">
