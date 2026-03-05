@@ -451,6 +451,31 @@ export default function AdminPage() {
         <div className="flex gap-6">
           {/* Left Column - Main Content */}
           <main className="flex-1 min-w-0">
+            {/* Mobile: Time Restriction Toggle */}
+            <div className="lg:hidden mb-4">
+              <label className="card p-4 flex items-center justify-between gap-3 cursor-pointer">
+                <div className="flex items-center gap-3 min-w-0">
+                  <FiSettings className="w-4 h-4 text-muted shrink-0" />
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-main leading-tight">Ignorar horarios</p>
+                    <p className="text-xs text-muted leading-tight">Desativa restricoes de horario</p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleToggleTimeRestrictions}
+                  disabled={togglingTime}
+                  className={`relative w-11 h-6 rounded-full transition-colors shrink-0 ${
+                    ignoreTimeRestrictions ? 'bg-primary' : 'bg-surface-hover border border-subtle'
+                  }`}
+                >
+                  <span className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${
+                    ignoreTimeRestrictions ? 'translate-x-5' : 'translate-x-0'
+                  }`} />
+                </button>
+              </label>
+            </div>
+
             {/* Quick Stats */}
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
               {statCards.map((stat) => {

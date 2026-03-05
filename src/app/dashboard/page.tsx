@@ -1167,6 +1167,169 @@ export default function DashboardPage() {
           </div>
         )}
 
+        {/* ── Tech user sections ── */}
+        {isTechUser && (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+            {/* Meus Planos de Acao - full width */}
+            <div className="md:col-span-2 card p-5">
+              <h2 className="text-lg font-semibold text-main mb-4 flex items-center gap-2">
+                <FiTool className="w-5 h-5 text-primary" />
+                Meus Planos de Acao
+              </h2>
+              {myActionPlans.length === 0 ? (
+                <div className="p-4 text-center">
+                  <p className="text-sm text-muted">Nenhum plano de acao atribuido</p>
+                </div>
+              ) : (
+                <>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                    {myActionPlans.map(plan => {
+                      const sevConfig: Record<string, { label: string; cls: string }> = {
+                        critica: { label: 'CRITICA', cls: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' },
+                        alta:    { label: 'ALTA',    cls: 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400' },
+                        media:   { label: 'MEDIA',   cls: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400' },
+                        baixa:   { label: 'BAIXA',   cls: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' },
+                      }
+                      const statusConfig: Record<string, { label: string; cls: string }> = {
+                        aberto:       { label: 'Aberto',       cls: 'bg-error/20 text-error' },
+                        em_andamento: { label: 'Em Andamento', cls: 'bg-warning/20 text-warning' },
+                        concluido:    { label: 'Concluido',    cls: 'bg-success/20 text-success' },
+                        vencido:      { label: 'Vencido',      cls: 'bg-error/20 text-error' },
+                      }
+                      const sev = sevConfig[plan.severity] || sevConfig.media
+                      const st = statusConfig[plan.status] || statusConfig.aberto
+                      const isOverdue = plan.deadline &&
+                        new Date(plan.deadline) < new Date() &&
+                        plan.status !== 'concluido'
+                      return (
+                        <a
+                          key={plan.id}
+                          href={`/admin/planos-de-acao/${plan.id}`}
+                          className="rounded-xl border border-subtle p-4 hover:shadow-theme-md hover:border-primary/30 transition-all block"
+                        >
+                          <div className="flex items-start gap-2 mb-2 flex-wrap">
+                            <span className={`px-2 py-0.5 rounded text-xs font-bold ${sev.cls}`}>
+                              {sev.label}
+                            </span>
+                            <span className={`px-2 py-0.5 rounded text-xs font-medium ${st.cls}`}>
+                              {st.label}
+                            </span>
+                            {plan.is_reincidencia && (
+                              <span className="px-2 py-0.5 rounded text-xs font-bold bg-error/20 text-error">
+                                Reincidencia
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-sm font-medium text-main mb-1 line-clamp-2">{plan.title}</p>
+                          <p className="text-xs text-muted">
+                            {plan.store?.name}
+                            {plan.deadline && (
+                              <span style={{ color: isOverdue ? 'var(--color-error)' : undefined }}>
+                                {` • ${new Date(plan.deadline).toLocaleDateString('pt-BR')}${isOverdue ? ' (vencido)' : ''}`}
+                              </span>
+                            )}
+                          </p>
+                        </a>
+                      )
+                    })}
+                  </div>
+                  <a
+                    href="/admin/planos-de-acao"
+                    className="block text-sm text-primary hover:underline text-center py-3 mt-2"
+                  >
+                    Ver todos os planos →
+                  </a>
+                </>
+              )}
+            </div>
+
+            {/* Notificacoes */}
+            <div className="card p-5">
+              <h2 className="text-lg font-semibold text-main mb-4 flex items-center gap-2">
+                <FiBell className="w-5 h-5 text-primary" />
+                Notificacoes
+              </h2>
+              {myNotifications.length === 0 ? (
+                <div className="p-4 text-center">
+                  <p className="text-sm text-muted">Nenhuma notificacao recente</p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {[...myNotifications]
+                    .sort((a, b) => (a.is_read === b.is_read ? 0 : a.is_read ? 1 : -1))
+                    .map(notif => (
+                      <div
+                        key={notif.id}
+                        className={`rounded-xl border border-subtle p-3 ${!notif.is_read ? 'border-l-4 border-l-primary bg-primary/5' : ''}`}
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex items-start gap-2 min-w-0">
+                            {!notif.is_read && (
+                              <span className="mt-1.5 w-2 h-2 rounded-full bg-primary shrink-0" />
+                            )}
+                            <div className="min-w-0">
+                              <p className="text-sm font-medium text-main truncate">{notif.title}</p>
+                              {notif.message && (
+                                <p className="text-xs text-muted line-clamp-2">{notif.message}</p>
+                              )}
+                              <p className="text-xs text-muted mt-1">
+                                {new Date(notif.created_at).toLocaleString('pt-BR')}
+                              </p>
+                            </div>
+                          </div>
+                          {notif.action_url && (
+                            <a
+                              href={notif.action_url}
+                              className="shrink-0 text-primary hover:underline"
+                            >
+                              <FiExternalLink className="w-4 h-4" />
+                            </a>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                </div>
+              )}
+            </div>
+
+            {/* Historico Recente (preview) */}
+            <div className="card p-5">
+              <h2 className="text-lg font-semibold text-main mb-4 flex items-center gap-2">
+                <FiClock className="w-5 h-5 text-primary" />
+                Historico Recente
+              </h2>
+              {recentChecklists.length === 0 ? (
+                <div className="p-4 text-center">
+                  <p className="text-sm text-muted">Voce ainda nao preencheu nenhum checklist</p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {recentChecklists.slice(0, 5).map(checklist => {
+                    const statusBadge = getStatusBadge(checklist.status)
+                    return (
+                      <a
+                        key={checklist.id}
+                        href={`/checklist/${checklist.id}`}
+                        className="rounded-xl border border-subtle p-3 hover:border-primary/30 transition-all block"
+                      >
+                        <div className="flex items-start justify-between mb-1">
+                          <p className="text-sm font-medium text-main truncate">{checklist.template?.name}</p>
+                          <span className={`badge-secondary text-xs shrink-0 ml-2 ${statusBadge.class}`}>
+                            {statusBadge.label}
+                          </span>
+                        </div>
+                        <p className="text-xs text-muted">
+                          {checklist.store?.name} • {formatDate(checklist.created_at)}
+                        </p>
+                      </a>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
         <div className="grid lg:grid-cols-3 gap-8">
           {/* Left Column - New Checklist */}
           <div className="lg:col-span-2">
@@ -1474,133 +1637,8 @@ export default function DashboardPage() {
 
           </div>
 
-          {/* Right Column - Recent Checklists + Tech sections */}
+          {/* Right Column - Recent Checklists */}
           <div>
-
-            {/* ── Tech user: Notifications ── */}
-            {isTechUser && (
-              <div className="mb-8">
-                <h2 className="text-lg font-semibold text-main mb-4 flex items-center gap-2">
-                  <FiBell className="w-5 h-5 text-primary" />
-                  Notificacoes
-                </h2>
-                {myNotifications.length === 0 ? (
-                  <div className="card p-4 text-center">
-                    <p className="text-sm text-muted">Nenhuma notificacao recente</p>
-                  </div>
-                ) : (
-                  <div className="space-y-2">
-                    {[...myNotifications]
-                      .sort((a, b) => (a.is_read === b.is_read ? 0 : a.is_read ? 1 : -1))
-                      .map(notif => (
-                        <div
-                          key={notif.id}
-                          className={`card p-3 ${!notif.is_read ? 'border-l-4 border-primary bg-primary/5' : ''}`}
-                        >
-                          <div className="flex items-start justify-between gap-2">
-                            <div className="flex items-start gap-2 min-w-0">
-                              {!notif.is_read && (
-                                <span className="mt-1.5 w-2 h-2 rounded-full bg-primary shrink-0" />
-                              )}
-                              <div className="min-w-0">
-                                <p className="text-sm font-medium text-main truncate">{notif.title}</p>
-                                {notif.message && (
-                                  <p className="text-xs text-muted line-clamp-2">{notif.message}</p>
-                                )}
-                                <p className="text-xs text-muted mt-1">
-                                  {new Date(notif.created_at).toLocaleString('pt-BR')}
-                                </p>
-                              </div>
-                            </div>
-                            {notif.action_url && (
-                              <a
-                                href={notif.action_url}
-                                className="shrink-0 text-primary hover:underline"
-                              >
-                                <FiExternalLink className="w-4 h-4" />
-                              </a>
-                            )}
-                          </div>
-                        </div>
-                      ))}
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* ── Tech user: My Action Plans ── */}
-            {isTechUser && (
-              <div className="mb-8">
-                <h2 className="text-lg font-semibold text-main mb-4 flex items-center gap-2">
-                  <FiTool className="w-5 h-5 text-primary" />
-                  Meus Planos de Acao
-                </h2>
-                {myActionPlans.length === 0 ? (
-                  <div className="card p-4 text-center">
-                    <p className="text-sm text-muted">Nenhum plano de acao atribuido</p>
-                  </div>
-                ) : (
-                  <div className="space-y-3">
-                    {myActionPlans.map(plan => {
-                      const sevConfig: Record<string, { label: string; cls: string }> = {
-                        critica: { label: 'CRITICA', cls: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' },
-                        alta:    { label: 'ALTA',    cls: 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400' },
-                        media:   { label: 'MEDIA',   cls: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400' },
-                        baixa:   { label: 'BAIXA',   cls: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' },
-                      }
-                      const statusConfig: Record<string, { label: string; cls: string }> = {
-                        aberto:       { label: 'Aberto',       cls: 'bg-error/20 text-error' },
-                        em_andamento: { label: 'Em Andamento', cls: 'bg-warning/20 text-warning' },
-                        concluido:    { label: 'Concluido',    cls: 'bg-success/20 text-success' },
-                        vencido:      { label: 'Vencido',      cls: 'bg-error/20 text-error' },
-                      }
-                      const sev = sevConfig[plan.severity] || sevConfig.media
-                      const st = statusConfig[plan.status] || statusConfig.aberto
-                      const isOverdue = plan.deadline &&
-                        new Date(plan.deadline) < new Date() &&
-                        plan.status !== 'concluido'
-                      return (
-                        <a
-                          key={plan.id}
-                          href={`/admin/planos-de-acao/${plan.id}`}
-                          className="card p-4 hover:shadow-theme-md transition-shadow block"
-                        >
-                          <div className="flex items-start gap-2 mb-2 flex-wrap">
-                            <span className={`px-2 py-0.5 rounded text-xs font-bold ${sev.cls}`}>
-                              {sev.label}
-                            </span>
-                            <span className={`px-2 py-0.5 rounded text-xs font-medium ${st.cls}`}>
-                              {st.label}
-                            </span>
-                            {plan.is_reincidencia && (
-                              <span className="px-2 py-0.5 rounded text-xs font-bold bg-error/20 text-error">
-                                Reincidencia
-                              </span>
-                            )}
-                          </div>
-                          <p className="text-sm font-medium text-main mb-1 line-clamp-2">{plan.title}</p>
-                          <p className="text-xs text-muted">
-                            {plan.store?.name}
-                            {plan.deadline && (
-                              <span style={{ color: isOverdue ? 'var(--color-error)' : undefined }}>
-                                {` • Prazo: ${new Date(plan.deadline).toLocaleDateString('pt-BR')}${isOverdue ? ' (vencido)' : ''}`}
-                              </span>
-                            )}
-                          </p>
-                        </a>
-                      )
-                    })}
-                    <a
-                      href="/admin/planos-de-acao"
-                      className="block text-sm text-primary hover:underline text-center py-2"
-                    >
-                      Ver todos os planos →
-                    </a>
-                  </div>
-                )}
-              </div>
-            )}
-
             <h2 className="text-lg font-semibold text-main mb-4 flex items-center gap-2">
               <FiClock className="w-5 h-5 text-primary" />
               Historico Recente

@@ -313,6 +313,29 @@ export default function PlanoDeAcaoPage() {
     fetchData()
   }
 
+  const handleDeleteAll = async () => {
+    if (actionPlans.length === 0) return
+    if (!confirm(`Tem certeza que deseja EXCLUIR TODOS os ${actionPlans.length} plano(s) de acao? Esta acao e irreversivel.`)) return
+    if (!confirm('Confirme novamente: TODOS os planos de acao e seus dados relacionados serao excluidos permanentemente.')) return
+
+    setDeleting(true)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const sb = supabase as any
+    try {
+      await sb.from('action_plan_updates').delete().neq('id', 0)
+      await sb.from('action_plan_stores').delete().neq('id', 0)
+      await sb.from('action_plan_evidence').delete().neq('id', 0)
+      await sb.from('action_plans').delete().neq('id', 0)
+    } catch (err) {
+      console.error('[PlanosDeAcao] Erro ao excluir todos:', err)
+      alert('Erro ao excluir planos. Verifique o console.')
+    }
+
+    setSelectedIds(new Set())
+    setDeleting(false)
+    fetchData()
+  }
+
   // Helpers
   const getStatusBadge = (status: string) => {
     const badges: Record<string, { label: string; cls: string }> = {
@@ -502,16 +525,36 @@ export default function PlanoDeAcaoPage() {
           <p className="text-sm text-muted">
             {filteredPlans.length} plano(s) de acao encontrado(s)
           </p>
-          {isAdmin && selectedIds.size > 0 && (
-            <button
-              onClick={handleBulkDelete}
-              disabled={deleting}
-              className="flex items-center gap-2 px-4 py-2 rounded-xl font-medium text-sm bg-error/20 text-error hover:bg-error/30 transition-colors disabled:opacity-50"
-            >
-              <FiTrash2 className="w-4 h-4" />
-              {deleting ? 'Excluindo...' : `Excluir ${selectedIds.size} selecionado(s)`}
-            </button>
-          )}
+          <div className="flex items-center gap-2">
+            {isAdmin && selectedIds.size > 0 && (
+              <button
+                onClick={handleBulkDelete}
+                disabled={deleting}
+                className="flex items-center gap-2 px-4 py-2 rounded-xl font-medium text-sm bg-error/20 text-error hover:bg-error/30 transition-colors disabled:opacity-50"
+              >
+                {deleting ? (
+                  <div className="w-4 h-4 border-2 border-red-400 border-t-transparent rounded-full animate-spin" />
+                ) : (
+                  <FiTrash2 className="w-4 h-4" />
+                )}
+                {deleting ? 'Excluindo...' : `Excluir ${selectedIds.size} selecionado(s)`}
+              </button>
+            )}
+            {isAdmin && actionPlans.length > 0 && (
+              <button
+                onClick={handleDeleteAll}
+                disabled={deleting}
+                className="flex items-center gap-2 px-4 py-2 rounded-xl font-medium text-sm bg-error/20 text-error hover:bg-error/30 transition-colors disabled:opacity-50"
+              >
+                {deleting ? (
+                  <div className="w-4 h-4 border-2 border-red-400 border-t-transparent rounded-full animate-spin" />
+                ) : (
+                  <FiTrash2 className="w-4 h-4" />
+                )}
+                Excluir Todos ({actionPlans.length})
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Table */}
