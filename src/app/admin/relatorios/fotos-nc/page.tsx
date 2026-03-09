@@ -280,7 +280,7 @@ export default function FotosNCPage() {
         backHref={APP_CONFIG.routes.adminReports}
       />
 
-      <main className="max-w-7xl mx-auto px-4 py-6 space-y-6">
+      <main className="max-w-[1400px] mx-auto px-4 py-6 space-y-6">
         {/* Filters */}
         <div className="card p-4 sticky top-0 z-10 space-y-3">
           {/* Period presets */}

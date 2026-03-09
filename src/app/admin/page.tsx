@@ -47,6 +47,17 @@ type Stats = {
   pendingValidations: number
 }
 
+/* eslint-disable @typescript-eslint/no-explicit-any */
+type PreviewData = {
+  recentUsers: any[]
+  recentTemplates: any[]
+  recentStores: any[]
+  recentSectors: any[]
+  recentFunctions: any[]
+  recentChecklists: any[]
+  recentValidations: any[]
+}
+
 export default function AdminPage() {
   const [stats, setStats] = useState<Stats>({
     totalUsers: 0,
@@ -57,6 +68,15 @@ export default function AdminPage() {
     totalChecklists: 0,
     checklistsToday: 0,
     pendingValidations: 0,
+  })
+  const [preview, setPreview] = useState<PreviewData>({
+    recentUsers: [],
+    recentTemplates: [],
+    recentStores: [],
+    recentSectors: [],
+    recentFunctions: [],
+    recentChecklists: [],
+    recentValidations: [],
   })
   const [loading, setLoading] = useState(true)
   const [userName, setUserName] = useState('Admin User')
@@ -124,7 +144,10 @@ export default function AdminPage() {
 
       // Tenta buscar stats online
       try {
-        const [usersRes, templatesRes, storesRes, sectorsRes, functionsRes, checklistsRes, validationsRes] = await Promise.all([
+        const [
+          usersRes, templatesRes, storesRes, sectorsRes, functionsRes, checklistsRes, validationsRes,
+          recentUsersRes, recentTemplatesRes, recentStoresRes, recentSectorsRes, recentFunctionsRes, recentChecklistsRes, recentValidationsRes,
+        ] = await Promise.all([
           supabase.from('users').select('id', { count: 'exact', head: true }),
           supabase.from('checklist_templates').select('id', { count: 'exact', head: true }).eq('is_active', true),
           supabase.from('stores').select('id', { count: 'exact', head: true }).eq('is_active', true),
@@ -132,6 +155,14 @@ export default function AdminPage() {
           supabase.from('functions').select('id', { count: 'exact', head: true }).eq('is_active', true),
           supabase.from('checklists').select('id', { count: 'exact', head: true }),
           supabase.from('cross_validations').select('id', { count: 'exact', head: true }).eq('status', 'pendente'),
+          // Preview data for cards
+          supabase.from('users').select('id, full_name, email, is_active, created_at').order('created_at', { ascending: false }).limit(3),
+          supabase.from('checklist_templates').select('id, name, category, is_active').eq('is_active', true).order('created_at', { ascending: false }).limit(3),
+          supabase.from('stores').select('id, name, is_active').eq('is_active', true).order('created_at', { ascending: false }).limit(3),
+          supabase.from('sectors').select('id, name, color, is_active, store:stores(name)').eq('is_active', true).order('created_at', { ascending: false }).limit(3),
+          supabase.from('functions').select('id, name, color, is_active').eq('is_active', true).order('created_at', { ascending: false }).limit(3),
+          supabase.from('checklists').select('id, status, created_at, template:checklist_templates(name), store:stores(name), user:users(full_name)').order('created_at', { ascending: false }).limit(3),
+          supabase.from('cross_validations').select('id, status, numero_nota, created_at, store:stores(name)').eq('status', 'pendente').order('created_at', { ascending: false }).limit(3),
         ])
 
         // Checklists today
@@ -151,6 +182,16 @@ export default function AdminPage() {
           totalChecklists: checklistsRes.count || 0,
           checklistsToday: checklistsTodayCount || 0,
           pendingValidations: validationsRes.count || 0,
+        })
+
+        setPreview({
+          recentUsers: recentUsersRes.data || [],
+          recentTemplates: recentTemplatesRes.data || [],
+          recentStores: recentStoresRes.data || [],
+          recentSectors: recentSectorsRes.data || [],
+          recentFunctions: recentFunctionsRes.data || [],
+          recentChecklists: recentChecklistsRes.data || [],
+          recentValidations: recentValidationsRes.data || [],
         })
       } catch (err) {
         console.error('[Admin] Erro ao buscar estatísticas online:', err)
@@ -247,7 +288,24 @@ export default function AdminPage() {
     return <LoadingPage />
   }
 
-  type DecorationType = 'progress-label' | 'mini-chart' | 'circles' | 'progress' | 'none'
+  const categoryLabels: Record<string, string> = {
+    recebimento: 'Recebimento',
+    limpeza: 'Limpeza',
+    abertura: 'Abertura',
+    fechamento: 'Fechamento',
+    outros: 'Outros',
+  }
+
+  const statusLabels: Record<string, string> = {
+    rascunho: 'Rascunho',
+    em_andamento: 'Andamento',
+    concluido: 'Concluido',
+    validado: 'Validado',
+    incompleto: 'Incompleto',
+    pendente: 'Pendente',
+    sucesso: 'Sucesso',
+    falhou: 'Falhou',
+  }
 
   const menuItems: {
     title: string
@@ -256,11 +314,7 @@ export default function AdminPage() {
     href: string
     stat: number | string
     badgeLabel: string
-    decoration: DecorationType
-    barColor?: string
-    barWidth?: string
-    labelLeft?: string
-    labelRight?: string
+    previewKey?: keyof PreviewData
   }[] = [
     {
       title: 'Usuarios',
@@ -269,11 +323,7 @@ export default function AdminPage() {
       href: APP_CONFIG.routes.adminUsers,
       stat: stats.totalUsers,
       badgeLabel: 'Users',
-      decoration: 'progress-label',
-      barColor: 'bg-primary',
-      barWidth: 'w-1/3',
-      labelLeft: 'Active',
-      labelRight: '25% Growth',
+      previewKey: 'recentUsers',
     },
     {
       title: 'Checklists',
@@ -282,7 +332,7 @@ export default function AdminPage() {
       href: APP_CONFIG.routes.adminTemplates,
       stat: stats.totalTemplates,
       badgeLabel: 'Templates',
-      decoration: 'mini-chart',
+      previewKey: 'recentTemplates',
     },
     {
       title: 'Lojas',
@@ -291,7 +341,7 @@ export default function AdminPage() {
       href: APP_CONFIG.routes.adminStores,
       stat: stats.totalStores,
       badgeLabel: 'Units',
-      decoration: 'circles',
+      previewKey: 'recentStores',
     },
     {
       title: 'Setores',
@@ -300,9 +350,7 @@ export default function AdminPage() {
       href: APP_CONFIG.routes.adminSectors,
       stat: stats.totalSectors,
       badgeLabel: 'Items',
-      decoration: 'progress',
-      barColor: 'bg-blue-500',
-      barWidth: 'w-3/5',
+      previewKey: 'recentSectors',
     },
     {
       title: 'Funcoes',
@@ -311,9 +359,7 @@ export default function AdminPage() {
       href: APP_CONFIG.routes.adminFunctions,
       stat: stats.totalFunctions,
       badgeLabel: 'Roles',
-      decoration: 'progress',
-      barColor: 'bg-orange-500',
-      barWidth: 'w-2/5',
+      previewKey: 'recentFunctions',
     },
     {
       title: 'Validacoes',
@@ -322,9 +368,7 @@ export default function AdminPage() {
       href: APP_CONFIG.routes.adminValidations,
       stat: stats.pendingValidations,
       badgeLabel: 'Pending',
-      decoration: 'progress',
-      barColor: 'bg-slate-300',
-      barWidth: 'w-1/5',
+      previewKey: 'recentValidations',
     },
     {
       title: 'Respostas',
@@ -333,7 +377,7 @@ export default function AdminPage() {
       href: APP_CONFIG.routes.adminChecklists,
       stat: stats.totalChecklists,
       badgeLabel: 'New',
-      decoration: 'none',
+      previewKey: 'recentChecklists',
     },
     {
       title: 'Galeria',
@@ -342,7 +386,6 @@ export default function AdminPage() {
       href: APP_CONFIG.routes.adminGallery,
       stat: 0,
       badgeLabel: 'Files',
-      decoration: 'none',
     },
     {
       title: 'Planos de Acao',
@@ -351,9 +394,6 @@ export default function AdminPage() {
       href: APP_CONFIG.routes.adminActionPlans,
       stat: 0,
       badgeLabel: 'Planos',
-      decoration: 'progress',
-      barColor: 'bg-warning',
-      barWidth: 'w-1/4',
     },
     {
       title: 'Relatorios',
@@ -362,7 +402,6 @@ export default function AdminPage() {
       href: APP_CONFIG.routes.adminReports,
       stat: stats.totalChecklists,
       badgeLabel: 'Analytics',
-      decoration: 'none',
     },
     {
       title: 'Configuracoes',
@@ -371,7 +410,6 @@ export default function AdminPage() {
       href: APP_CONFIG.routes.adminSettings,
       stat: 0,
       badgeLabel: 'Config',
-      decoration: 'none',
     },
   ]
 
@@ -511,11 +549,12 @@ export default function AdminPage() {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {menuItems.map((item) => {
                 const Icon = item.icon
+                const rows = item.previewKey ? preview[item.previewKey] : []
                 return (
                   <Link
                     key={item.href}
                     href={item.href}
-                    className="group card card-hover p-5 flex flex-col justify-between min-h-[190px]"
+                    className="group card card-hover p-5 flex flex-col min-h-[190px]"
                   >
                     {/* Top: Icon + Badge */}
                     <div className="flex items-start justify-between mb-4">
@@ -528,35 +567,64 @@ export default function AdminPage() {
                     </div>
 
                     {/* Middle: Title + Description */}
-                    <div className="mb-4">
+                    <div>
                       <h3 className="text-base font-semibold text-main group-hover:text-primary transition-colors">
                         {item.title}
                       </h3>
                       <p className="text-sm text-muted mt-0.5">{item.description}</p>
                     </div>
 
-                    {/* Bottom: Decoration */}
-                    <div className="mt-auto">
-                     
-                      {item.decoration === 'mini-chart' && (
-                        <div className="flex items-end gap-1 h-8">
-                          <div className="w-3 bg-slate-200 rounded-sm" style={{ height: '40%' }} />
-                          <div className="w-3 bg-slate-300 rounded-sm" style={{ height: '65%' }} />
-                          <div className="w-3 bg-primary rounded-sm" style={{ height: '100%' }} />
-                          <div className="w-3 bg-slate-200 rounded-sm" style={{ height: '50%' }} />
-                          <div className="w-3 bg-slate-300 rounded-sm" style={{ height: '30%' }} />
-                        </div>
-                      )}
-                      {item.decoration === 'circles' && (
-                        <div className="flex items-center">
-                          <div className="w-7 h-7 rounded-full bg-slate-400 border-2 border-surface" />
-                          <div className="w-7 h-7 rounded-full bg-slate-500 border-2 border-surface -ml-2" />
-                          <div className="w-7 h-7 rounded-full bg-slate-300 border-2 border-surface -ml-2" />
-                          <span className="text-xs text-muted ml-2">+5 more</span>
-                        </div>
-                      )}
-                     
-                    </div>
+                    {/* Mini-table preview */}
+                    {rows.length > 0 && (
+                      <div className="mt-3 pt-3 border-t border-subtle space-y-2">
+                        {item.previewKey === 'recentUsers' && rows.map((r: any) => (
+                          <div key={r.id} className="flex items-center gap-2 text-xs">
+                            <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${r.is_active ? 'bg-emerald-400' : 'bg-slate-300'}`} />
+                            <span className="text-main font-medium truncate flex-1">{r.full_name || '-'}</span>
+                            <span className="text-muted truncate max-w-[120px]">{r.email}</span>
+                          </div>
+                        ))}
+                        {item.previewKey === 'recentTemplates' && rows.map((r: any) => (
+                          <div key={r.id} className="flex items-center gap-2 text-xs">
+                            <span className="text-main font-medium truncate flex-1">{r.name}</span>
+                            <span className="text-muted text-[10px] bg-surface-hover px-1.5 py-0.5 rounded">{categoryLabels[r.category] || 'Outros'}</span>
+                          </div>
+                        ))}
+                        {item.previewKey === 'recentStores' && rows.map((r: any) => (
+                          <div key={r.id} className="flex items-center gap-2 text-xs">
+                            <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${r.is_active ? 'bg-emerald-400' : 'bg-slate-300'}`} />
+                            <span className="text-main font-medium truncate flex-1">{r.name}</span>
+                          </div>
+                        ))}
+                        {item.previewKey === 'recentSectors' && rows.map((r: any) => (
+                          <div key={r.id} className="flex items-center gap-2 text-xs">
+                            <div className="w-2.5 h-2.5 rounded shrink-0" style={{ backgroundColor: r.color || '#94a3b8' }} />
+                            <span className="text-main font-medium truncate flex-1">{r.name}</span>
+                            <span className="text-muted truncate max-w-[80px]">{r.store?.name || ''}</span>
+                          </div>
+                        ))}
+                        {item.previewKey === 'recentFunctions' && rows.map((r: any) => (
+                          <div key={r.id} className="flex items-center gap-2 text-xs">
+                            <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: r.color || '#94a3b8' }} />
+                            <span className="text-main font-medium truncate flex-1">{r.name}</span>
+                          </div>
+                        ))}
+                        {item.previewKey === 'recentValidations' && rows.map((r: any) => (
+                          <div key={r.id} className="flex items-center gap-2 text-xs">
+                            <span className="text-main font-medium truncate flex-1">Nota {r.numero_nota}</span>
+                            <span className="text-muted truncate max-w-[80px]">{r.store?.name || ''}</span>
+                            <span className="text-[10px] text-warning bg-warning/10 px-1.5 py-0.5 rounded">{statusLabels[r.status] || r.status}</span>
+                          </div>
+                        ))}
+                        {item.previewKey === 'recentChecklists' && rows.map((r: any) => (
+                          <div key={r.id} className="flex items-center gap-2 text-xs">
+                            <span className="text-main font-medium truncate flex-1">{r.template?.name || '-'}</span>
+                            <span className="text-muted truncate max-w-[60px]">{r.store?.name || ''}</span>
+                            <span className="text-[10px] text-muted bg-surface-hover px-1.5 py-0.5 rounded">{statusLabels[r.status] || r.status}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </Link>
                 )
               })}
