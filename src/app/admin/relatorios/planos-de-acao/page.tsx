@@ -22,7 +22,7 @@ import {
 } from 'react-icons/fi'
 import Link from 'next/link'
 import { APP_CONFIG } from '@/lib/config'
-import { LoadingPage, Header, Select } from '@/components/ui'
+import { LoadingPage, Header, Select, PageContainer } from '@/components/ui'
 import { getAuthCache, getUserCache } from '@/lib/offlineCache'
 import {
   fetchActionPlanReport,
@@ -270,7 +270,7 @@ export default function PlanoDeAcaoReportPage() {
         backHref={APP_CONFIG.routes.adminReports}
       />
 
-      <main className="max-w-[1400px] mx-auto px-4 py-6 space-y-6">
+      <PageContainer className="!py-6 space-y-6">
         {/* Filters */}
         <div className="card p-4 sticky top-0 z-10 space-y-3">
           {/* Period presets */}
@@ -447,7 +447,7 @@ export default function PlanoDeAcaoReportPage() {
             )}
           </>
         )}
-      </main>
+      </PageContainer>
 
       {/* Photo modal */}
       {modalPhoto && (

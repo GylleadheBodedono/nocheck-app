@@ -4,7 +4,7 @@ import React, { useEffect, useState, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { APP_CONFIG } from '@/lib/config'
-import { Header, IconPicker, Select } from '@/components/ui'
+import { Header, IconPicker, Select, PageContainer } from '@/components/ui'
 import Link from 'next/link'
 import {
   FiSave,
@@ -595,7 +595,7 @@ export default function NovoTemplatePage() {
       />
 
       {/* Main Content */}
-      <main className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <PageContainer size="lg">
         <form onSubmit={handleSubmit} className="space-y-6">
           {/* Basic Info */}
           <div className="card p-6">
@@ -1356,7 +1356,7 @@ export default function NovoTemplatePage() {
             </button>
           </div>
         </form>
-      </main>
+      </PageContainer>
     </div>
   )
 }

@@ -4,7 +4,7 @@ import { useEffect, useState, useMemo, useRef, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient, isSupabaseConfigured } from '@/lib/supabase'
 import { APP_CONFIG } from '@/lib/config'
-import { LoadingPage, Header } from '@/components/ui'
+import { LoadingPage, Header, PageContainer } from '@/components/ui'
 import { getAuthCache, getUserCache } from '@/lib/offlineCache'
 import {
   FiImage,
@@ -196,7 +196,7 @@ export default function GaleriaPage() {
         backHref={APP_CONFIG.routes.admin}
       />
 
-      <main className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 py-6">
+      <PageContainer className="!py-6">
         {/* Folder tabs */}
         <div className="flex gap-3 mb-6">
           <button
@@ -347,7 +347,7 @@ export default function GaleriaPage() {
             )}
           </div>
         )}
-      </main>
+      </PageContainer>
 
       {/* Preview modal */}
       {preview && (

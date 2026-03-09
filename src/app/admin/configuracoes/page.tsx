@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { createClient, isSupabaseConfigured } from '@/lib/supabase'
 import { FiSettings, FiCopy, FiEye, FiSave, FiRotateCcw, FiSend, FiChevronDown, FiChevronUp, FiCheck } from 'react-icons/fi'
 import { APP_CONFIG } from '@/lib/config'
-import { LoadingPage, Header } from '@/components/ui'
+import { LoadingPage, Header, PageContainer } from '@/components/ui'
 import { getAuthCache, getUserCache } from '@/lib/offlineCache'
 import {
   TEMPLATE_VARIABLES,
@@ -198,7 +198,7 @@ export default function ConfiguracoesPage() {
         backHref="/admin"
       />
 
-      <main className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
+      <PageContainer size="md" className="space-y-6">
 
         {/* Variaveis Disponiveis */}
         <div className="card overflow-hidden">
@@ -372,7 +372,7 @@ export default function ConfiguracoesPage() {
             O email de teste sera enviado para: <span className="font-medium text-secondary">{userEmail}</span>
           </p>
         )}
-      </main>
+      </PageContainer>
     </div>
   )
 }

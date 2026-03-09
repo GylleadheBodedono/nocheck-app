@@ -21,7 +21,7 @@ import {
 } from 'react-icons/fi'
 import type { Store, Sector } from '@/types/database'
 import { APP_CONFIG } from '@/lib/config'
-import { LoadingPage, Header, Select } from '@/components/ui'
+import { LoadingPage, Header, Select, PageContainer } from '@/components/ui'
 import { getAuthCache, getUserCache, getStoresCache, getSectorsCache } from '@/lib/offlineCache'
 
 type SectorUser = {
@@ -453,7 +453,7 @@ export default function SetoresPage() {
         ]}
       />
 
-      <main className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <PageContainer>
         {/* Offline Warning */}
         {isOffline && (
           <div className="bg-warning/10 border border-warning/30 rounded-xl p-4 mb-6 flex items-center gap-3">
@@ -626,7 +626,7 @@ export default function SetoresPage() {
             {sectors.filter(s => s.is_active).length} ativos, {sectors.filter(s => !s.is_active).length} inativos
           </p>
         </div>
-      </main>
+      </PageContainer>
 
       {/* Sector Modal */}
       {showSectorModal && (

@@ -7,7 +7,7 @@ import { useRouter, useParams } from 'next/navigation'
 import Link from 'next/link'
 import { createClient, isSupabaseConfigured } from '@/lib/supabase'
 import { APP_CONFIG } from '@/lib/config'
-import { LoadingPage, Header } from '@/components/ui'
+import { LoadingPage, Header, PageContainer } from '@/components/ui'
 import {
   FiPlay,
   FiCheckCircle,
@@ -722,7 +722,7 @@ export default function ActionPlanDetailPage() {
     return (
       <div className="min-h-screen bg-page">
         <Header title="Plano de Acao" backHref="/admin/planos-de-acao" />
-        <main className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <PageContainer size="md">
           <div className="card p-8 text-center">
             <FiAlertCircle className="w-12 h-12 text-error mx-auto mb-4" />
             <p className="text-error text-lg font-medium">{error}</p>
@@ -733,7 +733,7 @@ export default function ActionPlanDetailPage() {
               Voltar para Planos de Acao
             </Link>
           </div>
-        </main>
+        </PageContainer>
       </div>
     )
   }
@@ -748,7 +748,7 @@ export default function ActionPlanDetailPage() {
     <div className="min-h-screen bg-page">
       <Header title="Plano de Acao" backHref="/admin/planos-de-acao" />
 
-      <main className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
+      <PageContainer size="md" className="space-y-6">
         {/* Error alert */}
         {error && (
           <div className="p-4 bg-error/10 rounded-xl border border-error/30 flex items-center gap-3">
@@ -1082,7 +1082,7 @@ export default function ActionPlanDetailPage() {
             </div>
           )}
         </div>
-      </main>
+      </PageContainer>
 
       {/* ============================================ */}
       {/* COMPLETION MODAL */}

@@ -458,7 +458,7 @@ export default function AdminPage() {
 
       {/* Aviso para ativar notificacoes do sistema (PWA) */}
       {notificationBannerMounted && typeof window !== 'undefined' && 'Notification' in window && notificationPermission === 'default' && (
-        <div className="max-w-[1400px] mx-auto px-4 sm:px-6 pt-4">
+        <div className="mx-auto px-4 sm:px-6 lg:px-8 pt-4">
           <div className="card p-4 bg-primary/10 border border-primary/30 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-xl bg-primary/20 flex items-center justify-center shrink-0">
@@ -485,7 +485,7 @@ export default function AdminPage() {
       )}
 
       {/* Main Content */}
-      <div className="max-w-[1400px] mx-auto px-4 sm:px-6 py-6">
+      <div className="mx-auto px-4 sm:px-6 lg:px-8 py-6">
         <div className="flex gap-6">
           {/* Left Column - Main Content */}
           <main className="flex-1 min-w-0">

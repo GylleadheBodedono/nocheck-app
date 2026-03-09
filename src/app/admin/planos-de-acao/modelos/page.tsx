@@ -15,7 +15,7 @@ import {
   FiFileText,
 } from 'react-icons/fi'
 import { APP_CONFIG } from '@/lib/config'
-import { LoadingPage, Header, Select } from '@/components/ui'
+import { LoadingPage, Header, Select, PageContainer } from '@/components/ui'
 import { getAuthCache, getUserCache } from '@/lib/offlineCache'
 import type { Severity } from '@/types/database'
 
@@ -306,7 +306,7 @@ export default function ModelosPlanoDeAcaoPage() {
         backHref="/admin/planos-de-acao"
       />
 
-      <main className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
+      <PageContainer size="md" className="space-y-6">
 
         {/* Messages */}
         {success && (
@@ -560,7 +560,7 @@ export default function ModelosPlanoDeAcaoPage() {
             ))}
           </div>
         )}
-      </main>
+      </PageContainer>
     </div>
   )
 }

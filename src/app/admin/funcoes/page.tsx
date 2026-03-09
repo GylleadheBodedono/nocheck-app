@@ -16,7 +16,7 @@ import {
 } from 'react-icons/fi'
 import type { FunctionRow } from '@/types/database'
 import { APP_CONFIG } from '@/lib/config'
-import { LoadingPage, Header } from '@/components/ui'
+import { LoadingPage, Header, PageContainer } from '@/components/ui'
 import { getAuthCache, getUserCache, getFunctionsCache } from '@/lib/offlineCache'
 
 type FunctionWithStats = FunctionRow & {
@@ -287,7 +287,7 @@ export default function FuncoesPage() {
         ]}
       />
 
-      <main className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <PageContainer>
         {/* Offline Warning */}
         {isOffline && (
           <div className="bg-warning/10 border border-warning/30 rounded-xl p-4 mb-6 flex items-center gap-3">
@@ -397,7 +397,7 @@ export default function FuncoesPage() {
             {functions.filter(f => f.is_active).length} ativas, {functions.filter(f => !f.is_active).length} inativas
           </p>
         </div>
-      </main>
+      </PageContainer>
 
       {/* Function Modal */}
       {showModal && (

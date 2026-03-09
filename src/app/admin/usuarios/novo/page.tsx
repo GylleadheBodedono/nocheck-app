@@ -6,7 +6,7 @@ import Link from 'next/link'
 import { FiSave, FiUserPlus, FiCheckCircle, FiMail } from 'react-icons/fi'
 import type { Store, Sector, FunctionRow } from '@/types/database'
 import { APP_CONFIG } from '@/lib/config'
-import { Header, Select } from '@/components/ui'
+import { Header, Select, PageContainer } from '@/components/ui'
 
 export default function NovoUsuarioPage() {
   const [stores, setStores] = useState<Store[]>([])
@@ -151,7 +151,7 @@ export default function NovoUsuarioPage() {
         backHref={APP_CONFIG.routes.adminUsers}
       />
 
-      <main className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <PageContainer size="sm">
         {/* Success screen */}
         {success && (
           <div className="card p-8 text-center">
@@ -414,7 +414,7 @@ export default function NovoUsuarioPage() {
             </div>
           </form>
         )}
-      </main>
+      </PageContainer>
     </div>
   )
 }

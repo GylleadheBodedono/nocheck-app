@@ -20,7 +20,7 @@ import {
 } from 'react-icons/fi'
 import Link from 'next/link'
 import { APP_CONFIG } from '@/lib/config'
-import { LoadingPage, Header, Select } from '@/components/ui'
+import { LoadingPage, Header, Select, PageContainer } from '@/components/ui'
 import { getAuthCache, getUserCache, getActionPlansCache, getStoresCache, getAllUsersCache } from '@/lib/offlineCache'
 
 type ActionPlan = {
@@ -385,7 +385,7 @@ export default function PlanoDeAcaoPage() {
         backHref={isAdmin ? APP_CONFIG.routes.admin : APP_CONFIG.routes.dashboard}
       />
 
-      <main className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <PageContainer>
         {/* Offline Warning */}
         {isOffline && (
           <div className="bg-warning/10 border border-warning/30 rounded-xl p-4 mb-6 flex items-center gap-3">
@@ -698,7 +698,7 @@ export default function PlanoDeAcaoPage() {
             </div>
           )}
         </div>
-      </main>
+      </PageContainer>
     </div>
   )
 }

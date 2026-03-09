@@ -9,7 +9,7 @@ import Link from 'next/link'
 import { FiSave, FiUserCheck } from 'react-icons/fi'
 import type { User, Store, Sector, FunctionRow, UserStoreWithDetails } from '@/types/database'
 import { APP_CONFIG } from '@/lib/config'
-import { LoadingPage, Header, Select } from '@/components/ui'
+import { LoadingPage, Header, Select, PageContainer } from '@/components/ui'
 
 type UserWithAssignment = User & {
   store: Store | null
@@ -239,7 +239,7 @@ export default function EditarUsuarioPage() {
         backHref={APP_CONFIG.routes.adminUsers}
       />
 
-      <main className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <PageContainer size="sm">
         <form onSubmit={handleSubmit} className="space-y-6">
           {/* Success Message */}
           {success && (
@@ -446,7 +446,7 @@ export default function EditarUsuarioPage() {
             </button>
           </div>
         </form>
-      </main>
+      </PageContainer>
     </div>
   )
 }

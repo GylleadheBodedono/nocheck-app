@@ -4,7 +4,7 @@ import { useEffect, useState, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient, isSupabaseConfigured } from '@/lib/supabase'
 import { APP_CONFIG } from '@/lib/config'
-import { LoadingPage, Header, Select } from '@/components/ui'
+import { LoadingPage, Header, Select, PageContainer } from '@/components/ui'
 import {
   FiCheckCircle,
   FiXCircle,
@@ -401,7 +401,7 @@ export default function ValidacoesPage() {
         backHref={APP_CONFIG.routes.admin}
       />
 
-      <main className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <PageContainer>
         {/* Offline Warning */}
         {isOffline && (
           <div className="bg-warning/10 border border-warning/30 rounded-xl p-4 mb-6 flex items-center gap-3">
@@ -704,7 +704,7 @@ export default function ValidacoesPage() {
         <div className="mt-6 text-sm text-muted text-center">
           Mostrando {groupedValidations.length} validacoes
         </div>
-      </main>
+      </PageContainer>
     </div>
   )
 }

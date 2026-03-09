@@ -6,7 +6,7 @@ import React, { useEffect, useState, useMemo } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { APP_CONFIG } from '@/lib/config'
-import { Header, LoadingPage, IconPicker, Select } from '@/components/ui'
+import { Header, LoadingPage, IconPicker, Select, PageContainer } from '@/components/ui'
 import Link from 'next/link'
 import {
   FiSave,
@@ -865,7 +865,7 @@ export default function EditTemplatePage() {
       />
 
       {/* Main Content */}
-      <main className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <PageContainer size="lg">
         <form onSubmit={handleSubmit} className="space-y-6">
           {/* Basic Info */}
           <div className="card p-6">
@@ -1452,7 +1452,7 @@ export default function EditTemplatePage() {
             </button>
           </div>
         </form>
-      </main>
+      </PageContainer>
     </div>
   )
 }

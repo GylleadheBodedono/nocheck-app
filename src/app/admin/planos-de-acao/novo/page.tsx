@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { createClient, isSupabaseConfigured } from '@/lib/supabase'
 import { FiSave, FiFileText } from 'react-icons/fi'
 import { APP_CONFIG } from '@/lib/config'
-import { LoadingPage, Header, Select } from '@/components/ui'
+import { LoadingPage, Header, Select, PageContainer } from '@/components/ui'
 import { getAuthCache, getUserCache } from '@/lib/offlineCache'
 import { createNotification, sendEmailNotification } from '@/lib/notificationService'
 import { buildEmailFromTemplate, SEVERITY_COLORS, type EmailTemplateVariables } from '@/lib/emailTemplateEngine'
@@ -255,7 +255,7 @@ export default function NovoPlanoDeAcaoPage() {
         backHref="/admin/planos-de-acao"
       />
 
-      <main className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <PageContainer size="sm">
         <form onSubmit={handleSubmit} className="space-y-6">
           <div className="card p-6">
             <h2 className="text-lg font-semibold text-main mb-4">Informacoes do Plano</h2>
@@ -402,7 +402,7 @@ export default function NovoPlanoDeAcaoPage() {
             </button>
           </div>
         </form>
-      </main>
+      </PageContainer>
     </div>
   )
 }

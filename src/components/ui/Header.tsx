@@ -223,7 +223,7 @@ export function Header({
   return (
     <>
       <header className="fixed top-4 left-4 right-4 z-50 rounded-2xl border border-subtle shadow-theme-lg backdrop-blur-xl bg-[rgba(var(--bg-surface-rgb),0.8)]">
-        <div className="max-w-[1400px] mx-auto px-4 sm:px-6">
+        <div className="mx-auto px-4 sm:px-6">
           <div className="flex items-center justify-between h-16 gap-4">
             {/* Left: Navigation + Title */}
             <div className="flex items-center gap-3 shrink-0">

@@ -17,7 +17,7 @@ import {
 } from 'react-icons/fi'
 import type { Store } from '@/types/database'
 import { APP_CONFIG } from '@/lib/config'
-import { LoadingPage, Header } from '@/components/ui'
+import { LoadingPage, Header, PageContainer } from '@/components/ui'
 import { LocationPicker } from '@/components/ui/LocationPickerDynamic'
 import { getAuthCache, getUserCache, getStoresCache } from '@/lib/offlineCache'
 
@@ -301,7 +301,7 @@ export default function LojasPage() {
       />
 
       {/* Main Content */}
-      <main className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <PageContainer>
         {/* Offline Warning */}
         {isOffline && (
           <div className="bg-warning/10 border border-warning/30 rounded-xl p-4 mb-6 flex items-center gap-3">
@@ -473,7 +473,7 @@ export default function LojasPage() {
             {stores.filter(s => s.is_active).length} ativas, {stores.filter(s => !s.is_active).length} inativas
           </p>
         </div>
-      </main>
+      </PageContainer>
 
       {/* Modal */}
       {showModal && (

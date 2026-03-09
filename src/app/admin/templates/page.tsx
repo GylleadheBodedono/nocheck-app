@@ -17,7 +17,7 @@ import {
   FiStar,
 } from 'react-icons/fi'
 import { APP_CONFIG } from '@/lib/config'
-import { LoadingPage, Header } from '@/components/ui'
+import { LoadingPage, Header, PageContainer } from '@/components/ui'
 import type { ChecklistTemplate, TemplateField, TemplateVisibility, Store } from '@/types/database'
 import { getAuthCache, getUserCache, getTemplatesCache, getStoresCache } from '@/lib/offlineCache'
 
@@ -387,7 +387,7 @@ export default function TemplatesPage() {
       />
 
       {/* Main Content */}
-      <main className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <PageContainer>
         {/* Offline Warning */}
         {isOffline && (
           <div className="bg-warning/10 border border-warning/30 rounded-xl p-4 mb-6 flex items-center gap-3">
@@ -602,7 +602,7 @@ export default function TemplatesPage() {
             {templates.filter(t => t.is_active).length} ativos
           </p>
         </div>
-      </main>
+      </PageContainer>
     </div>
   )
 }
