@@ -80,9 +80,9 @@ export function FluxChat() {
     <>
       {/* Chat Panel */}
       {isOpen && (
-        <div className="fixed bottom-24 right-4 sm:right-6 z-[60] w-[calc(100vw-2rem)] sm:w-[380px] h-[70vh] sm:h-[520px] flex flex-col rounded-2xl shadow-xl border border-subtle bg-page overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-300">
+        <div className="fixed bottom-24 right-4 sm:right-6 z-[60] w-[calc(100vw-2rem)] sm:w-[380px] h-[70vh] sm:h-[520px] flex flex-col rounded-2xl shadow-xl border border-subtle bg-page overflow-hidden">
           {/* Header */}
-          <div className="bg-primary px-4 py-3 flex items-center justify-between shrink-0">
+          <div className="bg-accent px-4 py-3 flex items-center justify-between shrink-0">
             <div className="flex items-center gap-3">
               <div className="w-9 h-9 rounded-full bg-white/20 flex items-center justify-center text-lg">
                 🤖
@@ -110,7 +110,7 @@ export function FluxChat() {
                 <div
                   className={`max-w-[85%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed ${
                     msg.role === 'user'
-                      ? 'bg-primary text-white rounded-br-md'
+                      ? 'bg-accent text-white rounded-br-md'
                       : 'bg-surface border border-subtle text-main rounded-bl-md'
                   }`}
                 >
@@ -123,9 +123,9 @@ export function FluxChat() {
             {isLoading && (
               <div className="flex justify-start">
                 <div className="bg-surface border border-subtle rounded-2xl rounded-bl-md px-4 py-3 flex items-center gap-1.5">
-                  <span className="w-2 h-2 bg-muted rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-                  <span className="w-2 h-2 bg-muted rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-                  <span className="w-2 h-2 bg-muted rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                  <span className="w-2 h-2 rounded-full animate-bounce bg-accent/60" style={{ animationDelay: '0ms' }} />
+                  <span className="w-2 h-2 rounded-full animate-bounce bg-accent/60" style={{ animationDelay: '150ms' }} />
+                  <span className="w-2 h-2 rounded-full animate-bounce bg-accent/60" style={{ animationDelay: '300ms' }} />
                 </div>
               </div>
             )}
@@ -144,12 +144,12 @@ export function FluxChat() {
                 onKeyDown={handleKeyDown}
                 placeholder="Pergunte ao Flux..."
                 disabled={isLoading}
-                className="flex-1 bg-page border border-subtle rounded-xl px-4 py-2.5 text-sm text-main placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary disabled:opacity-50"
+                className="flex-1 bg-page border border-subtle rounded-xl px-4 py-2.5 text-sm text-main placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-accent/50 focus:border-accent disabled:opacity-50"
               />
               <button
                 onClick={sendMessage}
                 disabled={!input.trim() || isLoading}
-                className="bg-primary text-white p-2.5 rounded-xl hover:bg-primary-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
+                className="bg-accent text-white p-2.5 rounded-xl hover:opacity-90 transition-all disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
               >
                 <FiSend className="w-4 h-4" />
               </button>
@@ -164,7 +164,7 @@ export function FluxChat() {
         className={`fixed bottom-6 right-4 sm:right-6 z-[60] w-14 h-14 rounded-full shadow-lg flex items-center justify-center transition-all duration-300 hover:scale-110 active:scale-95 ${
           isOpen
             ? 'bg-surface border border-subtle text-muted hover:text-main'
-            : 'bg-primary text-white hover:bg-primary-hover'
+            : 'bg-accent text-white hover:opacity-90'
         }`}
         title={isOpen ? 'Fechar Flux' : 'Falar com o Flux'}
       >

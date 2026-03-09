@@ -1,5 +1,3 @@
-export const runtime = 'edge'
-
 import { NextRequest, NextResponse } from 'next/server'
 import Groq from 'groq-sdk'
 import { verifyApiAuth } from '@/lib/api-auth'
