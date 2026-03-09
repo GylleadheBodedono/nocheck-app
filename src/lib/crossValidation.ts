@@ -40,9 +40,6 @@ async function notificarIntegracoes(data: {
 
     if (!response.ok) {
       console.error('[CrossValidation] Erro ao notificar integrações:', await response.text())
-    } else {
-      const result = await response.json()
-      console.log('[CrossValidation] Notificações enviadas:', result)
     }
   } catch (err) {
     console.error('[CrossValidation] Erro ao chamar API de integrações:', err)
@@ -192,7 +189,6 @@ async function verificarValidacoesExpiradas(supabase: any): Promise<void> {
         dataHora: new Date(val.created_at).toLocaleString('pt-BR'),
       })
 
-      console.log(`[CrossValidation] Validacao expirada: nota ${val.numero_nota} (id ${val.id})`)
     }
   } catch (err) {
     console.error('[CrossValidation] Erro ao verificar validacoes expiradas:', err)
@@ -390,7 +386,6 @@ export async function processarValidacaoCruzada(
           dataHora,
         })
 
-        console.log(`[CrossValidation] Divergência detectada na nota ${numeroNota}: R$ ${updateData.diferenca}`)
       }
 
     } else {
@@ -508,7 +503,6 @@ export async function processarValidacaoCruzada(
             matchReason,
           })
 
-          console.log(`[CrossValidation] Notas diferentes vinculadas: ${foundSisterValidation.numero_nota} <-> ${numeroNota}`)
         }
       } else {
         // Criar nova validacao (sem match)

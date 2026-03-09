@@ -130,7 +130,6 @@ export function useAuth() {
       setUserProfile(profile)
       setLoading(false)
 
-      console.log('[useAuth] Loaded from cache (offline mode)')
       return true
     } catch (error) {
       console.error('[useAuth] Error loading from cache:', error)
@@ -223,7 +222,6 @@ export function useAuth() {
         await saveFunctionsCache(functions)
       }
 
-      console.log('[useAuth] User data cached for offline use')
     } catch (error) {
       console.error('[useAuth] Error caching user data:', error)
     }
@@ -245,7 +243,6 @@ export function useAuth() {
             // Limpa cache se usuario diferente (previne dados residuais)
             const cachedAuth = await getAuthCache()
             if (cachedAuth && cachedAuth.userId !== session.user.id) {
-              console.log('[useAuth] Usuario diferente detectado, limpando cache anterior')
               await clearAllCache()
             }
             // Cacheia para uso offline

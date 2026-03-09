@@ -24,7 +24,6 @@ export function usePrecache() {
   // Verifica se o Service Worker esta ativo
   const checkServiceWorker = useCallback(async (): Promise<ServiceWorkerRegistration | null> => {
     if (!('serviceWorker' in navigator)) {
-      console.log('[Precache] Service Worker nao suportado')
       return null
     }
 
@@ -40,7 +39,6 @@ export function usePrecache() {
   const precacheApp = useCallback(async () => {
     const registration = await checkServiceWorker()
     if (!registration?.active) {
-      console.log('[Precache] Service Worker nao ativo')
       return
     }
 
@@ -86,7 +84,6 @@ export function usePrecache() {
         progress: 100,
       }))
 
-      console.log('[Precache] App cacheado com sucesso')
     } catch (error) {
       console.error('[Precache] Erro:', error)
       setStatus(prev => ({
@@ -111,7 +108,6 @@ export function usePrecache() {
       error: null,
     })
 
-    console.log('[Precache] Cache limpo')
   }, [checkServiceWorker])
 
   return {
@@ -127,28 +123,15 @@ export function usePrecache() {
  * Chame essa funcao apos o login bem-sucedido
  */
 export async function triggerPrecache(): Promise<void> {
-  console.log('[Precache] Iniciando triggerPrecache...')
-  console.log('[Precache] serviceWorker in navigator:', 'serviceWorker' in navigator)
-  console.log('[Precache] isSecureContext:', window.isSecureContext)
-  console.log('[Precache] hostname:', window.location.hostname)
-  console.log('[Precache] protocol:', window.location.protocol)
-
   if (!('serviceWorker' in navigator)) {
-    const isLocalhost = ['localhost', '127.0.0.1', '[::1]'].includes(window.location.hostname)
-    const isSecure = window.location.protocol === 'https:'
-    console.log('[Precache] Service Worker nao suportado!')
-    console.log('[Precache] Motivo: SW requer HTTPS ou localhost')
-    console.log('[Precache] isLocalhost:', isLocalhost, '| isSecure:', isSecure)
     return
   }
 
   try {
     // Aguarda o SW estar pronto
     const registration = await navigator.serviceWorker.ready
-    console.log('[Precache] Service Worker pronto')
 
     if (!registration.active) {
-      console.log('[Precache] Service Worker nao ativo')
       return
     }
 
@@ -172,32 +155,23 @@ export async function triggerPrecache(): Promise<void> {
 
     // Pede para o SW fazer precache
     registration.active.postMessage({ type: 'PRECACHE_APP' })
-    console.log('[Precache] Solicitado ao SW...')
 
     // Aguarda o SW completar o precache
     await precacheComplete
-    console.log('[Precache] SW reportou conclusao')
 
     // Faz fetch adicional das paginas principais para garantir
     // que todos os assets JS/CSS sejam carregados
     const pages = ['/', '/dashboard', '/checklist/novo', '/login', '/offline']
 
-    console.log('[Precache] Carregando paginas para cachear assets...')
-
     await Promise.allSettled(
       pages.map(async (url) => {
         try {
-          const response = await fetch(url)
-          if (response.ok) {
-            console.log('[Precache] Pagina carregada:', url)
-          }
+          await fetch(url)
         } catch {
           // Ignora erros
         }
       })
     )
-
-    console.log('[Precache] COMPLETO!')
   } catch (error) {
     console.error('[Precache] Erro:', error)
   }

@@ -27,9 +27,6 @@ async function uploadImageToStorage(base64Image: string, fileName: string): Prom
 
   for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
     try {
-      console.log(`[Sync] uploadImageToStorage - Tentativa ${attempt}/${MAX_RETRIES} de`, fileName)
-      console.log('[Sync] uploadImageToStorage - Tamanho do base64:', base64Image.length, 'chars')
-
       const response = await fetch('/api/upload', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -39,12 +36,9 @@ async function uploadImageToStorage(base64Image: string, fileName: string): Prom
         }),
       })
 
-      console.log('[Sync] uploadImageToStorage - Response status:', response.status)
       const result = await response.json()
-      console.log('[Sync] uploadImageToStorage - Response body:', JSON.stringify(result).substring(0, 200))
 
       if (response.ok && result.success && result.url) {
-        console.log('[Sync] Upload de imagem OK:', fileName, '->', result.url.substring(0, 60))
         return result.url
       }
 
@@ -55,7 +49,6 @@ async function uploadImageToStorage(base64Image: string, fileName: string): Prom
 
     // Aguarda antes de tentar novamente (exceto na última tentativa)
     if (attempt < MAX_RETRIES) {
-      console.log(`[Sync] Aguardando ${RETRY_DELAY}ms antes de tentar novamente...`)
       await delay(RETRY_DELAY)
     }
   }
@@ -81,7 +74,6 @@ async function processResponsesWithImages(
 ): Promise<ProcessedResult> {
   const processedResponses = []
   let allImagesUploaded = true
-  console.log('[Sync] Processando', responses.length, 'respostas')
 
   for (const response of responses) {
     // Verifica se é um campo de foto com dados base64
@@ -93,7 +85,6 @@ async function processResponsesWithImages(
         const json = response.valueJson as { photos?: string[]; uploadedToDrive?: boolean }
         if (json.photos && Array.isArray(json.photos)) {
           photos = json.photos
-          console.log('[Sync] Campo de foto (objeto) com', photos.length, 'fotos')
         }
       }
       // Formato legado: array direto ['base64...', ...]
@@ -104,7 +95,6 @@ async function processResponsesWithImages(
           const first = arr[0] as string
           if (first.startsWith('data:image') || first.startsWith('http') || first.length > 1000) {
             photos = arr as string[]
-            console.log('[Sync] Campo de foto (array legado) com', photos.length, 'fotos')
           }
         }
       }
@@ -116,13 +106,11 @@ async function processResponsesWithImages(
         for (let i = 0; i < photos.length; i++) {
           const photo = photos[i]
           if (!photo || typeof photo !== 'string') {
-            console.log('[Sync] Foto', i + 1, '- INVÁLIDA (não é string)')
             continue
           }
 
           const isUrl = photo.startsWith('http')
           const isBase64 = photo.startsWith('data:') || photo.length > 1000
-          console.log('[Sync] Foto', i + 1, '- URL:', isUrl, '- Base64:', isBase64, '- Tamanho:', photo.length)
 
           // Se já é uma URL (já foi uploaded), mantém
           if (isUrl) {
@@ -132,11 +120,9 @@ async function processResponsesWithImages(
             // É base64, faz upload
             const timestamp = Date.now()
             const fileName = `sync_${timestamp}_foto_${i + 1}.jpg`
-            console.log('[Sync] Tentando upload:', fileName)
             const url = await uploadImageToStorage(photo, fileName)
 
             if (url) {
-              console.log('[Sync] Upload OK:', url.substring(0, 60))
               uploadedUrls.push(url)
               hasUploaded = true
             } else {
@@ -146,7 +132,6 @@ async function processResponsesWithImages(
               allImagesUploaded = false
             }
           } else {
-            console.log('[Sync] Foto ignorada (formato desconhecido)')
             uploadedUrls.push(photo)
           }
         }
@@ -175,7 +160,6 @@ async function processResponsesWithImages(
         if (jsonObj?.conditionalText) resultJson.conditionalText = jsonObj.conditionalText
         if (processedCondPhotos && processedCondPhotos.length > 0) resultJson.conditionalPhotos = processedCondPhotos
 
-        console.log('[Sync] Resultado: uploaded=', hasUploaded, 'allOk=', allImagesUploaded, 'urls=', uploadedUrls.length)
         processedResponses.push({
           ...response,
           valueJson: resultJson,
@@ -270,7 +254,6 @@ async function syncChecklist(checklist: PendingChecklist): Promise<boolean> {
     await updateChecklistStatus(checklist.id, 'syncing')
 
     // 0. Processa as respostas fazendo upload das imagens ANTES de criar o checklist
-    console.log('[Sync] Processando imagens do checklist:', checklist.id)
     const { responses: processedResponses, allImagesUploaded } = await processResponsesWithImages(checklist.responses)
 
     if (!allImagesUploaded) {
@@ -287,7 +270,6 @@ async function syncChecklist(checklist: PendingChecklist): Promise<boolean> {
     if (checklist.dbChecklistId) {
       // We know the exact DB record — update it
       targetChecklistId = checklist.dbChecklistId
-      console.log('[Sync] Updating existing DB checklist (stored ID):', targetChecklistId)
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       await (supabase as any)
         .from('checklists')
@@ -314,7 +296,6 @@ async function syncChecklist(checklist: PendingChecklist): Promise<boolean> {
 
       if (existing && existing.length > 0) {
         targetChecklistId = existing[0].id
-        console.log('[Sync] Updating existing DB checklist (found by query):', targetChecklistId)
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         await (supabase as any)
           .from('checklists')
@@ -342,7 +323,6 @@ async function syncChecklist(checklist: PendingChecklist): Promise<boolean> {
 
         if (checklistError) throw checklistError
         targetChecklistId = newChecklist.id
-        console.log('[Sync] Created new DB checklist:', targetChecklistId)
       }
     }
 
@@ -448,7 +428,6 @@ async function syncChecklist(checklist: PendingChecklist): Promise<boolean> {
     // 5. Delete from offline storage
     await deleteOfflineChecklist(checklist.id)
 
-    console.log('[Sync] Checklist synced successfully:', checklist.id)
     return true
   } catch (err) {
     const errorMessage = err instanceof Error ? err.message : 'Erro desconhecido'
@@ -463,12 +442,10 @@ async function syncChecklist(checklist: PendingChecklist): Promise<boolean> {
  */
 export async function syncAll(): Promise<{ synced: number; failed: number }> {
   if (isSyncing) {
-    console.log('[Sync] Already syncing, skipping...')
     return { synced: 0, failed: 0 }
   }
 
   if (!navigator.onLine) {
-    console.log('[Sync] Offline, skipping sync...')
     updateStatus({ lastError: 'Sem conexão com a internet' })
     return { synced: 0, failed: 0 }
   }
@@ -484,7 +461,6 @@ export async function syncAll(): Promise<{ synced: number; failed: number }> {
     if (c.syncStatus === 'syncing') {
       const age = now - new Date(c.createdAt).getTime()
       if (age > 1 * 60 * 1000) { // 1 minuto
-        console.log('[Sync] Recuperando checklist preso em syncing:', c.id)
         await updateChecklistStatus(c.id, 'pending')
         c.syncStatus = 'pending'
       }
@@ -517,7 +493,6 @@ export async function syncAll(): Promise<{ synced: number; failed: number }> {
     lastError: failed > 0 ? `${failed} checklist(s) falharam` : null,
   })
 
-  console.log(`[Sync] Complete: ${synced} synced, ${failed} failed`)
   return { synced, failed }
 }
 
@@ -530,18 +505,14 @@ export function initSyncService(): () => void {
 
   // Sync when coming back online (com delay para rede estabilizar)
   const handleOnline = () => {
-    console.log('[Sync] Back online, aguardando 3s para rede estabilizar...')
     if (syncTimeout) clearTimeout(syncTimeout)
     syncTimeout = setTimeout(async () => {
-      console.log('[Sync] Iniciando sync após delay...')
       const result = await syncAll()
 
       // Se algum falhou (provavelmente imagens), tenta novamente após 15s
       if (result.failed > 0) {
-        console.log('[Sync] Alguns falharam, agendando retry em 15s...')
         if (retryTimeout) clearTimeout(retryTimeout)
         retryTimeout = setTimeout(() => {
-          console.log('[Sync] Retry automático...')
           syncAll()
         }, 15000)
       }
@@ -561,7 +532,6 @@ export function initSyncService(): () => void {
     getPendingChecklists().then(pending => {
       const syncable = pending.filter(c => c.syncStatus === 'pending' || c.syncStatus === 'failed')
       if (syncable.length > 0) {
-        console.log('[Sync] Online com', syncable.length, 'itens prontos para sync')
         syncAll()
       }
     })

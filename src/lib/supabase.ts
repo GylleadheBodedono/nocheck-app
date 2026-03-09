@@ -30,8 +30,3 @@ export function createClient() {
 
   return browserClient
 }
-
-// Limpa o cliente (útil para logout)
-export function clearSupabaseClient() {
-  browserClient = null
-}

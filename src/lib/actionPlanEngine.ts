@@ -48,15 +48,6 @@ function evaluateCondition(
 ): boolean {
   const condValue = condition.condition_value as Record<string, unknown>
 
-  console.log(`[ActionPlan][DEBUG] Avaliando campo "${field.name}" (ID ${field.id}):`, {
-    field_type: field.field_type,
-    condition_type: condition.condition_type,
-    condition_value: JSON.stringify(condValue),
-    response_text: response.value_text,
-    response_number: response.value_number,
-    response_json: JSON.stringify(response.value_json),
-  })
-
   switch (field.field_type) {
     case 'yes_no': {
       let answer: string | null = null
@@ -64,28 +55,22 @@ function evaluateCondition(
         answer = (response.value_json as Record<string, unknown>).answer as string | null
       }
       if (!answer) answer = response.value_text
-      console.log(`[ActionPlan][DEBUG] yes_no: answer="${answer}", condition_type="${condition.condition_type}", condValue="${condValue.value}"`)
       if (!answer) return condition.condition_type === 'empty'
 
       const answerNorm = answer.toLowerCase()
       const condNorm = ((condValue.value as string) || '').toLowerCase()
 
       if (condition.condition_type === 'equals') {
-        const result = answerNorm === condNorm
-        console.log(`[ActionPlan][DEBUG] yes_no equals: "${answerNorm}" === "${condNorm}" => ${result}`)
-        return result
+        return answerNorm === condNorm
       }
       if (condition.condition_type === 'not_equals') {
-        const result = answerNorm !== condNorm
-        console.log(`[ActionPlan][DEBUG] yes_no not_equals: "${answerNorm}" !== "${condNorm}" => ${result}`)
-        return result
+        return answerNorm !== condNorm
       }
       return false
     }
 
     case 'number': {
       const num = response.value_number
-      console.log(`[ActionPlan][DEBUG] number: num=${num}, condition_type="${condition.condition_type}", condValue=${JSON.stringify(condValue)}`)
       if (num === null || num === undefined) return condition.condition_type === 'empty'
 
       if (condition.condition_type === 'less_than') return num < (condValue.min as number)
@@ -100,7 +85,6 @@ function evaluateCondition(
 
     case 'rating': {
       const rating = response.value_number
-      console.log(`[ActionPlan][DEBUG] rating: rating=${rating}, threshold=${condValue.threshold}`)
       if (rating === null || rating === undefined) return condition.condition_type === 'empty'
 
       const threshold = condValue.threshold as number
@@ -111,7 +95,6 @@ function evaluateCondition(
     case 'dropdown': {
       const val = response.value_text || ''
       const targetValues = (condValue.values as string[]) || []
-      console.log(`[ActionPlan][DEBUG] dropdown: val="${val}", condition_type="${condition.condition_type}", targetValues=${JSON.stringify(targetValues)}`)
 
       const valNorm = val.toLowerCase()
       const targetValuesNorm = targetValues.map(v => v.toLowerCase())
@@ -129,8 +112,6 @@ function evaluateCondition(
       } else if (response.value_text) {
         try { selected = JSON.parse(response.value_text) } catch { selected = [] }
       }
-      console.log(`[ActionPlan][DEBUG] checkbox_multiple: selected=${JSON.stringify(selected)}, required=${JSON.stringify(condValue.required)}, forbidden=${JSON.stringify(condValue.forbidden)}`)
-
       const required = condValue.required as string[] | undefined
       const forbidden = condValue.forbidden as string[] | undefined
 
@@ -141,7 +122,6 @@ function evaluateCondition(
 
     case 'text': {
       const text = response.value_text || ''
-      console.log(`[ActionPlan][DEBUG] text: text="${text}", condition_type="${condition.condition_type}", condValue="${condValue.value}"`)
       const textNorm = text.toLowerCase()
       const condTextNorm = ((condValue.value as string) || '').toLowerCase()
 
@@ -152,7 +132,6 @@ function evaluateCondition(
     }
 
     default:
-      console.log(`[ActionPlan][DEBUG] field_type "${field.field_type}" nao suportado para avaliacao de condicao`)
       return false
   }
 }
@@ -255,11 +234,8 @@ export async function processarNaoConformidades(
     }
 
     if (!conditions || conditions.length === 0) {
-      console.log(`[ActionPlan] Nenhuma field_condition ativa para os ${fieldIds.length} campos deste template (IDs: ${fieldIds.join(', ')})`)
       return { success: true, plansCreated: 0 }
     }
-
-    console.log(`[ActionPlan] ${conditions.length} field_condition(s) encontrada(s) para checklist #${checklistId}`)
 
     // 2. Buscar dados de contexto (uma unica vez, antes do loop)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -323,8 +299,6 @@ export async function processarNaoConformidades(
     let plansCreated = 0
 
     for (const condition of conditions as FieldCondition[]) {
-      console.log(`[ActionPlan][DEBUG] Processando condition #${condition.id}: field_id=${condition.field_id}, type="${condition.condition_type}", severity="${condition.severity}", assignee="${condition.default_assignee_id || 'nenhum'}"`)
-
       const field = fields.find(f => f.id === condition.field_id)
       if (!field) {
         console.warn(`[ActionPlan][DEBUG] Campo ID ${condition.field_id} NAO encontrado nos fields recebidos. Fields IDs: [${fields.map(f => f.id).join(', ')}]`)
@@ -339,10 +313,8 @@ export async function processarNaoConformidades(
 
       const isNonConforming = evaluateCondition(field, response, condition)
       if (!isNonConforming) {
-        console.log(`[ActionPlan] Campo "${field.name}" (ID ${field.id}): conforme`)
         continue
       }
-      console.log(`[ActionPlan] Campo "${field.name}" (ID ${field.id}): NAO CONFORME - criando plano de acao`)
 
       // 4. Nao-conformidade detectada! Verificar reincidencia
       const reincidencia = await checkReincidencia(supabase, field.id, storeId, templateId)
@@ -438,7 +410,7 @@ export async function processarNaoConformidades(
       plansCreated++
 
       // 7. Criar notificacao in-app para o responsavel
-      const notifResult = await createNotification(supabase, assigneeId, {
+      await createNotification(supabase, assigneeId, {
         type: reincidencia.isReincidencia ? 'reincidencia_detected' : 'action_plan_assigned',
         title: reincidencia.isReincidencia
           ? `Reincidencia #${reincidencia.count + 1}: ${field.name}`
@@ -452,8 +424,6 @@ export async function processarNaoConformidades(
           is_reincidencia: reincidencia.isReincidencia,
         },
       })
-      console.log('[ActionPlan] Notificacao responsavel:', notifResult.success ? 'OK' : notifResult.error)
-
       // 7b. Notificar quem respondeu o checklist (se nao for o mesmo que o responsavel)
       if (userId !== assigneeId) {
         // Nao buscar assignee name via client (RLS bloqueia) — usar fallback
@@ -506,9 +476,7 @@ export async function processarNaoConformidades(
         const emailResult = await sendActionPlanEmail(assigneeId, emailSubject, htmlBody, accessToken)
         const assigneeName = emailResult.assigneeName || 'Nao atribuido'
 
-        if (emailResult.success) {
-          console.log(`[ActionPlan] Email enviado com sucesso para assignee ${assigneeId} (${assigneeName})`)
-        } else {
+        if (!emailResult.success) {
           console.error(`[ActionPlan] FALHA ao enviar email para assignee ${assigneeId}:`, emailResult.error)
         }
 
@@ -576,7 +544,6 @@ export async function processarNaoConformidades(
       }
     }
 
-    console.log(`[ActionPlan] ${plansCreated} plano(s) de acao criado(s) para checklist #${checklistId}`)
     return { success: true, plansCreated }
   } catch (err) {
     console.error('[ActionPlan] Erro no processamento:', err)
@@ -680,7 +647,6 @@ export async function checkOverduePlans(
       }
     }
 
-    console.log(`[ActionPlan] ${overduePlans.length} plano(s) marcado(s) como vencido(s)`)
     return overduePlans.length
   } catch (err) {
     console.error('[ActionPlan] Erro ao verificar planos vencidos:', err)

@@ -64,6 +64,14 @@
 - Design tokens centralizados no Tailwind: `text-main`, `bg-surface`, `border-subtle`, `text-primary`, etc.
 - Componentes reutilizáveis: `Header`, `LoadingPage`, `Select`, `GlobalSearch`, `IconPicker`
 
+### 🤖 Flux (Chatbot IA)
+- **Assistente flutuante** — botão fixo no canto inferior direito, disponível em todas as telas
+- Powered by **Groq API** (LLaMA 3.3 70B) com Edge Runtime (compatível com Cloudflare Pages)
+- Personalidade amigável, extrovertida e engraçada — responde em português brasileiro
+- Responde dúvidas sobre qualquer funcionalidade do NoCheck (checklists, relatórios, planos de ação, etc.)
+- Histórico de conversa mantido durante a sessão (últimas 20 mensagens)
+- Indicador de digitação animado enquanto processa a resposta
+
 ### 📊 Relatórios e Dashboard
 - Dashboard com resumo de checklists do dia, alertas de vencimento e atividade recente
 - **Dashboard técnica** — usuários marcados como "técnico" veem dashboard diferenciada com notificações, planos de ação atribuídos e histórico recente
@@ -152,9 +160,10 @@ src/
 │   │   │   ├── fotos-nc/         # Relatório fotográfico de não-conformidades
 │   │   │   └── planos-de-acao/   # Relatório de planos de ação
 │   │   └── configuracoes/        # Configurações globais e templates de email
-│   ├── api/                      # API Routes (Next.js)
+│   ├── api/                      # API Routes (Next.js, Edge Runtime)
 │   │   ├── admin/users/          # Criação e edição de usuários (usa service role)
-│   │   ├── email/                # Envio de emails via Supabase Edge Function
+│   │   ├── chat/                 # Chatbot Flux (Groq API)
+│   │   ├── notifications/email/  # Envio de emails via Resend
 │   │   └── sync/                 # Sincronização offline
 │   ├── checklist/
 │   │   └── [id]/                 # Preenchimento de checklist
@@ -167,9 +176,15 @@ src/
 │   │   ├── Header.tsx            # Header universal com GlobalSearch
 │   │   ├── GlobalSearch.tsx      # Pesquisa global no admin
 │   │   ├── Select.tsx            # Dropdown customizado (substitui <select> nativo)
+│   │   ├── PageContainer.tsx     # Container com largura padronizada
+│   │   ├── AdminSidebar.tsx      # Sidebar de navegação admin
 │   │   ├── LoadingPage.tsx
 │   │   ├── IconPicker.tsx
 │   │   └── index.ts
+│   ├── FluxChat.tsx              # Chatbot IA flutuante (Flux)
+│   ├── PWAInstall.tsx            # Prompt de instalação PWA
+│   ├── SyncIndicator.tsx         # Indicador de sincronização offline
+│   ├── OfflineIndicator.tsx      # Banner de modo offline
 │   ├── fields/
 │   │   └── FieldRenderer.tsx     # Renderiza campos de checklist pelo tipo
 │   └── admin/
@@ -186,10 +201,18 @@ src/
 │   ├── exportUtils.ts            # Exportação client-side (CSV, Excel, TXT, PDF)
 │   ├── analyticsQueries.ts       # Queries de conformidade e reincidências
 │   ├── actionPlanEngine.ts       # Motor de criação automática de planos de ação
+│   ├── api-auth.ts               # Verificação de auth em API routes
+│   ├── logout.ts                 # Logout completo com limpeza de caches
 │   ├── google.ts                 # Integração Google Drive (upload de fotos)
 │   └── teams.ts                  # Alertas Microsoft Teams via Webhook
 ├── hooks/
-│   └── useNotifications.ts       # Hook de notificações em tempo real
+│   ├── useAuth.ts                # Hook de autenticação (online + cache offline)
+│   ├── useOfflineAuth.ts         # Hook de auth com suporte offline completo
+│   ├── useOfflineData.ts         # Hook de dados com fallback offline (IndexedDB)
+│   ├── useOnlineStatus.ts        # Hook de status de conexão
+│   ├── useNotifications.ts       # Hook de notificações em tempo real
+│   ├── usePrecache.ts            # Hook de precache de assets (PWA)
+│   └── useTheme.ts               # Hook de tema claro/escuro
 └── types/
     └── database.ts               # Tipos TypeScript do schema do Supabase
 ```
@@ -200,15 +223,16 @@ src/
 
 | Camada | Tecnologia |
 |--------|------------|
-| Framework | **Next.js 15** (App Router, Edge Runtime) |
+| Framework | **Next.js 14.2** (App Router, Edge Runtime) |
 | Linguagem | **TypeScript** (strict) |
 | Backend / DB | **Supabase** (PostgreSQL + Auth + Realtime + Edge Functions) |
 | Estilo | **Tailwind CSS** v3 com design tokens customizados |
 | Offline | **IndexedDB** + **Service Worker** (PWA) |
 | Drag-and-drop | **@dnd-kit** (reordenação de campos e seções) |
 | Ícones | **react-icons** (Feather Icons) |
-| Animações | CSS keyframes nativo |
-| Email | Supabase Edge Function + templates HTML |
+| Animações | **Framer Motion** |
+| IA / Chatbot | **Groq API** (LLaMA 3.3 70B) |
+| Email | **Resend** + templates HTML |
 | Alertas | Microsoft Teams Webhooks |
 | Fotos | Google Drive API |
 | Deploy | **Cloudflare Pages** (build com `@cloudflare/next-on-pages`) |
@@ -232,6 +256,13 @@ Crie um arquivo `.env.local`:
 NEXT_PUBLIC_SUPABASE_URL=https://xxx.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=xxx
 SUPABASE_SERVICE_ROLE_KEY=xxx
+
+# Groq (chatbot Flux)
+GROQ_API_KEY=gsk_xxx
+
+# Resend (envio de emails)
+RESEND_API_KEY=re_xxx
+RESEND_FROM_EMAIL=NoCheck <noreply@seudominio.com>
 
 # Microsoft Teams (opcional)
 TEAMS_WEBHOOK_URL=https://xxx.webhook.office.com/...

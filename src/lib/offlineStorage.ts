@@ -56,7 +56,6 @@ export async function initDB(): Promise<IDBDatabase> {
 
     request.onsuccess = () => {
       db = request.result
-      console.log('[OfflineDB] Database opened successfully')
       resolve(db)
     }
 
@@ -68,7 +67,6 @@ export async function initDB(): Promise<IDBDatabase> {
         const store = database.createObjectStore(STORE_NAME, { keyPath: 'id' })
         store.createIndex('syncStatus', 'syncStatus', { unique: false })
         store.createIndex('createdAt', 'createdAt', { unique: false })
-        console.log('[OfflineDB] Object store created')
       }
     }
   })
@@ -94,7 +92,6 @@ export async function saveOfflineChecklist(checklist: Omit<PendingChecklist, 'id
     const request = store.add(pendingChecklist)
 
     request.onsuccess = () => {
-      console.log('[OfflineDB] Checklist saved:', id)
       resolve(id)
     }
 
@@ -194,7 +191,6 @@ export async function deleteOfflineChecklist(id: string): Promise<void> {
     const request = store.delete(id)
 
     request.onsuccess = () => {
-      console.log('[OfflineDB] Checklist deleted:', id)
       resolve()
     }
 
@@ -217,7 +213,6 @@ export async function clearOfflineData(): Promise<void> {
     const request = store.clear()
 
     request.onsuccess = () => {
-      console.log('[OfflineDB] All data cleared')
       resolve()
     }
 
@@ -282,7 +277,6 @@ export async function updateOfflineChecklistSection(
 
       const updateRequest = store.put(checklist)
       updateRequest.onsuccess = () => {
-        console.log('[OfflineDB] Section updated:', sectionId, allDone ? '(all done)' : '')
         resolve()
       }
       updateRequest.onerror = () => reject(updateRequest.error)

@@ -54,12 +54,10 @@ export function useOfflineAuth(): OfflineAuthState & OfflineAuthActions {
   // Monitora status de conexao
   useEffect(() => {
     const handleOnline = () => {
-      console.log('[OfflineAuth] Back online')
       setState(prev => ({ ...prev, isOnline: true }))
     }
 
     const handleOffline = () => {
-      console.log('[OfflineAuth] Gone offline')
       setState(prev => ({ ...prev, isOnline: false, isOfflineMode: true }))
     }
 
@@ -121,7 +119,6 @@ export function useOfflineAuth(): OfflineAuthState & OfflineAuthActions {
         const cachedUser = await getUserCache(cachedAuth.userId)
 
         if (cachedUser) {
-          console.log('[OfflineAuth] Using cached auth')
           setState(prev => ({
             ...prev,
             user: cachedUser,
@@ -276,7 +273,6 @@ export function useOfflineAuth(): OfflineAuthState & OfflineAuthActions {
       }
 
       await saveSyncMetadata('user_data', 'success')
-      console.log('[OfflineAuth] User data cached successfully')
     } catch (error) {
       console.error('[OfflineAuth] Error caching user data:', error)
       await saveSyncMetadata('user_data', 'failed')
@@ -360,7 +356,6 @@ export function useOfflineAuth(): OfflineAuthState & OfflineAuthActions {
         error: null,
       })
 
-      console.log('[OfflineAuth] Logged out and cache cleared')
     } catch (error) {
       console.error('[OfflineAuth] Logout error:', error)
     }
@@ -382,7 +377,6 @@ export function useOfflineAuth(): OfflineAuthState & OfflineAuthActions {
     if (!state.isAuthenticated || !state.user) return
 
     if (navigator.onLine) {
-      console.log('[OfflineAuth] Syncing user data...')
       await cacheUserData(state.user.id, state.user.email)
       setState(prev => ({ ...prev, isOfflineMode: false }))
     }

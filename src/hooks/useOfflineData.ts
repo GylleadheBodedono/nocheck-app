@@ -355,15 +355,12 @@ export function useOfflineData(): OfflineDataState & OfflineDataActions {
    */
   const syncAllData = useCallback(async (userId: string) => {
     if (!navigator.onLine) {
-      console.log('[OfflineData] Cannot sync while offline')
       return
     }
 
     setState(prev => ({ ...prev, isLoading: true, error: null }))
 
     try {
-      console.log('[OfflineData] Starting full sync...')
-
       // Busca o store_id do usuario
       const storeId = await getUserStoreId(userId)
 
@@ -448,7 +445,6 @@ export function useOfflineData(): OfflineDataState & OfflineDataActions {
         lastSyncAt: now,
       }))
 
-      console.log('[OfflineData] Full sync completed')
     } catch (error) {
       console.error('[OfflineData] Sync error:', error)
       await saveSyncMetadata('full_sync', 'failed')
