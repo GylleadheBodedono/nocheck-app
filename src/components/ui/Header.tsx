@@ -4,8 +4,9 @@ import { useEffect, useState, useMemo, useRef, useCallback } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
 import { useRouter } from 'next/navigation'
-import { FiArrowLeft, FiLogOut, FiUser, FiBell, FiSettings, FiCheck, FiAlertTriangle, FiCheckCircle, FiClock, FiTrash2, FiX } from 'react-icons/fi'
+import { FiArrowLeft, FiLogOut, FiUser, FiBell, FiSettings, FiCheck, FiAlertTriangle, FiCheckCircle, FiClock, FiTrash2, FiX, FiMenu } from 'react-icons/fi'
 import { GlobalSearch } from './GlobalSearch'
+import { AdminSidebar } from './AdminSidebar'
 import { APP_CONFIG } from '@/lib/config'
 import { ThemeToggle } from './ThemeToggle'
 import { createClient } from '@/lib/supabase'
@@ -154,6 +155,7 @@ export function Header({
   // Notifications
   const { notifications, unreadCount, markAsRead, markAllAsRead, deleteNotification, deleteAllNotifications } = useNotifications()
   const [notifOpen, setNotifOpen] = useState(false)
+  const [sidebarOpen, setSidebarOpen] = useState(false)
   const notifRef = useRef<HTMLDivElement>(null)
   const [notificationPermission, setNotificationPermission] = useState<'default' | 'granted' | 'denied'>(() =>
     typeof window !== 'undefined' && 'Notification' in window ? (Notification.permission as 'default' | 'granted' | 'denied') : 'default'
@@ -225,7 +227,18 @@ export function Header({
           <div className="flex items-center justify-between h-16 gap-4">
             {/* Left: Navigation + Title */}
             <div className="flex items-center gap-3 shrink-0">
-              {/* Back arrow or Hamburger menu */}
+              {/* Admin sidebar toggle */}
+              {isAdmin && (
+                <button
+                  onClick={() => setSidebarOpen(true)}
+                  className="p-2 text-muted hover:text-main hover:bg-surface-hover rounded-xl transition-colors"
+                  title="Menu Admin"
+                >
+                  <FiMenu className="w-5 h-5" />
+                </button>
+              )}
+
+              {/* Back arrow or Home button */}
               {backHref || onBack ? (
                 <button
                   onClick={handleBack}
@@ -482,6 +495,9 @@ export function Header({
       </header>
       {/* Spacer for fixed header */}
       <div className="h-24" />
+
+      {/* Admin sidebar drawer */}
+      {isAdmin && <AdminSidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />}
     </>
   )
 }
