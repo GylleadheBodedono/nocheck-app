@@ -294,19 +294,7 @@ export default function GaleriaPage() {
             {visibleFiles.map((file) => (
               <div key={file.path} className="card overflow-hidden group">
                 {/* Thumbnail */}
-                <button
-                  type="button"
-                  onClick={() => setPreview(file)}
-                  className="w-full aspect-square bg-surface relative overflow-hidden"
-                >
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={file.publicUrl}
-                    alt={file.name}
-                    className="w-full h-full object-cover transition-transform group-hover:scale-105"
-                    loading="lazy"
-                  />
-                </button>
+                <GaleriaThumbnail file={file} onClick={() => setPreview(file)} />
 
                 {/* Info */}
                 <div className="p-2.5">
@@ -370,6 +358,7 @@ export default function GaleriaPage() {
               src={preview.publicUrl}
               alt={preview.name}
               className="w-full h-auto max-h-[80vh] object-contain rounded-xl"
+              onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }}
             />
             <div className="mt-3 flex items-center justify-between bg-surface rounded-xl p-3">
               <div>
@@ -388,5 +377,33 @@ export default function GaleriaPage() {
         </div>
       )}
     </div>
+  )
+}
+
+function GaleriaThumbnail({ file, onClick }: { file: StorageFile; onClick: () => void }) {
+  const [error, setError] = useState(false)
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="w-full aspect-square bg-surface relative overflow-hidden"
+    >
+      {error ? (
+        <div className="w-full h-full flex flex-col items-center justify-center gap-2">
+          <FiImage className="w-8 h-8 text-muted" />
+          <span className="text-[10px] text-muted">Erro ao carregar</span>
+        </div>
+      ) : (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={file.publicUrl}
+          alt={file.name}
+          className="w-full h-full object-cover transition-transform group-hover:scale-105"
+          loading="lazy"
+          onError={() => setError(true)}
+        />
+      )}
+    </button>
   )
 }

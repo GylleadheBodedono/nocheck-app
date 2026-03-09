@@ -154,6 +154,14 @@ function ChecklistForm() {
       .sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0))
   }, [template])
 
+  // Fields without a section (Campos Gerais)
+  const generalFields = useMemo(() => {
+    if (!template) return []
+    return template.fields
+      .filter(f => f.section_id === null && f.field_type !== 'gps')
+      .sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0))
+  }, [template])
+
   useEffect(() => {
     const fetchData = async () => {
       if (!templateId || !storeId) {
@@ -1914,7 +1922,8 @@ function ChecklistForm() {
   // ============ SECTIONED TEMPLATE: SECTION LIST VIEW ============
   if (hasSections && activeSection === null) {
     const completedCount = sectionProgress.filter(sp => sp.status === 'concluido').length
-    const totalCount = sortedSections.length
+    const hasGeneralFields = generalFields.length > 0
+    const totalCount = sortedSections.length + (hasGeneralFields ? 1 : 0)
     const progressPct = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0
 
     return (
@@ -1981,6 +1990,28 @@ function ChecklistForm() {
                 </button>
               )
             })}
+
+            {/* Campos Gerais (fields without a section) */}
+            {hasGeneralFields && (
+              <button
+                type="button"
+                onClick={() => setActiveSection(-1)}
+                className="w-full text-left card p-3 sm:p-5 transition-all hover:shadow-theme-md cursor-pointer border-subtle hover:border-primary/30"
+              >
+                <div className="flex items-center gap-3 sm:gap-4">
+                  <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl flex items-center justify-center text-sm font-bold shrink-0 bg-primary/10 text-primary">
+                    {sortedSections.length + 1}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <h3 className="font-semibold text-sm sm:text-base text-main">Campos Gerais</h3>
+                    <p className="text-[10px] sm:text-xs text-muted">
+                      {generalFields.length} campo{generalFields.length !== 1 ? 's' : ''}
+                    </p>
+                  </div>
+                  <FiChevronRight className="w-4 h-4 sm:w-5 sm:h-5 shrink-0 text-muted" />
+                </div>
+              </button>
+            )}
           </div>
 
           {/* Finalizar Checklist button: always visible */}
@@ -2065,10 +2096,13 @@ function ChecklistForm() {
 
   // ============ SECTIONED TEMPLATE: FILLING A SPECIFIC SECTION ============
   if (hasSections && activeSection !== null) {
-    const section = sortedSections.find(s => s.id === activeSection)
-    const sectionFields = getFieldsForSection(activeSection).filter(f => f.field_type !== 'gps')
-    const progress = sectionProgress.find(sp => sp.section_id === activeSection)
-    const isDone = progress?.status === 'concluido'
+    const isGeneralSection = activeSection === -1
+    const section = isGeneralSection ? null : sortedSections.find(s => s.id === activeSection)
+    const sectionFields = isGeneralSection
+      ? generalFields
+      : getFieldsForSection(activeSection).filter(f => f.field_type !== 'gps')
+    const progress = isGeneralSection ? null : sectionProgress.find(sp => sp.section_id === activeSection)
+    const isDone = isGeneralSection ? false : progress?.status === 'concluido'
 
     const filledCount = sectionFields.filter(f => {
       const v = responses[f.id]
@@ -2080,7 +2114,7 @@ function ChecklistForm() {
       <div className="min-h-screen bg-page">
         <Header
           onBack={handleSectionBack}
-          title={section?.name}
+          title={isGeneralSection ? 'Campos Gerais' : section?.name}
           subtitle={template.name}
           icon={FiLayers}
           rightSlot={

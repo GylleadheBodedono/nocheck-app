@@ -591,16 +591,6 @@ function ActionPlanCard({ item, onPhotoClick }: { item: ActionPlanReportItem; on
 function PhotoThumb({ url, borderColor, onClick }: { url: string; borderColor: string; onClick: () => void }) {
   const [error, setError] = useState(false)
 
-  if (url.startsWith('data:')) {
-    return (
-      <div className="w-20 h-20 rounded-lg border-2 border-yellow-500 bg-yellow-50 dark:bg-yellow-900/20 flex items-center justify-center cursor-default">
-        <span className="text-[10px] text-yellow-600 dark:text-yellow-400 font-medium text-center leading-tight">
-          Pendente<br />upload
-        </span>
-      </div>
-    )
-  }
-
   if (error) {
     return (
       <div className="w-20 h-20 rounded-lg border-2 border-gray-300 dark:border-gray-600 bg-gray-100 dark:bg-gray-800 flex items-center justify-center cursor-default">
