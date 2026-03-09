@@ -111,7 +111,7 @@ export default function GaleriaPage() {
   const filteredFiles = useMemo(() => {
     if (!search.trim()) return files
     const q = search.toLowerCase()
-    return files.filter(f => f.name.toLowerCase().includes(q))
+    return files.filter(f => f.name.toLowerCase().includes(q) || f.path.toLowerCase().includes(q))
   }, [files, search])
 
   const visibleFiles = filteredFiles.slice(0, visibleCount)
@@ -301,6 +301,12 @@ export default function GaleriaPage() {
                   <p className="text-xs text-main font-medium truncate" title={file.name}>
                     {file.name}
                   </p>
+                  {(() => {
+                    const subPath = file.path.replace(/^(uploads|anexos)\//, '').replace(`/${file.name}`, '')
+                    return subPath ? (
+                      <p className="text-[10px] text-muted truncate" title={subPath}>{subPath}</p>
+                    ) : null
+                  })()}
                   <div className="flex items-center justify-between mt-1">
                     <div className="text-xs text-muted">
                       <span>{formatSize(file.size)}</span>

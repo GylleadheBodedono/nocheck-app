@@ -1465,7 +1465,10 @@ function ChecklistForm() {
 
       const updatedJson: Record<string, unknown> = { ...json }
 
-      const folder = templateId ? `uploads/t${templateId}/cl${clId}` : undefined
+      const sanitizeName = (s: string) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-zA-Z0-9_-]/g, '_').substring(0, 40)
+      const tName = template?.name ? sanitizeName(template.name) : `t${templateId}`
+      const sName = store?.name ? sanitizeName(store.name) : `s${storeId}`
+      const folder = templateId ? `uploads/${tName}/${sName}_cl${clId}` : undefined
 
       if (photos && hasBase64Photos) {
         const uploadedUrls: string[] = []
