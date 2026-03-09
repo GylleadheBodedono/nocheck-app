@@ -1,5 +1,6 @@
+export const runtime = 'edge'
+
 import { NextRequest, NextResponse } from 'next/server'
-import Groq from 'groq-sdk'
 import { verifyApiAuth } from '@/lib/api-auth'
 
 const SYSTEM_PROMPT = `Voce e o Flux, o assistente virtual do NoCheck — Sistema de Checklists do Grupo Do No.
@@ -19,7 +20,7 @@ O NoCheck e um sistema web/PWA de checklists operacionais para redes de lojas do
 FUNCIONALIDADES PRINCIPAIS:
 1. **Dashboard** (/dashboard) — Tela inicial do operador: mostra checklists pendentes do dia, resumo de atividade, e acesso rapido para preencher novos checklists.
 2. **Novo Checklist** (/checklist/novo) — Operador seleciona a loja, o template desejado e preenche os campos. Tipos de campo: texto, numero, sim/nao (conforme/nao conforme), selecao, foto, assinatura, calculo automatico, data, hora, telefone, email, CEP, CPF, CNPJ.
-3. **Templates** (/admin/templates) — Area admin para criar e editar modelos de checklists. Cada template tem secoes e campos configuráveis. Pode definir horarios permitidos de preenchimento, restringir a admins, e categorizar (recebimento, limpeza, abertura, fechamento, outros).
+3. **Templates** (/admin/templates) — Area admin para criar e editar modelos de checklists. Cada template tem secoes e campos configuraveis. Pode definir horarios permitidos de preenchimento, restringir a admins, e categorizar (recebimento, limpeza, abertura, fechamento, outros).
 4. **Lojas** (/admin/lojas) — Cadastro de unidades/lojas com nome, CNPJ, endereco completo, coordenadas GPS. Pode exigir localizacao GPS para preencher checklists.
 5. **Setores** (/admin/setores) — Departamentos dentro de cada loja (ex: Cozinha, Salao, Estoque, Padaria). Cada setor tem cor e icone personalizaveis.
 6. **Funcoes** (/admin/funcoes) — Cargos dos usuarios como Estoquista, Supervisor, Aprendiz, etc. Usado para controlar quais templates cada cargo pode preencher.
@@ -67,19 +68,31 @@ export async function POST(request: NextRequest) {
     // Limit history to last 20 messages to avoid large payloads
     const recentMessages = messages.slice(-20)
 
-    const groq = new Groq({ apiKey: process.env.GROQ_API_KEY })
-
-    const completion = await groq.chat.completions.create({
-      model: 'llama-3.3-70b-versatile',
-      messages: [
-        { role: 'system', content: SYSTEM_PROMPT },
-        ...recentMessages,
-      ],
-      max_tokens: 1024,
-      temperature: 0.7,
+    const groqRes = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${process.env.GROQ_API_KEY}`,
+      },
+      body: JSON.stringify({
+        model: 'llama-3.3-70b-versatile',
+        messages: [
+          { role: 'system', content: SYSTEM_PROMPT },
+          ...recentMessages,
+        ],
+        max_tokens: 1024,
+        temperature: 0.7,
+      }),
     })
 
-    const reply = completion.choices[0]?.message?.content || 'Opa, nao consegui processar sua pergunta. Tenta de novo?'
+    if (!groqRes.ok) {
+      const errorText = await groqRes.text()
+      console.error('[Chat API] Groq error:', groqRes.status, errorText)
+      return NextResponse.json({ error: 'Erro ao consultar IA' }, { status: 502 })
+    }
+
+    const data = await groqRes.json()
+    const reply = data.choices?.[0]?.message?.content || 'Opa, nao consegui processar sua pergunta. Tenta de novo?'
 
     return NextResponse.json({ message: reply })
   } catch (error) {
