@@ -5,6 +5,7 @@ import { APP_CONFIG } from "@/lib/config"
 import { PWAInstall } from "@/components/PWAInstall"
 import { OfflineIndicator } from "@/components/OfflineIndicator"
 import { SyncIndicator } from "@/components/SyncIndicator"
+import { FluxChat } from "@/components/FluxChat"
 
 const inter = Inter({
   subsets: ["latin"],
@@ -65,6 +66,7 @@ export default function RootLayout({
         {children}
         <SyncIndicator />
         <PWAInstall />
+        <FluxChat />
       </body>
     </html>
   )
