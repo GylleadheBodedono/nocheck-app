@@ -37,7 +37,7 @@ export async function GET(request: NextRequest) {
     if (error) throw new Error(error.message)
 
     const items = (files || [])
-      .filter(f => f.name && !f.name.startsWith('.'))
+      .filter(f => f.name && !f.name.startsWith('.') && f.id)
       .map(f => {
         const { data: urlData } = supabase.storage
           .from(BUCKET)
