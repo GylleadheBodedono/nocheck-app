@@ -5,7 +5,6 @@ import { useRouter } from 'next/navigation'
 import { createClient, isSupabaseConfigured } from '@/lib/supabase'
 import {
   FiBarChart2,
-  FiTrendingUp,
   FiUsers,
   FiMapPin,
   FiClipboard,
@@ -51,6 +50,27 @@ type TemplateStats = {
 type DailyStats = {
   date: string
   count: number
+}
+
+type SectorStats = {
+  sector_id: number
+  sector_name: string
+  store_name: string
+  total_checklists: number
+  completed: number
+  completion_rate: number
+}
+
+type AttentionPoint = {
+  text: string
+  severity: 'warning' | 'error'
+}
+
+type RequiredAction = {
+  text: string
+  responsible: string
+  deadline: string
+  deadlineColor: string
 }
 
 type UserChecklist = {
@@ -101,6 +121,11 @@ export default function RelatoriosPage() {
   const [exportMenuOpen, setExportMenuOpen] = useState(false)
   const [exporting, setExporting] = useState(false)
   const [exportingPdf, setExportingPdf] = useState(false)
+  // Visao Geral executive panel state
+  const [sectorStats, setSectorStats] = useState<SectorStats[]>([])
+  const [attentionPoints, setAttentionPoints] = useState<AttentionPoint[]>([])
+  const [requiredActions, setRequiredActions] = useState<RequiredAction[]>([])
+  const [overallAdherence, setOverallAdherence] = useState(0)
   const responsePerPage = 20
   const router = useRouter()
   const supabase = useMemo(() => createClient(), [])
@@ -180,6 +205,9 @@ export default function RelatoriosPage() {
         storesData,
         templatesData,
         allChecklists,
+        sectorsData,
+        actionPlansData,
+        allUsersData,
       ] = await Promise.all([
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         (supabase as any).from('checklists').select('id', { count: 'exact', head: true }),
@@ -197,9 +225,18 @@ export default function RelatoriosPage() {
         (supabase as any).from('stores').select('id, name').eq('is_active', true),
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         (supabase as any).from('checklist_templates').select('id, name').eq('is_active', true),
-        // Get all checklists in period for aggregation (more efficient than multiple queries)
+        // Get all checklists in period with sector/status for executive panel
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        (supabase as any).from('checklists').select('id, store_id, template_id, created_at').gte('created_at', startDate.toISOString()),
+        (supabase as any).from('checklists').select('id, store_id, template_id, sector_id, status, created_at, completed_at').gte('created_at', startDate.toISOString()),
+        // Sectors with store info
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (supabase as any).from('sectors').select('id, name, store_id, store:stores(name)').eq('is_active', true),
+        // Pending/overdue action plans
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (supabase as any).from('action_plans').select('id, store_id, field_id, status, severity, deadline, assigned_to, created_at, store:stores(name), field:template_fields(name)').in('status', ['aberto', 'em_andamento', 'vencido']).order('deadline', { ascending: true }).limit(5),
+        // All users for assignee names
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (supabase as any).from('users').select('id, full_name, function_ref:functions(name)'),
       ])
 
       setSummary({
@@ -270,6 +307,124 @@ export default function RelatoriosPage() {
         })
       }
       setDailyStats(dailyData)
+
+      // === Executive panel computations ===
+      const sectors = sectorsData?.data || []
+      const usersLookup = allUsersData?.data || []
+      const actionPlans = actionPlansData?.data || []
+
+      // Compute sector stats
+      if (sectors.length > 0) {
+        const sectorStatsCalc: SectorStats[] = sectors.map((sector: { id: number; name: string; store_id: number; store: { name: string } | null }) => {
+          const sectorChecklists = checklists.filter((c: { sector_id: number }) => c.sector_id === sector.id)
+          const completedCount = sectorChecklists.filter((c: { status: string }) => c.status === 'concluido' || c.status === 'validado').length
+          const rate = sectorChecklists.length > 0 ? Math.round((completedCount / sectorChecklists.length) * 100) : 0
+
+          return {
+            sector_id: sector.id,
+            sector_name: sector.name,
+            store_name: sector.store?.name || '',
+            total_checklists: sectorChecklists.length,
+            completed: completedCount,
+            completion_rate: rate,
+          }
+        }).sort((a: SectorStats, b: SectorStats) => b.completion_rate - a.completion_rate)
+        setSectorStats(sectorStatsCalc)
+
+        // Overall adherence = weighted average
+        const totalAll = sectorStatsCalc.reduce((s: number, x: SectorStats) => s + x.total_checklists, 0)
+        const completedAll = sectorStatsCalc.reduce((s: number, x: SectorStats) => s + x.completed, 0)
+        const adherence = totalAll > 0 ? Math.round((completedAll / totalAll) * 100) : 0
+        setOverallAdherence(adherence)
+
+        // Generate attention points
+        const points: AttentionPoint[] = []
+
+        // Store with lowest adherence
+        if (storesData.data && storesData.data.length > 0) {
+          const storeAdherence = storesData.data.map((store: { id: number; name: string }) => {
+            const sc = checklists.filter((c: { store_id: number }) => c.store_id === store.id)
+            const comp = sc.filter((c: { status: string }) => c.status === 'concluido' || c.status === 'validado').length
+            return { name: store.name, rate: sc.length > 0 ? Math.round((comp / sc.length) * 100) : 0, total: sc.length }
+          }).filter((s: { total: number }) => s.total > 0).sort((a: { rate: number }, b: { rate: number }) => a.rate - b.rate)
+
+          if (storeAdherence.length > 0 && storeAdherence[0].rate < 80) {
+            points.push({
+              text: `Unidade ${storeAdherence[0].name} com menor adesao geral: ${storeAdherence[0].rate}% — necessario intervencao`,
+              severity: storeAdherence[0].rate < 50 ? 'error' : 'warning',
+            })
+          }
+        }
+
+        // Overdue action plans
+        const overdueCount = actionPlans.filter((ap: { status: string }) => ap.status === 'vencido').length
+        if (overdueCount > 0) {
+          points.push({
+            text: `${overdueCount} plano(s) de acao vencido(s)`,
+            severity: 'error',
+          })
+        }
+
+        // Sectors with rate < 50%
+        const criticalSectors = sectorStatsCalc.filter((s: SectorStats) => s.completion_rate < 50 && s.total_checklists > 0)
+        for (const cs of criticalSectors) {
+          points.push({
+            text: `Setor ${cs.sector_name} (${cs.store_name}) com adesao critica: ${cs.completion_rate}%`,
+            severity: 'error',
+          })
+        }
+
+        // Templates not used in period
+        if (templatesData.data) {
+          const unusedTemplates = templatesData.data.filter((t: { id: number; name: string }) =>
+            !checklists.some((c: { template_id: number }) => c.template_id === t.id)
+          )
+          for (const ut of unusedTemplates) {
+            points.push({
+              text: `Checklist "${ut.name}" nao preenchido nos ultimos ${days} dias`,
+              severity: 'warning',
+            })
+          }
+        }
+
+        setAttentionPoints(points)
+      } else {
+        setSectorStats([])
+        setOverallAdherence(0)
+        setAttentionPoints([])
+      }
+
+      // Generate required actions from action plans
+      if (actionPlans.length > 0) {
+        const now = new Date()
+        const actions: RequiredAction[] = actionPlans.map((ap: {
+          id: number; status: string; deadline: string | null; assigned_to: string | null;
+          store: { name: string } | null; field: { name: string } | null;
+        }) => {
+          const fieldName = ap.field?.name || 'Campo desconhecido'
+          const storeName = ap.store?.name || 'Loja desconhecida'
+          const assignee = usersLookup.find((u: { id: string }) => u.id === ap.assigned_to)
+          const assigneeName = assignee?.full_name || 'Nao atribuido'
+          const assigneeFunction = assignee?.function_ref?.name
+          const responsible = assigneeFunction ? `${assigneeName} — ${assigneeFunction}` : assigneeName
+
+          let deadlineStr = 'Sem prazo'
+          let deadlineColor = 'bg-gray-500'
+          if (ap.deadline) {
+            const dl = new Date(ap.deadline)
+            deadlineStr = dl.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })
+            const diffDays = Math.ceil((dl.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
+            if (diffDays <= 0) deadlineColor = 'bg-error'
+            else if (diffDays <= 7) deadlineColor = 'bg-warning'
+            else deadlineColor = 'bg-success'
+          }
+
+          return { text: `${fieldName} — ${storeName}`, responsible, deadline: deadlineStr, deadlineColor }
+        })
+        setRequiredActions(actions)
+      } else {
+        setRequiredActions([])
+      }
 
       // Fetch user checklists for responses tab
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -351,6 +506,19 @@ export default function RelatoriosPage() {
   }
 
   const maxDailyCount = Math.max(...dailyStats.map(d => d.count), 1)
+
+  // Executive summary text
+  const summaryText = useMemo(() => {
+    if (!sectorStats.length) return ''
+    const best = sectorStats[0]
+    const worst = sectorStats[sectorStats.length - 1]
+    if (best.sector_id === worst.sector_id) {
+      return `Adesao geral aos checklists esta em ${overallAdherence}%. Setor de ${best.sector_name} com ${best.completion_rate}% de preenchimento.`
+    }
+    return `Adesao geral aos checklists esta em ${overallAdherence}%. ` +
+      `Setor de ${best.sector_name} lidera com ${best.completion_rate}% de preenchimento. ` +
+      `Setor de ${worst.sector_name} e o ponto fraco com apenas ${worst.completion_rate}%.`
+  }, [sectorStats, overallAdherence])
 
   // Filter user checklists
   const filteredUserChecklists = useMemo(() => {
@@ -705,77 +873,111 @@ export default function RelatoriosPage() {
           </div>
         </div>
 
-        {/* Summary Cards */}
-        <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4 mb-8">
-          <div className="card p-4">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
-                <FiClipboard className="w-5 h-5 text-primary" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold text-main">{summary.totalChecklists}</p>
-                <p className="text-xs text-muted">Total</p>
-              </div>
+        {/* Executive Summary Card */}
+        {summaryText && (
+          <div className="border-l-4 border-success bg-surface rounded-r-xl px-5 py-4 mb-6">
+            <p className="text-sm text-main leading-relaxed">{summaryText}</p>
+          </div>
+        )}
+
+        {/* KPI Cards */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+          <div className="card p-5">
+            <div className="h-1 w-16 bg-primary rounded-full mb-3" />
+            <p className="text-sm text-muted mb-1">Adesao Geral</p>
+            <div className="flex items-baseline gap-2">
+              <span className="text-4xl font-bold text-main">{overallAdherence}%</span>
+              {overallAdherence >= 70 ? (
+                <span className="text-success text-lg">&#9650;</span>
+              ) : (
+                <span className="text-error text-lg">&#9660;</span>
+              )}
+            </div>
+            <p className="text-xs text-muted mt-1">{summary.totalChecklists} checklists no total</p>
+          </div>
+
+          <div className="card p-5">
+            <div className="h-1 w-16 bg-success rounded-full mb-3" />
+            <p className="text-sm text-muted mb-1">Checklists Ativos</p>
+            <div className="flex items-baseline gap-2">
+              <span className="text-4xl font-bold text-main">{summary.activeTemplates}</span>
+              <span className="text-success text-lg">&#9650;</span>
+            </div>
+            <p className="text-xs text-muted mt-1">+{summary.completedToday} hoje</p>
+          </div>
+
+          <div className="card p-5">
+            <div className="h-1 w-16 bg-error rounded-full mb-3" />
+            <p className="text-sm text-muted mb-1">Pior Setor</p>
+            <div className="flex items-baseline gap-2">
+              <span className="text-4xl font-bold text-main">
+                {sectorStats.length > 0 ? `${sectorStats[sectorStats.length - 1].completion_rate}%` : '--'}
+              </span>
+              <span className="text-error text-lg">&#9660;</span>
+            </div>
+            <p className="text-xs text-muted mt-1">
+              {sectorStats.length > 0 ? sectorStats[sectorStats.length - 1].sector_name : 'Sem dados'}
+            </p>
+          </div>
+
+          <div className="card p-5">
+            <div className="h-1 w-16 bg-success rounded-full mb-3" />
+            <p className="text-sm text-muted mb-1">Melhor Setor</p>
+            <div className="flex items-baseline gap-2">
+              <span className="text-4xl font-bold text-main">
+                {sectorStats.length > 0 ? `${sectorStats[0].completion_rate}%` : '--'}
+              </span>
+              <span className="text-success text-lg">&#9650;</span>
+            </div>
+            <p className="text-xs text-muted mt-1">
+              {sectorStats.length > 0 ? sectorStats[0].sector_name : 'Sem dados'}
+            </p>
+          </div>
+        </div>
+
+        {/* Attention Points + Required Actions */}
+        <div className="grid lg:grid-cols-2 gap-6 mb-8">
+          {/* Pontos de Atencao */}
+          <div>
+            <h3 className="flex items-center gap-2 text-sm font-bold text-warning uppercase tracking-wide mb-4">
+              <FiAlertTriangle className="w-5 h-5" />
+              Pontos de Atencao
+            </h3>
+            <div className="space-y-3">
+              {attentionPoints.length === 0 ? (
+                <div className="border-l-4 border-success bg-surface rounded-r-xl px-4 py-3">
+                  <p className="text-sm text-muted">Nenhum ponto de atencao no periodo</p>
+                </div>
+              ) : (
+                attentionPoints.map((p, i) => (
+                  <div key={i} className={`border-l-4 ${p.severity === 'error' ? 'border-error' : 'border-warning'} bg-surface rounded-r-xl px-4 py-3`}>
+                    <p className="text-sm text-main">{p.text}</p>
+                  </div>
+                ))
+              )}
             </div>
           </div>
 
-          <div className="card p-4">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-lg bg-success/20 flex items-center justify-center">
-                <FiCheckCircle className="w-5 h-5 text-success" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold text-main">{summary.completedToday}</p>
-                <p className="text-xs text-muted">Hoje</p>
-              </div>
-            </div>
-          </div>
-
-          <div className="card p-4">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-lg bg-info/20 flex items-center justify-center">
-                <FiTrendingUp className="w-5 h-5 text-info" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold text-main">{summary.avgPerDay}</p>
-                <p className="text-xs text-muted">Media/dia</p>
-              </div>
-            </div>
-          </div>
-
-          <div className="card p-4">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-lg bg-accent/20 flex items-center justify-center">
-                <FiUsers className="w-5 h-5 text-accent" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold text-main">{summary.activeUsers}</p>
-                <p className="text-xs text-muted">Usuarios</p>
-              </div>
-            </div>
-          </div>
-
-          <div className="card p-4">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-lg bg-warning/20 flex items-center justify-center">
-                <FiMapPin className="w-5 h-5 text-warning" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold text-main">{summary.activeStores}</p>
-                <p className="text-xs text-muted">Lojas</p>
-              </div>
-            </div>
-          </div>
-
-          <div className="card p-4">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-lg bg-secondary/20 flex items-center justify-center">
-                <FiClipboard className="w-5 h-5 text-secondary" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold text-main">{summary.activeTemplates}</p>
-                <p className="text-xs text-muted">Checklists</p>
-              </div>
+          {/* Acoes Necessarias */}
+          <div>
+            <h3 className="flex items-center gap-2 text-sm font-bold text-success uppercase tracking-wide mb-4">
+              <FiCheckCircle className="w-5 h-5" />
+              Acoes Necessarias
+            </h3>
+            <div className="space-y-3">
+              {requiredActions.length === 0 ? (
+                <div className="border-l-4 border-success bg-surface rounded-r-xl px-4 py-3">
+                  <p className="text-sm text-muted">Nenhuma acao pendente</p>
+                </div>
+              ) : (
+                requiredActions.map((a, i) => (
+                  <div key={i} className="border-l-4 border-success bg-surface rounded-r-xl px-4 py-3 flex items-center justify-between gap-2">
+                    <p className="text-sm text-main flex-1">{a.text}</p>
+                    <span className="text-xs text-muted whitespace-nowrap">{a.responsible}</span>
+                    <span className={`text-xs text-white px-2 py-1 rounded whitespace-nowrap ${a.deadlineColor}`}>{a.deadline}</span>
+                  </div>
+                ))
+              )}
             </div>
           </div>
         </div>
