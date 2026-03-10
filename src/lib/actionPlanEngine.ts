@@ -653,3 +653,8 @@ export async function checkOverduePlans(
     return 0
   }
 }
+
+// Exports for testing (pure functions)
+export { evaluateCondition as _evaluateCondition }
+export { getNonConformityValueStr as _getNonConformityValueStr }
+export type { FieldData, ResponseData }

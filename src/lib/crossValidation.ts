@@ -543,3 +543,6 @@ export async function processarValidacaoCruzada(
     }
   }
 }
+
+// Exports for testing (pure functions)
+export { verificarNotasIrmas as _verificarNotasIrmas }
