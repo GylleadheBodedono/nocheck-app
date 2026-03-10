@@ -21,7 +21,8 @@ ON CONFLICT (name) DO NOTHING;
 -- 2. CONFIGURACOES DO APP
 -- ============================================
 INSERT INTO public.app_settings (key, value, description) VALUES
-  ('ignore_time_restrictions', 'false', 'Se true, ignora restricoes de horario dos templates (para testes)')
+  ('ignore_time_restrictions', 'false', 'Se true, ignora restricoes de horario dos templates (para testes)'),
+  ('ignore_time_restrictions_stores', 'all', 'Lojas com bypass de horario: all ou JSON array de IDs ex: [1,3,5]')
 ON CONFLICT (key) DO NOTHING;
 
 -- ============================================

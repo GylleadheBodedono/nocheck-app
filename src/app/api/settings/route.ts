@@ -12,19 +12,40 @@ function getServiceClient() {
 }
 
 /**
- * GET /api/settings?key=validation_expiration_minutes
+ * GET /api/settings?key=some_key
+ * GET /api/settings?keys=key1,key2  (multi-key)
  */
 export async function GET(request: NextRequest) {
   const auth = await verifyApiAuth(request)
   if (auth.error) return auth.error
 
   try {
-    const key = request.nextUrl.searchParams.get('key')
-    if (!key) {
-      return NextResponse.json({ error: 'key is required' }, { status: 400 })
+    const supabase = getServiceClient()
+
+    // Multi-key support
+    const keysParam = request.nextUrl.searchParams.get('keys')
+    if (keysParam) {
+      const keysArray = keysParam.split(',').map(k => k.trim()).filter(Boolean)
+      if (keysArray.length === 0) {
+        return NextResponse.json({ error: 'keys cannot be empty' }, { status: 400 })
+      }
+      const { data, error } = await supabase
+        .from('app_settings')
+        .select('key, value')
+        .in('key', keysArray)
+
+      if (error) {
+        return NextResponse.json({ error: error.message }, { status: 500 })
+      }
+      return NextResponse.json(data || [])
     }
 
-    const supabase = getServiceClient()
+    // Single key (backward compatible)
+    const key = request.nextUrl.searchParams.get('key')
+    if (!key) {
+      return NextResponse.json({ error: 'key or keys is required' }, { status: 400 })
+    }
+
     const { data, error } = await supabase
       .from('app_settings')
       .select('key, value')

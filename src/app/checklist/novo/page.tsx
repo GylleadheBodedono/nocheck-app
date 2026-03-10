@@ -216,15 +216,29 @@ function ChecklistForm() {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const rawTemplate = templateData as any
         if (rawTemplate.allowed_start_time && rawTemplate.allowed_end_time) {
-          // Check if admin has disabled time restrictions
+          // Check if admin has disabled time restrictions (global or per-store)
           let ignoreTime = false
           try {
-            const settingsRes = await fetch('/api/settings?key=ignore_time_restrictions', {
+            const settingsRes = await fetch('/api/settings?keys=ignore_time_restrictions,ignore_time_restrictions_stores', {
               headers: { 'x-supabase-auth': (await supabase.auth.getSession()).data.session?.access_token || '' },
             })
             if (settingsRes.ok) {
-              const settingsData = await settingsRes.json()
-              ignoreTime = settingsData.value === 'true'
+              const settings: { key: string; value: string }[] = await settingsRes.json()
+              const toggleValue = settings.find(s => s.key === 'ignore_time_restrictions')?.value
+              const storesValue = settings.find(s => s.key === 'ignore_time_restrictions_stores')?.value
+
+              if (toggleValue === 'true') {
+                if (!storesValue || storesValue === 'all') {
+                  ignoreTime = true
+                } else {
+                  try {
+                    const ids: number[] = JSON.parse(storesValue)
+                    ignoreTime = ids.includes(Number(storeId))
+                  } catch {
+                    ignoreTime = true // fallback safe
+                  }
+                }
+              }
             }
           } catch { /* ignore */ }
 

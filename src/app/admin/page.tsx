@@ -35,6 +35,7 @@ import {
   FiBell,
 } from 'react-icons/fi'
 import type { IconType } from 'react-icons'
+import { useDebouncedCallback } from 'use-debounce'
 
 type Stats = {
   totalUsers: number
@@ -82,6 +83,8 @@ export default function AdminPage() {
   const [userName, setUserName] = useState('Admin User')
   const [ignoreTimeRestrictions, setIgnoreTimeRestrictions] = useState(false)
   const [togglingTime, setTogglingTime] = useState(false)
+  const [bypassStoreIds, setBypassStoreIds] = useState<number[] | 'all'>('all')
+  const [allStores, setAllStores] = useState<{id: number; name: string}[]>([])
   const [notificationPermission, setNotificationPermission] = useState<'default' | 'granted' | 'denied'>('default')
   const [notificationBannerMounted, setNotificationBannerMounted] = useState(false)
   const router = useRouter()
@@ -222,16 +225,32 @@ export default function AdminPage() {
         }
       }
 
-      // Fetch time restriction setting
+      // Fetch time restriction settings + all stores
       try {
         const session = await supabase.auth.getSession()
         const token = session.data.session?.access_token || ''
-        const res = await fetch('/api/settings?key=ignore_time_restrictions', {
-          headers: { 'x-supabase-auth': token },
-        })
-        if (res.ok) {
-          const data = await res.json()
-          setIgnoreTimeRestrictions(data.value === 'true')
+
+        const [settingsRes, storesListRes] = await Promise.all([
+          fetch('/api/settings?keys=ignore_time_restrictions,ignore_time_restrictions_stores', {
+            headers: { 'x-supabase-auth': token },
+          }),
+          (supabase as any).from('stores').select('id, name').eq('is_active', true).order('name'),
+        ])
+
+        if (settingsRes.ok) {
+          const settings = await settingsRes.json() as { key: string; value: string }[]
+          const toggleVal = settings.find(s => s.key === 'ignore_time_restrictions')?.value
+          const storesVal = settings.find(s => s.key === 'ignore_time_restrictions_stores')?.value
+          setIgnoreTimeRestrictions(toggleVal === 'true')
+          if (storesVal && storesVal !== 'all') {
+            try { setBypassStoreIds(JSON.parse(storesVal)) } catch { setBypassStoreIds('all') }
+          } else {
+            setBypassStoreIds('all')
+          }
+        }
+
+        if (storesListRes.data) {
+          setAllStores(storesListRes.data)
         }
       } catch { /* ignore */ }
 
@@ -270,6 +289,29 @@ export default function AdminPage() {
       console.error('[Admin] Erro ao alterar configuracao de tempo:', err)
     }
     setTogglingTime(false)
+  }
+
+  // Debounced save for per-store bypass selection
+  const saveBypassStores = useDebouncedCallback(async (mode: number[] | 'all') => {
+    try {
+      const session = await supabase.auth.getSession()
+      const token = session.data.session?.access_token || ''
+      await fetch('/api/settings', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', 'x-supabase-auth': token },
+        body: JSON.stringify({
+          key: 'ignore_time_restrictions_stores',
+          value: mode === 'all' ? 'all' : JSON.stringify(mode),
+        }),
+      })
+    } catch (err) {
+      console.error('[Admin] Erro ao salvar lojas bypass:', err)
+    }
+  }, 500)
+
+  const handleBypassStoresChange = (mode: number[] | 'all') => {
+    setBypassStoreIds(mode)
+    saveBypassStores(mode)
   }
 
   const handleSignOut = async () => {
@@ -489,29 +531,97 @@ export default function AdminPage() {
         <div className="flex gap-6">
           {/* Left Column - Main Content */}
           <main className="flex-1 min-w-0">
-            {/* Mobile: Time Restriction Toggle */}
+            {/* Mobile: Modo Teste */}
             <div className="lg:hidden mb-4">
-              <label className="card p-4 flex items-center justify-between gap-3 cursor-pointer">
-                <div className="flex items-center gap-3 min-w-0">
-                  <FiSettings className="w-4 h-4 text-muted shrink-0" />
-                  <div className="min-w-0">
-                    <p className="text-sm font-medium text-main leading-tight">Ignorar horarios</p>
-                    <p className="text-xs text-muted leading-tight">Desativa restricoes de horario</p>
+              <div className="card p-4">
+                <label className="flex items-center justify-between gap-3 cursor-pointer">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <FiSettings className="w-4 h-4 text-muted shrink-0" />
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-main leading-tight">Ignorar horarios</p>
+                      <p className="text-xs text-muted leading-tight">Desativa restricoes de horario</p>
+                    </div>
                   </div>
-                </div>
-                <button
-                  type="button"
-                  onClick={handleToggleTimeRestrictions}
-                  disabled={togglingTime}
-                  className={`relative w-11 h-6 rounded-full transition-colors shrink-0 ${
-                    ignoreTimeRestrictions ? 'bg-primary' : 'bg-surface-hover border border-subtle'
-                  }`}
-                >
-                  <span className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${
-                    ignoreTimeRestrictions ? 'translate-x-5' : 'translate-x-0'
-                  }`} />
-                </button>
-              </label>
+                  <button
+                    type="button"
+                    onClick={handleToggleTimeRestrictions}
+                    disabled={togglingTime}
+                    className={`relative w-11 h-6 rounded-full transition-colors shrink-0 ${
+                      ignoreTimeRestrictions ? 'bg-primary' : 'bg-surface-hover border border-subtle'
+                    }`}
+                  >
+                    <span className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${
+                      ignoreTimeRestrictions ? 'translate-x-5' : 'translate-x-0'
+                    }`} />
+                  </button>
+                </label>
+                {ignoreTimeRestrictions && (
+                  <div className="mt-3 pt-3 border-t border-subtle space-y-2">
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => handleBypassStoresChange('all')}
+                        className={`text-xs px-3 py-1.5 rounded-lg font-medium transition-colors ${
+                          bypassStoreIds === 'all'
+                            ? 'bg-primary text-white'
+                            : 'bg-surface-hover text-muted hover:text-main'
+                        }`}
+                      >
+                        Todas as lojas
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (bypassStoreIds === 'all') handleBypassStoresChange([])
+                        }}
+                        className={`text-xs px-3 py-1.5 rounded-lg font-medium transition-colors ${
+                          bypassStoreIds !== 'all'
+                            ? 'bg-primary text-white'
+                            : 'bg-surface-hover text-muted hover:text-main'
+                        }`}
+                      >
+                        Lojas especificas
+                      </button>
+                    </div>
+                    {bypassStoreIds !== 'all' && (
+                      <div className="space-y-0.5 max-h-48 overflow-y-auto">
+                        {allStores.map(store => {
+                          const checked = Array.isArray(bypassStoreIds) && bypassStoreIds.includes(store.id)
+                          return (
+                            <label key={store.id} className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-surface-hover cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={checked}
+                                onChange={() => {
+                                  const cur = Array.isArray(bypassStoreIds) ? bypassStoreIds : []
+                                  handleBypassStoresChange(checked ? cur.filter(id => id !== store.id) : [...cur, store.id])
+                                }}
+                                className="w-3.5 h-3.5 rounded border-subtle accent-primary"
+                              />
+                              <span className="text-xs text-main">{store.name}</span>
+                            </label>
+                          )
+                        })}
+                      </div>
+                    )}
+                    <div className={`px-2 py-1 rounded-lg ${
+                      bypassStoreIds !== 'all' && Array.isArray(bypassStoreIds) && bypassStoreIds.length === 0
+                        ? 'bg-muted/10' : 'bg-warning/10'
+                    }`}>
+                      <p className={`text-xs font-medium ${
+                        bypassStoreIds !== 'all' && Array.isArray(bypassStoreIds) && bypassStoreIds.length === 0
+                          ? 'text-muted' : 'text-warning'
+                      }`}>
+                        {bypassStoreIds === 'all'
+                          ? 'Restricoes de horario desativadas para todas as lojas'
+                          : Array.isArray(bypassStoreIds) && bypassStoreIds.length === 0
+                            ? 'Nenhuma loja selecionada'
+                            : `Restricoes desativadas para ${(bypassStoreIds as number[]).length} loja(s)`}
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
 
             {/* Quick Stats */}
@@ -661,7 +771,7 @@ export default function AdminPage() {
               </div>
             </div>
 
-            {/* Time Restriction Toggle */}
+            {/* Modo Teste — Desktop */}
             <div className="card p-5">
               <h3 className="flex items-center gap-2 text-sm font-bold text-main mb-3">
                 <FiSettings className="w-4 h-4 text-muted" />
@@ -686,8 +796,69 @@ export default function AdminPage() {
                 </button>
               </label>
               {ignoreTimeRestrictions && (
-                <div className="mt-2 px-2 py-1 bg-warning/10 rounded-lg">
-                  <p className="text-xs text-warning font-medium">Restricoes de horario desativadas</p>
+                <div className="mt-3 pt-3 border-t border-subtle space-y-2">
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => handleBypassStoresChange('all')}
+                      className={`text-xs px-3 py-1.5 rounded-lg font-medium transition-colors ${
+                        bypassStoreIds === 'all'
+                          ? 'bg-primary text-white'
+                          : 'bg-surface-hover text-muted hover:text-main'
+                      }`}
+                    >
+                      Todas as lojas
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (bypassStoreIds === 'all') handleBypassStoresChange([])
+                      }}
+                      className={`text-xs px-3 py-1.5 rounded-lg font-medium transition-colors ${
+                        bypassStoreIds !== 'all'
+                          ? 'bg-primary text-white'
+                          : 'bg-surface-hover text-muted hover:text-main'
+                      }`}
+                    >
+                      Lojas especificas
+                    </button>
+                  </div>
+                  {bypassStoreIds !== 'all' && (
+                    <div className="space-y-0.5 max-h-48 overflow-y-auto">
+                      {allStores.map(store => {
+                        const checked = Array.isArray(bypassStoreIds) && bypassStoreIds.includes(store.id)
+                        return (
+                          <label key={store.id} className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-surface-hover cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={checked}
+                              onChange={() => {
+                                const cur = Array.isArray(bypassStoreIds) ? bypassStoreIds : []
+                                handleBypassStoresChange(checked ? cur.filter(id => id !== store.id) : [...cur, store.id])
+                              }}
+                              className="w-3.5 h-3.5 rounded border-subtle accent-primary"
+                            />
+                            <span className="text-xs text-main">{store.name}</span>
+                          </label>
+                        )
+                      })}
+                    </div>
+                  )}
+                  <div className={`px-2 py-1 rounded-lg ${
+                    bypassStoreIds !== 'all' && Array.isArray(bypassStoreIds) && bypassStoreIds.length === 0
+                      ? 'bg-muted/10' : 'bg-warning/10'
+                  }`}>
+                    <p className={`text-xs font-medium ${
+                      bypassStoreIds !== 'all' && Array.isArray(bypassStoreIds) && bypassStoreIds.length === 0
+                        ? 'text-muted' : 'text-warning'
+                    }`}>
+                      {bypassStoreIds === 'all'
+                        ? 'Restricoes de horario desativadas para todas as lojas'
+                        : Array.isArray(bypassStoreIds) && bypassStoreIds.length === 0
+                          ? 'Nenhuma loja selecionada'
+                          : `Restricoes desativadas para ${(bypassStoreIds as number[]).length} loja(s)`}
+                    </p>
+                  </div>
                 </div>
               )}
             </div>

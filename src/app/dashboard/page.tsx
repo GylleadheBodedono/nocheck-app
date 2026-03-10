@@ -153,6 +153,7 @@ export default function DashboardPage() {
   const [myNotifications, setMyNotifications] = useState<NotificationItem[]>([])
   const [todayInProgressMap, setTodayInProgressMap] = useState<Record<string, number>>({}) // key: templateId-storeId -> checklistId
   const [todayCompletedSet, setTodayCompletedSet] = useState<Set<string>>(new Set()) // key: templateId-storeId
+  const [timeBypassStoreIds, setTimeBypassStoreIds] = useState<number[] | 'all' | null>(null)
   const [loading, setLoading] = useState(true)
   const [notLoggedIn, setNotLoggedIn] = useState(false)
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -275,6 +276,28 @@ export default function DashboardPage() {
     if (profileData) {
       setProfile(profileData as UserProfile)
     }
+
+    // Fetch time bypass settings
+    try {
+      const token = (await supabase.auth.getSession()).data.session?.access_token || ''
+      const bypassRes = await fetch('/api/settings?keys=ignore_time_restrictions,ignore_time_restrictions_stores', {
+        headers: { 'x-supabase-auth': token },
+      })
+      if (bypassRes.ok) {
+        const settings: { key: string; value: string }[] = await bypassRes.json()
+        const toggle = settings.find(s => s.key === 'ignore_time_restrictions')?.value
+        if (toggle === 'true') {
+          const storesValue = settings.find(s => s.key === 'ignore_time_restrictions_stores')?.value
+          if (!storesValue || storesValue === 'all') {
+            setTimeBypassStoreIds('all')
+          } else {
+            try { setTimeBypassStoreIds(JSON.parse(storesValue)) } catch { setTimeBypassStoreIds('all') }
+          }
+        } else {
+          setTimeBypassStoreIds(null)
+        }
+      }
+    } catch { /* ignore */ }
 
     // Fetch stores based on role
     if (profileData?.is_admin) {
@@ -1414,7 +1437,8 @@ export default function DashboardPage() {
                       const pct = hasSections
                         ? Math.round((item.completedSections / item.totalSections) * 100)
                         : null
-                      const withinTime = isTemplateWithinAllowedTime(item.template)
+                      const bypassed = timeBypassStoreIds === 'all' || (Array.isArray(timeBypassStoreIds) && timeBypassStoreIds.includes(item.store_id))
+                      const withinTime = bypassed || isTemplateWithinAllowedTime(item.template)
                       const cardContent = (
                         <>
                           <div className="flex items-start justify-between mb-2">
