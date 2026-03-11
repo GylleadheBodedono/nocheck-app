@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
-import { FiDownload, FiX } from 'react-icons/fi'
+import { FiDownload, FiX, FiRefreshCw } from 'react-icons/fi'
 
 interface BeforeInstallPromptEvent extends Event {
   prompt(): Promise<void>
@@ -25,6 +25,8 @@ export function PWAInstall() {
   const [showBanner, setShowBanner] = useState(false)
   const [isIOS, setIsIOS] = useState(false)
   const [isInstalled, setIsInstalled] = useState(false)
+  const [updateAvailable, setUpdateAvailable] = useState(false)
+  const [waitingRegistration, setWaitingRegistration] = useState<ServiceWorkerRegistration | null>(null)
 
   // Verifica se deve mostrar o banner (não dispensado recentemente)
   const shouldShowBanner = useCallback(() => {
@@ -48,6 +50,30 @@ export function PWAInstall() {
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.register('/sw.js').then(registration => {
         console.log('[PWA] SW registered, checking for updates every 60s')
+
+        // Verifica se já tem SW waiting (update pendente de sessao anterior)
+        if (registration.waiting) {
+          console.log('[PWA] SW waiting detectado na inicializacao')
+          setUpdateAvailable(true)
+          setWaitingRegistration(registration)
+        }
+
+        // Escuta por novo SW instalado
+        registration.addEventListener('updatefound', () => {
+          const newWorker = registration.installing
+          if (!newWorker) return
+          console.log('[PWA] Novo SW sendo instalado...')
+
+          newWorker.addEventListener('statechange', () => {
+            // Novo SW instalado e pronto para ativar
+            if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+              console.log('[PWA] Novo SW instalado! Mostrando banner de atualizacao')
+              setUpdateAvailable(true)
+              setWaitingRegistration(registration)
+            }
+          })
+        })
+
         // Verifica atualizações a cada 60 segundos
         setInterval(() => {
           registration.update()
@@ -150,7 +176,41 @@ export function PWAInstall() {
     setShowBanner(false)
   }
 
-  // Não renderiza se não deve mostrar ou já está instalado
+  const handleUpdate = () => {
+    console.log('[PWA] Usuario clicou Atualizar agora')
+    if (waitingRegistration?.waiting) {
+      waitingRegistration.waiting.postMessage({ type: 'SKIP_WAITING' })
+      // controllerchange vai disparar o reload automaticamente
+    }
+  }
+
+  // Banner de atualizacao disponivel — prioridade maxima
+  if (updateAvailable) {
+    return (
+      <div className="fixed top-0 left-0 right-0 z-[100] animate-fade-in">
+        <div className="bg-primary text-white px-4 py-3 shadow-lg">
+          <div className="max-w-lg mx-auto flex items-center justify-between gap-3">
+            <div className="flex items-center gap-3 min-w-0">
+              <FiRefreshCw className="w-5 h-5 shrink-0 animate-spin" style={{ animationDuration: '3s' }} />
+              <div className="min-w-0">
+                <p className="font-semibold text-sm">Nova atualizacao disponivel!</p>
+                <p className="text-xs opacity-90">Toque em atualizar ou feche e abra o app.</p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={handleUpdate}
+              className="shrink-0 px-4 py-2 bg-white text-primary font-bold text-sm rounded-lg hover:bg-white/90 transition-colors"
+            >
+              Atualizar
+            </button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // Não renderiza install banner se não deve mostrar ou já está instalado
   if (!showBanner || isInstalled) {
     return null
   }

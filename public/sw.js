@@ -43,8 +43,8 @@ self.addEventListener('install', (event) => {
         })
       })
       .then(() => {
-        console.log('[SW v13] Install complete')
-        return self.skipWaiting()
+        console.log('[SW v13] Install complete, waiting for activation...')
+        // NAO chama skipWaiting — espera o usuario aceitar a atualizacao via banner
       })
   )
 })
