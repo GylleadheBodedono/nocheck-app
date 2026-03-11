@@ -44,10 +44,25 @@ export function PWAInstall() {
   }, [])
 
   useEffect(() => {
-    // Registrar Service Worker primeiro
+    // Registrar Service Worker e configurar auto-update
     if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('/sw.js').catch(err => {
+      navigator.serviceWorker.register('/sw.js').then(registration => {
+        console.log('[PWA] SW registered, checking for updates every 60s')
+        // Verifica atualizações a cada 60 segundos
+        setInterval(() => {
+          registration.update()
+        }, 60 * 1000)
+      }).catch(err => {
         console.log('[PWA] SW register failed:', err)
+      })
+
+      // Quando novo SW assume controle, recarrega para usar código novo
+      let refreshing = false
+      navigator.serviceWorker.addEventListener('controllerchange', () => {
+        if (refreshing) return
+        refreshing = true
+        console.log('[PWA] New SW activated, reloading...')
+        window.location.reload()
       })
     }
 
