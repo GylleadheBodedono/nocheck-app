@@ -57,19 +57,39 @@ self.addEventListener('activate', (event) => {
 
   event.waitUntil(
     caches.keys()
-      .then((keys) => {
-        return Promise.all(
-          keys
-            .filter((key) => key.startsWith('nocheck-') && key !== APP_CACHE && key !== STATIC_CACHE)
-            .map((key) => {
-              console.log('[SW v13] Deleting old cache:', key)
-              return caches.delete(key)
-            })
+      .then(async (keys) => {
+        const oldAppCaches = keys.filter(k => k.startsWith('nocheck-app-') && k !== APP_CACHE)
+        const oldStaticCaches = keys.filter(k => k.startsWith('nocheck-static-') && k !== STATIC_CACHE)
+
+        // Migra entradas dos caches antigos para os novos
+        if (oldAppCaches.length > 0) {
+          console.log('[SW v13] Migrating entries from old app caches:', oldAppCaches)
+          const newCache = await caches.open(APP_CACHE)
+          for (const oldName of oldAppCaches) {
+            const oldCache = await caches.open(oldName)
+            const requests = await oldCache.keys()
+            for (const req of requests) {
+              const resp = await oldCache.match(req)
+              if (resp) await newCache.put(req, resp)
+            }
+          }
+        }
+
+        // Deleta caches antigos apos migracao
+        await Promise.all(
+          [...oldAppCaches, ...oldStaticCaches].map(k => {
+            console.log('[SW v13] Deleting old cache:', k)
+            return caches.delete(k)
+          })
         )
       })
       .then(() => {
         console.log('[SW v13] Taking control of all clients')
         return self.clients.claim()
+      })
+      .then(() => {
+        // Precache em background para garantir cache completo
+        precacheApp().catch(() => {})
       })
   )
 })

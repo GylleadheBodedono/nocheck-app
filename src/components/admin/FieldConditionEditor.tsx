@@ -165,11 +165,11 @@ export function FieldConditionEditor({
   if (!supportedTypes.includes(fieldType)) return null
 
   return (
-    <div className="border-t border-subtle pt-3 mt-3">
+    <div className="px-2 sm:px-3 py-2">
       <button
         type="button"
         onClick={handleToggle}
-        className="flex items-center gap-2 text-sm font-medium w-full"
+        className="flex items-center justify-center gap-2 text-sm font-medium w-full"
       >
         <FiAlertTriangle className={`w-4 h-4 ${condition ? 'text-warning' : 'text-muted'}`} />
         <span className={condition ? 'text-warning' : 'text-muted'}>

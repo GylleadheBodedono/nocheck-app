@@ -204,6 +204,7 @@ function ChecklistForm() {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const rawTemplate = templateData as any
         if (rawTemplate.allowed_start_time && rawTemplate.allowed_end_time) {
+          console.log(`[Checklist] Verificando horario — template: ${rawTemplate.name}, start: ${rawTemplate.allowed_start_time}, end: ${rawTemplate.allowed_end_time}`)
           // Check if admin has disabled time restrictions (global or per-store)
           let ignoreTime = false
           try {
@@ -230,10 +231,12 @@ function ChecklistForm() {
             }
           } catch { /* ignore */ }
 
+          console.log(`[Checklist] Bypass de horario: ${ignoreTime ? 'ATIVO' : 'INATIVO'} (loja: ${storeId})`)
           if (!ignoreTime) {
             const startTime = rawTemplate.allowed_start_time as string
             const endTime = rawTemplate.allowed_end_time as string
             if (!isWithinTimeRange(startTime, endTime)) {
+              console.log(`[Checklist] BLOQUEADO por horario — ${startTime} a ${endTime}`)
               setTimeBlocked(true)
               setTimeBlockedMessage(`Este checklist so pode ser respondido entre ${startTime.substring(0, 5)} e ${endTime.substring(0, 5)}`)
             }
@@ -288,6 +291,7 @@ function ChecklistForm() {
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           const ct = cachedTemplate as any
           if (ct.allowed_start_time && ct.allowed_end_time) {
+            console.log(`[Checklist/Offline] Verificando horario — start: ${ct.allowed_start_time}, end: ${ct.allowed_end_time}`)
             // Tentar verificar bypass mesmo offline (fetch pode funcionar se houver conexao parcial)
             let ignoreTime = false
             try {
@@ -312,10 +316,12 @@ function ChecklistForm() {
               }
             } catch { /* offline — bypass nao disponivel */ }
 
+            console.log(`[Checklist/Offline] Bypass de horario: ${ignoreTime ? 'ATIVO' : 'INATIVO'} (loja: ${storeId})`)
             if (!ignoreTime) {
               const startTime = ct.allowed_start_time as string
               const endTime = ct.allowed_end_time as string
               if (!isWithinTimeRange(startTime, endTime)) {
+                console.log(`[Checklist/Offline] BLOQUEADO por horario — ${startTime} a ${endTime}`)
                 setTimeBlocked(true)
                 setTimeBlockedMessage(`Este checklist so pode ser respondido entre ${startTime.substring(0, 5)} e ${endTime.substring(0, 5)}`)
               }

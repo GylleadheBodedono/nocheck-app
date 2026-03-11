@@ -122,9 +122,11 @@ type NotificationItem = {
 
 
 /** Retorna true se o template nao tem restricao de horario ou se a hora atual esta dentro da janela permitida */
-function isTemplateWithinAllowedTime(template: { allowed_start_time?: string | null; allowed_end_time?: string | null }): boolean {
+function isTemplateWithinAllowedTime(template: { allowed_start_time?: string | null; allowed_end_time?: string | null; name?: string }): boolean {
   if (!template?.allowed_start_time || !template?.allowed_end_time) return true
-  return isWithinTimeRange(String(template.allowed_start_time), String(template.allowed_end_time))
+  const result = isWithinTimeRange(String(template.allowed_start_time), String(template.allowed_end_time))
+  console.log(`[Dashboard] TimeCheck template "${template.name || '?'}": ${result ? 'DENTRO do horario' : 'FORA do horario'}`)
+  return result
 }
 
 export default function DashboardPage() {
@@ -286,11 +288,20 @@ export default function DashboardPage() {
         if (toggle === 'true') {
           const storesValue = settings.find(s => s.key === 'ignore_time_restrictions_stores')?.value
           if (!storesValue || storesValue === 'all') {
+            console.log('[Dashboard] Bypass de horario: ATIVO para TODAS as lojas')
             setTimeBypassStoreIds('all')
           } else {
-            try { setTimeBypassStoreIds(JSON.parse(storesValue)) } catch { setTimeBypassStoreIds('all') }
+            try {
+              const parsed = JSON.parse(storesValue)
+              console.log('[Dashboard] Bypass de horario: ATIVO para lojas:', parsed)
+              setTimeBypassStoreIds(parsed)
+            } catch {
+              console.log('[Dashboard] Bypass de horario: ATIVO (fallback all)')
+              setTimeBypassStoreIds('all')
+            }
           }
         } else {
+          console.log('[Dashboard] Bypass de horario: INATIVO')
           setTimeBypassStoreIds(null)
         }
       }

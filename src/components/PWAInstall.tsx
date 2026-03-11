@@ -60,6 +60,8 @@ export function PWAInstall() {
       let refreshing = false
       navigator.serviceWorker.addEventListener('controllerchange', () => {
         if (refreshing) return
+        // Não recarrega se estiver offline — vai perder o conteúdo
+        if (!navigator.onLine) return
         refreshing = true
         console.log('[PWA] New SW activated, reloading...')
         window.location.reload()
