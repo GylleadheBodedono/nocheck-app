@@ -24,6 +24,7 @@ import { processarNaoConformidades } from '@/lib/actionPlanEngine'
 import { saveOfflineChecklist, updateChecklistStatus, getPendingChecklists, updateOfflineFieldResponse, putOfflineChecklist, getOfflineChecklist, deleteOfflineChecklist, type PendingChecklist } from '@/lib/offlineStorage'
 import { getTemplatesCache, getStoresCache, getTemplateFieldsCache, getAuthCache, getTemplateSectionsCache } from '@/lib/offlineCache'
 import { useDebouncedCallback } from 'use-debounce'
+import { isWithinTimeRange } from '@/lib/timeUtils'
 
 type FieldWithSection = TemplateField & { section_id: number | null }
 
@@ -37,19 +38,6 @@ type SectionProgress = {
   status: 'pendente' | 'concluido'
   completed_at: string | null
   db_id?: number
-}
-
-function parseTimeToMinutes(timeStr: string): number {
-  const parts = timeStr.split(':')
-  return parseInt(parts[0], 10) * 60 + parseInt(parts[1], 10)
-}
-
-function isWithinTimeRange(startTime: string, endTime: string): boolean {
-  const now = new Date()
-  const currentMinutes = now.getHours() * 60 + now.getMinutes()
-  const startMinutes = parseTimeToMinutes(startTime)
-  const endMinutes = parseTimeToMinutes(endTime)
-  return currentMinutes >= startMinutes && currentMinutes <= endMinutes
 }
 
 // Upload photo helper
@@ -300,11 +288,37 @@ function ChecklistForm() {
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           const ct = cachedTemplate as any
           if (ct.allowed_start_time && ct.allowed_end_time) {
-            const startTime = ct.allowed_start_time as string
-            const endTime = ct.allowed_end_time as string
-            if (!isWithinTimeRange(startTime, endTime)) {
-              setTimeBlocked(true)
-              setTimeBlockedMessage(`Este checklist so pode ser respondido entre ${startTime.substring(0, 5)} e ${endTime.substring(0, 5)}`)
+            // Tentar verificar bypass mesmo offline (fetch pode funcionar se houver conexao parcial)
+            let ignoreTime = false
+            try {
+              const token = (await supabase.auth.getSession()).data.session?.access_token || ''
+              const bypassRes = await fetch('/api/settings?keys=ignore_time_restrictions,ignore_time_restrictions_stores', {
+                headers: { 'x-supabase-auth': token },
+              })
+              if (bypassRes.ok) {
+                const settings: { key: string; value: string }[] = await bypassRes.json()
+                const toggleValue = settings.find(s => s.key === 'ignore_time_restrictions')?.value
+                const storesValue = settings.find(s => s.key === 'ignore_time_restrictions_stores')?.value
+                if (toggleValue === 'true') {
+                  if (!storesValue || storesValue === 'all') {
+                    ignoreTime = true
+                  } else {
+                    try {
+                      const ids: number[] = JSON.parse(storesValue)
+                      ignoreTime = ids.includes(Number(storeId))
+                    } catch { ignoreTime = true }
+                  }
+                }
+              }
+            } catch { /* offline — bypass nao disponivel */ }
+
+            if (!ignoreTime) {
+              const startTime = ct.allowed_start_time as string
+              const endTime = ct.allowed_end_time as string
+              if (!isWithinTimeRange(startTime, endTime)) {
+                setTimeBlocked(true)
+                setTimeBlockedMessage(`Este checklist so pode ser respondido entre ${startTime.substring(0, 5)} e ${endTime.substring(0, 5)}`)
+              }
             }
           }
         }

@@ -26,6 +26,7 @@ import {
 import { getPendingChecklists, type PendingChecklist } from '@/lib/offlineStorage'
 import { syncAll, subscribeSyncStatus } from '@/lib/syncService'
 import { fullLogout } from '@/lib/logout'
+import { isWithinTimeRange } from '@/lib/timeUtils'
 
 type TemplateSection = {
   id: number
@@ -123,11 +124,7 @@ type NotificationItem = {
 /** Retorna true se o template nao tem restricao de horario ou se a hora atual esta dentro da janela permitida */
 function isTemplateWithinAllowedTime(template: { allowed_start_time?: string | null; allowed_end_time?: string | null }): boolean {
   if (!template?.allowed_start_time || !template?.allowed_end_time) return true
-  const now = new Date()
-  const current = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:00`
-  const start = String(template.allowed_start_time).substring(0, 8)
-  const end = String(template.allowed_end_time).substring(0, 8)
-  return current >= start && current <= end
+  return isWithinTimeRange(String(template.allowed_start_time), String(template.allowed_end_time))
 }
 
 export default function DashboardPage() {
