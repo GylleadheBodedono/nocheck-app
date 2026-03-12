@@ -865,8 +865,8 @@ export default function EditTemplatePage() {
       />
 
       {/* Main Content */}
-      <PageContainer size="lg">
-        <form onSubmit={handleSubmit} className="space-y-6">
+      <PageContainer>
+        <form onSubmit={handleSubmit} className="w-full space-y-6">
           {/* Basic Info */}
           <div className="card p-6">
             <h2 className="text-lg font-semibold text-main mb-4">Informacoes do Checklist</h2>

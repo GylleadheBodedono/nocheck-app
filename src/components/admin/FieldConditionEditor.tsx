@@ -1,9 +1,10 @@
 'use client'
 
 import { useState } from 'react'
-import { FiAlertTriangle, FiChevronDown, FiChevronUp, FiTrash2, FiLayers, FiCamera, FiFileText } from 'react-icons/fi'
+import { FiAlertTriangle, FiTrash2, FiLayers, FiCamera, FiFileText } from 'react-icons/fi'
 import type { ConditionType, Severity } from '@/types/database'
 import { Select } from '@/components/ui/Select'
+import { Modal } from '@/components/ui/Modal'
 
 export type ConditionConfig = {
   enabled: boolean
@@ -78,7 +79,7 @@ export function FieldConditionEditor({
   presets = [],
   onSaveAsPreset,
 }: Props) {
-  const [expanded, setExpanded] = useState(false)
+  const [isModalOpen, setIsModalOpen] = useState(false)
   const [showSavePreset, setShowSavePreset] = useState(false)
   const [presetName, setPresetName] = useState('')
   const [selectedPreset, setSelectedPreset] = useState('')
@@ -115,15 +116,13 @@ export function FieldConditionEditor({
       }
       defaults.descriptionTemplate = `Nao conformidade: ${fieldName} - {store_name}`
       onChange(defaults)
-      setExpanded(true)
-    } else {
-      setExpanded(!expanded)
     }
+    setIsModalOpen(true)
   }
 
   const handleRemove = () => {
     onChange(null)
-    setExpanded(false)
+    setIsModalOpen(false)
   }
 
   const update = (partial: Partial<ConditionConfig>) => {
@@ -180,13 +179,16 @@ export function FieldConditionEditor({
             Ativa
           </span>
         )}
-        <span className="ml-auto">
-          {expanded ? <FiChevronUp className="w-4 h-4 text-muted" /> : <FiChevronDown className="w-4 h-4 text-muted" />}
-        </span>
       </button>
 
-      {expanded && condition && (
-        <div className="mt-3 space-y-4 p-4 bg-warning/5 rounded-xl border border-warning/20">
+      <Modal
+        isOpen={isModalOpen && !!condition}
+        onClose={() => setIsModalOpen(false)}
+        title="Condição de Não Conformidade"
+        size="md"
+      >
+        {condition && (
+        <div className="space-y-4">
           {/* Condicao especifica por tipo */}
           {fieldType === 'yes_no' && (
             <div>
@@ -563,7 +565,8 @@ export function FieldConditionEditor({
             Remover condicao
           </button>
         </div>
-      )}
+        )}
+      </Modal>
     </div>
   )
 }
