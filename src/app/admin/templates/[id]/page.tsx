@@ -6,7 +6,7 @@ import React, { useEffect, useState, useMemo } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { APP_CONFIG } from '@/lib/config'
-import { Header, LoadingPage, IconPicker, Select, PageContainer } from '@/components/ui'
+import { Header, LoadingPage, IconPicker, Select, PageContainer, Modal } from '@/components/ui'
 import Link from 'next/link'
 import {
   FiSave,
@@ -114,6 +114,8 @@ export default function EditTemplatePage() {
   const [fieldConditions, setFieldConditions] = useState<Record<string, ConditionConfig | null>>({})
   const [conditionUsers, setConditionUsers] = useState<{ id: string; name: string }[]>([])
   const [conditionPresets, setConditionPresets] = useState<PresetOption[]>([])
+  const [showSectorModal, setShowSectorModal] = useState(false)
+  const [showFunctionModal, setShowFunctionModal] = useState(false)
 
   useEffect(() => {
     const fetchData = async () => {
@@ -933,6 +935,26 @@ export default function EditTemplatePage() {
                 </label>
               </div>
             </div>
+
+            <div className="flex flex-wrap gap-3 mt-4 pt-4 border-t border-subtle">
+              <button type="button" onClick={() => setShowSectorModal(true)} className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-subtle bg-surface-hover hover:border-primary/40 transition-all text-sm text-secondary hover:text-primary">
+                <FiGrid className="w-4 h-4" />
+                Visibilidade por Setor
+                {visibility.length > 0 && (
+                  <span className="text-xs bg-success/20 text-success px-2 py-0.5 rounded-full">{visibility.length}</span>
+                )}
+              </button>
+              <button type="button" onClick={() => setShowFunctionModal(true)} className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-subtle bg-surface-hover hover:border-primary/40 transition-all text-sm text-secondary hover:text-primary">
+                <FiBriefcase className="w-4 h-4" />
+                Restringir por Funcao
+                {adminOnly && (
+                  <span className="text-xs bg-red-500/20 text-red-400 px-2 py-0.5 rounded-full">Admin</span>
+                )}
+                {!adminOnly && selectedFunctionIds.length > 0 && (
+                  <span className="text-xs bg-info/20 text-info px-2 py-0.5 rounded-full">{selectedFunctionIds.length}</span>
+                )}
+              </button>
+            </div>
           </div>
 
           {/* Configuracoes de Tempo */}
@@ -1252,15 +1274,12 @@ export default function EditTemplatePage() {
             )}
           </div>
 
-          {/* Visibility by Sector */}
-          <div className="card p-6">
-            <h2 className="text-lg font-semibold text-main mb-2">Visibilidade por Setor</h2>
+          {/* Modal: Visibilidade por Setor */}
+          <Modal isOpen={showSectorModal} onClose={() => setShowSectorModal(false)} title="Visibilidade por Setor" size="lg">
             <p className="text-sm text-muted mb-4">
               Selecione em quais setores este checklist estara disponivel.
               Apenas usuarios dos setores selecionados poderao preencher.
-              Administradores sempre podem visualizar todos os checklists.
             </p>
-
             <div className="space-y-4">
               {stores.map(store => {
                 const storeSectors = getSectorsForStore(store.id)
@@ -1339,7 +1358,6 @@ export default function EditTemplatePage() {
                 )
               })}
             </div>
-
             {visibility.length > 0 && (
               <div className="mt-4 p-3 bg-success/10 rounded-lg">
                 <p className="text-sm text-success">
@@ -1347,16 +1365,13 @@ export default function EditTemplatePage() {
                 </p>
               </div>
             )}
-          </div>
+          </Modal>
 
-          {/* Function Filter (optional) */}
-          <div className="card p-6">
-            <h2 className="text-lg font-semibold text-main mb-2">Restringir por Funcao (Opcional)</h2>
+          {/* Modal: Restringir por Funcao */}
+          <Modal isOpen={showFunctionModal} onClose={() => setShowFunctionModal(false)} title="Restringir por Funcao" size="md">
             <p className="text-sm text-muted mb-4">
               Se nenhuma funcao for selecionada, o checklist estara disponivel para todas as funcoes.
-              Selecione funcoes especificas para restringir o acesso.
             </p>
-
             <div className="flex flex-wrap gap-2">
               <label
                 className={`flex items-center gap-2 px-3 py-2 rounded-lg cursor-pointer transition-all text-sm ${
@@ -1399,24 +1414,22 @@ export default function EditTemplatePage() {
                     {fn.name}
                   </label>
                 ))}
-              </div>
-
-              {adminOnly && (
-                <div className="mt-4 p-3 bg-red-500/10 rounded-lg">
-                  <p className="text-sm text-red-400">
-                    Este checklist sera visivel apenas para administradores, independente de loja ou setor.
-                  </p>
-                </div>
-              )}
-
-              {!adminOnly && selectedFunctionIds.length > 0 && (
-                <div className="mt-4 p-3 bg-info/10 rounded-lg">
-                  <p className="text-sm text-info">
-                    Restrito a {selectedFunctionIds.length} funcao{selectedFunctionIds.length > 1 ? 'es' : ''}
-                  </p>
-                </div>
-              )}
             </div>
+            {adminOnly && (
+              <div className="mt-4 p-3 bg-red-500/10 rounded-lg">
+                <p className="text-sm text-red-400">
+                  Este checklist sera visivel apenas para administradores, independente de loja ou setor.
+                </p>
+              </div>
+            )}
+            {!adminOnly && selectedFunctionIds.length > 0 && (
+              <div className="mt-4 p-3 bg-info/10 rounded-lg">
+                <p className="text-sm text-info">
+                  Restrito a {selectedFunctionIds.length} funcao{selectedFunctionIds.length > 1 ? 'es' : ''}
+                </p>
+              </div>
+            )}
+          </Modal>
 
           {/* Error */}
           {error && (
