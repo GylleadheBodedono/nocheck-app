@@ -9,7 +9,7 @@ import { APP_CONFIG } from '@/lib/config'
 import { ThemeToggle, LoadingInline } from '@/components/ui'
 import { triggerPrecache } from '@/hooks/usePrecache'
 import { cacheAllDataForOffline } from '@/lib/offlineCache'
-import { FiLock, FiMail } from 'react-icons/fi'
+import { FiLock, FiMail, FiEye, FiEyeOff } from 'react-icons/fi'
 
 function LoginForm() {
   const searchParams = useSearchParams()
@@ -19,6 +19,7 @@ function LoginForm() {
   const [successMsg, setSuccessMsg] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [status, setStatus] = useState<string>('')
+  const [showPassword, setShowPassword] = useState(false)
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -236,15 +237,27 @@ function LoginForm() {
                     <FiLock className="absolute left-4 top-1/2 -translate-y-1/2 w-[18px] h-[18px] text-muted pointer-events-none" />
                     <input
                       id="password"
-                      type="password"
+                      type={showPassword ? 'text' : 'password'}
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
                       required
                       autoComplete="current-password"
                       className="input"
-                      style={{ paddingLeft: '2.75rem' }}
+                      style={{ paddingLeft: '2.75rem', paddingRight: '2.75rem' }}
                       placeholder="••••••••"
                     />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(prev => !prev)}
+                      className="absolute right-4 top-1/2 -translate-y-1/2 z-10 text-muted hover:text-main transition-colors"
+                      tabIndex={-1}
+                      aria-label={showPassword ? 'Ocultar senha' : 'Mostrar senha'}
+                    >
+                      <span className="flex items-center gap-1">
+        {showPassword ? <FiEyeOff className="w-[18px] h-[18px]" /> : <FiEye className="w-[18px] h-[18px]" />}
+        <span className="text-xs">{showPassword ? 'Ocultar senha' : 'Ver senha'}</span>
+      </span>
+                    </button>
                   </div>
                 </div>
 
