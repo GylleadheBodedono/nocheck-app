@@ -393,15 +393,6 @@ export default function RelatoriosPage() {
         activeTemplateIds.has(c.template_id) && activeStoreIds.has(c.store_id)
       )
 
-      // === DEBUG LOGS — remover depois ===
-      console.log('=== DEBUG ADESAO ===')
-      console.log('Templates ativos:', templatesForAdh.length, templatesForAdh.map((t: { id: number; name: string }) => `${t.id}:${t.name}`))
-      console.log('Lojas ativas:', storesForAdh.length, storesForAdh.map((s: { id: number; name: string }) => `${s.id}:${s.name}`))
-      console.log('Visibility rows (raw):', visibilityRows.length, visibilityRows.slice(0, 20))
-      console.log('Active checklists:', activeChecklists.length)
-      console.log('Checklists template+store pairs:', [...new Set(activeChecklists.map((c: { template_id: number; store_id: number }) => `${c.template_id}-${c.store_id}`))])
-      console.log('=== FIM DEBUG ===')
-
       setRawActiveChecklists(activeChecklists)
       setRawTemplates(templatesForAdh)
       setRawStores(storesForAdh)
@@ -518,16 +509,7 @@ export default function RelatoriosPage() {
   const coverageGaps = useMemo(() => {
     const stores = overviewFilterStore ? rawStores.filter(s => s.id === Number(overviewFilterStore)) : rawStores
     const vis = overviewFilterStore ? rawVisibility.filter(v => v.store_id === Number(overviewFilterStore)) : rawVisibility
-    const gaps = computeCoverageGaps(filteredChecklists, rawTemplates, stores, vis)
-    // === DEBUG LOGS — remover depois ===
-    console.log('=== DEBUG GAPS ===')
-    console.log('Visibility passada:', vis.length, 'unicas template+store:', new Set(vis.map(v => `${v.template_id}-${v.store_id}`)).size)
-    console.log('Templates passados:', rawTemplates.length, rawTemplates.map(t => `${t.id}:${t.name}`))
-    console.log('Stores passadas:', stores.length, stores.map(s => `${s.id}:${s.name}`))
-    console.log('Checklists filtrados:', filteredChecklists.length)
-    console.log('Gaps resultado:', gaps.length, gaps.slice(0, 10))
-    console.log('=== FIM DEBUG GAPS ===')
-    return gaps
+    return computeCoverageGaps(filteredChecklists, rawTemplates, stores, vis)
   }, [filteredChecklists, rawTemplates, rawStores, rawVisibility, overviewFilterStore])
 
   const dailyStatusStats = useMemo(() => {
