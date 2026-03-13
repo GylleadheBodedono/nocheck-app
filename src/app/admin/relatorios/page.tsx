@@ -29,8 +29,6 @@ import {
   computeOverallAdherence, computeTemplateAdherence, computeStoreAdherence,
   computeUserAdherence, computeCoverageGaps, computeDailyStatusStats,
   computeAvgCompletionTime, generateEnhancedAttentionPoints, formatMinutes,
-  type AdherenceMetrics, type TemplateAdherence, type StoreAdherence,
-  type UserAdherence, type CoverageGap, type DailyStatusStats,
 } from '@/lib/adherenceCalculations'
 import {
   exportOverviewToCSV, exportOverviewToTXT, exportOverviewToExcel, exportOverviewToPDF,
@@ -66,11 +64,6 @@ type SectorStats = {
   total_checklists: number
   completed: number
   completion_rate: number
-}
-
-type AttentionPoint = {
-  text: string
-  severity: 'warning' | 'error'
 }
 
 type RequiredAction = {
@@ -130,16 +123,15 @@ export default function RelatoriosPage() {
   const [exportingPdf, setExportingPdf] = useState(false)
   // Visao Geral executive panel state
   const [sectorStats, setSectorStats] = useState<SectorStats[]>([])
-  const [attentionPoints, setAttentionPoints] = useState<AttentionPoint[]>([])
   const [requiredActions, setRequiredActions] = useState<RequiredAction[]>([])
-  // Enhanced adherence state
-  const [overallMetrics, setOverallMetrics] = useState<AdherenceMetrics | null>(null)
-  const [templateAdherence, setTemplateAdherence] = useState<TemplateAdherence[]>([])
-  const [storeAdherence, setStoreAdherence] = useState<StoreAdherence[]>([])
-  const [userAdherence, setUserAdherence] = useState<UserAdherence[]>([])
-  const [coverageGaps, setCoverageGaps] = useState<CoverageGap[]>([])
-  const [dailyStatusStats, setDailyStatusStats] = useState<DailyStatusStats[]>([])
-  const [avgCompletionTime, setAvgCompletionTime] = useState<number | null>(null)
+  // Raw data for adherence recomputation on filter change
+  const [rawActiveChecklists, setRawActiveChecklists] = useState<{ id: number; store_id: number; template_id: number; sector_id: number | null; status: string; created_by: string; started_at: string | null; created_at: string; completed_at: string | null }[]>([])
+  const [rawTemplates, setRawTemplates] = useState<{ id: number; name: string }[]>([])
+  const [rawStores, setRawStores] = useState<{ id: number; name: string }[]>([])
+  const [rawUsers, setRawUsers] = useState<{ id: string; full_name: string }[]>([])
+  const [rawVisibility, setRawVisibility] = useState<{ template_id: number; store_id: number }[]>([])
+  const [rawChartDays, setRawChartDays] = useState(30)
+  const [rawOverdueCount, setRawOverdueCount] = useState(0)
   const [showAllGaps, setShowAllGaps] = useState(false)
   // Filtro de loja na visao geral
   const [overviewFilterStore, setOverviewFilterStore] = useState('')
@@ -352,61 +344,8 @@ export default function RelatoriosPage() {
           }
         }).sort((a: SectorStats, b: SectorStats) => b.completion_rate - a.completion_rate)
         setSectorStats(sectorStatsCalc)
-
-        // Generate attention points
-        const points: AttentionPoint[] = []
-
-        // Store with lowest adherence
-        if (storesData.data && storesData.data.length > 0) {
-          const storeAdherence = storesData.data.map((store: { id: number; name: string }) => {
-            const sc = checklists.filter((c: { store_id: number }) => c.store_id === store.id)
-            const comp = sc.filter((c: { status: string }) => c.status === 'concluido' || c.status === 'validado').length
-            return { name: store.name, rate: sc.length > 0 ? Math.round((comp / sc.length) * 100) : 0, total: sc.length }
-          }).filter((s: { total: number }) => s.total > 0).sort((a: { rate: number }, b: { rate: number }) => a.rate - b.rate)
-
-          if (storeAdherence.length > 0 && storeAdherence[0].rate < 80) {
-            points.push({
-              text: `Unidade ${storeAdherence[0].name} com menor adesao geral: ${storeAdherence[0].rate}% — necessario intervencao`,
-              severity: storeAdherence[0].rate < 50 ? 'error' : 'warning',
-            })
-          }
-        }
-
-        // Overdue action plans
-        const overdueCount = actionPlans.filter((ap: { status: string }) => ap.status === 'vencido').length
-        if (overdueCount > 0) {
-          points.push({
-            text: `${overdueCount} plano(s) de acao vencido(s)`,
-            severity: 'error',
-          })
-        }
-
-        // Sectors with rate < 50%
-        const criticalSectors = sectorStatsCalc.filter((s: SectorStats) => s.completion_rate < 50 && s.total_checklists > 0)
-        for (const cs of criticalSectors) {
-          points.push({
-            text: `Setor ${cs.sector_name} (${cs.store_name}) com adesao critica: ${cs.completion_rate}%`,
-            severity: 'error',
-          })
-        }
-
-        // Templates not used in period
-        if (templatesData.data) {
-          const unusedTemplates = templatesData.data.filter((t: { id: number; name: string }) =>
-            !checklists.some((c: { template_id: number }) => c.template_id === t.id)
-          )
-          for (const ut of unusedTemplates) {
-            points.push({
-              text: `Checklist "${ut.name}" nao preenchido nos ultimos ${days} dias`,
-              severity: 'warning',
-            })
-          }
-        }
-
-        setAttentionPoints(points)
       } else {
         setSectorStats([])
-        setAttentionPoints([])
       }
 
       // Generate required actions from action plans
@@ -441,7 +380,7 @@ export default function RelatoriosPage() {
         setRequiredActions([])
       }
 
-      // === Enhanced adherence computations ===
+      // === Store raw data for adherence — recomputed reactively via useMemo when filters change ===
       const visibilityRows = visibilityData?.data || []
       const storesForAdh = (storesData.data || []).map((s: { id: number; name: string }) => ({ id: s.id, name: s.name }))
       const templatesForAdh = (templatesData.data || []).map((t: { id: number; name: string }) => ({ id: t.id, name: t.name }))
@@ -454,34 +393,13 @@ export default function RelatoriosPage() {
         activeTemplateIds.has(c.template_id) && activeStoreIds.has(c.store_id)
       )
 
-      const overall = computeOverallAdherence(activeChecklists)
-      setOverallMetrics(overall)
-
-      const tAdh = computeTemplateAdherence(activeChecklists, templatesForAdh, visibilityRows)
-      setTemplateAdherence(tAdh)
-
-      const sAdh = computeStoreAdherence(activeChecklists, storesForAdh, templatesForAdh, visibilityRows)
-      setStoreAdherence(sAdh)
-
-      const uAdh = computeUserAdherence(activeChecklists, usersForAdh)
-      setUserAdherence(uAdh)
-
-      const gaps = computeCoverageGaps(activeChecklists, templatesForAdh, storesForAdh, visibilityRows)
-      setCoverageGaps(gaps)
-
-      const dailyStatus = computeDailyStatusStats(activeChecklists, Math.min(days, 30))
-      setDailyStatusStats(dailyStatus)
-
-      setAvgCompletionTime(computeAvgCompletionTime(activeChecklists))
-
-      // Enhanced attention points (replaces old attention points)
-      const unusedTemplateNames = templatesForAdh
-        .filter((t: { id: number; name: string }) => !activeChecklists.some((c: { template_id: number }) => c.template_id === t.id))
-        .filter((t: { id: number }) => !visibilityRows.some((v: { template_id: number }) => v.template_id === t.id))
-        .map((t: { name: string }) => t.name)
-      const overdueCount = actionPlans.filter((ap: { status: string }) => ap.status === 'vencido').length
-      const enhancedPoints = generateEnhancedAttentionPoints(sAdh, tAdh, gaps, overdueCount, unusedTemplateNames)
-      setAttentionPoints(enhancedPoints)
+      setRawActiveChecklists(activeChecklists)
+      setRawTemplates(templatesForAdh)
+      setRawStores(storesForAdh)
+      setRawUsers(usersForAdh)
+      setRawVisibility(visibilityRows)
+      setRawChartDays(Math.min(days, 30))
+      setRawOverdueCount(actionPlans.filter((ap: { status: string }) => ap.status === 'vencido').length)
 
       // Fetch user checklists for responses tab
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -562,7 +480,56 @@ export default function RelatoriosPage() {
     setLoading(false)
   }
 
-  // Sorted adherence arrays
+  // === Reactive adherence: recomputes ALL data when store filter or raw data changes ===
+  const filteredChecklists = useMemo(() => {
+    if (!overviewFilterStore) return rawActiveChecklists
+    const storeId = Number(overviewFilterStore)
+    return rawActiveChecklists.filter(c => c.store_id === storeId)
+  }, [rawActiveChecklists, overviewFilterStore])
+
+  const overallMetrics = useMemo(() => {
+    if (filteredChecklists.length === 0 && rawActiveChecklists.length === 0) return null
+    return computeOverallAdherence(filteredChecklists)
+  }, [filteredChecklists, rawActiveChecklists])
+
+  const templateAdherence = useMemo(() => {
+    const vis = overviewFilterStore ? rawVisibility.filter(v => v.store_id === Number(overviewFilterStore)) : rawVisibility
+    return computeTemplateAdherence(filteredChecklists, rawTemplates, vis)
+  }, [filteredChecklists, rawTemplates, rawVisibility, overviewFilterStore])
+
+  const storeAdherence = useMemo(() => {
+    const stores = overviewFilterStore ? rawStores.filter(s => s.id === Number(overviewFilterStore)) : rawStores
+    return computeStoreAdherence(filteredChecklists, stores, rawTemplates, rawVisibility)
+  }, [filteredChecklists, rawStores, rawTemplates, rawVisibility, overviewFilterStore])
+
+  const userAdherence = useMemo(() => {
+    return computeUserAdherence(filteredChecklists, rawUsers)
+  }, [filteredChecklists, rawUsers])
+
+  const coverageGaps = useMemo(() => {
+    const stores = overviewFilterStore ? rawStores.filter(s => s.id === Number(overviewFilterStore)) : rawStores
+    const vis = overviewFilterStore ? rawVisibility.filter(v => v.store_id === Number(overviewFilterStore)) : rawVisibility
+    return computeCoverageGaps(filteredChecklists, rawTemplates, stores, vis)
+  }, [filteredChecklists, rawTemplates, rawStores, rawVisibility, overviewFilterStore])
+
+  const dailyStatusStats = useMemo(() => {
+    return computeDailyStatusStats(filteredChecklists, rawChartDays)
+  }, [filteredChecklists, rawChartDays])
+
+  const avgCompletionTime = useMemo(() => {
+    return computeAvgCompletionTime(filteredChecklists)
+  }, [filteredChecklists])
+
+  const attentionPoints = useMemo(() => {
+    if (rawActiveChecklists.length === 0 && filteredChecklists.length === 0) return []
+    const unusedTemplateNames = rawTemplates
+      .filter(t => !filteredChecklists.some(c => c.template_id === t.id))
+      .filter(t => !rawVisibility.some(v => v.template_id === t.id))
+      .map(t => t.name)
+    return generateEnhancedAttentionPoints(storeAdherence, templateAdherence, coverageGaps, rawOverdueCount, unusedTemplateNames)
+  }, [filteredChecklists, rawActiveChecklists, rawTemplates, rawVisibility, storeAdherence, templateAdherence, coverageGaps, rawOverdueCount])
+
+  // Sorted arrays for display
   const sortedTemplateAdherence = useMemo(() => {
     const arr = [...templateAdherence]
     if (templateSort === 'best') arr.sort((a, b) => b.metrics.completionRate - a.metrics.completionRate)
@@ -572,13 +539,12 @@ export default function RelatoriosPage() {
   }, [templateAdherence, templateSort])
 
   const sortedStoreAdherence = useMemo(() => {
-    let arr = [...storeAdherence]
-    if (overviewFilterStore) arr = arr.filter(s => s.storeId === Number(overviewFilterStore))
+    const arr = [...storeAdherence]
     if (storeSort === 'best') arr.sort((a, b) => b.metrics.completionRate - a.metrics.completionRate)
     else if (storeSort === 'worst') arr.sort((a, b) => a.metrics.completionRate - b.metrics.completionRate)
     else arr.sort((a, b) => a.storeName.localeCompare(b.storeName))
     return arr
-  }, [storeAdherence, storeSort, overviewFilterStore])
+  }, [storeAdherence, storeSort])
 
   const sortedUserAdherence = useMemo(() => {
     const arr = [...userAdherence]
@@ -587,12 +553,6 @@ export default function RelatoriosPage() {
     else arr.sort((a, b) => a.userName.localeCompare(b.userName))
     return arr
   }, [userAdherence, userSort])
-
-  // Filtered coverage gaps
-  const filteredCoverageGaps = useMemo(() => {
-    if (!overviewFilterStore) return coverageGaps
-    return coverageGaps.filter(g => g.storeId === Number(overviewFilterStore))
-  }, [coverageGaps, overviewFilterStore])
 
   // Executive summary text
   const summaryText = useMemo(() => {
@@ -610,7 +570,7 @@ export default function RelatoriosPage() {
       text += ` ${coverageGaps.length} checklist${coverageGaps.length > 1 ? 's' : ''} nao preenchido${coverageGaps.length > 1 ? 's' : ''} (deveriam ter sido feitos mas nao foram).`
     }
 
-    if (sectorStats.length > 1) {
+    if (!overviewFilterStore && sectorStats.length > 1) {
       const best = sectorStats[0]
       const worst = sectorStats[sectorStats.length - 1]
       const allZero = best.completion_rate === 0 && worst.completion_rate === 0
@@ -623,7 +583,7 @@ export default function RelatoriosPage() {
       }
     }
     return text
-  }, [overallMetrics, coverageGaps, sectorStats])
+  }, [overallMetrics, coverageGaps, sectorStats, overviewFilterStore])
 
   // Filter user checklists
   const filteredUserChecklists = useMemo(() => {
@@ -1352,7 +1312,7 @@ export default function RelatoriosPage() {
         </div>
 
         {/* Coverage Gaps */}
-        {filteredCoverageGaps.length > 0 && (
+        {coverageGaps.length > 0 && (
           <div className="card overflow-hidden mb-6">
             <div className="px-6 py-4 border-b border-subtle">
               <h3 className="font-semibold text-main flex items-center gap-2">
@@ -1371,7 +1331,7 @@ export default function RelatoriosPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-subtle">
-                  {(showAllGaps ? filteredCoverageGaps : filteredCoverageGaps.slice(0, 20)).map((g, i) => (
+                  {(showAllGaps ? coverageGaps : coverageGaps.slice(0, 20)).map((g, i) => (
                     <tr key={i} className="hover:bg-surface-hover/50">
                       <td className="px-4 py-3 font-medium text-main">{g.templateName}</td>
                       <td className="px-4 py-3 text-secondary">{g.storeName}</td>
@@ -1385,10 +1345,10 @@ export default function RelatoriosPage() {
                 </tbody>
               </table>
             </div>
-            {filteredCoverageGaps.length > 20 && !showAllGaps && (
+            {coverageGaps.length > 20 && !showAllGaps && (
               <div className="px-6 py-3 border-t border-subtle">
                 <button onClick={() => setShowAllGaps(true)} className="text-xs text-primary hover:underline">
-                  Ver todos ({filteredCoverageGaps.length} nao preenchidos)
+                  Ver todos ({coverageGaps.length} nao preenchidos)
                 </button>
               </div>
             )}
