@@ -1541,6 +1541,7 @@ function ChecklistForm() {
 
   // === FINALIZE CHECKLIST (both sectioned and non-sectioned) ===
   const handleFinalizeChecklist = async () => {
+    console.log('[Finalize] INICIO — checklistId:', checklistId, 'online:', navigator.onLine)
     // Finalizar exige internet — show modal if offline
     if (!navigator.onLine) {
       // Mark offline checklist as ready for sync when connectivity returns
@@ -1553,15 +1554,19 @@ function ChecklistForm() {
     }
 
     setSubmitting(true)
+    console.log('[Finalize] submitting=true')
 
     let userId: string | null = null
     try {
+      console.log('[Finalize] Buscando usuario...')
       const { data: { user } } = await supabase.auth.getUser()
       userId = user?.id || null
-    } catch { /* offline */ }
+      console.log('[Finalize] Usuario:', userId ? 'OK' : 'NULL')
+    } catch (e) { console.error('[Finalize] Erro getUser:', e) }
     if (!userId) {
       const cachedAuth = await getAuthCache()
       userId = cachedAuth?.userId || null
+      console.log('[Finalize] userId via cache:', userId ? 'OK' : 'NULL')
     }
     if (!userId) {
       setErrors({ 0: 'Usuario nao autenticado.' })
@@ -1573,25 +1578,34 @@ function ChecklistForm() {
       // === ONLINE ===
       if (checklistId) {
         // Upload pending photos (base64 → cloud)
+        console.log('[Finalize] Etapa 1: uploadPendingPhotos...')
         await uploadPendingPhotos(checklistId)
+        console.log('[Finalize] Etapa 1: CONCLUIDA')
 
         // Finalize checklist status
+        console.log('[Finalize] Etapa 2: update status concluido...')
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        await (supabase as any)
+        const updateRes = await (supabase as any)
           .from('checklists')
           .update({ status: 'concluido', completed_at: new Date().toISOString() })
           .eq('id', checklistId)
+        console.log('[Finalize] Etapa 2: CONCLUIDA', updateRes.error ? `ERRO: ${updateRes.error.message}` : 'OK')
 
         // Process cross validation + non-conformity
         if (template) {
+          console.log('[Finalize] Etapa 3: buildResponseRows...')
           const allFieldIds = template.fields.map(f => f.id)
           const allResponseData = await buildResponseRows(allFieldIds, false)
+          console.log('[Finalize] Etapa 3: CONCLUIDA, rows:', allResponseData.length)
+
           const allResponseMapped = allResponseData.map(r => ({
             field_id: r.fieldId,
             value_text: r.valueText,
             value_number: r.valueNumber,
             value_json: r.valueJson,
           }))
+
+          console.log('[Finalize] Etapa 4: processarValidacaoCruzada...')
           await processarValidacaoCruzada(
             supabase,
             checklistId,
@@ -1601,6 +1615,9 @@ function ChecklistForm() {
             allResponseMapped,
             template.fields
           )
+          console.log('[Finalize] Etapa 4: CONCLUIDA')
+
+          console.log('[Finalize] Etapa 5: processarNaoConformidades...')
           const ncResult = await processarNaoConformidades(
             supabase,
             checklistId,
@@ -1611,10 +1628,11 @@ function ChecklistForm() {
             allResponseMapped,
             template.fields.map(f => ({ id: f.id, name: f.name, field_type: f.field_type, options: f.options }))
           )
-          console.log('[Checklist] Resultado nao-conformidades:', ncResult)
+          console.log('[Finalize] Etapa 5: CONCLUIDA', ncResult)
         }
 
         // Activity log
+        console.log('[Finalize] Etapa 6: activity_log...')
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         await (supabase as any).from('activity_log').insert({
           store_id: Number(storeId),
@@ -1623,12 +1641,16 @@ function ChecklistForm() {
           action: 'checklist_concluido',
           details: { template_name: template?.name },
         })
+        console.log('[Finalize] Etapa 6: CONCLUIDA')
 
+        console.log('[Finalize] SUCESSO — redirecionando...')
         setSuccess(true)
         setTimeout(() => router.push(APP_CONFIG.routes.dashboard), 2000)
+      } else {
+        console.log('[Finalize] SEM checklistId — nada a fazer')
       }
     } catch (err) {
-      console.error('[Checklist] Erro ao finalizar:', err)
+      console.error('[Finalize] ERRO na finalizacao:', err)
       setErrors({ 0: err instanceof Error ? err.message : 'Erro ao finalizar checklist' })
       setSubmitting(false)
     }
@@ -1636,22 +1658,26 @@ function ChecklistForm() {
 
   // === FINALIZE WITH JUSTIFICATIONS (incomplete checklist) ===
   const handleFinalizeWithJustifications = async () => {
+    console.log('[FinalizeJust] INICIO — checklistId:', checklistId)
     // Validate all justifications are filled
     const missing = emptyRequiredFields.filter(f => !justifications[f.id]?.trim())
-    if (missing.length > 0) return
+    if (missing.length > 0) { console.log('[FinalizeJust] Justificativas faltando:', missing.length); return }
 
     if (!navigator.onLine || !checklistId) {
+      console.log('[FinalizeJust] Offline ou sem checklistId')
       setShowOfflineModal(true)
       return
     }
 
     setSubmitting(true)
+    console.log('[FinalizeJust] submitting=true')
 
     let userId: string | null = null
     try {
       const { data: { user } } = await supabase.auth.getUser()
       userId = user?.id || null
-    } catch { /* offline */ }
+      console.log('[FinalizeJust] Usuario:', userId ? 'OK' : 'NULL')
+    } catch (e) { console.error('[FinalizeJust] Erro getUser:', e) }
     if (!userId) {
       const cachedAuth = await getAuthCache()
       userId = cachedAuth?.userId || null
@@ -1663,37 +1689,46 @@ function ChecklistForm() {
     }
 
     try {
-      // Upload pending photos
+      console.log('[FinalizeJust] Etapa 1: uploadPendingPhotos...')
       await uploadPendingPhotos(checklistId)
+      console.log('[FinalizeJust] Etapa 1: CONCLUIDA')
 
       // Insert justifications
+      console.log('[FinalizeJust] Etapa 2: insert justifications...')
       const justificationRows = emptyRequiredFields.map(field => ({
         checklist_id: checklistId,
         field_id: field.id,
         justification_text: justifications[field.id].trim(),
         justified_by: userId,
       }))
-
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      await (supabase as any).from('checklist_justifications').insert(justificationRows)
+      const justRes = await (supabase as any).from('checklist_justifications').insert(justificationRows)
+      console.log('[FinalizeJust] Etapa 2: CONCLUIDA', justRes.error ? `ERRO: ${justRes.error.message}` : 'OK')
 
       // Mark checklist as incompleto
+      console.log('[FinalizeJust] Etapa 3: update status incompleto...')
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      await (supabase as any)
+      const updateRes = await (supabase as any)
         .from('checklists')
         .update({ status: 'incompleto', completed_at: new Date().toISOString() })
         .eq('id', checklistId)
+      console.log('[FinalizeJust] Etapa 3: CONCLUIDA', updateRes.error ? `ERRO: ${updateRes.error.message}` : 'OK')
 
       // Process cross-validation + non-conformities
       if (template) {
+        console.log('[FinalizeJust] Etapa 4: buildResponseRows...')
         const allFieldIds = template.fields.map(f => f.id)
         const allResponseData = await buildResponseRows(allFieldIds, false)
+        console.log('[FinalizeJust] Etapa 4: CONCLUIDA, rows:', allResponseData.length)
+
         const allResponseMapped = allResponseData.map(r => ({
           field_id: r.fieldId,
           value_text: r.valueText,
           value_number: r.valueNumber,
           value_json: r.valueJson,
         }))
+
+        console.log('[FinalizeJust] Etapa 5: processarValidacaoCruzada...')
         await processarValidacaoCruzada(
           supabase,
           checklistId,
@@ -1703,6 +1738,9 @@ function ChecklistForm() {
           allResponseMapped,
           template.fields
         )
+        console.log('[FinalizeJust] Etapa 5: CONCLUIDA')
+
+        console.log('[FinalizeJust] Etapa 6: processarNaoConformidades...')
         const ncResult2 = await processarNaoConformidades(
           supabase,
           checklistId,
@@ -1713,10 +1751,11 @@ function ChecklistForm() {
           allResponseMapped,
           template.fields.map(f => ({ id: f.id, name: f.name, field_type: f.field_type, options: f.options }))
         )
-        console.log('[Checklist] Resultado nao-conformidades (justificativas):', ncResult2)
+        console.log('[FinalizeJust] Etapa 6: CONCLUIDA', ncResult2)
       }
 
       // Activity log
+      console.log('[FinalizeJust] Etapa 7: activity_log...')
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       await (supabase as any).from('activity_log').insert({
         store_id: Number(storeId),
@@ -1729,11 +1768,13 @@ function ChecklistForm() {
           justification_count: emptyRequiredFields.length,
         },
       })
+      console.log('[FinalizeJust] Etapa 7: CONCLUIDA')
 
+      console.log('[FinalizeJust] SUCESSO — redirecionando...')
       setSuccess(true)
       setTimeout(() => router.push(APP_CONFIG.routes.dashboard), 2000)
     } catch (err) {
-      console.error('[Checklist] Erro ao finalizar com justificativas:', err)
+      console.error('[FinalizeJust] ERRO na finalizacao:', err)
       setErrors({ 0: err instanceof Error ? err.message : 'Erro ao finalizar checklist' })
       setSubmitting(false)
     }
