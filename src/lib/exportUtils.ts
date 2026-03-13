@@ -6,6 +6,8 @@
 import type { NCPhotoItem } from './ncPhotoReportQueries'
 import type { ActionPlanReportItem } from './actionPlanReportQueries'
 import type { ComplianceSummary, FieldComplianceRow, StoreComplianceRow, ReincidenciaSummary, ReincidenciaRow, AssigneeStats } from './analyticsQueries'
+import type { AdherenceMetrics, TemplateAdherence, StoreAdherence, UserAdherence, CoverageGap } from './adherenceCalculations'
+import { formatMinutes } from './adherenceCalculations'
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // TIPOS PARA EXPORTACAO DAS TABS DE RELATORIOS
@@ -17,6 +19,13 @@ export type OverviewExportData = {
   templateStats: { template_name: string; total_uses: number }[]
   dailyStats: { date: string; count: number }[]
   period: string
+  // Enhanced adherence data (optional for backward compat)
+  overallMetrics?: AdherenceMetrics
+  templateAdherence?: TemplateAdherence[]
+  storeAdherence?: StoreAdherence[]
+  userAdherence?: UserAdherence[]
+  coverageGaps?: CoverageGap[]
+  avgCompletionTimeMinutes?: number | null
 }
 
 export type UserChecklistExport = {
@@ -863,17 +872,64 @@ export function exportOverviewToCSV(data: OverviewExportData, filename: string) 
   lines.push([data.summary.totalChecklists, data.summary.completedToday, data.summary.avgPerDay, data.summary.activeUsers, data.summary.activeStores, data.summary.activeTemplates].join(','))
   lines.push('')
 
+  // Enhanced status distribution
+  if (data.overallMetrics) {
+    const m = data.overallMetrics
+    const b = m.statusBreakdown
+    lines.push('=== DISTRIBUICAO DE STATUS ===')
+    lines.push('Taxa Conclusao (%),Validados,Concluidos,Em Andamento,Incompletos,Rascunhos,Total,Tempo Medio')
+    lines.push([m.completionRate, b.validado, b.concluido, b.em_andamento, b.incompleto, b.rascunho, b.total, formatMinutes(data.avgCompletionTimeMinutes ?? null)].join(','))
+    lines.push('')
+  }
+
+  // Enhanced template adherence
+  if (data.templateAdherence && data.templateAdherence.length > 0) {
+    lines.push('=== ADESAO POR TEMPLATE ===')
+    lines.push('Template,Total,Validados,Concluidos,Em Andamento,Incompletos,Rascunhos,Taxa (%),Tempo Medio,Lojas sem Preenchimento')
+    for (const t of data.templateAdherence) {
+      const b = t.metrics.statusBreakdown
+      lines.push([esc(t.templateName), b.total, b.validado, b.concluido, b.em_andamento, b.incompleto, b.rascunho, t.metrics.completionRate, formatMinutes(t.avgCompletionTimeMinutes), `${t.storesWithZero}/${t.totalAssignedStores}`].join(','))
+    }
+    lines.push('')
+  }
+
+  // Enhanced store adherence
+  if (data.storeAdherence && data.storeAdherence.length > 0) {
+    lines.push('=== ADESAO POR LOJA ===')
+    lines.push('Loja,Total,Validados,Concluidos,Em Andamento,Incompletos,Rascunhos,Taxa (%),Templates Faltando')
+    for (const s of data.storeAdherence) {
+      const b = s.metrics.statusBreakdown
+      lines.push([esc(s.storeName), b.total, b.validado, b.concluido, b.em_andamento, b.incompleto, b.rascunho, s.metrics.completionRate, esc(s.templatesNeverFilled.join('; ') || '-')].join(','))
+    }
+    lines.push('')
+  }
+
+  // User adherence
+  if (data.userAdherence && data.userAdherence.length > 0) {
+    lines.push('=== ADESAO POR USUARIO ===')
+    lines.push('Usuario,Total,Validados,Concluidos,Em Andamento,Incompletos,Rascunhos,Taxa (%),Tempo Medio')
+    for (const u of data.userAdherence) {
+      const b = u.metrics.statusBreakdown
+      lines.push([esc(u.userName), b.total, b.validado, b.concluido, b.em_andamento, b.incompleto, b.rascunho, u.metrics.completionRate, formatMinutes(u.avgCompletionTimeMinutes)].join(','))
+    }
+    lines.push('')
+  }
+
+  // Coverage gaps
+  if (data.coverageGaps && data.coverageGaps.length > 0) {
+    lines.push('=== LACUNAS DE COBERTURA ===')
+    lines.push('Template,Loja,Ultimo Preenchimento,Dias sem Preenchimento')
+    for (const g of data.coverageGaps) {
+      lines.push([esc(g.templateName), esc(g.storeName), g.lastFilledAt ? fmtDateBR(g.lastFilledAt) : 'Nunca', g.daysSinceLastFilled !== null ? String(g.daysSinceLastFilled) : '-'].join(','))
+    }
+    lines.push('')
+  }
+
+  // Legacy sections (keep for compat)
   lines.push('=== DESEMPENHO POR LOJA ===')
   lines.push('Loja,Total Checklists,Hoje,Media/Dia')
   for (const s of data.storeStats) {
     lines.push([esc(s.store_name), s.total_checklists, s.completed_today, s.completion_rate].join(','))
-  }
-  lines.push('')
-
-  lines.push('=== USO DE CHECKLISTS ===')
-  lines.push('Template,Utilizacoes')
-  for (const t of data.templateStats) {
-    lines.push([esc(t.template_name), t.total_uses].join(','))
   }
   lines.push('')
 
@@ -903,17 +959,67 @@ export function exportOverviewToTXT(data: OverviewExportData, filename: string) 
     `  Lojas Ativas:      ${s.activeStores}`,
     `  Templates Ativos:  ${s.activeTemplates}`,
     '',
-    '--- DESEMPENHO POR LOJA ---',
   ]
-  for (const st of data.storeStats) {
-    lines.push(`  ${st.store_name.padEnd(30)} Total: ${String(st.total_checklists).padStart(5)}   Hoje: ${String(st.completed_today).padStart(3)}   Media/dia: ${st.completion_rate}`)
+
+  // Enhanced status distribution
+  if (data.overallMetrics) {
+    const m = data.overallMetrics
+    const b = m.statusBreakdown
+    lines.push('--- DISTRIBUICAO DE STATUS ---')
+    lines.push(`  Taxa de Conclusao:  ${m.completionRate}%`)
+    lines.push(`  Validados:          ${b.validado}`)
+    lines.push(`  Concluidos:         ${b.concluido}`)
+    lines.push(`  Em Andamento:       ${b.em_andamento}`)
+    lines.push(`  Incompletos:        ${b.incompleto}`)
+    lines.push(`  Rascunhos:          ${b.rascunho}`)
+    lines.push(`  Total:              ${b.total}`)
+    lines.push(`  Tempo Medio:        ${formatMinutes(data.avgCompletionTimeMinutes ?? null)}`)
+    lines.push('')
   }
-  lines.push('')
-  lines.push('--- USO DE CHECKLISTS ---')
-  for (const t of data.templateStats) {
-    lines.push(`  ${t.template_name.padEnd(40)} ${t.total_uses} uso(s)`)
+
+  // Template adherence
+  if (data.templateAdherence && data.templateAdherence.length > 0) {
+    lines.push('--- ADESAO POR TEMPLATE ---')
+    for (const t of data.templateAdherence) {
+      const b = t.metrics.statusBreakdown
+      lines.push(`  ${t.templateName.padEnd(35)} Taxa: ${String(t.metrics.completionRate).padStart(3)}%  V:${b.validado} C:${b.concluido} A:${b.em_andamento} I:${b.incompleto} R:${b.rascunho}  Lojas s/preench: ${t.storesWithZero}/${t.totalAssignedStores}`)
+    }
+    lines.push('')
   }
-  lines.push('')
+
+  // Store adherence
+  if (data.storeAdherence && data.storeAdherence.length > 0) {
+    lines.push('--- ADESAO POR LOJA ---')
+    for (const st of data.storeAdherence) {
+      const b = st.metrics.statusBreakdown
+      lines.push(`  ${st.storeName.padEnd(35)} Taxa: ${String(st.metrics.completionRate).padStart(3)}%  V:${b.validado} C:${b.concluido} A:${b.em_andamento} I:${b.incompleto} R:${b.rascunho}`)
+      if (st.templatesNeverFilled.length > 0) {
+        lines.push(`    Templates faltando: ${st.templatesNeverFilled.join(', ')}`)
+      }
+    }
+    lines.push('')
+  }
+
+  // User adherence
+  if (data.userAdherence && data.userAdherence.length > 0) {
+    lines.push('--- ADESAO POR USUARIO ---')
+    for (const u of data.userAdherence) {
+      const b = u.metrics.statusBreakdown
+      lines.push(`  ${u.userName.padEnd(30)} Taxa: ${String(u.metrics.completionRate).padStart(3)}%  V:${b.validado} C:${b.concluido} A:${b.em_andamento} I:${b.incompleto} R:${b.rascunho}  Tempo: ${formatMinutes(u.avgCompletionTimeMinutes)}`)
+    }
+    lines.push('')
+  }
+
+  // Coverage gaps
+  if (data.coverageGaps && data.coverageGaps.length > 0) {
+    lines.push('--- LACUNAS DE COBERTURA ---')
+    for (const g of data.coverageGaps) {
+      const lastFilled = g.lastFilledAt ? fmtDateBR(g.lastFilledAt) : 'NUNCA'
+      lines.push(`  ${g.templateName.padEnd(30)} ${g.storeName.padEnd(25)} Ultimo: ${lastFilled}`)
+    }
+    lines.push('')
+  }
+
   lines.push('--- DADOS DIARIOS ---')
   for (const d of data.dailyStats) {
     const bar = '█'.repeat(Math.min(d.count, 50))
@@ -927,34 +1033,92 @@ export async function exportOverviewToExcel(data: OverviewExportData, filename: 
   const XLSX = await import('xlsx')
   const wb = XLSX.utils.book_new()
 
-  // Sheet 1: Store stats
-  const storeData = data.storeStats.map(s => ({
-    'Loja': s.store_name,
-    'Total Checklists': s.total_checklists,
-    'Hoje': s.completed_today,
-    'Media/Dia': s.completion_rate,
-  }))
-  const ws1 = XLSX.utils.json_to_sheet(storeData.length ? storeData : [{ 'Loja': 'Sem dados' }])
-  ws1['!cols'] = [{ wch: 30 }, { wch: 16 }, { wch: 8 }, { wch: 12 }]
-  XLSX.utils.book_append_sheet(wb, ws1, 'Desempenho por Loja')
+  // Sheet 1: Template adherence (enhanced) or legacy template stats
+  if (data.templateAdherence && data.templateAdherence.length > 0) {
+    const tmplRows = data.templateAdherence.map(t => ({
+      'Template': t.templateName,
+      'Total': t.metrics.statusBreakdown.total,
+      'Validados': t.metrics.statusBreakdown.validado,
+      'Concluidos': t.metrics.statusBreakdown.concluido,
+      'Em Andamento': t.metrics.statusBreakdown.em_andamento,
+      'Incompletos': t.metrics.statusBreakdown.incompleto,
+      'Rascunhos': t.metrics.statusBreakdown.rascunho,
+      'Taxa (%)': t.metrics.completionRate,
+      'Tempo Medio': formatMinutes(t.avgCompletionTimeMinutes),
+      'Lojas s/ Preench.': `${t.storesWithZero}/${t.totalAssignedStores}`,
+    }))
+    const ws = XLSX.utils.json_to_sheet(tmplRows)
+    ws['!cols'] = [{ wch: 35 }, { wch: 8 }, { wch: 10 }, { wch: 12 }, { wch: 14 }, { wch: 12 }, { wch: 10 }, { wch: 10 }, { wch: 12 }, { wch: 16 }]
+    XLSX.utils.book_append_sheet(wb, ws, 'Adesao por Template')
+  } else {
+    const tmplData = data.templateStats.map(t => ({ 'Template': t.template_name, 'Utilizacoes': t.total_uses }))
+    const ws = XLSX.utils.json_to_sheet(tmplData.length ? tmplData : [{ 'Template': 'Sem dados' }])
+    ws['!cols'] = [{ wch: 40 }, { wch: 14 }]
+    XLSX.utils.book_append_sheet(wb, ws, 'Uso de Checklists')
+  }
 
-  // Sheet 2: Template stats
-  const tmplData = data.templateStats.map(t => ({
-    'Template': t.template_name,
-    'Utilizacoes': t.total_uses,
-  }))
-  const ws2 = XLSX.utils.json_to_sheet(tmplData.length ? tmplData : [{ 'Template': 'Sem dados' }])
-  ws2['!cols'] = [{ wch: 40 }, { wch: 14 }]
-  XLSX.utils.book_append_sheet(wb, ws2, 'Uso de Checklists')
+  // Sheet 2: Store adherence (enhanced) or legacy store stats
+  if (data.storeAdherence && data.storeAdherence.length > 0) {
+    const storeRows = data.storeAdherence.map(s => ({
+      'Loja': s.storeName,
+      'Total': s.metrics.statusBreakdown.total,
+      'Validados': s.metrics.statusBreakdown.validado,
+      'Concluidos': s.metrics.statusBreakdown.concluido,
+      'Em Andamento': s.metrics.statusBreakdown.em_andamento,
+      'Incompletos': s.metrics.statusBreakdown.incompleto,
+      'Rascunhos': s.metrics.statusBreakdown.rascunho,
+      'Taxa (%)': s.metrics.completionRate,
+      'Templates Faltando': s.templatesNeverFilled.join('; ') || '-',
+    }))
+    const ws = XLSX.utils.json_to_sheet(storeRows)
+    ws['!cols'] = [{ wch: 30 }, { wch: 8 }, { wch: 10 }, { wch: 12 }, { wch: 14 }, { wch: 12 }, { wch: 10 }, { wch: 10 }, { wch: 40 }]
+    XLSX.utils.book_append_sheet(wb, ws, 'Adesao por Loja')
+  } else {
+    const storeData = data.storeStats.map(s => ({ 'Loja': s.store_name, 'Total Checklists': s.total_checklists, 'Hoje': s.completed_today, 'Media/Dia': s.completion_rate }))
+    const ws = XLSX.utils.json_to_sheet(storeData.length ? storeData : [{ 'Loja': 'Sem dados' }])
+    ws['!cols'] = [{ wch: 30 }, { wch: 16 }, { wch: 8 }, { wch: 12 }]
+    XLSX.utils.book_append_sheet(wb, ws, 'Desempenho por Loja')
+  }
 
-  // Sheet 3: Daily stats
+  // Sheet 3: User adherence (new)
+  if (data.userAdherence && data.userAdherence.length > 0) {
+    const userRows = data.userAdherence.map(u => ({
+      'Usuario': u.userName,
+      'Total': u.metrics.statusBreakdown.total,
+      'Validados': u.metrics.statusBreakdown.validado,
+      'Concluidos': u.metrics.statusBreakdown.concluido,
+      'Em Andamento': u.metrics.statusBreakdown.em_andamento,
+      'Incompletos': u.metrics.statusBreakdown.incompleto,
+      'Rascunhos': u.metrics.statusBreakdown.rascunho,
+      'Taxa (%)': u.metrics.completionRate,
+      'Tempo Medio': formatMinutes(u.avgCompletionTimeMinutes),
+    }))
+    const ws = XLSX.utils.json_to_sheet(userRows)
+    ws['!cols'] = [{ wch: 30 }, { wch: 8 }, { wch: 10 }, { wch: 12 }, { wch: 14 }, { wch: 12 }, { wch: 10 }, { wch: 10 }, { wch: 12 }]
+    XLSX.utils.book_append_sheet(wb, ws, 'Adesao por Usuario')
+  }
+
+  // Sheet 4: Coverage gaps (new)
+  if (data.coverageGaps && data.coverageGaps.length > 0) {
+    const gapRows = data.coverageGaps.map(g => ({
+      'Template': g.templateName,
+      'Loja': g.storeName,
+      'Ultimo Preenchimento': g.lastFilledAt ? fmtDateBR(g.lastFilledAt) : 'Nunca',
+      'Dias sem Preenchimento': g.daysSinceLastFilled !== null ? g.daysSinceLastFilled : '-',
+    }))
+    const ws = XLSX.utils.json_to_sheet(gapRows)
+    ws['!cols'] = [{ wch: 35 }, { wch: 30 }, { wch: 22 }, { wch: 22 }]
+    XLSX.utils.book_append_sheet(wb, ws, 'Lacunas de Cobertura')
+  }
+
+  // Sheet 5: Daily stats
   const dailyData = data.dailyStats.map(d => ({
     'Data': d.date,
     'Quantidade': d.count,
   }))
-  const ws3 = XLSX.utils.json_to_sheet(dailyData.length ? dailyData : [{ 'Data': 'Sem dados' }])
-  ws3['!cols'] = [{ wch: 12 }, { wch: 12 }]
-  XLSX.utils.book_append_sheet(wb, ws3, 'Dados Diarios')
+  const ws = XLSX.utils.json_to_sheet(dailyData.length ? dailyData : [{ 'Data': 'Sem dados' }])
+  ws['!cols'] = [{ wch: 12 }, { wch: 12 }]
+  XLSX.utils.book_append_sheet(wb, ws, 'Dados Diarios')
 
   const buf = XLSX.write(wb, { bookType: 'xlsx', type: 'array' })
   downloadFile(buf, filename, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
@@ -962,43 +1126,138 @@ export async function exportOverviewToExcel(data: OverviewExportData, filename: 
 
 export async function exportOverviewToPDF(data: OverviewExportData): Promise<void> {
   const { jsPDF } = await import('jspdf')
-  const doc = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4' })
+  const doc = new jsPDF({ orientation: 'l', unit: 'mm', format: 'a4' })
   const s = data.summary
 
-  let y = addPdfHeader(doc, 'RELATORIO VISAO GERAL', [
+  const metas = [
     `Periodo: ${periodLabel[data.period] || data.period}`,
     `Gerado em: ${new Date().toLocaleString('pt-BR')}`,
     `Total: ${s.totalChecklists}  |  Hoje: ${s.completedToday}  |  Media/dia: ${s.avgPerDay}  |  Usuarios: ${s.activeUsers}  |  Lojas: ${s.activeStores}  |  Templates: ${s.activeTemplates}`,
-  ])
+  ]
 
-  // Store table
+  // Add status distribution if available
+  if (data.overallMetrics) {
+    const m = data.overallMetrics
+    const b = m.statusBreakdown
+    metas.push(`Taxa Conclusao: ${m.completionRate}%  |  V:${b.validado}  C:${b.concluido}  A:${b.em_andamento}  I:${b.incompleto}  R:${b.rascunho}  |  Tempo Medio: ${formatMinutes(data.avgCompletionTimeMinutes ?? null)}`)
+  }
+
+  let y = addPdfHeader(doc, 'RELATORIO VISAO GERAL', metas)
+
+  // Template adherence table (enhanced or legacy)
   doc.setFontSize(10)
   doc.setFont('helvetica', 'bold')
   doc.setTextColor('#000000')
-  doc.text(n('Desempenho por Loja'), MARGIN, y)
-  y += 6
 
-  y = drawPdfTable(doc, [
-    { header: 'Loja', width: 80 },
-    { header: 'Total', width: 30, align: 'right' },
-    { header: 'Hoje', width: 30, align: 'right' },
-    { header: 'Media/Dia', width: 42, align: 'right' },
-  ], data.storeStats.map(s => [s.store_name, String(s.total_checklists), String(s.completed_today), String(s.completion_rate)]), y)
+  if (data.templateAdherence && data.templateAdherence.length > 0) {
+    doc.text(n('Adesao por Template'), MARGIN, y)
+    y += 6
+    y = drawPdfTable(doc, [
+      { header: 'Template', width: 60 },
+      { header: 'Total', width: 18, align: 'right' },
+      { header: 'Valid.', width: 18, align: 'right' },
+      { header: 'Concl.', width: 18, align: 'right' },
+      { header: 'Andam.', width: 18, align: 'right' },
+      { header: 'Incomp.', width: 20, align: 'right' },
+      { header: 'Rasc.', width: 18, align: 'right' },
+      { header: 'Taxa', width: 18, align: 'right' },
+      { header: 'Tempo', width: 22, align: 'right' },
+      { header: 'Lacunas', width: 22, align: 'right' },
+    ], data.templateAdherence.map(t => {
+      const b = t.metrics.statusBreakdown
+      return [t.templateName, String(b.total), String(b.validado), String(b.concluido), String(b.em_andamento), String(b.incompleto), String(b.rascunho), `${t.metrics.completionRate}%`, formatMinutes(t.avgCompletionTimeMinutes), `${t.storesWithZero}/${t.totalAssignedStores}`]
+    }), y)
+  } else {
+    doc.text(n('Uso de Checklists'), MARGIN, y)
+    y += 6
+    y = drawPdfTable(doc, [
+      { header: 'Template', width: 120 },
+      { header: 'Utilizacoes', width: 62, align: 'right' },
+    ], data.templateStats.map(t => [t.template_name, String(t.total_uses)]), y)
+  }
 
   y += 8
   if (y > PAGE_BOTTOM - 20) { doc.addPage(); y = MARGIN }
 
-  // Template table
+  // Store adherence table (enhanced or legacy)
   doc.setFontSize(10)
   doc.setFont('helvetica', 'bold')
   doc.setTextColor('#000000')
-  doc.text(n('Uso de Checklists'), MARGIN, y)
-  y += 6
 
-  drawPdfTable(doc, [
-    { header: 'Template', width: 120 },
-    { header: 'Utilizacoes', width: 62, align: 'right' },
-  ], data.templateStats.map(t => [t.template_name, String(t.total_uses)]), y)
+  if (data.storeAdherence && data.storeAdherence.length > 0) {
+    doc.text(n('Adesao por Loja'), MARGIN, y)
+    y += 6
+    y = drawPdfTable(doc, [
+      { header: 'Loja', width: 50 },
+      { header: 'Total', width: 18, align: 'right' },
+      { header: 'Valid.', width: 18, align: 'right' },
+      { header: 'Concl.', width: 18, align: 'right' },
+      { header: 'Andam.', width: 18, align: 'right' },
+      { header: 'Incomp.', width: 20, align: 'right' },
+      { header: 'Rasc.', width: 18, align: 'right' },
+      { header: 'Taxa', width: 18, align: 'right' },
+      { header: 'Tmpl Faltando', width: 55 },
+    ], data.storeAdherence.map(st => {
+      const b = st.metrics.statusBreakdown
+      return [st.storeName, String(b.total), String(b.validado), String(b.concluido), String(b.em_andamento), String(b.incompleto), String(b.rascunho), `${st.metrics.completionRate}%`, st.templatesNeverFilled.join(', ') || '-']
+    }), y)
+  } else {
+    doc.text(n('Desempenho por Loja'), MARGIN, y)
+    y += 6
+    y = drawPdfTable(doc, [
+      { header: 'Loja', width: 80 },
+      { header: 'Total', width: 30, align: 'right' },
+      { header: 'Hoje', width: 30, align: 'right' },
+      { header: 'Media/Dia', width: 42, align: 'right' },
+    ], data.storeStats.map(s => [s.store_name, String(s.total_checklists), String(s.completed_today), String(s.completion_rate)]), y)
+  }
+
+  y += 8
+  if (y > PAGE_BOTTOM - 20) { doc.addPage(); y = MARGIN }
+
+  // User adherence table (new)
+  if (data.userAdherence && data.userAdherence.length > 0) {
+    doc.setFontSize(10)
+    doc.setFont('helvetica', 'bold')
+    doc.setTextColor('#000000')
+    doc.text(n('Adesao por Usuario'), MARGIN, y)
+    y += 6
+    y = drawPdfTable(doc, [
+      { header: 'Usuario', width: 50 },
+      { header: 'Total', width: 20, align: 'right' },
+      { header: 'Valid.', width: 20, align: 'right' },
+      { header: 'Concl.', width: 20, align: 'right' },
+      { header: 'Andam.', width: 22, align: 'right' },
+      { header: 'Incomp.', width: 22, align: 'right' },
+      { header: 'Rasc.', width: 20, align: 'right' },
+      { header: 'Taxa', width: 20, align: 'right' },
+      { header: 'Tempo', width: 25, align: 'right' },
+    ], data.userAdherence.map(u => {
+      const b = u.metrics.statusBreakdown
+      return [u.userName, String(b.total), String(b.validado), String(b.concluido), String(b.em_andamento), String(b.incompleto), String(b.rascunho), `${u.metrics.completionRate}%`, formatMinutes(u.avgCompletionTimeMinutes)]
+    }), y)
+
+    y += 8
+    if (y > PAGE_BOTTOM - 20) { doc.addPage(); y = MARGIN }
+  }
+
+  // Coverage gaps table (new)
+  if (data.coverageGaps && data.coverageGaps.length > 0) {
+    doc.setFontSize(10)
+    doc.setFont('helvetica', 'bold')
+    doc.setTextColor('#000000')
+    doc.text(n('Lacunas de Cobertura'), MARGIN, y)
+    y += 6
+    drawPdfTable(doc, [
+      { header: 'Template', width: 80 },
+      { header: 'Loja', width: 60 },
+      { header: 'Ultimo Preench.', width: 50, align: 'right' },
+    ], data.coverageGaps.map(g => [
+      g.templateName,
+      g.storeName,
+      g.lastFilledAt ? fmtDateBR(g.lastFilledAt) : 'Nunca',
+    ]), y)
+  }
 
   addPdfFooters(doc)
   const timestamp = new Date().toISOString().split('T')[0]

@@ -26,6 +26,13 @@ import { LoadingPage, Header, Select, PageContainer } from '@/components/ui'
 import { getAuthCache, getUserCache } from '@/lib/offlineCache'
 import { fetchComplianceData, fetchReincidenciaData, fetchStoreHeatmap, type ComplianceSummary, type FieldComplianceRow, type StoreComplianceRow, type ReincidenciaSummary, type ReincidenciaRow, type AssigneeStats, type HeatmapCell } from '@/lib/analyticsQueries'
 import {
+  computeOverallAdherence, computeTemplateAdherence, computeStoreAdherence,
+  computeUserAdherence, computeCoverageGaps, computeDailyStatusStats,
+  computeAvgCompletionTime, generateEnhancedAttentionPoints, formatMinutes,
+  type AdherenceMetrics, type TemplateAdherence, type StoreAdherence,
+  type UserAdherence, type CoverageGap, type DailyStatusStats,
+} from '@/lib/adherenceCalculations'
+import {
   exportOverviewToCSV, exportOverviewToTXT, exportOverviewToExcel, exportOverviewToPDF,
   exportResponsesToCSV, exportResponsesToTXT, exportResponsesToExcel, exportResponsesToPDF,
   exportComplianceToCSV, exportComplianceToTXT, exportComplianceToExcel, exportComplianceToPDF,
@@ -125,7 +132,15 @@ export default function RelatoriosPage() {
   const [sectorStats, setSectorStats] = useState<SectorStats[]>([])
   const [attentionPoints, setAttentionPoints] = useState<AttentionPoint[]>([])
   const [requiredActions, setRequiredActions] = useState<RequiredAction[]>([])
-  const [overallAdherence, setOverallAdherence] = useState(0)
+  // Enhanced adherence state
+  const [overallMetrics, setOverallMetrics] = useState<AdherenceMetrics | null>(null)
+  const [templateAdherence, setTemplateAdherence] = useState<TemplateAdherence[]>([])
+  const [storeAdherence, setStoreAdherence] = useState<StoreAdherence[]>([])
+  const [userAdherence, setUserAdherence] = useState<UserAdherence[]>([])
+  const [coverageGaps, setCoverageGaps] = useState<CoverageGap[]>([])
+  const [dailyStatusStats, setDailyStatusStats] = useState<DailyStatusStats[]>([])
+  const [avgCompletionTime, setAvgCompletionTime] = useState<number | null>(null)
+  const [showAllGaps, setShowAllGaps] = useState(false)
   const responsePerPage = 20
   const router = useRouter()
   const supabase = useMemo(() => createClient(), [])
@@ -208,6 +223,7 @@ export default function RelatoriosPage() {
         sectorsData,
         actionPlansData,
         allUsersData,
+        visibilityData,
       ] = await Promise.all([
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         (supabase as any).from('checklists').select('id', { count: 'exact', head: true }),
@@ -227,7 +243,7 @@ export default function RelatoriosPage() {
         (supabase as any).from('checklist_templates').select('id, name').eq('is_active', true),
         // Get all checklists in period with sector/status for executive panel
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        (supabase as any).from('checklists').select('id, store_id, template_id, sector_id, status, created_at, completed_at').gte('created_at', startDate.toISOString()),
+        (supabase as any).from('checklists').select('id, store_id, template_id, sector_id, status, created_by, started_at, created_at, completed_at').gte('created_at', startDate.toISOString()),
         // Sectors with store info
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         (supabase as any).from('sectors').select('id, name, store_id, store:stores(name)').eq('is_active', true),
@@ -237,6 +253,9 @@ export default function RelatoriosPage() {
         // All users for assignee names
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         (supabase as any).from('users').select('id, full_name, function_ref:functions(name)'),
+        // Template visibility (which templates should be filled in which stores)
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (supabase as any).from('template_visibility').select('template_id, store_id'),
       ])
 
       setSummary({
@@ -331,12 +350,6 @@ export default function RelatoriosPage() {
         }).sort((a: SectorStats, b: SectorStats) => b.completion_rate - a.completion_rate)
         setSectorStats(sectorStatsCalc)
 
-        // Overall adherence = weighted average
-        const totalAll = sectorStatsCalc.reduce((s: number, x: SectorStats) => s + x.total_checklists, 0)
-        const completedAll = sectorStatsCalc.reduce((s: number, x: SectorStats) => s + x.completed, 0)
-        const adherence = totalAll > 0 ? Math.round((completedAll / totalAll) * 100) : 0
-        setOverallAdherence(adherence)
-
         // Generate attention points
         const points: AttentionPoint[] = []
 
@@ -390,7 +403,6 @@ export default function RelatoriosPage() {
         setAttentionPoints(points)
       } else {
         setSectorStats([])
-        setOverallAdherence(0)
         setAttentionPoints([])
       }
 
@@ -425,6 +437,41 @@ export default function RelatoriosPage() {
       } else {
         setRequiredActions([])
       }
+
+      // === Enhanced adherence computations ===
+      const visibilityRows = visibilityData?.data || []
+      const storesForAdh = (storesData.data || []).map((s: { id: number; name: string }) => ({ id: s.id, name: s.name }))
+      const templatesForAdh = (templatesData.data || []).map((t: { id: number; name: string }) => ({ id: t.id, name: t.name }))
+      const usersForAdh = (usersLookup || []).map((u: { id: string; full_name: string }) => ({ id: u.id, full_name: u.full_name || 'Desconhecido' }))
+
+      const overall = computeOverallAdherence(checklists)
+      setOverallMetrics(overall)
+
+      const tAdh = computeTemplateAdherence(checklists, templatesForAdh, visibilityRows)
+      setTemplateAdherence(tAdh)
+
+      const sAdh = computeStoreAdherence(checklists, storesForAdh, templatesForAdh, visibilityRows)
+      setStoreAdherence(sAdh)
+
+      const uAdh = computeUserAdherence(checklists, usersForAdh)
+      setUserAdherence(uAdh)
+
+      const gaps = computeCoverageGaps(checklists, templatesForAdh, storesForAdh, visibilityRows)
+      setCoverageGaps(gaps)
+
+      const dailyStatus = computeDailyStatusStats(checklists, Math.min(days, 30))
+      setDailyStatusStats(dailyStatus)
+
+      setAvgCompletionTime(computeAvgCompletionTime(checklists))
+
+      // Enhanced attention points (replaces old attention points)
+      const unusedTemplateNames = templatesForAdh
+        .filter((t: { id: number; name: string }) => !checklists.some((c: { template_id: number }) => c.template_id === t.id))
+        .filter((t: { id: number }) => !visibilityRows.some((v: { template_id: number }) => v.template_id === t.id))
+        .map((t: { name: string }) => t.name)
+      const overdueCount = actionPlans.filter((ap: { status: string }) => ap.status === 'vencido').length
+      const enhancedPoints = generateEnhancedAttentionPoints(sAdh, tAdh, gaps, overdueCount, unusedTemplateNames)
+      setAttentionPoints(enhancedPoints)
 
       // Fetch user checklists for responses tab
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -505,20 +552,26 @@ export default function RelatoriosPage() {
     setLoading(false)
   }
 
-  const maxDailyCount = Math.max(...dailyStats.map(d => d.count), 1)
-
   // Executive summary text
   const summaryText = useMemo(() => {
-    if (!sectorStats.length) return ''
-    const best = sectorStats[0]
-    const worst = sectorStats[sectorStats.length - 1]
-    if (best.sector_id === worst.sector_id) {
-      return `Adesao geral aos checklists esta em ${overallAdherence}%. Setor de ${best.sector_name} com ${best.completion_rate}% de preenchimento.`
+    if (!overallMetrics) return ''
+    const sb = overallMetrics.statusBreakdown
+    let text = `Adesao geral: ${overallMetrics.completionRate}% concluidos.`
+    const parts: string[] = []
+    if (sb.em_andamento > 0) parts.push(`${sb.em_andamento} em andamento`)
+    if (sb.incompleto > 0) parts.push(`${sb.incompleto} incompleto${sb.incompleto > 1 ? 's' : ''}`)
+    if (sb.rascunho > 0) parts.push(`${sb.rascunho} rascunho${sb.rascunho > 1 ? 's' : ''}`)
+    if (parts.length > 0) text += ` ${parts.join(', ')}.`
+    if (coverageGaps.length > 0) text += ` ${coverageGaps.length} lacuna${coverageGaps.length > 1 ? 's' : ''} de cobertura (template/loja sem preenchimento).`
+    if (sectorStats.length > 0) {
+      const best = sectorStats[0]
+      const worst = sectorStats[sectorStats.length - 1]
+      if (best.sector_id !== worst.sector_id) {
+        text += ` Melhor setor: ${best.sector_name} (${best.completion_rate}%). Pior: ${worst.sector_name} (${worst.completion_rate}%).`
+      }
     }
-    return `Adesao geral aos checklists esta em ${overallAdherence}%. ` +
-      `Setor de ${best.sector_name} lidera com ${best.completion_rate}% de preenchimento. ` +
-      `Setor de ${worst.sector_name} e o ponto fraco com apenas ${worst.completion_rate}%.`
-  }, [sectorStats, overallAdherence])
+    return text
+  }, [overallMetrics, coverageGaps, sectorStats])
 
   // Filter user checklists
   const filteredUserChecklists = useMemo(() => {
@@ -542,8 +595,10 @@ export default function RelatoriosPage() {
 
   const getStatusBadge = (status: string) => {
     const badges: Record<string, { label: string; cls: string }> = {
-      concluido: { label: 'Concluido', cls: 'bg-success/20 text-success' },
+      validado: { label: 'Validado', cls: 'bg-success/20 text-success' },
+      concluido: { label: 'Concluido', cls: 'bg-primary/20 text-primary' },
       em_andamento: { label: 'Em Andamento', cls: 'bg-warning/20 text-warning' },
+      incompleto: { label: 'Incompleto', cls: 'bg-error/20 text-error' },
       rascunho: { label: 'Rascunho', cls: 'bg-surface-hover text-muted' },
     }
     return badges[status] || { label: status, cls: 'bg-surface-hover text-muted' }
@@ -562,7 +617,7 @@ export default function RelatoriosPage() {
       const filename = `relatorio_${tabName}_${timestamp}`
 
       if (activeTab === 'overview') {
-        const data = { summary, storeStats, templateStats, dailyStats, period }
+        const data = { summary, storeStats, templateStats, dailyStats, period, overallMetrics: overallMetrics ?? undefined, templateAdherence, storeAdherence, userAdherence, coverageGaps, avgCompletionTimeMinutes: avgCompletionTime }
         if (format === 'csv') exportOverviewToCSV(data, `${filename}.csv`)
         else if (format === 'txt') exportOverviewToTXT(data, `${filename}.txt`)
         else await exportOverviewToExcel(data, `${filename}.xlsx`)
@@ -594,7 +649,7 @@ export default function RelatoriosPage() {
     setExportingPdf(true)
     try {
       if (activeTab === 'overview') {
-        await exportOverviewToPDF({ summary, storeStats, templateStats, dailyStats, period })
+        await exportOverviewToPDF({ summary, storeStats, templateStats, dailyStats, period, overallMetrics: overallMetrics ?? undefined, templateAdherence, storeAdherence, userAdherence, coverageGaps, avgCompletionTimeMinutes: avgCompletionTime })
       } else if (activeTab === 'responses') {
         await exportResponsesToPDF(filteredUserChecklists)
       } else if (activeTab === 'conformidade') {
@@ -875,65 +930,82 @@ export default function RelatoriosPage() {
 
         {/* Executive Summary Card */}
         {summaryText && (
-          <div className="border-l-4 border-success bg-surface rounded-r-xl px-5 py-4 mb-6">
+          <div className="border-l-4 border-primary bg-surface rounded-r-xl px-5 py-4 mb-6">
             <p className="text-sm text-main leading-relaxed">{summaryText}</p>
           </div>
         )}
 
-        {/* KPI Cards */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-          <div className="card p-5">
-            <div className="h-1 w-16 bg-primary rounded-full mb-3" />
-            <p className="text-sm text-muted mb-1">Adesao Geral</p>
-            <div className="flex items-baseline gap-2">
-              <span className="text-4xl font-bold text-main">{overallAdherence}%</span>
-              {overallAdherence >= 70 ? (
-                <span className="text-success text-lg">&#9650;</span>
-              ) : (
-                <span className="text-error text-lg">&#9660;</span>
-              )}
+        {/* KPI Cards — 6 cards */}
+        {overallMetrics && (
+          <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4 mb-6">
+            <div className={`card p-4 border-l-4 ${overallMetrics.completionRate >= 70 ? 'border-l-success' : overallMetrics.completionRate >= 40 ? 'border-l-warning' : 'border-l-error'}`}>
+              <p className="text-xs text-muted mb-1">Taxa de Conclusao</p>
+              <p className="text-3xl font-bold text-main">{overallMetrics.completionRate}%</p>
+              <p className="text-[10px] text-muted mt-1">{overallMetrics.statusBreakdown.concluido + overallMetrics.statusBreakdown.validado} de {overallMetrics.statusBreakdown.total}</p>
             </div>
-            <p className="text-xs text-muted mt-1">{summary.totalChecklists} checklists no total</p>
+            <div className="card p-4 border-l-4 border-l-warning">
+              <p className="text-xs text-muted mb-1">Em Andamento</p>
+              <p className="text-3xl font-bold text-warning">{overallMetrics.statusBreakdown.em_andamento}</p>
+              <p className="text-[10px] text-muted mt-1">{overallMetrics.inProgressRate}% do total</p>
+            </div>
+            <div className="card p-4 border-l-4 border-l-error">
+              <p className="text-xs text-muted mb-1">Incompletos</p>
+              <p className="text-3xl font-bold text-error">{overallMetrics.statusBreakdown.incompleto}</p>
+              <p className="text-[10px] text-muted mt-1">{overallMetrics.abandonRate}% abandonados</p>
+            </div>
+            <div className="card p-4 border-l-4 border-l-[var(--border-subtle)]">
+              <p className="text-xs text-muted mb-1">Rascunhos</p>
+              <p className="text-3xl font-bold text-muted">{overallMetrics.statusBreakdown.rascunho}</p>
+              <p className="text-[10px] text-muted mt-1">Nao iniciados</p>
+            </div>
+            <div className="card p-4 border-l-4 border-l-primary">
+              <p className="text-xs text-muted mb-1">Tempo Medio</p>
+              <p className="text-3xl font-bold text-primary">{formatMinutes(avgCompletionTime)}</p>
+              <p className="text-[10px] text-muted mt-1">Inicio ate conclusao</p>
+            </div>
+            <div className={`card p-4 border-l-4 ${coverageGaps.length > 0 ? 'border-l-error' : 'border-l-success'}`}>
+              <p className="text-xs text-muted mb-1">Lacunas</p>
+              <p className={`text-3xl font-bold ${coverageGaps.length > 0 ? 'text-error' : 'text-success'}`}>{coverageGaps.length}</p>
+              <p className="text-[10px] text-muted mt-1">Template x Loja sem dados</p>
+            </div>
           </div>
+        )}
 
-          <div className="card p-5">
-            <div className="h-1 w-16 bg-success rounded-full mb-3" />
-            <p className="text-sm text-muted mb-1">Checklists Ativos</p>
-            <div className="flex items-baseline gap-2">
-              <span className="text-4xl font-bold text-main">{summary.activeTemplates}</span>
-              <span className="text-success text-lg">&#9650;</span>
+        {/* Status Distribution Bar */}
+        {overallMetrics && overallMetrics.statusBreakdown.total > 0 && (() => {
+          const sb = overallMetrics.statusBreakdown
+          const t = sb.total
+          const segments = [
+            { key: 'validado', label: 'Validado', count: sb.validado, color: 'bg-success', textColor: 'text-success' },
+            { key: 'concluido', label: 'Concluido', count: sb.concluido, color: 'bg-primary', textColor: 'text-primary' },
+            { key: 'em_andamento', label: 'Em Andamento', count: sb.em_andamento, color: 'bg-warning', textColor: 'text-warning' },
+            { key: 'incompleto', label: 'Incompleto', count: sb.incompleto, color: 'bg-error', textColor: 'text-error' },
+            { key: 'rascunho', label: 'Rascunho', count: sb.rascunho, color: 'bg-surface-hover', textColor: 'text-muted' },
+          ].filter(s => s.count > 0)
+          return (
+            <div className="card p-5 mb-6">
+              <h3 className="text-sm font-semibold text-main mb-3">Distribuicao de Status</h3>
+              <div className="h-6 rounded-full overflow-hidden flex">
+                {segments.map(s => (
+                  <div
+                    key={s.key}
+                    className={`${s.color} transition-all relative group`}
+                    style={{ width: `${(s.count / t) * 100}%` }}
+                    title={`${s.label}: ${s.count} (${Math.round((s.count / t) * 100)}%)`}
+                  />
+                ))}
+              </div>
+              <div className="flex flex-wrap gap-4 mt-3">
+                {segments.map(s => (
+                  <div key={s.key} className="flex items-center gap-1.5">
+                    <span className={`w-2.5 h-2.5 rounded-full ${s.color}`} />
+                    <span className="text-xs text-muted">{s.label}: <span className={`font-semibold ${s.textColor}`}>{s.count}</span> ({Math.round((s.count / t) * 100)}%)</span>
+                  </div>
+                ))}
+              </div>
             </div>
-            <p className="text-xs text-muted mt-1">+{summary.completedToday} hoje</p>
-          </div>
-
-          <div className="card p-5">
-            <div className="h-1 w-16 bg-error rounded-full mb-3" />
-            <p className="text-sm text-muted mb-1">Pior Setor</p>
-            <div className="flex items-baseline gap-2">
-              <span className="text-4xl font-bold text-main">
-                {sectorStats.length > 0 ? `${sectorStats[sectorStats.length - 1].completion_rate}%` : '--'}
-              </span>
-              <span className="text-error text-lg">&#9660;</span>
-            </div>
-            <p className="text-xs text-muted mt-1">
-              {sectorStats.length > 0 ? sectorStats[sectorStats.length - 1].sector_name : 'Sem dados'}
-            </p>
-          </div>
-
-          <div className="card p-5">
-            <div className="h-1 w-16 bg-success rounded-full mb-3" />
-            <p className="text-sm text-muted mb-1">Melhor Setor</p>
-            <div className="flex items-baseline gap-2">
-              <span className="text-4xl font-bold text-main">
-                {sectorStats.length > 0 ? `${sectorStats[0].completion_rate}%` : '--'}
-              </span>
-              <span className="text-success text-lg">&#9650;</span>
-            </div>
-            <p className="text-xs text-muted mt-1">
-              {sectorStats.length > 0 ? sectorStats[0].sector_name : 'Sem dados'}
-            </p>
-          </div>
-        </div>
+          )
+        })()}
 
         {/* Attention Points + Required Actions */}
         <div className="grid lg:grid-cols-2 gap-6 mb-8">
@@ -943,7 +1015,7 @@ export default function RelatoriosPage() {
               <FiAlertTriangle className="w-5 h-5" />
               Pontos de Atencao
             </h3>
-            <div className="space-y-3">
+            <div className="space-y-3 max-h-80 overflow-y-auto">
               {attentionPoints.length === 0 ? (
                 <div className="border-l-4 border-success bg-surface rounded-r-xl px-4 py-3">
                   <p className="text-sm text-muted">Nenhum ponto de atencao no periodo</p>
@@ -982,93 +1054,269 @@ export default function RelatoriosPage() {
           </div>
         </div>
 
-        {/* Chart */}
+        {/* Stacked Daily Chart */}
         <div className="card p-6 mb-8">
-          <h3 className="text-lg font-semibold text-main mb-4">Checklists por Dia (ultimos 30 dias)</h3>
-          <div className="h-48 flex items-end gap-1">
-            {dailyStats.map((day, index) => (
-              <div
-                key={index}
-                className="flex-1 flex flex-col items-center gap-1"
-              >
-                <div
-                  className="w-full bg-primary rounded-t transition-all hover:bg-primary-hover"
-                  style={{ height: `${(day.count / maxDailyCount) * 100}%`, minHeight: day.count > 0 ? '4px' : '0' }}
-                  title={`${day.date}: ${day.count} checklists`}
-                />
-                {index % 5 === 0 && (
-                  <span className="text-[10px] text-muted">{day.date}</span>
-                )}
-              </div>
+          <h3 className="text-lg font-semibold text-main mb-2">Checklists por Dia</h3>
+          <div className="flex flex-wrap gap-3 mb-4">
+            {[
+              { label: 'Validado', color: 'bg-success' },
+              { label: 'Concluido', color: 'bg-primary' },
+              { label: 'Em Andamento', color: 'bg-warning' },
+              { label: 'Incompleto', color: 'bg-error' },
+              { label: 'Rascunho', color: 'bg-surface-hover' },
+            ].map(l => (
+              <span key={l.label} className="flex items-center gap-1 text-[10px] text-muted">
+                <span className={`w-2 h-2 rounded-full ${l.color}`} />
+                {l.label}
+              </span>
             ))}
           </div>
+          {(() => {
+            const maxDay = Math.max(...dailyStatusStats.map(d => d.total), 1)
+            return (
+              <div className="h-48 flex items-end gap-1">
+                {dailyStatusStats.map((day, index) => (
+                  <div key={index} className="flex-1 flex flex-col items-center gap-0.5" title={`${day.date}: ${day.total} total`}>
+                    <div className="w-full flex flex-col-reverse" style={{ height: `${(day.total / maxDay) * 100}%`, minHeight: day.total > 0 ? '4px' : '0' }}>
+                      {day.rascunho > 0 && <div className="w-full bg-surface-hover" style={{ flex: day.rascunho }} />}
+                      {day.incompleto > 0 && <div className="w-full bg-error" style={{ flex: day.incompleto }} />}
+                      {day.em_andamento > 0 && <div className="w-full bg-warning" style={{ flex: day.em_andamento }} />}
+                      {day.concluido > 0 && <div className="w-full bg-primary" style={{ flex: day.concluido }} />}
+                      {day.validado > 0 && <div className="w-full bg-success rounded-t" style={{ flex: day.validado }} />}
+                    </div>
+                    {index % 5 === 0 && (
+                      <span className="text-[10px] text-muted">{day.date}</span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )
+          })()}
         </div>
 
-        {/* Tables */}
-        <div className="grid lg:grid-cols-2 gap-6">
-          {/* Store Stats */}
-          <div className="card overflow-hidden">
-            <div className="px-6 py-4 border-b border-subtle">
-              <h3 className="font-semibold text-main flex items-center gap-2">
-                <FiMapPin className="w-4 h-4" />
-                Desempenho por Loja
-              </h3>
-            </div>
-            <div className="divide-y divide-subtle">
-              {storeStats.length === 0 ? (
-                <div className="px-6 py-8 text-center text-muted">
-                  Nenhum dado disponivel
-                </div>
-              ) : (
-                storeStats.map((store) => (
-                  <div key={store.store_id} className="px-6 py-4 flex items-center justify-between hover:bg-surface-hover transition-colors">
-                    <div>
-                      <p className="font-medium text-main">{store.store_name}</p>
-                      <p className="text-sm text-muted">
-                        {store.completion_rate} checklists/dia em media
-                      </p>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-xl font-bold text-primary">{store.total_checklists}</p>
-                      <p className="text-xs text-muted">
-                        {store.completed_today} hoje
-                      </p>
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
+        {/* Adesao por Template */}
+        <div className="card overflow-hidden mb-6">
+          <div className="px-6 py-4 border-b border-subtle">
+            <h3 className="font-semibold text-main flex items-center gap-2">
+              <FiClipboard className="w-4 h-4" />
+              Adesao por Template
+            </h3>
           </div>
-
-          {/* Template Stats */}
-          <div className="card overflow-hidden">
-            <div className="px-6 py-4 border-b border-subtle">
-              <h3 className="font-semibold text-main flex items-center gap-2">
-                <FiClipboard className="w-4 h-4" />
-                Uso de Checklists
-              </h3>
-            </div>
-            <div className="divide-y divide-subtle">
-              {templateStats.length === 0 ? (
-                <div className="px-6 py-8 text-center text-muted">
-                  Nenhum dado disponivel
-                </div>
-              ) : (
-                templateStats.map((template) => (
-                  <div key={template.template_id} className="px-6 py-4 flex items-center justify-between hover:bg-surface-hover transition-colors">
-                    <div>
-                      <p className="font-medium text-main">{template.template_name}</p>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-xl font-bold text-primary">{template.total_uses}</p>
-                      <p className="text-xs text-muted">utilizacoes</p>
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="bg-surface-hover">
+                <tr>
+                  <th className="px-4 py-3 text-left font-medium text-muted">Template</th>
+                  <th className="px-3 py-3 text-right font-medium text-muted">Total</th>
+                  <th className="px-3 py-3 text-right font-medium text-success">Valid.</th>
+                  <th className="px-3 py-3 text-right font-medium text-primary">Concl.</th>
+                  <th className="px-3 py-3 text-right font-medium text-warning">Andam.</th>
+                  <th className="px-3 py-3 text-right font-medium text-error">Incomp.</th>
+                  <th className="px-3 py-3 text-right font-medium text-muted">Rasc.</th>
+                  <th className="px-4 py-3 text-right font-medium text-muted">Taxa</th>
+                  <th className="px-4 py-3 text-right font-medium text-muted">Lacunas</th>
+                  <th className="px-4 py-3 font-medium text-muted min-w-[120px]">Barra</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-subtle">
+                {templateAdherence.length === 0 ? (
+                  <tr><td colSpan={10} className="px-4 py-8 text-center text-muted">Nenhum dado</td></tr>
+                ) : templateAdherence.map((t) => {
+                  const sb = t.metrics.statusBreakdown
+                  const total = sb.total || 1
+                  return (
+                    <tr key={t.templateId} className="hover:bg-surface-hover/50">
+                      <td className="px-4 py-3 font-medium text-main">{t.templateName}</td>
+                      <td className="px-3 py-3 text-right text-main">{sb.total}</td>
+                      <td className="px-3 py-3 text-right text-success">{sb.validado || '-'}</td>
+                      <td className="px-3 py-3 text-right text-primary">{sb.concluido || '-'}</td>
+                      <td className="px-3 py-3 text-right text-warning">{sb.em_andamento || '-'}</td>
+                      <td className="px-3 py-3 text-right text-error">{sb.incompleto || '-'}</td>
+                      <td className="px-3 py-3 text-right text-muted">{sb.rascunho || '-'}</td>
+                      <td className="px-4 py-3 text-right">
+                        <span className={`inline-block px-2 py-0.5 rounded-lg text-xs font-bold ${
+                          t.metrics.completionRate >= 80 ? 'bg-success/20 text-success' :
+                          t.metrics.completionRate >= 50 ? 'bg-warning/20 text-warning' :
+                          'bg-error/20 text-error'
+                        }`}>{t.metrics.completionRate}%</span>
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        {t.storesWithZero > 0 ? (
+                          <span className="text-xs text-error font-medium">{t.storesWithZero} loja{t.storesWithZero > 1 ? 's' : ''}</span>
+                        ) : (
+                          <span className="text-xs text-muted">-</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="h-2 rounded-full overflow-hidden flex bg-subtle">
+                          {sb.validado > 0 && <div className="bg-success" style={{ width: `${(sb.validado / total) * 100}%` }} />}
+                          {sb.concluido > 0 && <div className="bg-primary" style={{ width: `${(sb.concluido / total) * 100}%` }} />}
+                          {sb.em_andamento > 0 && <div className="bg-warning" style={{ width: `${(sb.em_andamento / total) * 100}%` }} />}
+                          {sb.incompleto > 0 && <div className="bg-error" style={{ width: `${(sb.incompleto / total) * 100}%` }} />}
+                          {sb.rascunho > 0 && <div className="bg-surface-hover" style={{ width: `${(sb.rascunho / total) * 100}%` }} />}
+                        </div>
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
           </div>
         </div>
+
+        {/* Adesao por Loja */}
+        <div className="card overflow-hidden mb-6">
+          <div className="px-6 py-4 border-b border-subtle">
+            <h3 className="font-semibold text-main flex items-center gap-2">
+              <FiMapPin className="w-4 h-4" />
+              Adesao por Loja
+            </h3>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="bg-surface-hover">
+                <tr>
+                  <th className="px-4 py-3 text-left font-medium text-muted">Loja</th>
+                  <th className="px-3 py-3 text-right font-medium text-muted">Total</th>
+                  <th className="px-3 py-3 text-right font-medium text-success">Valid.</th>
+                  <th className="px-3 py-3 text-right font-medium text-primary">Concl.</th>
+                  <th className="px-3 py-3 text-right font-medium text-warning">Andam.</th>
+                  <th className="px-3 py-3 text-right font-medium text-error">Incomp.</th>
+                  <th className="px-3 py-3 text-right font-medium text-muted">Rasc.</th>
+                  <th className="px-4 py-3 text-right font-medium text-muted">Taxa</th>
+                  <th className="px-4 py-3 text-left font-medium text-muted">Templates Faltando</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-subtle">
+                {storeAdherence.length === 0 ? (
+                  <tr><td colSpan={9} className="px-4 py-8 text-center text-muted">Nenhum dado</td></tr>
+                ) : storeAdherence.map((s) => {
+                  const sb = s.metrics.statusBreakdown
+                  return (
+                    <tr key={s.storeId} className="hover:bg-surface-hover/50">
+                      <td className="px-4 py-3 font-medium text-main">{s.storeName}</td>
+                      <td className="px-3 py-3 text-right text-main">{sb.total}</td>
+                      <td className="px-3 py-3 text-right text-success">{sb.validado || '-'}</td>
+                      <td className="px-3 py-3 text-right text-primary">{sb.concluido || '-'}</td>
+                      <td className="px-3 py-3 text-right text-warning">{sb.em_andamento || '-'}</td>
+                      <td className="px-3 py-3 text-right text-error">{sb.incompleto || '-'}</td>
+                      <td className="px-3 py-3 text-right text-muted">{sb.rascunho || '-'}</td>
+                      <td className="px-4 py-3 text-right">
+                        <span className={`inline-block px-2 py-0.5 rounded-lg text-xs font-bold ${
+                          s.metrics.completionRate >= 80 ? 'bg-success/20 text-success' :
+                          s.metrics.completionRate >= 50 ? 'bg-warning/20 text-warning' :
+                          'bg-error/20 text-error'
+                        }`}>{s.metrics.completionRate}%</span>
+                      </td>
+                      <td className="px-4 py-3">
+                        {s.templatesNeverFilled.length > 0 ? (
+                          <span className="text-xs text-error">{s.templatesNeverFilled.join(', ')}</span>
+                        ) : (
+                          <span className="text-xs text-muted">-</span>
+                        )}
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {/* Adesao por Usuario */}
+        <div className="card overflow-hidden mb-6">
+          <div className="px-6 py-4 border-b border-subtle">
+            <h3 className="font-semibold text-main flex items-center gap-2">
+              <FiUsers className="w-4 h-4" />
+              Adesao por Usuario
+            </h3>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="bg-surface-hover">
+                <tr>
+                  <th className="px-4 py-3 text-left font-medium text-muted">Usuario</th>
+                  <th className="px-3 py-3 text-right font-medium text-muted">Total</th>
+                  <th className="px-3 py-3 text-right font-medium text-success">Concl.</th>
+                  <th className="px-3 py-3 text-right font-medium text-warning">Andam.</th>
+                  <th className="px-3 py-3 text-right font-medium text-error">Incomp.</th>
+                  <th className="px-3 py-3 text-right font-medium text-muted">Rasc.</th>
+                  <th className="px-4 py-3 text-right font-medium text-muted">Taxa</th>
+                  <th className="px-4 py-3 text-right font-medium text-muted">Tempo Medio</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-subtle">
+                {userAdherence.length === 0 ? (
+                  <tr><td colSpan={8} className="px-4 py-8 text-center text-muted">Nenhum dado</td></tr>
+                ) : userAdherence.map((u) => {
+                  const sb = u.metrics.statusBreakdown
+                  return (
+                    <tr key={u.userId} className="hover:bg-surface-hover/50">
+                      <td className="px-4 py-3 font-medium text-main">{u.userName}</td>
+                      <td className="px-3 py-3 text-right text-main">{sb.total}</td>
+                      <td className="px-3 py-3 text-right text-success">{sb.concluido + sb.validado || '-'}</td>
+                      <td className="px-3 py-3 text-right text-warning">{sb.em_andamento || '-'}</td>
+                      <td className="px-3 py-3 text-right text-error">{sb.incompleto || '-'}</td>
+                      <td className="px-3 py-3 text-right text-muted">{sb.rascunho || '-'}</td>
+                      <td className="px-4 py-3 text-right">
+                        <span className={`inline-block px-2 py-0.5 rounded-lg text-xs font-bold ${
+                          u.metrics.completionRate >= 80 ? 'bg-success/20 text-success' :
+                          u.metrics.completionRate >= 50 ? 'bg-warning/20 text-warning' :
+                          'bg-error/20 text-error'
+                        }`}>{u.metrics.completionRate}%</span>
+                      </td>
+                      <td className="px-4 py-3 text-right text-muted">{formatMinutes(u.avgCompletionTimeMinutes)}</td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {/* Coverage Gaps */}
+        {coverageGaps.length > 0 && (
+          <div className="card overflow-hidden mb-6">
+            <div className="px-6 py-4 border-b border-subtle">
+              <h3 className="font-semibold text-main flex items-center gap-2">
+                <FiAlertTriangle className="w-4 h-4 text-error" />
+                Lacunas de Cobertura — Nunca Preenchido no Periodo
+              </h3>
+              <p className="text-xs text-muted mt-1">Templates atribuidos a lojas mas sem nenhum checklist no periodo selecionado</p>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="bg-surface-hover">
+                  <tr>
+                    <th className="px-4 py-3 text-left font-medium text-muted">Template</th>
+                    <th className="px-4 py-3 text-left font-medium text-muted">Loja</th>
+                    <th className="px-4 py-3 text-left font-medium text-muted">Status</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-subtle">
+                  {(showAllGaps ? coverageGaps : coverageGaps.slice(0, 20)).map((g, i) => (
+                    <tr key={i} className="hover:bg-surface-hover/50">
+                      <td className="px-4 py-3 font-medium text-main">{g.templateName}</td>
+                      <td className="px-4 py-3 text-secondary">{g.storeName}</td>
+                      <td className="px-4 py-3">
+                        <span className="inline-block px-2 py-0.5 rounded-lg text-xs font-bold bg-error/20 text-error">
+                          Nunca preenchido
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            {coverageGaps.length > 20 && !showAllGaps && (
+              <div className="px-6 py-3 border-t border-subtle">
+                <button onClick={() => setShowAllGaps(true)} className="text-xs text-primary hover:underline">
+                  Ver todos ({coverageGaps.length} lacunas)
+                </button>
+              </div>
+            )}
+          </div>
+        )}
         </>}
 
         {activeTab === 'conformidade' && (
