@@ -141,6 +141,10 @@ export default function RelatoriosPage() {
   const [dailyStatusStats, setDailyStatusStats] = useState<DailyStatusStats[]>([])
   const [avgCompletionTime, setAvgCompletionTime] = useState<number | null>(null)
   const [showAllGaps, setShowAllGaps] = useState(false)
+  // Ordenacao das tabelas de adesao
+  const [storeSort, setStoreSort] = useState<'best' | 'worst' | 'name'>('worst')
+  const [templateSort, setTemplateSort] = useState<'best' | 'worst' | 'name'>('worst')
+  const [userSort, setUserSort] = useState<'best' | 'worst' | 'name'>('worst')
   const responsePerPage = 20
   const router = useRouter()
   const supabase = useMemo(() => createClient(), [])
@@ -444,29 +448,36 @@ export default function RelatoriosPage() {
       const templatesForAdh = (templatesData.data || []).map((t: { id: number; name: string }) => ({ id: t.id, name: t.name }))
       const usersForAdh = (usersLookup || []).map((u: { id: string; full_name: string }) => ({ id: u.id, full_name: u.full_name || 'Desconhecido' }))
 
-      const overall = computeOverallAdherence(checklists)
+      // Filtrar apenas checklists de templates e lojas ativos
+      const activeTemplateIds = new Set(templatesForAdh.map((t: { id: number }) => t.id))
+      const activeStoreIds = new Set(storesForAdh.map((s: { id: number }) => s.id))
+      const activeChecklists = checklists.filter((c: { template_id: number; store_id: number }) =>
+        activeTemplateIds.has(c.template_id) && activeStoreIds.has(c.store_id)
+      )
+
+      const overall = computeOverallAdherence(activeChecklists)
       setOverallMetrics(overall)
 
-      const tAdh = computeTemplateAdherence(checklists, templatesForAdh, visibilityRows)
+      const tAdh = computeTemplateAdherence(activeChecklists, templatesForAdh, visibilityRows)
       setTemplateAdherence(tAdh)
 
-      const sAdh = computeStoreAdherence(checklists, storesForAdh, templatesForAdh, visibilityRows)
+      const sAdh = computeStoreAdherence(activeChecklists, storesForAdh, templatesForAdh, visibilityRows)
       setStoreAdherence(sAdh)
 
-      const uAdh = computeUserAdherence(checklists, usersForAdh)
+      const uAdh = computeUserAdherence(activeChecklists, usersForAdh)
       setUserAdherence(uAdh)
 
-      const gaps = computeCoverageGaps(checklists, templatesForAdh, storesForAdh, visibilityRows)
+      const gaps = computeCoverageGaps(activeChecklists, templatesForAdh, storesForAdh, visibilityRows)
       setCoverageGaps(gaps)
 
-      const dailyStatus = computeDailyStatusStats(checklists, Math.min(days, 30))
+      const dailyStatus = computeDailyStatusStats(activeChecklists, Math.min(days, 30))
       setDailyStatusStats(dailyStatus)
 
-      setAvgCompletionTime(computeAvgCompletionTime(checklists))
+      setAvgCompletionTime(computeAvgCompletionTime(activeChecklists))
 
       // Enhanced attention points (replaces old attention points)
       const unusedTemplateNames = templatesForAdh
-        .filter((t: { id: number; name: string }) => !checklists.some((c: { template_id: number }) => c.template_id === t.id))
+        .filter((t: { id: number; name: string }) => !activeChecklists.some((c: { template_id: number }) => c.template_id === t.id))
         .filter((t: { id: number }) => !visibilityRows.some((v: { template_id: number }) => v.template_id === t.id))
         .map((t: { name: string }) => t.name)
       const overdueCount = actionPlans.filter((ap: { status: string }) => ap.status === 'vencido').length
@@ -552,21 +563,56 @@ export default function RelatoriosPage() {
     setLoading(false)
   }
 
+  // Sorted adherence arrays
+  const sortedTemplateAdherence = useMemo(() => {
+    const arr = [...templateAdherence]
+    if (templateSort === 'best') arr.sort((a, b) => b.metrics.completionRate - a.metrics.completionRate)
+    else if (templateSort === 'worst') arr.sort((a, b) => a.metrics.completionRate - b.metrics.completionRate)
+    else arr.sort((a, b) => a.templateName.localeCompare(b.templateName))
+    return arr
+  }, [templateAdherence, templateSort])
+
+  const sortedStoreAdherence = useMemo(() => {
+    const arr = [...storeAdherence]
+    if (storeSort === 'best') arr.sort((a, b) => b.metrics.completionRate - a.metrics.completionRate)
+    else if (storeSort === 'worst') arr.sort((a, b) => a.metrics.completionRate - b.metrics.completionRate)
+    else arr.sort((a, b) => a.storeName.localeCompare(b.storeName))
+    return arr
+  }, [storeAdherence, storeSort])
+
+  const sortedUserAdherence = useMemo(() => {
+    const arr = [...userAdherence]
+    if (userSort === 'best') arr.sort((a, b) => b.metrics.completionRate - a.metrics.completionRate)
+    else if (userSort === 'worst') arr.sort((a, b) => a.metrics.completionRate - b.metrics.completionRate)
+    else arr.sort((a, b) => a.userName.localeCompare(b.userName))
+    return arr
+  }, [userAdherence, userSort])
+
   // Executive summary text
   const summaryText = useMemo(() => {
     if (!overallMetrics) return ''
     const sb = overallMetrics.statusBreakdown
+    if (sb.total === 0) return 'Nenhum checklist registrado no periodo selecionado.'
+
     let text = `Adesao geral: ${overallMetrics.completionRate}% concluidos.`
     const parts: string[] = []
     if (sb.em_andamento > 0) parts.push(`${sb.em_andamento} em andamento`)
     if (sb.incompleto > 0) parts.push(`${sb.incompleto} incompleto${sb.incompleto > 1 ? 's' : ''}`)
     if (sb.rascunho > 0) parts.push(`${sb.rascunho} rascunho${sb.rascunho > 1 ? 's' : ''}`)
     if (parts.length > 0) text += ` ${parts.join(', ')}.`
-    if (coverageGaps.length > 0) text += ` ${coverageGaps.length} lacuna${coverageGaps.length > 1 ? 's' : ''} de cobertura (template/loja sem preenchimento).`
-    if (sectorStats.length > 0) {
+    if (coverageGaps.length > 0) {
+      text += ` ${coverageGaps.length} checklist${coverageGaps.length > 1 ? 's' : ''} nao preenchido${coverageGaps.length > 1 ? 's' : ''} (deveriam ter sido feitos mas nao foram).`
+    }
+
+    if (sectorStats.length > 1) {
       const best = sectorStats[0]
       const worst = sectorStats[sectorStats.length - 1]
-      if (best.sector_id !== worst.sector_id) {
+      const allZero = best.completion_rate === 0 && worst.completion_rate === 0
+      const allSame = best.completion_rate === worst.completion_rate
+
+      if (allZero) {
+        text += ' Nenhum setor concluiu checklists no periodo.'
+      } else if (!allSame && best.sector_id !== worst.sector_id) {
         text += ` Melhor setor: ${best.sector_name} (${best.completion_rate}%). Pior: ${worst.sector_name} (${worst.completion_rate}%).`
       }
     }
@@ -964,9 +1010,9 @@ export default function RelatoriosPage() {
               <p className="text-[10px] text-muted mt-1">Inicio ate conclusao</p>
             </div>
             <div className={`card p-4 border-l-4 ${coverageGaps.length > 0 ? 'border-l-error' : 'border-l-success'}`}>
-              <p className="text-xs text-muted mb-1">Lacunas</p>
+              <p className="text-xs text-muted mb-1">Nao Preenchidos</p>
               <p className={`text-3xl font-bold ${coverageGaps.length > 0 ? 'text-error' : 'text-success'}`}>{coverageGaps.length}</p>
-              <p className="text-[10px] text-muted mt-1">Template x Loja sem dados</p>
+              <p className="text-[10px] text-muted mt-1">Checklists pendentes de preenchimento</p>
             </div>
           </div>
         )}
@@ -1096,11 +1142,16 @@ export default function RelatoriosPage() {
 
         {/* Adesao por Template */}
         <div className="card overflow-hidden mb-6">
-          <div className="px-6 py-4 border-b border-subtle">
+          <div className="px-6 py-4 border-b border-subtle flex items-center flex-wrap gap-2">
             <h3 className="font-semibold text-main flex items-center gap-2">
               <FiClipboard className="w-4 h-4" />
               Adesao por Template
             </h3>
+            <div className="flex gap-1 ml-auto">
+              <button onClick={() => setTemplateSort('worst')} className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${templateSort === 'worst' ? 'bg-error/20 text-error' : 'bg-surface-hover text-muted hover:text-main'}`}>Pior primeiro</button>
+              <button onClick={() => setTemplateSort('best')} className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${templateSort === 'best' ? 'bg-success/20 text-success' : 'bg-surface-hover text-muted hover:text-main'}`}>Melhor primeiro</button>
+              <button onClick={() => setTemplateSort('name')} className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${templateSort === 'name' ? 'bg-primary/20 text-primary' : 'bg-surface-hover text-muted hover:text-main'}`}>A-Z</button>
+            </div>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -1119,9 +1170,9 @@ export default function RelatoriosPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-subtle">
-                {templateAdherence.length === 0 ? (
+                {sortedTemplateAdherence.length === 0 ? (
                   <tr><td colSpan={10} className="px-4 py-8 text-center text-muted">Nenhum dado</td></tr>
-                ) : templateAdherence.map((t) => {
+                ) : sortedTemplateAdherence.map((t) => {
                   const sb = t.metrics.statusBreakdown
                   const total = sb.total || 1
                   return (
@@ -1166,11 +1217,16 @@ export default function RelatoriosPage() {
 
         {/* Adesao por Loja */}
         <div className="card overflow-hidden mb-6">
-          <div className="px-6 py-4 border-b border-subtle">
+          <div className="px-6 py-4 border-b border-subtle flex items-center flex-wrap gap-2">
             <h3 className="font-semibold text-main flex items-center gap-2">
               <FiMapPin className="w-4 h-4" />
               Adesao por Loja
             </h3>
+            <div className="flex gap-1 ml-auto">
+              <button onClick={() => setStoreSort('worst')} className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${storeSort === 'worst' ? 'bg-error/20 text-error' : 'bg-surface-hover text-muted hover:text-main'}`}>Pior primeiro</button>
+              <button onClick={() => setStoreSort('best')} className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${storeSort === 'best' ? 'bg-success/20 text-success' : 'bg-surface-hover text-muted hover:text-main'}`}>Melhor primeiro</button>
+              <button onClick={() => setStoreSort('name')} className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${storeSort === 'name' ? 'bg-primary/20 text-primary' : 'bg-surface-hover text-muted hover:text-main'}`}>A-Z</button>
+            </div>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -1188,9 +1244,9 @@ export default function RelatoriosPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-subtle">
-                {storeAdherence.length === 0 ? (
+                {sortedStoreAdherence.length === 0 ? (
                   <tr><td colSpan={9} className="px-4 py-8 text-center text-muted">Nenhum dado</td></tr>
-                ) : storeAdherence.map((s) => {
+                ) : sortedStoreAdherence.map((s) => {
                   const sb = s.metrics.statusBreakdown
                   return (
                     <tr key={s.storeId} className="hover:bg-surface-hover/50">
@@ -1225,11 +1281,16 @@ export default function RelatoriosPage() {
 
         {/* Adesao por Usuario */}
         <div className="card overflow-hidden mb-6">
-          <div className="px-6 py-4 border-b border-subtle">
+          <div className="px-6 py-4 border-b border-subtle flex items-center flex-wrap gap-2">
             <h3 className="font-semibold text-main flex items-center gap-2">
               <FiUsers className="w-4 h-4" />
               Adesao por Usuario
             </h3>
+            <div className="flex gap-1 ml-auto">
+              <button onClick={() => setUserSort('worst')} className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${userSort === 'worst' ? 'bg-error/20 text-error' : 'bg-surface-hover text-muted hover:text-main'}`}>Pior primeiro</button>
+              <button onClick={() => setUserSort('best')} className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${userSort === 'best' ? 'bg-success/20 text-success' : 'bg-surface-hover text-muted hover:text-main'}`}>Melhor primeiro</button>
+              <button onClick={() => setUserSort('name')} className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${userSort === 'name' ? 'bg-primary/20 text-primary' : 'bg-surface-hover text-muted hover:text-main'}`}>A-Z</button>
+            </div>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -1246,9 +1307,9 @@ export default function RelatoriosPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-subtle">
-                {userAdherence.length === 0 ? (
+                {sortedUserAdherence.length === 0 ? (
                   <tr><td colSpan={8} className="px-4 py-8 text-center text-muted">Nenhum dado</td></tr>
-                ) : userAdherence.map((u) => {
+                ) : sortedUserAdherence.map((u) => {
                   const sb = u.metrics.statusBreakdown
                   return (
                     <tr key={u.userId} className="hover:bg-surface-hover/50">
@@ -1280,9 +1341,9 @@ export default function RelatoriosPage() {
             <div className="px-6 py-4 border-b border-subtle">
               <h3 className="font-semibold text-main flex items-center gap-2">
                 <FiAlertTriangle className="w-4 h-4 text-error" />
-                Lacunas de Cobertura — Nunca Preenchido no Periodo
+                Checklists Nao Preenchidos
               </h3>
-              <p className="text-xs text-muted mt-1">Templates atribuidos a lojas mas sem nenhum checklist no periodo selecionado</p>
+              <p className="text-xs text-muted mt-1">Combinacoes de template + loja que deveriam ter sido preenchidas no periodo mas nao foram</p>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
@@ -1311,7 +1372,7 @@ export default function RelatoriosPage() {
             {coverageGaps.length > 20 && !showAllGaps && (
               <div className="px-6 py-3 border-t border-subtle">
                 <button onClick={() => setShowAllGaps(true)} className="text-xs text-primary hover:underline">
-                  Ver todos ({coverageGaps.length} lacunas)
+                  Ver todos ({coverageGaps.length} nao preenchidos)
                 </button>
               </div>
             )}

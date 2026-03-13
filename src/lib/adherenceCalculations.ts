@@ -352,12 +352,12 @@ export function generateEnhancedAttentionPoints(
     for (const [tName, stores] of byTemplate) {
       if (stores.length <= 3) {
         points.push({
-          text: `Checklist "${tName}" nunca preenchido nas lojas: ${stores.join(', ')}`,
+          text: `"${tName}" deveria ser preenchido mas nao foi nas lojas: ${stores.join(', ')}`,
           severity: 'error',
         })
       } else {
         points.push({
-          text: `Checklist "${tName}" nunca preenchido em ${stores.length} lojas`,
+          text: `"${tName}" deveria ser preenchido mas nao foi em ${stores.length} lojas`,
           severity: 'error',
         })
       }
