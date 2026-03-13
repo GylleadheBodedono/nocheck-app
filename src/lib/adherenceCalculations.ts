@@ -223,6 +223,19 @@ export function computeCoverageGaps(
   const templateMap = new Map(templates.map((t) => [t.id, t.name]))
   const storeMap = new Map(stores.map((s) => [s.id, s.name]))
 
+  // Deduplicate visibility rows by unique template_id + store_id
+  // and filter out rows referencing templates/stores not in the active lists
+  const seen = new Set<string>()
+  const uniqueVisibility: VisibilityRow[] = []
+  for (const v of visibility) {
+    const key = `${v.template_id}-${v.store_id}`
+    if (seen.has(key)) continue
+    if (!templateMap.has(v.template_id)) continue
+    if (!storeMap.has(v.store_id)) continue
+    seen.add(key)
+    uniqueVisibility.push(v)
+  }
+
   // Index: "templateId-storeId" -> latest created_at
   const latestMap = new Map<string, string>()
   for (const c of checklists) {
@@ -235,7 +248,7 @@ export function computeCoverageGaps(
 
   const gaps: CoverageGap[] = []
 
-  for (const v of visibility) {
+  for (const v of uniqueVisibility) {
     const key = `${v.template_id}-${v.store_id}`
     const lastFilled = latestMap.get(key) || null
 
@@ -243,22 +256,16 @@ export function computeCoverageGaps(
     if (!lastFilled) {
       gaps.push({
         templateId: v.template_id,
-        templateName: templateMap.get(v.template_id) || `Template #${v.template_id}`,
+        templateName: templateMap.get(v.template_id)!,
         storeId: v.store_id,
-        storeName: storeMap.get(v.store_id) || `Loja #${v.store_id}`,
+        storeName: storeMap.get(v.store_id)!,
         lastFilledAt: null,
         daysSinceLastFilled: null,
       })
     }
   }
 
-  // Also check all visibility pairs that DO have checklists but haven't been filled recently
-  // (we don't add these since the user primarily wants "nunca preenchido no periodo")
-
   return gaps.sort((a, b) => {
-    // Nulls (never filled) first
-    if (a.lastFilledAt === null && b.lastFilledAt !== null) return -1
-    if (a.lastFilledAt !== null && b.lastFilledAt === null) return 1
     return (a.templateName + a.storeName).localeCompare(b.templateName + b.storeName)
   })
 }
