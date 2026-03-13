@@ -874,7 +874,6 @@ CREATE POLICY "checklists_insert" ON public.checklists
   FOR INSERT WITH CHECK (
     created_by = auth.uid()
     AND store_id IN (SELECT user_store_ids())
-    AND NOT user_is_manager()
   );
 CREATE POLICY "checklists_update" ON public.checklists
   FOR UPDATE USING (
