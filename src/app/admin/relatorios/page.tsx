@@ -141,6 +141,8 @@ export default function RelatoriosPage() {
   const [dailyStatusStats, setDailyStatusStats] = useState<DailyStatusStats[]>([])
   const [avgCompletionTime, setAvgCompletionTime] = useState<number | null>(null)
   const [showAllGaps, setShowAllGaps] = useState(false)
+  // Filtro de loja na visao geral
+  const [overviewFilterStore, setOverviewFilterStore] = useState('')
   // Ordenacao das tabelas de adesao
   const [storeSort, setStoreSort] = useState<'best' | 'worst' | 'name'>('worst')
   const [templateSort, setTemplateSort] = useState<'best' | 'worst' | 'name'>('worst')
@@ -215,7 +217,6 @@ export default function RelatoriosPage() {
 
       // Fetch all data in parallel for better performance
       const [
-        checklistsRes,
         usersRes,
         storesRes,
         templatesRes,
@@ -229,8 +230,6 @@ export default function RelatoriosPage() {
         allUsersData,
         visibilityData,
       ] = await Promise.all([
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        (supabase as any).from('checklists').select('id', { count: 'exact', head: true }),
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         (supabase as any).from('users').select('id', { count: 'exact', head: true }).eq('is_active', true),
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -263,7 +262,7 @@ export default function RelatoriosPage() {
       ])
 
       setSummary({
-        totalChecklists: checklistsRes.count || 0,
+        totalChecklists: periodCountRes.count || 0,
         completedToday: todayCountRes.count || 0,
         avgPerDay: Math.round((periodCountRes.count || 0) / days * 10) / 10,
         activeUsers: usersRes.count || 0,
@@ -573,12 +572,13 @@ export default function RelatoriosPage() {
   }, [templateAdherence, templateSort])
 
   const sortedStoreAdherence = useMemo(() => {
-    const arr = [...storeAdherence]
+    let arr = [...storeAdherence]
+    if (overviewFilterStore) arr = arr.filter(s => s.storeId === Number(overviewFilterStore))
     if (storeSort === 'best') arr.sort((a, b) => b.metrics.completionRate - a.metrics.completionRate)
     else if (storeSort === 'worst') arr.sort((a, b) => a.metrics.completionRate - b.metrics.completionRate)
     else arr.sort((a, b) => a.storeName.localeCompare(b.storeName))
     return arr
-  }, [storeAdherence, storeSort])
+  }, [storeAdherence, storeSort, overviewFilterStore])
 
   const sortedUserAdherence = useMemo(() => {
     const arr = [...userAdherence]
@@ -587,6 +587,12 @@ export default function RelatoriosPage() {
     else arr.sort((a, b) => a.userName.localeCompare(b.userName))
     return arr
   }, [userAdherence, userSort])
+
+  // Filtered coverage gaps
+  const filteredCoverageGaps = useMemo(() => {
+    if (!overviewFilterStore) return coverageGaps
+    return coverageGaps.filter(g => g.storeId === Number(overviewFilterStore))
+  }, [coverageGaps, overviewFilterStore])
 
   // Executive summary text
   const summaryText = useMemo(() => {
@@ -955,10 +961,20 @@ export default function RelatoriosPage() {
         )}
 
         {activeTab === 'overview' && <>
-        {/* Period Filter */}
-        <div className="flex items-center justify-between mb-6">
+        {/* Period + Store Filters */}
+        <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
           <h2 className="text-lg font-semibold text-main">Visao Geral</h2>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
+            <select
+              value={overviewFilterStore}
+              onChange={(e) => setOverviewFilterStore(e.target.value)}
+              className="px-3 py-2 rounded-xl text-sm bg-surface border border-subtle text-main focus:outline-none focus:ring-2 focus:ring-primary"
+            >
+              <option value="">Todas as lojas</option>
+              {allStoresSimple.map((s) => (
+                <option key={s.id} value={String(s.id)}>{s.name}</option>
+              ))}
+            </select>
             {(['7d', '30d', '90d'] as const).map((p) => (
               <button
                 key={p}
@@ -1336,7 +1352,7 @@ export default function RelatoriosPage() {
         </div>
 
         {/* Coverage Gaps */}
-        {coverageGaps.length > 0 && (
+        {filteredCoverageGaps.length > 0 && (
           <div className="card overflow-hidden mb-6">
             <div className="px-6 py-4 border-b border-subtle">
               <h3 className="font-semibold text-main flex items-center gap-2">
@@ -1355,7 +1371,7 @@ export default function RelatoriosPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-subtle">
-                  {(showAllGaps ? coverageGaps : coverageGaps.slice(0, 20)).map((g, i) => (
+                  {(showAllGaps ? filteredCoverageGaps : filteredCoverageGaps.slice(0, 20)).map((g, i) => (
                     <tr key={i} className="hover:bg-surface-hover/50">
                       <td className="px-4 py-3 font-medium text-main">{g.templateName}</td>
                       <td className="px-4 py-3 text-secondary">{g.storeName}</td>
@@ -1369,10 +1385,10 @@ export default function RelatoriosPage() {
                 </tbody>
               </table>
             </div>
-            {coverageGaps.length > 20 && !showAllGaps && (
+            {filteredCoverageGaps.length > 20 && !showAllGaps && (
               <div className="px-6 py-3 border-t border-subtle">
                 <button onClick={() => setShowAllGaps(true)} className="text-xs text-primary hover:underline">
-                  Ver todos ({coverageGaps.length} nao preenchidos)
+                  Ver todos ({filteredCoverageGaps.length} nao preenchidos)
                 </button>
               </div>
             )}
