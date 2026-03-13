@@ -393,6 +393,21 @@ export default function RelatoriosPage() {
         activeTemplateIds.has(c.template_id) && activeStoreIds.has(c.store_id)
       )
 
+      // === DEBUG: por que incompletos somem? ===
+      const allIncompletos = checklists.filter((c: { status: string }) => c.status === 'incompleto')
+      const activeIncompletos = activeChecklists.filter((c: { status: string }) => c.status === 'incompleto')
+      console.log('=== DEBUG INCOMPLETOS ===')
+      console.log('Total checklists do DB (periodo):', checklists.length)
+      console.log('Incompletos no DB:', allIncompletos.length, allIncompletos.map((c: { id: number; store_id: number; template_id: number; status: string }) => ({ id: c.id, store: c.store_id, template: c.template_id })))
+      console.log('Incompletos apos filtro ativo:', activeIncompletos.length)
+      console.log('Template IDs ativos:', [...activeTemplateIds])
+      console.log('Store IDs ativos:', [...activeStoreIds])
+      if (allIncompletos.length > activeIncompletos.length) {
+        const removidos = allIncompletos.filter((c: { template_id: number; store_id: number }) => !activeTemplateIds.has(c.template_id) || !activeStoreIds.has(c.store_id))
+        console.log('Incompletos REMOVIDOS pelo filtro:', removidos.map((c: { id: number; store_id: number; template_id: number }) => ({ id: c.id, store: c.store_id, template: c.template_id, templateAtivo: activeTemplateIds.has(c.template_id), storeAtiva: activeStoreIds.has(c.store_id) })))
+      }
+      console.log('=== FIM DEBUG INCOMPLETOS ===')
+
       setRawActiveChecklists(activeChecklists)
       setRawTemplates(templatesForAdh)
       setRawStores(storesForAdh)
