@@ -631,15 +631,18 @@ export default function EditTemplatePage() {
       // Build local section id → db section id map
       const sectionIdMap: Record<string, number> = {}
 
-      // Update existing sections
-      for (const section of sections.filter(s => s.dbId)) {
+      // Update existing sections (em paralelo para performance)
+      const existingSections = sections.filter(s => s.dbId)
+      if (existingSections.length > 0) {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const { error: updSecErr } = await (supabase as any)
-          .from('template_sections')
-          .update({ name: section.name, description: section.description || null, sort_order: section.sort_order })
-          .eq('id', section.dbId)
-        if (updSecErr) throw updSecErr
-        sectionIdMap[section.id] = section.dbId!
+        const sb = supabase as any
+        const sectionResults = await Promise.all(existingSections.map(section =>
+          sb.from('template_sections')
+            .update({ name: section.name, description: section.description || null, sort_order: section.sort_order })
+            .eq('id', section.dbId)
+        ))
+        for (const r of sectionResults) { if (r.error) throw r.error }
+        existingSections.forEach(s => { sectionIdMap[s.id] = s.dbId! })
       }
 
       // Insert new sections
@@ -682,25 +685,26 @@ export default function EditTemplatePage() {
         return sectionIdMap[localId] || null
       }
 
-      // Update existing fields
-      for (const field of existingFields) {
+      // Update existing fields (em paralelo para performance)
+      if (existingFields.length > 0) {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const { error: updateError } = await (supabase as any)
-          .from('template_fields')
-          .update({
-            name: field.name,
-            field_type: field.field_type,
-            is_required: field.is_required,
-            sort_order: field.sort_order,
-            section_id: resolveSection(field.section_id),
-            options: serializeOptions(field.options),
-            validation: field.validation,
-            placeholder: field.placeholder || null,
-            help_text: field.help_text || null,
-          })
-          .eq('id', field.dbId)
-
-        if (updateError) throw updateError
+        const sbFields = supabase as any
+        const fieldResults = await Promise.all(existingFields.map(field =>
+          sbFields.from('template_fields')
+            .update({
+              name: field.name,
+              field_type: field.field_type,
+              is_required: field.is_required,
+              sort_order: field.sort_order,
+              section_id: resolveSection(field.section_id),
+              options: serializeOptions(field.options),
+              validation: field.validation,
+              placeholder: field.placeholder || null,
+              help_text: field.help_text || null,
+            })
+            .eq('id', field.dbId)
+        ))
+        for (const r of fieldResults) { if (r.error) throw r.error }
       }
 
       // Insert new fields

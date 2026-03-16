@@ -1133,7 +1133,7 @@ export default function ActionPlanDetailPage() {
       {/* ============================================ */}
       {showCompletionModal && plan && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-          <div className="bg-card rounded-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto shadow-xl border border-subtle">
+          <div className="bg-page rounded-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto shadow-xl border border-subtle" style={{ backgroundColor: 'var(--bg-page, #09090b)' }}>
             <div className="p-6 space-y-5">
               <div>
                 <h3 className="text-lg font-bold text-main">Concluir Plano de Acao</h3>
@@ -1155,6 +1155,7 @@ export default function ActionPlanDetailPage() {
                   ref={completionFileInputRef}
                   type="file"
                   accept="image/*"
+                  capture="environment"
                   onChange={handleCompletionPhotoChange}
                   className="hidden"
                 />
