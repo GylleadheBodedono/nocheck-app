@@ -210,6 +210,9 @@ export default function ActionPlanDetailPage() {
       return null
     }
 
+    // Debug: verificar se response foi carregada
+    console.log('[ActionPlan] response_id:', data.response_id, 'response:', data.response)
+
     // Buscar dados de usuarios separadamente (assigned_to e assigned_by referenciam auth.users)
     const plan = data as PlanDetail
     plan.assigned_user = null

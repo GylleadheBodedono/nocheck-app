@@ -212,6 +212,7 @@ export default function ChecklistViewPage() {
         .single()
 
       if (checklistError || !checklistData) {
+        console.error('[ChecklistView] Erro ao buscar checklist:', checklistId, checklistError?.message, checklistError?.code)
         setError('Checklist nao encontrado')
         setLoading(false)
         return
