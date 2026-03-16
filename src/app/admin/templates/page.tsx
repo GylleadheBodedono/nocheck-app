@@ -643,20 +643,34 @@ function SortableTemplateCard({
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: template.id })
   const style = { transform: CSS.Translate.toString(transform), transition, opacity: isDragging ? 0.5 : 1, zIndex: isDragging ? 50 : undefined }
 
+  // Animacao spring gelatinosa
+  const springConfig = { type: 'spring' as const, stiffness: 300, damping: 20, mass: 0.8 }
+
   return (
-    <div ref={setNodeRef} style={style} className={`card rounded-xl transition-all ${!template.is_active ? 'opacity-50' : ''}`}>
+    <motion.div
+      ref={setNodeRef}
+      style={style}
+      whileHover={{ scale: 1.008, y: -1 }}
+      whileTap={{ scale: 0.995 }}
+      transition={springConfig}
+      className={`card rounded-xl ${!template.is_active ? 'opacity-50' : ''}`}
+    >
       {/* Capsula principal */}
-      <div className="flex items-center gap-2 px-3 py-3 cursor-pointer" onClick={onToggleExpand}>
+      <div className="flex items-center gap-2 px-3 py-3 cursor-pointer select-none" onClick={onToggleExpand}>
         {/* Drag handle */}
         <button {...attributes} {...listeners} className="p-1 text-muted hover:text-main cursor-grab active:cursor-grabbing touch-none" onClick={e => e.stopPropagation()}>
           <FiMenu className="w-4 h-4" />
         </button>
 
-        {/* Favorito */}
-        <button onClick={e => { e.stopPropagation(); onToggleFavorite() }}
-          className={`p-0.5 ${isFavorite ? 'text-amber-400' : 'text-muted/30 hover:text-amber-400'}`}>
+        {/* Favorito com animacao de bounce */}
+        <motion.button
+          onClick={e => { e.stopPropagation(); onToggleFavorite() }}
+          whileTap={{ scale: 1.4, rotate: 15 }}
+          transition={{ type: 'spring', stiffness: 500, damping: 10 }}
+          className={`p-0.5 ${isFavorite ? 'text-amber-400' : 'text-muted/30 hover:text-amber-400'}`}
+        >
           <FiStar className={`w-4 h-4 ${isFavorite ? 'fill-amber-400' : ''}`} />
-        </button>
+        </motion.button>
 
         {/* Info principal */}
         <div className="flex-1 min-w-0">
@@ -676,99 +690,140 @@ function SortableTemplateCard({
           </div>
         </div>
 
-        {/* Status badge */}
-        <span className={`shrink-0 w-2 h-2 rounded-full ${template.is_active ? 'bg-success' : 'bg-error'}`}
-          title={template.is_active ? 'Ativo' : 'Inativo'} />
+        {/* Status badge com pulse */}
+        <motion.span
+          animate={template.is_active ? { scale: [1, 1.3, 1] } : {}}
+          transition={{ duration: 2, repeat: Infinity, repeatDelay: 3 }}
+          className={`shrink-0 w-2.5 h-2.5 rounded-full ${template.is_active ? 'bg-success' : 'bg-error'}`}
+          title={template.is_active ? 'Ativo' : 'Inativo'}
+        />
 
-        {/* Expand arrow */}
-        <FiChevronDown className={`w-4 h-4 text-muted transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
+        {/* Expand arrow com rotacao spring */}
+        <motion.div animate={{ rotate: isExpanded ? 180 : 0 }} transition={springConfig}>
+          <FiChevronDown className="w-4 h-4 text-muted" />
+        </motion.div>
 
         {/* Menu de acoes */}
         <div className="relative" onClick={e => e.stopPropagation()}>
-          <button onClick={() => onMenuToggle(template.id)} className="p-1.5 text-muted hover:text-main hover:bg-surface rounded-lg">
+          <motion.button whileTap={{ scale: 0.85 }} onClick={() => onMenuToggle(template.id)}
+            className="p-1.5 text-muted hover:text-main hover:bg-surface rounded-lg">
             <FiMoreVertical className="w-4 h-4" />
-          </button>
-          {activeMenu === template.id && (
-            <div className="absolute right-0 top-full mt-1 bg-surface border border-subtle rounded-xl shadow-xl z-50 py-1 w-44">
-              {!isOffline && (
-                <Link href={`${APP_CONFIG.routes.adminTemplates}/${template.id}`}
-                  className="flex items-center gap-2 px-3 py-2 text-sm text-main hover:bg-surface-hover w-full">
-                  <FiEdit2 className="w-3.5 h-3.5" /> Editar
-                </Link>
-              )}
-              <button onClick={onDuplicate} disabled={isOffline}
-                className="flex items-center gap-2 px-3 py-2 text-sm text-main hover:bg-surface-hover w-full disabled:opacity-50">
-                <FiCopy className="w-3.5 h-3.5" /> Duplicar
-              </button>
-              <button onClick={onToggleStatus} disabled={isOffline}
-                className="flex items-center gap-2 px-3 py-2 text-sm text-main hover:bg-surface-hover w-full disabled:opacity-50">
-                {template.is_active ? <FiEyeOff className="w-3.5 h-3.5" /> : <FiEye className="w-3.5 h-3.5" />}
-                {template.is_active ? 'Desativar' : 'Ativar'}
-              </button>
-              <div className="border-t border-subtle my-1" />
-              <button onClick={onDelete} disabled={isOffline}
-                className="flex items-center gap-2 px-3 py-2 text-sm text-error hover:bg-error/10 w-full disabled:opacity-50">
-                <FiTrash2 className="w-3.5 h-3.5" /> Excluir
-              </button>
-            </div>
-          )}
+          </motion.button>
+          <AnimatePresence>
+            {activeMenu === template.id && (
+              <motion.div
+                initial={{ opacity: 0, scale: 0.9, y: -5 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.9, y: -5 }}
+                transition={{ type: 'spring', stiffness: 400, damping: 25 }}
+                className="absolute right-0 top-full mt-1 bg-surface border border-subtle rounded-xl shadow-xl z-50 py-1 w-44 origin-top-right"
+              >
+                {!isOffline && (
+                  <Link href={`${APP_CONFIG.routes.adminTemplates}/${template.id}`}
+                    className="flex items-center gap-2 px-3 py-2 text-sm text-main hover:bg-surface-hover w-full">
+                    <FiEdit2 className="w-3.5 h-3.5" /> Editar
+                  </Link>
+                )}
+                <button onClick={onDuplicate} disabled={isOffline}
+                  className="flex items-center gap-2 px-3 py-2 text-sm text-main hover:bg-surface-hover w-full disabled:opacity-50">
+                  <FiCopy className="w-3.5 h-3.5" /> Duplicar
+                </button>
+                <button onClick={onToggleStatus} disabled={isOffline}
+                  className="flex items-center gap-2 px-3 py-2 text-sm text-main hover:bg-surface-hover w-full disabled:opacity-50">
+                  {template.is_active ? <FiEyeOff className="w-3.5 h-3.5" /> : <FiEye className="w-3.5 h-3.5" />}
+                  {template.is_active ? 'Desativar' : 'Ativar'}
+                </button>
+                <div className="border-t border-subtle my-1" />
+                <button onClick={onDelete} disabled={isOffline}
+                  className="flex items-center gap-2 px-3 py-2 text-sm text-error hover:bg-error/10 w-full disabled:opacity-50">
+                  <FiTrash2 className="w-3.5 h-3.5" /> Excluir
+                </button>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
       </div>
 
-      {/* Conteudo expandido */}
+      {/* Conteudo expandido — animacao tipo grafo com stagger */}
       <AnimatePresence>
         {isExpanded && (
           <motion.div
             initial={{ height: 0, opacity: 0 }}
             animate={{ height: 'auto', opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
-            transition={{ duration: 0.2 }}
+            transition={{ type: 'spring', stiffness: 200, damping: 25, mass: 0.8 }}
             className="overflow-hidden"
           >
             <div className="px-3 pb-3 border-t border-subtle pt-3">
-              {/* Descricao */}
+              {/* Descricao — aparece primeiro */}
               {template.description && (
-                <p className="text-xs text-secondary mb-3">{template.description}</p>
+                <motion.p
+                  initial={{ opacity: 0, x: -10 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: 0.05, ...springConfig }}
+                  className="text-xs text-secondary mb-3"
+                >
+                  {template.description}
+                </motion.p>
               )}
 
-              {/* Lojas visiveis */}
+              {/* Lojas — cada pill brota com stagger */}
               {template.visibility.length > 0 && (
                 <div className="mb-3">
-                  <p className="text-[10px] text-muted uppercase tracking-wider mb-1">Visivel em</p>
-                  <div className="flex flex-wrap gap-1">
-                    {Array.from(new Map(template.visibility.map(v => [v.store_id, v])).values()).map(v => (
-                      <span key={v.store_id} className="px-2 py-0.5 text-[11px] bg-emerald-500/10 text-emerald-400 rounded-lg">
+                  <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.1 }}
+                    className="text-[10px] text-muted uppercase tracking-wider mb-1.5">Visivel em</motion.p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {Array.from(new Map(template.visibility.map(v => [v.store_id, v])).values()).map((v, i) => (
+                      <motion.span
+                        key={v.store_id}
+                        initial={{ opacity: 0, scale: 0, y: 10 }}
+                        animate={{ opacity: 1, scale: 1, y: 0 }}
+                        transition={{ delay: 0.1 + i * 0.06, type: 'spring', stiffness: 400, damping: 15 }}
+                        className="px-2.5 py-1 text-[11px] bg-emerald-500/10 text-emerald-400 rounded-lg border border-emerald-500/20"
+                      >
                         {v.store?.name || `Loja ${v.store_id}`}
-                      </span>
+                      </motion.span>
                     ))}
                   </div>
                 </div>
               )}
 
-              {/* Checklists recentes */}
+              {/* Checklists recentes — cada item desliza como no de grafo */}
               {clCount > 0 && (
                 <div>
-                  <p className="text-[10px] text-muted uppercase tracking-wider mb-1">Ultimos preenchidos</p>
+                  <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.15 }}
+                    className="text-[10px] text-muted uppercase tracking-wider mb-1.5">Ultimos preenchidos</motion.p>
                   {recents.length === 0 ? (
-                    <p className="text-xs text-muted animate-pulse">Carregando...</p>
+                    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex items-center gap-2">
+                      <div className="w-3 h-3 rounded-full bg-primary/30 animate-pulse" />
+                      <p className="text-xs text-muted">Carregando...</p>
+                    </motion.div>
                   ) : (
-                    <div className="flex flex-col gap-1">
-                      {recents.map(cl => {
+                    <div className="flex flex-col gap-1.5 pl-2 border-l-2 border-primary/20">
+                      {recents.map((cl, i) => {
                         const badge = getStatusBadge(cl.status)
                         return (
-                          <div key={cl.id} className="flex items-center gap-2 text-xs">
-                            <FiClipboard className="w-3 h-3 text-muted shrink-0" />
+                          <motion.div
+                            key={cl.id}
+                            initial={{ opacity: 0, x: -20, scale: 0.8 }}
+                            animate={{ opacity: 1, x: 0, scale: 1 }}
+                            transition={{ delay: 0.15 + i * 0.08, type: 'spring', stiffness: 350, damping: 18 }}
+                            className="flex items-center gap-2 text-xs bg-surface/50 rounded-lg px-2.5 py-1.5 -ml-[9px]"
+                          >
+                            <div className="w-2 h-2 rounded-full bg-primary/40 shrink-0" />
                             <span className="text-secondary truncate flex-1">{cl.store_name}</span>
                             <span className="text-muted shrink-0">{new Date(cl.created_at).toLocaleDateString('pt-BR')}</span>
                             <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium shrink-0 ${badge.cls}`}>{badge.label}</span>
-                          </div>
+                          </motion.div>
                         )
                       })}
                       {clCount > 5 && (
-                        <Link href={`${APP_CONFIG.routes.adminChecklists}?template=${template.id}`}
-                          className="text-xs text-primary hover:underline mt-1">
-                          Ver todos ({clCount}) →
-                        </Link>
+                        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.4 }}>
+                          <Link href={`${APP_CONFIG.routes.adminChecklists}?template=${template.id}`}
+                            className="text-xs text-primary hover:underline ml-2">
+                            Ver todos ({clCount}) →
+                          </Link>
+                        </motion.div>
                       )}
                     </div>
                   )}
@@ -776,13 +831,14 @@ function SortableTemplateCard({
               )}
 
               {clCount === 0 && !template.description && template.visibility.length === 0 && (
-                <p className="text-xs text-muted">Nenhum dado adicional para este template.</p>
+                <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+                  className="text-xs text-muted">Nenhum dado adicional.</motion.p>
               )}
             </div>
           </motion.div>
         )}
       </AnimatePresence>
-    </div>
+    </motion.div>
   )
 }
 
