@@ -840,26 +840,24 @@ function YesNoField({ field, value, onChange }: { field: TemplateField; value: u
                   ))}
                 </div>
               )}
-              {conditionalPhotos.length < 3 && (
-                <button
-                  type="button"
-                  onClick={() => conditionalInputRef.current?.click()}
-                  disabled={compressingConditionalPhoto}
-                  className="w-full py-3 border-2 border-dashed border-default hover:border-primary rounded-xl text-secondary hover:text-primary transition-colors flex items-center justify-center gap-2 disabled:opacity-50 text-sm"
-                >
-                  {compressingConditionalPhoto ? (
-                    <>
-                      <div className="w-4 h-4 border-2 border-secondary border-t-transparent rounded-full animate-spin" />
-                      <span>Processando...</span>
-                    </>
-                  ) : (
-                    <>
-                      <FiCamera className="w-4 h-4" />
-                      <span>Anexar Foto ({conditionalPhotos.length}/3)</span>
-                    </>
-                  )}
-                </button>
-              )}
+              <button
+                type="button"
+                onClick={() => conditionalInputRef.current?.click()}
+                disabled={compressingConditionalPhoto}
+                className="w-full py-3 border-2 border-dashed border-default hover:border-primary rounded-xl text-secondary hover:text-primary transition-colors flex items-center justify-center gap-2 disabled:opacity-50 text-sm"
+              >
+                {compressingConditionalPhoto ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-secondary border-t-transparent rounded-full animate-spin" />
+                    <span>Processando...</span>
+                  </>
+                ) : (
+                  <>
+                    <FiCamera className="w-4 h-4" />
+                    <span>Anexar Foto{conditionalPhotos.length > 0 ? ` (${conditionalPhotos.length})` : ''}</span>
+                  </>
+                )}
+              </button>
               <input
                 ref={conditionalInputRef}
                 type="file"
