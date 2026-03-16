@@ -71,6 +71,8 @@ type PlanDetail = {
   template: { name: string } | null
   field: { name: string } | null
   action_plan_stores?: { store: { name: string } }[]
+  response?: { value_text: string | null; value_json: Record<string, unknown> | null } | null
+  response_id?: number | null
 }
 
 type PlanUpdate = {
@@ -194,7 +196,8 @@ export default function ActionPlanDetailPage() {
         sector:sectors(name),
         template:checklist_templates(name),
         field:template_fields(name),
-        action_plan_stores(store:stores(name))
+        action_plan_stores(store:stores(name)),
+        response:checklist_responses(value_text, value_json)
       `)
       .eq('id', planId)
       .single()
@@ -822,6 +825,44 @@ export default function ActionPlanDetailPage() {
                   <span className="text-error font-semibold">{plan.non_conformity_value}</span>
                 </div>
               )}
+
+              {/* Fotos e texto da resposta que disparou o plano */}
+              {(() => {
+                const vJson = plan.response?.value_json as Record<string, unknown> | null
+                if (!vJson) return null
+                const photos = (vJson.photos as string[] || []).filter((p: string) => typeof p === 'string' && p.startsWith('http'))
+                const condText = vJson.conditionalText as string | undefined
+                const condPhotos = (vJson.conditionalPhotos as string[] || []).filter((p: string) => typeof p === 'string' && p.startsWith('http'))
+                const allPhotos = [...photos, ...condPhotos]
+                if (allPhotos.length === 0 && !condText) return null
+
+                return (
+                  <div className="mt-3 p-4 bg-error/5 border border-error/20 rounded-xl space-y-3">
+                    <p className="text-xs font-semibold text-error uppercase tracking-wider">Evidencias do Funcionario</p>
+                    {condText && (
+                      <div className="bg-surface p-3 rounded-lg border border-subtle">
+                        <p className="text-xs text-muted mb-1">Observacao:</p>
+                        <p className="text-sm text-main">{condText}</p>
+                      </div>
+                    )}
+                    {allPhotos.length > 0 && (
+                      <div>
+                        <p className="text-xs text-muted mb-2">Fotos ({allPhotos.length}):</p>
+                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                          {allPhotos.map((url, i) => (
+                            <a key={i} href={url} target="_blank" rel="noopener noreferrer"
+                              className="relative aspect-square rounded-lg overflow-hidden bg-surface border border-subtle hover:border-primary transition-colors group">
+                              <img src={url} alt={`Evidencia ${i + 1}`}
+                                className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
+                            </a>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )
+              })()}
+
               <div className="pt-2">
                 <Link
                   href={`/checklist/${plan.checklist_id}`}

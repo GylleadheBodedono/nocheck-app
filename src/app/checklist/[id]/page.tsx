@@ -110,10 +110,12 @@ export default function ChecklistViewPage() {
       const cl = cachedChecklists.find(c => c.id === Number(checklistId))
       if (!cl) return false
 
-      // Verifica permissao
+      // Permissao basica no cache: admin, criador, ou manager (offline nao tem RLS)
       const isAdmin = cachedUser.is_admin === true
       const isCreator = cl.created_by === cachedAuth.userId
-      if (!isAdmin && !isCreator) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const isManager = (cachedUser as any).is_manager === true
+      if (!isAdmin && !isCreator && !isManager) {
         setError('Voce nao tem permissao para ver este checklist')
         setLoading(false)
         return true
@@ -195,15 +197,7 @@ export default function ChecklistViewPage() {
         return
       }
 
-      // Fetch user profile for auth check
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data: profile } = await (supabase as any)
-        .from('users')
-        .select('is_admin')
-        .eq('id', user.id)
-        .single()
-
-      // Fetch checklist with relations
+      // Fetch checklist with relations (RLS garante permissao)
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { data: checklistData, error: checklistError } = await (supabase as any)
         .from('checklists')
@@ -223,15 +217,8 @@ export default function ChecklistViewPage() {
         return
       }
 
-      // Auth check: admin or creator
-      const isAdmin = profile?.is_admin === true
-      const isCreator = checklistData.created_by === user.id
-
-      if (!isAdmin && !isCreator) {
-        setError('Voce nao tem permissao para ver este checklist')
-        setLoading(false)
-        return
-      }
+      // Permissao ja verificada pela RLS do Supabase
+      // Se a query retornou dados, o usuario tem acesso (admin, manager da loja, ou criador)
 
       setChecklist(checklistData)
 
