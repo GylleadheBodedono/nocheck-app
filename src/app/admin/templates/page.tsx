@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useMemo, useCallback } from 'react'
+import { useEffect, useState, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import Link from 'next/link'
@@ -15,33 +15,16 @@ import {
   FiClipboard,
   FiWifiOff,
   FiStar,
-  FiChevronDown,
-  FiMoreVertical,
-  FiMenu,
-  FiMapPin,
-  FiFile,
-  FiAlertTriangle,
 } from 'react-icons/fi'
-import {
-  DndContext,
-  closestCenter,
-  PointerSensor,
-  useSensor,
-  useSensors,
-  type DragEndEvent,
-} from '@dnd-kit/core'
-import {
-  SortableContext,
-  useSortable,
-  verticalListSortingStrategy,
-  arrayMove,
-} from '@dnd-kit/sortable'
-import { CSS } from '@dnd-kit/utilities'
-import { AnimatePresence, motion } from 'framer-motion'
 import { APP_CONFIG } from '@/lib/config'
 import { LoadingPage, Header, PageContainer } from '@/components/ui'
 import type { ChecklistTemplate, TemplateField, TemplateVisibility, Store } from '@/types/database'
 import { getAuthCache, getUserCache, getTemplatesCache, getStoresCache } from '@/lib/offlineCache'
+
+type TemplateWithDetails = ChecklistTemplate & {
+  fields: TemplateField[]
+  visibility: (TemplateVisibility & { store: Store })[]
+}
 
 export default function TemplatesPage() {
   const [templates, setTemplates] = useState<TemplateWithDetails[]>([])
@@ -52,14 +35,8 @@ export default function TemplatesPage() {
   const [favoriteIds, setFavoriteIds] = useState<Set<number>>(new Set())
   const [showFavoritesOnly, setShowFavoritesOnly] = useState(false)
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
-  const [expandedId, setExpandedId] = useState<number | null>(null)
-  const [checklistCounts, setChecklistCounts] = useState<Record<number, number>>({})
-  const [recentChecklists, setRecentChecklists] = useState<Record<number, { id: number; store_name: string; status: string; created_at: string }[]>>({})
-  const [activeMenu, setActiveMenu] = useState<number | null>(null)
-  const [filterStatus, setFilterStatus] = useState<'all' | 'active' | 'inactive'>('all')
   const router = useRouter()
   const supabase = useMemo(() => createClient(), [])
-  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }))
 
   useEffect(() => {
     fetchTemplates()
@@ -179,68 +156,8 @@ export default function TemplatesPage() {
       }
     }
 
-    // Buscar contagem de checklists por template
-    try {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data: counts } = await (supabase as any)
-        .from('checklists')
-        .select('template_id')
-      if (counts) {
-        const map: Record<number, number> = {}
-        for (const c of counts) {
-          map[c.template_id] = (map[c.template_id] || 0) + 1
-        }
-        setChecklistCounts(map)
-      }
-    } catch { /* nao critico */ }
-
     setLoading(false)
   }
-
-  // Buscar checklists recentes ao expandir um template
-  const loadRecentChecklists = useCallback(async (templateId: number) => {
-    if (recentChecklists[templateId]) return // ja carregado
-    try {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data } = await (supabase as any)
-        .from('checklists')
-        .select('id, status, created_at, store:stores(name)')
-        .eq('template_id', templateId)
-        .order('created_at', { ascending: false })
-        .limit(5)
-      if (data) {
-        setRecentChecklists(prev => ({
-          ...prev,
-          [templateId]: data.map((c: { id: number; status: string; created_at: string; store: { name: string } | null }) => ({
-            id: c.id,
-            store_name: c.store?.name || 'Sem loja',
-            status: c.status,
-            created_at: c.created_at,
-          })),
-        }))
-      }
-    } catch { /* nao critico */ }
-  }, [recentChecklists, supabase])
-
-  const toggleExpand = useCallback((templateId: number) => {
-    setExpandedId(prev => {
-      if (prev === templateId) return null
-      loadRecentChecklists(templateId)
-      return templateId
-    })
-  }, [loadRecentChecklists])
-
-  // Drag-and-drop: reordenar templates
-  const handleDragEnd = useCallback((event: DragEndEvent) => {
-    const { active, over } = event
-    if (!over || active.id === over.id) return
-
-    setTemplates(prev => {
-      const oldIndex = prev.findIndex(t => t.id === active.id)
-      const newIndex = prev.findIndex(t => t.id === over.id)
-      return arrayMove(prev, oldIndex, newIndex)
-    })
-  }, [])
 
   const toggleTemplateStatus = async (templateId: number, currentStatus: boolean) => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -284,114 +201,63 @@ export default function TemplatesPage() {
 
     // 2. Copiar sections e mapear IDs antigos → novos
     const sectionIdMap: Record<number, number> = {}
-
     const { data: originalSections } = await sb
-      .from('template_sections')
-      .select('*')
-      .eq('template_id', template.id)
-      .order('sort_order')
+      .from('template_sections').select('*').eq('template_id', template.id).order('sort_order')
 
     if (originalSections && originalSections.length > 0) {
       for (const section of originalSections) {
-        const { data: newSection, error: sectionError } = await sb
+        const { data: newSection } = await sb
           .from('template_sections')
-          .insert({
-            template_id: newTemplate.id,
-            name: section.name,
-            description: section.description,
-            sort_order: section.sort_order,
-          })
-          .select()
-          .single()
-
-        if (sectionError || !newSection) {
-          console.error('Error copying section:', sectionError)
-          continue
-        }
-        sectionIdMap[section.id] = newSection.id
+          .insert({ template_id: newTemplate.id, name: section.name, description: section.description, sort_order: section.sort_order })
+          .select().single()
+        if (newSection) sectionIdMap[section.id] = newSection.id
       }
     }
 
-    // 3. Copiar fields com .select() para obter novos IDs (necessario para conditions)
+    // 3. Copiar fields com mapeamento de IDs (necessario para conditions)
     const fieldIdMap: Record<number, number> = {}
-
     if (template.fields.length > 0) {
-      // Inserir campo por campo para manter mapeamento de IDs
       for (const f of template.fields) {
-        const { data: newField, error: fieldError } = await sb
+        const { data: newField } = await sb
           .from('template_fields')
           .insert({
-            template_id: newTemplate.id,
-            name: f.name,
-            field_type: f.field_type,
-            is_required: f.is_required,
-            sort_order: f.sort_order,
-            options: f.options,
-            validation: f.validation,
-            calculation: f.calculation,
-            placeholder: f.placeholder,
-            help_text: f.help_text,
-            section_id: f.section_id ? sectionIdMap[f.section_id] || null : null,
+            template_id: newTemplate.id, name: f.name, field_type: f.field_type,
+            is_required: f.is_required, sort_order: f.sort_order, options: f.options,
+            validation: f.validation, calculation: f.calculation, placeholder: f.placeholder,
+            help_text: f.help_text, section_id: f.section_id ? sectionIdMap[f.section_id] || null : null,
           })
-          .select()
-          .single()
-
-        if (fieldError || !newField) {
-          console.error('Error copying field:', fieldError)
-          continue
-        }
-        fieldIdMap[f.id] = newField.id
+          .select().single()
+        if (newField) fieldIdMap[f.id] = newField.id
       }
     }
 
     // 4. Copiar field_conditions (regras de nao-conformidade)
     const originalFieldIds = template.fields.map(f => f.id)
     if (originalFieldIds.length > 0) {
-      const { data: conditions } = await sb
-        .from('field_conditions')
-        .select('*')
-        .in('field_id', originalFieldIds)
-
+      const { data: conditions } = await sb.from('field_conditions').select('*').in('field_id', originalFieldIds)
       if (conditions && conditions.length > 0) {
-        const conditionRows = conditions
+        const rows = conditions
           .filter((c: { field_id: number }) => fieldIdMap[c.field_id])
           .map((c: { field_id: number; condition_type: string; condition_value: unknown; severity: string; default_assignee_id: string | null; deadline_days: number; description_template: string | null; is_active: boolean; require_photo_on_completion: boolean | null; require_text_on_completion: boolean | null; completion_max_chars: number | null }) => ({
-            field_id: fieldIdMap[c.field_id],
-            condition_type: c.condition_type,
-            condition_value: c.condition_value,
-            severity: c.severity,
-            default_assignee_id: c.default_assignee_id,
-            deadline_days: c.deadline_days,
-            description_template: c.description_template,
-            is_active: c.is_active,
+            field_id: fieldIdMap[c.field_id], condition_type: c.condition_type, condition_value: c.condition_value,
+            severity: c.severity, default_assignee_id: c.default_assignee_id, deadline_days: c.deadline_days,
+            description_template: c.description_template, is_active: c.is_active,
             require_photo_on_completion: c.require_photo_on_completion ?? false,
             require_text_on_completion: c.require_text_on_completion ?? false,
             completion_max_chars: c.completion_max_chars ?? null,
           }))
-
-        if (conditionRows.length > 0) {
-          const { error: condError } = await sb
-            .from('field_conditions')
-            .insert(conditionRows)
-          if (condError) console.error('Error copying conditions:', condError)
-        }
+        if (rows.length > 0) await sb.from('field_conditions').insert(rows)
       }
     }
 
-    // 5. Copiar template_visibility (quais lojas/setores/funcoes veem o template)
+    // 5. Copiar template_visibility
     if (template.visibility && template.visibility.length > 0) {
-      const visibilityRows = template.visibility.map((v: { store_id: number; sector_id: number | null; function_id: number | null; roles: string[] | null }) => ({
-        template_id: newTemplate.id,
-        store_id: v.store_id,
-        sector_id: v.sector_id ?? null,
-        function_id: v.function_id ?? null,
-        roles: v.roles ?? [],
-      }))
-
-      const { error: visError } = await sb
-        .from('template_visibility')
-        .insert(visibilityRows)
-      if (visError) console.error('Error copying visibility:', visError)
+      await sb.from('template_visibility').insert(
+        template.visibility.map((v: { store_id: number; sector_id: number | null; function_id: number | null; roles: string[] | null }) => ({
+          template_id: newTemplate.id, store_id: v.store_id, sector_id: v.sector_id ?? null,
+          function_id: v.function_id ?? null, roles: v.roles ?? [],
+        }))
+      )
     }
 
     fetchTemplates()
@@ -470,9 +336,8 @@ export default function TemplatesPage() {
 
       const matchesCategory = !filterCategory || template.category === filterCategory
       const matchesFavorite = !showFavoritesOnly || favoriteIds.has(template.id)
-      const matchesStatus = filterStatus === 'all' || (filterStatus === 'active' ? template.is_active : !template.is_active)
 
-      return matchesSearch && matchesCategory && matchesFavorite && matchesStatus
+      return matchesSearch && matchesCategory && matchesFavorite
     })
     .sort((a, b) => {
       const aFav = favoriteIds.has(a.id) ? 1 : 0
@@ -493,356 +358,259 @@ export default function TemplatesPage() {
     return colors[category || 'outros'] || colors.outros
   }
 
-
-  const getStatusBadge = (status: string) => {
-    const map: Record<string, { label: string; cls: string }> = {
-      concluido: { label: 'Concluido', cls: 'bg-primary/20 text-primary' },
-      validado: { label: 'Validado', cls: 'bg-success/20 text-success' },
-      em_andamento: { label: 'Em Andamento', cls: 'bg-warning/20 text-warning' },
-      incompleto: { label: 'Incompleto', cls: 'bg-error/20 text-error' },
-      rascunho: { label: 'Rascunho', cls: 'bg-surface-hover text-muted' },
+  const getFieldTypeLabel = (type: string) => {
+    const labels: Record<string, string> = {
+      text: 'Texto',
+      number: 'Número',
+      photo: 'Foto',
+      dropdown: 'Lista',
+      signature: 'Assinatura',
+      datetime: 'Data/Hora',
+      checkbox_multiple: 'Múltipla Escolha',
+      gps: 'GPS',
+      barcode: 'Código de Barras',
+      calculated: 'Calculado',
     }
-    return map[status] || { label: status, cls: 'bg-surface text-muted' }
+    return labels[type] || type
   }
 
-  if (loading) return <LoadingPage />
+  if (loading) {
+    return <LoadingPage />
+  }
 
   return (
-    <div className="min-h-screen bg-page" onClick={() => setActiveMenu(null)}>
+    <div className="min-h-screen bg-page">
       <Header
         title="Modelos de Checklist"
         icon={FiClipboard}
         backHref={APP_CONFIG.routes.admin}
         actions={isOffline ? [] : [
-          { label: 'Novo Checklist', href: APP_CONFIG.routes.adminTemplatesNew, icon: FiPlus, variant: 'primary' },
+          {
+            label: 'Novo Checklist',
+            href: APP_CONFIG.routes.adminTemplatesNew,
+            icon: FiPlus,
+            variant: 'primary',
+          },
         ]}
       />
 
+      {/* Main Content */}
       <PageContainer>
+        {/* Offline Warning */}
         {isOffline && (
           <div className="bg-warning/10 border border-warning/30 rounded-xl p-4 mb-6 flex items-center gap-3">
             <FiWifiOff className="w-5 h-5 text-warning" />
-            <p className="text-warning text-sm">Voce esta offline. Edicoes nao estao disponiveis.</p>
+            <p className="text-warning text-sm">
+              Voce esta offline. Os dados mostrados sao do cache local. Edicoes nao estao disponiveis.
+            </p>
           </div>
         )}
 
-        {/* Filtros */}
-        <div className="flex flex-col gap-3 mb-6">
-          <div className="flex flex-col sm:flex-row gap-3">
-            <div className="flex-1 relative">
-              <FiSearch className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted" />
-              <input
-                type="text"
-                placeholder="Buscar templates..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-9 pr-4 py-2 bg-surface border border-subtle rounded-xl text-sm text-main placeholder-muted focus:outline-none focus:ring-2 focus:ring-primary"
-              />
-            </div>
-            <div className="flex gap-1.5 flex-wrap">
-              <button onClick={() => setShowFavoritesOnly(!showFavoritesOnly)}
-                className={`px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors flex items-center gap-1 ${showFavoritesOnly ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30' : 'btn-secondary'}`}>
-                <FiStar className={`w-3 h-3 ${showFavoritesOnly ? 'fill-amber-400' : ''}`} /> Fav
-              </button>
-              {(['all', 'active', 'inactive'] as const).map(s => (
-                <button key={s} onClick={() => setFilterStatus(s)}
-                  className={`px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors ${filterStatus === s ? 'btn-primary' : 'btn-secondary'}`}>
-                  {s === 'all' ? 'Todos' : s === 'active' ? 'Ativos' : 'Inativos'}
-                </button>
-              ))}
-            </div>
+        {/* Filters */}
+        <div className="flex flex-col sm:flex-row gap-4 mb-6">
+          <div className="flex-1 relative">
+            <FiSearch className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted" />
+            <input
+              type="text"
+              placeholder="Buscar checklists..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full pl-10 pr-4 py-2 bg-surface border border-subtle rounded-xl text-main placeholder-muted focus:outline-none focus:ring-2 focus:ring-primary"
+            />
           </div>
-          <div className="flex gap-1.5 flex-wrap">
-            <button onClick={() => setFilterCategory(null)}
-              className={`px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors ${filterCategory === null ? 'btn-primary' : 'btn-secondary'}`}>
-              Todas categorias
+
+          <div className="flex gap-2 flex-wrap">
+            <button
+              onClick={() => setShowFavoritesOnly(!showFavoritesOnly)}
+              className={`px-3 py-2 rounded-xl text-sm font-medium transition-colors flex items-center gap-1.5 ${
+                showFavoritesOnly
+                  ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
+                  : 'btn-secondary'
+              }`}
+              title="Filtrar favoritos"
+            >
+              <FiStar className={`w-3.5 h-3.5 ${showFavoritesOnly ? 'fill-amber-400' : ''}`} />
+              Favoritos
+            </button>
+            <button
+              onClick={() => setFilterCategory(null)}
+              className={`px-3 py-2 rounded-xl text-sm font-medium transition-colors ${
+                filterCategory === null
+                  ? 'btn-primary'
+                  : 'btn-secondary'
+              }`}
+            >
+              Todos
             </button>
             {categories.map(cat => (
-              <button key={cat} onClick={() => setFilterCategory(cat)}
-                className={`px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors capitalize ${filterCategory === cat ? 'btn-primary' : 'btn-secondary'}`}>
+              <button
+                key={cat}
+                onClick={() => setFilterCategory(cat)}
+                className={`px-3 py-2 rounded-xl text-sm font-medium transition-colors capitalize ${
+                  filterCategory === cat
+                    ? 'btn-primary'
+                    : 'btn-secondary'
+                }`}
+              >
                 {cat}
               </button>
             ))}
           </div>
         </div>
 
-        {/* Lista de capsulas */}
+        {/* Templates Grid */}
         {filteredTemplates.length === 0 ? (
           <div className="text-center py-16 card rounded-2xl">
-            <p className="text-muted">Nenhum template encontrado</p>
+            <p className="text-muted">Nenhum checklist encontrado</p>
           </div>
         ) : (
-          <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-            <SortableContext items={filteredTemplates.map(t => t.id)} strategy={verticalListSortingStrategy}>
-              <div className="flex flex-col gap-2">
-                {filteredTemplates.map(template => {
-                  const storeCount = new Set(template.visibility.map(v => v.store_id)).size
-                  const clCount = checklistCounts[template.id] || 0
-                  const isExpanded = expandedId === template.id
-                  const recents = recentChecklists[template.id] || []
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            {filteredTemplates.map(template => (
+              <div
+                key={template.id}
+                className={`card rounded-2xl p-6 transition-all ${
+                  template.is_active
+                    ? ''
+                    : 'border-red-500/30 opacity-60'
+                }`}
+              >
+                {/* Header */}
+                <div className="flex items-start justify-between mb-4">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 mb-1">
+                     
+                      <h3 className="text-lg font-semibold text-main">{template.name}</h3>
+                      {!template.is_active && (
+                        <span className="px-2 py-0.5 text-xs bg-red-500/20 text-red-400 rounded">
+                          Inativo
+                        </span>
+                      )}
+                    </div>
+                    {template.description && (
+                      <p className="text-sm text-secondary line-clamp-2">{template.description}</p>
+                    )}
+                  </div>
+                  <span className={`px-2 py-1 text-xs rounded-lg capitalize ${getCategoryColor(template.category)}`}>
+                    {template.category || 'Outros'}
+                  </span>
+                </div>
 
-                  return (
-                    <SortableTemplateCard
-                      key={template.id}
-                      template={template}
-                      storeCount={storeCount}
-                      clCount={clCount}
-                      isExpanded={isExpanded}
-                      recents={recents}
-                      isFavorite={favoriteIds.has(template.id)}
-                      isOffline={isOffline}
-                      activeMenu={activeMenu}
-                      getCategoryColor={getCategoryColor}
-                      getStatusBadge={getStatusBadge}
-                      onToggleExpand={() => toggleExpand(template.id)}
-                      onToggleFavorite={() => toggleFavorite(template.id)}
-                      onDuplicate={() => duplicateTemplate(template)}
-                      onToggleStatus={() => toggleTemplateStatus(template.id, template.is_active)}
-                      onDelete={() => deleteTemplate(template.id)}
-                      onMenuToggle={(id) => { setActiveMenu(prev => prev === id ? null : id) }}
-                    />
+                {/* Stats */}
+                <div className="flex items-center gap-4 mb-4 text-sm text-muted">
+                  <span>{template.fields.length} campos</span>
+                  <span>{new Set(template.visibility.map(v => v.store_id)).size} lojas</span>
+                  <span>v{template.version}</span>
+                </div>
+
+                {/* Field Types Preview */}
+                <div className="flex flex-wrap gap-1 mb-4">
+                  {[...new Set(template.fields.map(f => f.field_type))].map(type => (
+                    <span
+                      key={type}
+                      className="px-2 py-1 text-xs bg-surface text-muted rounded"
+                    >
+                      {getFieldTypeLabel(type)}
+                    </span>
+                  ))}
+                </div>
+
+                {/* Visibility */}
+                {template.visibility.length > 0 && (() => {
+                  const uniqueStores = Array.from(
+                    new Map(template.visibility.map(v => [v.store_id, v])).values()
                   )
-                })}
+                  return (
+                    <div className="mb-4">
+                      <p className="text-xs text-muted mb-1">Visível em:</p>
+                      <div className="flex flex-wrap gap-1">
+                        {uniqueStores.slice(0, 4).map(v => (
+                          <span
+                            key={v.store_id}
+                            className="px-2 py-1 text-xs bg-emerald-500/10 text-emerald-400 rounded"
+                          >
+                            {v.store.name}
+                          </span>
+                        ))}
+                        {uniqueStores.length > 4 && (
+                          <span className="px-2 py-1 text-xs bg-surface text-muted rounded">
+                            +{uniqueStores.length - 4}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  )
+                })()}
+
+                {/* Actions */}
+                <div className="flex items-center justify-end gap-2 pt-4 border-t border-subtle">
+                   <button
+                        onClick={() => toggleFavorite(template.id)}
+                        className={`p-0.5 transition-colors ${
+                          favoriteIds.has(template.id)
+                            ? 'text-amber-400'
+                            : 'text-muted hover:text-amber-400'
+                        }`}
+                        title={favoriteIds.has(template.id) ? 'Remover favorito' : 'Favoritar'}
+                      >
+                        <FiStar className={`w-5 h-5 ${favoriteIds.has(template.id) ? 'fill-amber-400' : ''}`} />
+                      </button>
+                  <button
+                    onClick={() => duplicateTemplate(template)}
+                    className="p-2 text-muted hover:text-main hover:bg-surface rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    title="Duplicar"
+                    disabled={isOffline}
+                  >
+                    <FiCopy className="w-4 h-4" />
+                  </button>
+                  <button
+                    onClick={() => toggleTemplateStatus(template.id, template.is_active)}
+                    className={`p-2 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+                      template.is_active
+                        ? 'text-amber-400 hover:bg-amber-500/20'
+                        : 'text-emerald-400 hover:bg-emerald-500/20'
+                    }`}
+                    title={template.is_active ? 'Desativar' : 'Ativar'}
+                    disabled={isOffline}
+                  >
+                    {template.is_active ? (
+                      <FiEyeOff className="w-4 h-4" />
+                    ) : (
+                      <FiEye className="w-4 h-4" />
+                    )}
+                  </button>
+                  {!isOffline && (
+                    <Link
+                      href={`${APP_CONFIG.routes.adminTemplates}/${template.id}`}
+                      className="p-2 text-blue-400 hover:bg-blue-500/20 rounded-lg transition-colors"
+                      title="Editar"
+                    >
+                      <FiEdit2 className="w-4 h-4" />
+                    </Link>
+                  )}
+                  <button
+                    onClick={() => deleteTemplate(template.id)}
+                    className="p-2 text-red-400 hover:bg-red-500/20 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    title="Excluir"
+                    disabled={isOffline}
+                  >
+                    <FiTrash2 className="w-4 h-4" />
+                  </button>
+                </div>
               </div>
-            </SortableContext>
-          </DndContext>
+            ))}
+          </div>
         )}
 
-        <div className="mt-4 flex items-center justify-between text-xs text-muted">
-          <p>{filteredTemplates.length} de {templates.length} templates</p>
-          <p>{templates.filter(t => t.is_active).length} ativos</p>
+        {/* Stats */}
+        <div className="mt-6 flex items-center justify-between text-sm text-muted">
+          <p>
+            Mostrando {filteredTemplates.length} de {templates.length} checklists
+          </p>
+          <p>
+            {templates.filter(t => t.is_active).length} ativos
+          </p>
         </div>
       </PageContainer>
     </div>
   )
-}
-
-// === Componente de capsula sortable ===
-function SortableTemplateCard({
-  template, storeCount, clCount, isExpanded, recents, isFavorite, isOffline, activeMenu,
-  getCategoryColor, getStatusBadge,
-  onToggleExpand, onToggleFavorite, onDuplicate, onToggleStatus, onDelete, onMenuToggle,
-}: {
-  template: TemplateWithDetails
-  storeCount: number
-  clCount: number
-  isExpanded: boolean
-  recents: { id: number; store_name: string; status: string; created_at: string }[]
-  isFavorite: boolean
-  isOffline: boolean
-  activeMenu: number | null
-  getCategoryColor: (cat: string | null) => string
-  getStatusBadge: (status: string) => { label: string; cls: string }
-  onToggleExpand: () => void
-  onToggleFavorite: () => void
-  onDuplicate: () => void
-  onToggleStatus: () => void
-  onDelete: () => void
-  onMenuToggle: (id: number) => void
-}) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: template.id })
-  const style = { transform: CSS.Translate.toString(transform), transition, opacity: isDragging ? 0.5 : 1, zIndex: isDragging ? 50 : undefined }
-
-  // Animacao spring gelatinosa
-  const springConfig = { type: 'spring' as const, stiffness: 300, damping: 20, mass: 0.8 }
-
-  return (
-    <motion.div
-      ref={setNodeRef}
-      style={style}
-      whileHover={{ scale: 1.008, y: -1 }}
-      whileTap={{ scale: 0.995 }}
-      transition={springConfig}
-      className={`card rounded-xl ${!template.is_active ? 'opacity-50' : ''}`}
-    >
-      {/* Capsula principal */}
-      <div className="flex items-center gap-2 px-3 py-3 cursor-pointer select-none" onClick={onToggleExpand}>
-        {/* Drag handle */}
-        <button {...attributes} {...listeners} className="p-1 text-muted hover:text-main cursor-grab active:cursor-grabbing touch-none" onClick={e => e.stopPropagation()}>
-          <FiMenu className="w-4 h-4" />
-        </button>
-
-        {/* Favorito com animacao de bounce */}
-        <motion.button
-          onClick={e => { e.stopPropagation(); onToggleFavorite() }}
-          whileTap={{ scale: 1.4, rotate: 15 }}
-          transition={{ type: 'spring', stiffness: 500, damping: 10 }}
-          className={`p-0.5 ${isFavorite ? 'text-amber-400' : 'text-muted/30 hover:text-amber-400'}`}
-        >
-          <FiStar className={`w-4 h-4 ${isFavorite ? 'fill-amber-400' : ''}`} />
-        </motion.button>
-
-        {/* Info principal */}
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2">
-            <h3 className="text-sm font-semibold text-main truncate">{template.name}</h3>
-            <span className={`shrink-0 px-1.5 py-0.5 text-[10px] rounded capitalize ${getCategoryColor(template.category)}`}>
-              {template.category || 'outros'}
-            </span>
-          </div>
-          <div className="flex items-center gap-3 text-[11px] text-muted mt-0.5">
-            <span className="flex items-center gap-1"><FiFile className="w-3 h-3" />{template.fields.length} campos</span>
-            <span className="flex items-center gap-1"><FiMapPin className="w-3 h-3" />{storeCount} lojas</span>
-            {clCount > 0 && <span className="flex items-center gap-1"><FiClipboard className="w-3 h-3" />{clCount} preenchidos</span>}
-            {(template.allowed_start_time || template.allowed_end_time) && (
-              <span className="flex items-center gap-1"><FiAlertTriangle className="w-3 h-3" />Horario restrito</span>
-            )}
-          </div>
-        </div>
-
-        {/* Status badge com pulse */}
-        <motion.span
-          animate={template.is_active ? { scale: [1, 1.3, 1] } : {}}
-          transition={{ duration: 2, repeat: Infinity, repeatDelay: 3 }}
-          className={`shrink-0 w-2.5 h-2.5 rounded-full ${template.is_active ? 'bg-success' : 'bg-error'}`}
-          title={template.is_active ? 'Ativo' : 'Inativo'}
-        />
-
-        {/* Expand arrow com rotacao spring */}
-        <motion.div animate={{ rotate: isExpanded ? 180 : 0 }} transition={springConfig}>
-          <FiChevronDown className="w-4 h-4 text-muted" />
-        </motion.div>
-
-        {/* Menu de acoes */}
-        <div className="relative" onClick={e => e.stopPropagation()}>
-          <motion.button whileTap={{ scale: 0.85 }} onClick={() => onMenuToggle(template.id)}
-            className="p-1.5 text-muted hover:text-main hover:bg-surface rounded-lg">
-            <FiMoreVertical className="w-4 h-4" />
-          </motion.button>
-          <AnimatePresence>
-            {activeMenu === template.id && (
-              <motion.div
-                initial={{ opacity: 0, scale: 0.9, y: -5 }}
-                animate={{ opacity: 1, scale: 1, y: 0 }}
-                exit={{ opacity: 0, scale: 0.9, y: -5 }}
-                transition={{ type: 'spring', stiffness: 400, damping: 25 }}
-                className="absolute right-0 top-full mt-1 bg-surface border border-subtle rounded-xl shadow-xl z-50 py-1 w-44 origin-top-right"
-              >
-                {!isOffline && (
-                  <Link href={`${APP_CONFIG.routes.adminTemplates}/${template.id}`}
-                    className="flex items-center gap-2 px-3 py-2 text-sm text-main hover:bg-surface-hover w-full">
-                    <FiEdit2 className="w-3.5 h-3.5" /> Editar
-                  </Link>
-                )}
-                <button onClick={onDuplicate} disabled={isOffline}
-                  className="flex items-center gap-2 px-3 py-2 text-sm text-main hover:bg-surface-hover w-full disabled:opacity-50">
-                  <FiCopy className="w-3.5 h-3.5" /> Duplicar
-                </button>
-                <button onClick={onToggleStatus} disabled={isOffline}
-                  className="flex items-center gap-2 px-3 py-2 text-sm text-main hover:bg-surface-hover w-full disabled:opacity-50">
-                  {template.is_active ? <FiEyeOff className="w-3.5 h-3.5" /> : <FiEye className="w-3.5 h-3.5" />}
-                  {template.is_active ? 'Desativar' : 'Ativar'}
-                </button>
-                <div className="border-t border-subtle my-1" />
-                <button onClick={onDelete} disabled={isOffline}
-                  className="flex items-center gap-2 px-3 py-2 text-sm text-error hover:bg-error/10 w-full disabled:opacity-50">
-                  <FiTrash2 className="w-3.5 h-3.5" /> Excluir
-                </button>
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </div>
-      </div>
-
-      {/* Conteudo expandido — animacao tipo grafo com stagger */}
-      <AnimatePresence>
-        {isExpanded && (
-          <motion.div
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: 'auto', opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            transition={{ type: 'spring', stiffness: 200, damping: 25, mass: 0.8 }}
-            className="overflow-hidden"
-          >
-            <div className="px-3 pb-3 border-t border-subtle pt-3">
-              {/* Descricao — aparece primeiro */}
-              {template.description && (
-                <motion.p
-                  initial={{ opacity: 0, x: -10 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ delay: 0.05, ...springConfig }}
-                  className="text-xs text-secondary mb-3"
-                >
-                  {template.description}
-                </motion.p>
-              )}
-
-              {/* Lojas — cada pill brota com stagger */}
-              {template.visibility.length > 0 && (
-                <div className="mb-3">
-                  <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.1 }}
-                    className="text-[10px] text-muted uppercase tracking-wider mb-1.5">Visivel em</motion.p>
-                  <div className="flex flex-wrap gap-1.5">
-                    {Array.from(new Map(template.visibility.map(v => [v.store_id, v])).values()).map((v, i) => (
-                      <motion.span
-                        key={v.store_id}
-                        initial={{ opacity: 0, scale: 0, y: 10 }}
-                        animate={{ opacity: 1, scale: 1, y: 0 }}
-                        transition={{ delay: 0.1 + i * 0.06, type: 'spring', stiffness: 400, damping: 15 }}
-                        className="px-2.5 py-1 text-[11px] bg-emerald-500/10 text-emerald-400 rounded-lg border border-emerald-500/20"
-                      >
-                        {v.store?.name || `Loja ${v.store_id}`}
-                      </motion.span>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Checklists recentes — cada item desliza como no de grafo */}
-              {clCount > 0 && (
-                <div>
-                  <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.15 }}
-                    className="text-[10px] text-muted uppercase tracking-wider mb-1.5">Ultimos preenchidos</motion.p>
-                  {recents.length === 0 ? (
-                    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex items-center gap-2">
-                      <div className="w-3 h-3 rounded-full bg-primary/30 animate-pulse" />
-                      <p className="text-xs text-muted">Carregando...</p>
-                    </motion.div>
-                  ) : (
-                    <div className="flex flex-col gap-1.5 pl-2 border-l-2 border-primary/20">
-                      {recents.map((cl, i) => {
-                        const badge = getStatusBadge(cl.status)
-                        return (
-                          <motion.div
-                            key={cl.id}
-                            initial={{ opacity: 0, x: -20, scale: 0.8 }}
-                            animate={{ opacity: 1, x: 0, scale: 1 }}
-                            transition={{ delay: 0.15 + i * 0.08, type: 'spring', stiffness: 350, damping: 18 }}
-                            className="flex items-center gap-2 text-xs bg-surface/50 rounded-lg px-2.5 py-1.5 -ml-[9px]"
-                          >
-                            <div className="w-2 h-2 rounded-full bg-primary/40 shrink-0" />
-                            <span className="text-secondary truncate flex-1">{cl.store_name}</span>
-                            <span className="text-muted shrink-0">{new Date(cl.created_at).toLocaleDateString('pt-BR')}</span>
-                            <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium shrink-0 ${badge.cls}`}>{badge.label}</span>
-                          </motion.div>
-                        )
-                      })}
-                      {clCount > 5 && (
-                        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.4 }}>
-                          <Link href={`${APP_CONFIG.routes.adminChecklists}?template=${template.id}`}
-                            className="text-xs text-primary hover:underline ml-2">
-                            Ver todos ({clCount}) →
-                          </Link>
-                        </motion.div>
-                      )}
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {clCount === 0 && !template.description && template.visibility.length === 0 && (
-                <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }}
-                  className="text-xs text-muted">Nenhum dado adicional.</motion.p>
-              )}
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </motion.div>
-  )
-}
-
-type TemplateWithDetails = ChecklistTemplate & {
-  fields: TemplateField[]
-  visibility: (TemplateVisibility & { store: Store })[]
 }
