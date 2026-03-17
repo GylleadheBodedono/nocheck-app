@@ -1264,6 +1264,251 @@ export async function exportOverviewToPDF(data: OverviewExportData): Promise<voi
   doc.save(`relatorio_visao_geral_${timestamp}.pdf`)
 }
 
+// ─── EXPORT INDIVIDUAL: ADESAO POR TEMPLATE ─────────────────────────────────
+
+export function exportTemplateAdherenceToCSV(items: TemplateAdherence[], period: string, filename: string) {
+  const esc = (v: string) => `"${String(v).replace(/"/g, '""')}"`
+  const lines: string[] = []
+  lines.push('Template,Total,Validados,Concluidos,Em Andamento,Incompletos,Rascunhos,Taxa (%),Tempo Medio,Lojas sem Preenchimento')
+  for (const t of items) {
+    const b = t.metrics.statusBreakdown
+    lines.push([esc(t.templateName), b.total, b.validado, b.concluido, b.em_andamento, b.incompleto, b.rascunho, t.metrics.completionRate, formatMinutes(t.avgCompletionTimeMinutes), `${t.storesWithZero}/${t.totalAssignedStores}`].join(','))
+  }
+  downloadFile('\uFEFF' + lines.join('\n'), filename, 'text/csv;charset=utf-8')
+}
+
+export function exportTemplateAdherenceToTXT(items: TemplateAdherence[], period: string, filename: string) {
+  const lines: string[] = [
+    '═'.repeat(80),
+    'ADESAO POR TEMPLATE',
+    `Periodo: ${periodLabel[period] || period}`,
+    `Gerado em: ${new Date().toLocaleString('pt-BR')}`,
+    '═'.repeat(80),
+    '',
+  ]
+  for (const t of items) {
+    const b = t.metrics.statusBreakdown
+    lines.push(`  ${t.templateName.padEnd(35)} Taxa: ${String(t.metrics.completionRate).padStart(3)}%  V:${b.validado} C:${b.concluido} A:${b.em_andamento} I:${b.incompleto} R:${b.rascunho}  Lojas s/preench: ${t.storesWithZero}/${t.totalAssignedStores}  Tempo: ${formatMinutes(t.avgCompletionTimeMinutes)}`)
+  }
+  downloadFile(lines.join('\n'), filename, 'text/plain;charset=utf-8')
+}
+
+export async function exportTemplateAdherenceToExcel(items: TemplateAdherence[], period: string, filename: string) {
+  const XLSX = await import('xlsx')
+  const wb = XLSX.utils.book_new()
+  const rows = items.map(t => ({
+    'Template': t.templateName,
+    'Total': t.metrics.statusBreakdown.total,
+    'Validados': t.metrics.statusBreakdown.validado,
+    'Concluidos': t.metrics.statusBreakdown.concluido,
+    'Em Andamento': t.metrics.statusBreakdown.em_andamento,
+    'Incompletos': t.metrics.statusBreakdown.incompleto,
+    'Rascunhos': t.metrics.statusBreakdown.rascunho,
+    'Taxa (%)': t.metrics.completionRate,
+    'Tempo Medio': formatMinutes(t.avgCompletionTimeMinutes),
+    'Lojas s/ Preench.': `${t.storesWithZero}/${t.totalAssignedStores}`,
+  }))
+  const ws = XLSX.utils.json_to_sheet(rows)
+  ws['!cols'] = [{ wch: 35 }, { wch: 8 }, { wch: 10 }, { wch: 12 }, { wch: 14 }, { wch: 12 }, { wch: 10 }, { wch: 10 }, { wch: 12 }, { wch: 16 }]
+  XLSX.utils.book_append_sheet(wb, ws, 'Adesao por Template')
+  const buf = XLSX.write(wb, { bookType: 'xlsx', type: 'array' })
+  downloadFile(buf, filename, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+}
+
+export async function exportTemplateAdherenceToPDF(items: TemplateAdherence[], period: string) {
+  const { jsPDF } = await import('jspdf')
+  const doc = new jsPDF({ orientation: 'l', unit: 'mm', format: 'a4' })
+  const metas = [
+    `Periodo: ${periodLabel[period] || period}`,
+    `Gerado em: ${new Date().toLocaleString('pt-BR')}`,
+  ]
+  const y = addPdfHeader(doc, 'ADESAO POR TEMPLATE', metas)
+  doc.setFontSize(10)
+  doc.setFont('helvetica', 'bold')
+  doc.setTextColor('#000000')
+  drawPdfTable(doc, [
+    { header: 'Template', width: 60 },
+    { header: 'Total', width: 18, align: 'right' },
+    { header: 'Valid.', width: 18, align: 'right' },
+    { header: 'Concl.', width: 18, align: 'right' },
+    { header: 'Andam.', width: 18, align: 'right' },
+    { header: 'Incomp.', width: 20, align: 'right' },
+    { header: 'Rasc.', width: 18, align: 'right' },
+    { header: 'Taxa', width: 18, align: 'right' },
+    { header: 'Tempo', width: 22, align: 'right' },
+    { header: 'Lacunas', width: 22, align: 'right' },
+  ], items.map(t => {
+    const b = t.metrics.statusBreakdown
+    return [t.templateName, String(b.total), String(b.validado), String(b.concluido), String(b.em_andamento), String(b.incompleto), String(b.rascunho), `${t.metrics.completionRate}%`, formatMinutes(t.avgCompletionTimeMinutes), `${t.storesWithZero}/${t.totalAssignedStores}`]
+  }), y)
+  addPdfFooters(doc)
+  const timestamp = new Date().toISOString().split('T')[0]
+  doc.save(`adesao_template_${timestamp}.pdf`)
+}
+
+// ─── EXPORT INDIVIDUAL: ADESAO POR LOJA ─────────────────────────────────────
+
+export function exportStoreAdherenceToCSV(items: StoreAdherence[], period: string, filename: string) {
+  const esc = (v: string) => `"${String(v).replace(/"/g, '""')}"`
+  const lines: string[] = []
+  lines.push('Loja,Total,Validados,Concluidos,Em Andamento,Incompletos,Rascunhos,Taxa (%),Templates Faltando')
+  for (const s of items) {
+    const b = s.metrics.statusBreakdown
+    lines.push([esc(s.storeName), b.total, b.validado, b.concluido, b.em_andamento, b.incompleto, b.rascunho, s.metrics.completionRate, esc(s.templatesNeverFilled.join('; ') || '-')].join(','))
+  }
+  downloadFile('\uFEFF' + lines.join('\n'), filename, 'text/csv;charset=utf-8')
+}
+
+export function exportStoreAdherenceToTXT(items: StoreAdherence[], period: string, filename: string) {
+  const lines: string[] = [
+    '═'.repeat(80),
+    'ADESAO POR LOJA',
+    `Periodo: ${periodLabel[period] || period}`,
+    `Gerado em: ${new Date().toLocaleString('pt-BR')}`,
+    '═'.repeat(80),
+    '',
+  ]
+  for (const st of items) {
+    const b = st.metrics.statusBreakdown
+    lines.push(`  ${st.storeName.padEnd(35)} Taxa: ${String(st.metrics.completionRate).padStart(3)}%  V:${b.validado} C:${b.concluido} A:${b.em_andamento} I:${b.incompleto} R:${b.rascunho}`)
+    if (st.templatesNeverFilled.length > 0) {
+      lines.push(`    Templates faltando: ${st.templatesNeverFilled.join(', ')}`)
+    }
+  }
+  downloadFile(lines.join('\n'), filename, 'text/plain;charset=utf-8')
+}
+
+export async function exportStoreAdherenceToExcel(items: StoreAdherence[], period: string, filename: string) {
+  const XLSX = await import('xlsx')
+  const wb = XLSX.utils.book_new()
+  const rows = items.map(s => ({
+    'Loja': s.storeName,
+    'Total': s.metrics.statusBreakdown.total,
+    'Validados': s.metrics.statusBreakdown.validado,
+    'Concluidos': s.metrics.statusBreakdown.concluido,
+    'Em Andamento': s.metrics.statusBreakdown.em_andamento,
+    'Incompletos': s.metrics.statusBreakdown.incompleto,
+    'Rascunhos': s.metrics.statusBreakdown.rascunho,
+    'Taxa (%)': s.metrics.completionRate,
+    'Templates Faltando': s.templatesNeverFilled.join('; ') || '-',
+  }))
+  const ws = XLSX.utils.json_to_sheet(rows)
+  ws['!cols'] = [{ wch: 30 }, { wch: 8 }, { wch: 10 }, { wch: 12 }, { wch: 14 }, { wch: 12 }, { wch: 10 }, { wch: 10 }, { wch: 40 }]
+  XLSX.utils.book_append_sheet(wb, ws, 'Adesao por Loja')
+  const buf = XLSX.write(wb, { bookType: 'xlsx', type: 'array' })
+  downloadFile(buf, filename, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+}
+
+export async function exportStoreAdherenceToPDF(items: StoreAdherence[], period: string) {
+  const { jsPDF } = await import('jspdf')
+  const doc = new jsPDF({ orientation: 'l', unit: 'mm', format: 'a4' })
+  const metas = [
+    `Periodo: ${periodLabel[period] || period}`,
+    `Gerado em: ${new Date().toLocaleString('pt-BR')}`,
+  ]
+  const y = addPdfHeader(doc, 'ADESAO POR LOJA', metas)
+  doc.setFontSize(10)
+  doc.setFont('helvetica', 'bold')
+  doc.setTextColor('#000000')
+  drawPdfTable(doc, [
+    { header: 'Loja', width: 50 },
+    { header: 'Total', width: 18, align: 'right' },
+    { header: 'Valid.', width: 18, align: 'right' },
+    { header: 'Concl.', width: 18, align: 'right' },
+    { header: 'Andam.', width: 18, align: 'right' },
+    { header: 'Incomp.', width: 20, align: 'right' },
+    { header: 'Rasc.', width: 18, align: 'right' },
+    { header: 'Taxa', width: 18, align: 'right' },
+    { header: 'Tmpl Faltando', width: 55 },
+  ], items.map(st => {
+    const b = st.metrics.statusBreakdown
+    return [st.storeName, String(b.total), String(b.validado), String(b.concluido), String(b.em_andamento), String(b.incompleto), String(b.rascunho), `${st.metrics.completionRate}%`, st.templatesNeverFilled.join(', ') || '-']
+  }), y)
+  addPdfFooters(doc)
+  const timestamp = new Date().toISOString().split('T')[0]
+  doc.save(`adesao_loja_${timestamp}.pdf`)
+}
+
+// ─── EXPORT INDIVIDUAL: ADESAO POR USUARIO ──────────────────────────────────
+
+export function exportUserAdherenceToCSV(items: UserAdherence[], period: string, filename: string) {
+  const esc = (v: string) => `"${String(v).replace(/"/g, '""')}"`
+  const lines: string[] = []
+  lines.push('Usuario,Total,Validados,Concluidos,Em Andamento,Incompletos,Rascunhos,Taxa (%),Tempo Medio')
+  for (const u of items) {
+    const b = u.metrics.statusBreakdown
+    lines.push([esc(u.userName), b.total, b.validado, b.concluido, b.em_andamento, b.incompleto, b.rascunho, u.metrics.completionRate, formatMinutes(u.avgCompletionTimeMinutes)].join(','))
+  }
+  downloadFile('\uFEFF' + lines.join('\n'), filename, 'text/csv;charset=utf-8')
+}
+
+export function exportUserAdherenceToTXT(items: UserAdherence[], period: string, filename: string) {
+  const lines: string[] = [
+    '═'.repeat(80),
+    'ADESAO POR USUARIO',
+    `Periodo: ${periodLabel[period] || period}`,
+    `Gerado em: ${new Date().toLocaleString('pt-BR')}`,
+    '═'.repeat(80),
+    '',
+  ]
+  for (const u of items) {
+    const b = u.metrics.statusBreakdown
+    lines.push(`  ${u.userName.padEnd(30)} Taxa: ${String(u.metrics.completionRate).padStart(3)}%  V:${b.validado} C:${b.concluido} A:${b.em_andamento} I:${b.incompleto} R:${b.rascunho}  Tempo: ${formatMinutes(u.avgCompletionTimeMinutes)}`)
+  }
+  downloadFile(lines.join('\n'), filename, 'text/plain;charset=utf-8')
+}
+
+export async function exportUserAdherenceToExcel(items: UserAdherence[], period: string, filename: string) {
+  const XLSX = await import('xlsx')
+  const wb = XLSX.utils.book_new()
+  const rows = items.map(u => ({
+    'Usuario': u.userName,
+    'Total': u.metrics.statusBreakdown.total,
+    'Validados': u.metrics.statusBreakdown.validado,
+    'Concluidos': u.metrics.statusBreakdown.concluido,
+    'Em Andamento': u.metrics.statusBreakdown.em_andamento,
+    'Incompletos': u.metrics.statusBreakdown.incompleto,
+    'Rascunhos': u.metrics.statusBreakdown.rascunho,
+    'Taxa (%)': u.metrics.completionRate,
+    'Tempo Medio': formatMinutes(u.avgCompletionTimeMinutes),
+  }))
+  const ws = XLSX.utils.json_to_sheet(rows)
+  ws['!cols'] = [{ wch: 30 }, { wch: 8 }, { wch: 10 }, { wch: 12 }, { wch: 14 }, { wch: 12 }, { wch: 10 }, { wch: 10 }, { wch: 12 }]
+  XLSX.utils.book_append_sheet(wb, ws, 'Adesao por Usuario')
+  const buf = XLSX.write(wb, { bookType: 'xlsx', type: 'array' })
+  downloadFile(buf, filename, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+}
+
+export async function exportUserAdherenceToPDF(items: UserAdherence[], period: string) {
+  const { jsPDF } = await import('jspdf')
+  const doc = new jsPDF({ orientation: 'l', unit: 'mm', format: 'a4' })
+  const metas = [
+    `Periodo: ${periodLabel[period] || period}`,
+    `Gerado em: ${new Date().toLocaleString('pt-BR')}`,
+  ]
+  const y = addPdfHeader(doc, 'ADESAO POR USUARIO', metas)
+  doc.setFontSize(10)
+  doc.setFont('helvetica', 'bold')
+  doc.setTextColor('#000000')
+  drawPdfTable(doc, [
+    { header: 'Usuario', width: 50 },
+    { header: 'Total', width: 20, align: 'right' },
+    { header: 'Valid.', width: 20, align: 'right' },
+    { header: 'Concl.', width: 20, align: 'right' },
+    { header: 'Andam.', width: 22, align: 'right' },
+    { header: 'Incomp.', width: 22, align: 'right' },
+    { header: 'Rasc.', width: 20, align: 'right' },
+    { header: 'Taxa', width: 20, align: 'right' },
+    { header: 'Tempo', width: 25, align: 'right' },
+  ], items.map(u => {
+    const b = u.metrics.statusBreakdown
+    return [u.userName, String(b.total), String(b.validado), String(b.concluido), String(b.em_andamento), String(b.incompleto), String(b.rascunho), `${u.metrics.completionRate}%`, formatMinutes(u.avgCompletionTimeMinutes)]
+  }), y)
+  addPdfFooters(doc)
+  const timestamp = new Date().toISOString().split('T')[0]
+  doc.save(`adesao_usuario_${timestamp}.pdf`)
+}
+
 // ─── RESPOSTAS POR USUARIO ──────────────────────────────────────────────────
 
 export function exportResponsesToCSV(items: UserChecklistExport[], filename: string) {

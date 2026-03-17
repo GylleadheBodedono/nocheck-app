@@ -35,6 +35,9 @@ import {
   exportResponsesToCSV, exportResponsesToTXT, exportResponsesToExcel, exportResponsesToPDF,
   exportComplianceToCSV, exportComplianceToTXT, exportComplianceToExcel, exportComplianceToPDF,
   exportReincidenciasToCSV, exportReincidenciasToTXT, exportReincidenciasToExcel, exportReincidenciasToPDF,
+  exportTemplateAdherenceToCSV, exportTemplateAdherenceToTXT, exportTemplateAdherenceToExcel, exportTemplateAdherenceToPDF,
+  exportStoreAdherenceToCSV, exportStoreAdherenceToTXT, exportStoreAdherenceToExcel, exportStoreAdherenceToPDF,
+  exportUserAdherenceToCSV, exportUserAdherenceToTXT, exportUserAdherenceToExcel, exportUserAdherenceToPDF,
 } from '@/lib/exportUtils'
 
 type StoreStats = {
@@ -139,6 +142,7 @@ export default function RelatoriosPage() {
   const [storeSort, setStoreSort] = useState<'best' | 'worst' | 'name'>('worst')
   const [templateSort, setTemplateSort] = useState<'best' | 'worst' | 'name'>('worst')
   const [userSort, setUserSort] = useState<'best' | 'worst' | 'name'>('worst')
+  const [cardExportMenu, setCardExportMenu] = useState<string | null>(null)
   const responsePerPage = 20
   const router = useRouter()
   const supabase = useMemo(() => createClient(), [])
@@ -677,6 +681,50 @@ export default function RelatoriosPage() {
     }
   }
 
+  const handleCardExport = async (cardType: 'template' | 'store' | 'user', format: 'csv' | 'txt' | 'xlsx' | 'pdf') => {
+    setCardExportMenu(null)
+    const timestamp = new Date().toISOString().split('T')[0]
+    if (cardType === 'template') {
+      if (format === 'csv') exportTemplateAdherenceToCSV(sortedTemplateAdherence, period, `adesao_template_${timestamp}.csv`)
+      else if (format === 'txt') exportTemplateAdherenceToTXT(sortedTemplateAdherence, period, `adesao_template_${timestamp}.txt`)
+      else if (format === 'xlsx') await exportTemplateAdherenceToExcel(sortedTemplateAdherence, period, `adesao_template_${timestamp}.xlsx`)
+      else await exportTemplateAdherenceToPDF(sortedTemplateAdherence, period)
+    } else if (cardType === 'store') {
+      if (format === 'csv') exportStoreAdherenceToCSV(sortedStoreAdherence, period, `adesao_loja_${timestamp}.csv`)
+      else if (format === 'txt') exportStoreAdherenceToTXT(sortedStoreAdherence, period, `adesao_loja_${timestamp}.txt`)
+      else if (format === 'xlsx') await exportStoreAdherenceToExcel(sortedStoreAdherence, period, `adesao_loja_${timestamp}.xlsx`)
+      else await exportStoreAdherenceToPDF(sortedStoreAdherence, period)
+    } else {
+      if (format === 'csv') exportUserAdherenceToCSV(sortedUserAdherence, period, `adesao_usuario_${timestamp}.csv`)
+      else if (format === 'txt') exportUserAdherenceToTXT(sortedUserAdherence, period, `adesao_usuario_${timestamp}.txt`)
+      else if (format === 'xlsx') await exportUserAdherenceToExcel(sortedUserAdherence, period, `adesao_usuario_${timestamp}.xlsx`)
+      else await exportUserAdherenceToPDF(sortedUserAdherence, period)
+    }
+  }
+
+  const CardExportDropdown = ({ cardType }: { cardType: 'template' | 'store' | 'user' }) => {
+    const isOpen = cardExportMenu === cardType
+    return (
+      <div className="relative">
+        <button
+          onClick={() => setCardExportMenu(isOpen ? null : cardType)}
+          className="p-1.5 rounded-lg text-muted hover:text-main hover:bg-surface-hover transition-colors"
+          title="Exportar esta tabela"
+        >
+          <FiDownload className="w-4 h-4" />
+        </button>
+        {isOpen && (
+          <div className="absolute right-0 top-full mt-1 bg-surface border border-subtle rounded-lg shadow-lg z-20 min-w-[120px]">
+            <button onClick={() => handleCardExport(cardType, 'csv')} className="w-full px-4 py-2 text-sm text-left text-main hover:bg-surface-hover rounded-t-lg">CSV</button>
+            <button onClick={() => handleCardExport(cardType, 'xlsx')} className="w-full px-4 py-2 text-sm text-left text-main hover:bg-surface-hover">Excel</button>
+            <button onClick={() => handleCardExport(cardType, 'txt')} className="w-full px-4 py-2 text-sm text-left text-main hover:bg-surface-hover">TXT</button>
+            <button onClick={() => handleCardExport(cardType, 'pdf')} className="w-full px-4 py-2 text-sm text-left text-main hover:bg-surface-hover rounded-b-lg">PDF</button>
+          </div>
+        )}
+      </div>
+    )
+  }
+
   const exportDropdown = (
     <div className="relative">
       <button
@@ -1129,6 +1177,7 @@ export default function RelatoriosPage() {
               <button onClick={() => setTemplateSort('best')} className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${templateSort === 'best' ? 'bg-success/20 text-success' : 'bg-surface-hover text-muted hover:text-main'}`}>Melhor primeiro</button>
               <button onClick={() => setTemplateSort('name')} className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${templateSort === 'name' ? 'bg-primary/20 text-primary' : 'bg-surface-hover text-muted hover:text-main'}`}>A-Z</button>
             </div>
+            <CardExportDropdown cardType="template" />
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -1204,6 +1253,7 @@ export default function RelatoriosPage() {
               <button onClick={() => setStoreSort('best')} className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${storeSort === 'best' ? 'bg-success/20 text-success' : 'bg-surface-hover text-muted hover:text-main'}`}>Melhor primeiro</button>
               <button onClick={() => setStoreSort('name')} className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${storeSort === 'name' ? 'bg-primary/20 text-primary' : 'bg-surface-hover text-muted hover:text-main'}`}>A-Z</button>
             </div>
+            <CardExportDropdown cardType="store" />
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -1217,7 +1267,7 @@ export default function RelatoriosPage() {
                   <th className="px-3 py-3 text-right font-medium text-error">Incomp.</th>
                   <th className="px-3 py-3 text-right font-medium text-muted">Rasc.</th>
                   <th className="px-4 py-3 text-right font-medium text-muted">Taxa</th>
-                  <th className="px-4 py-3 text-left font-medium text-muted">Templates Faltando</th>
+                  <th className="px-4 py-3 text-center font-medium text-muted">Faltando</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-subtle">
@@ -1241,9 +1291,14 @@ export default function RelatoriosPage() {
                           'bg-error/20 text-error'
                         }`}>{s.metrics.completionRate}%</span>
                       </td>
-                      <td className="px-4 py-3">
+                      <td className="px-4 py-3 text-center">
                         {s.templatesNeverFilled.length > 0 ? (
-                          <span className="text-xs text-error">{s.templatesNeverFilled.join(', ')}</span>
+                          <span
+                            className="inline-block px-2 py-0.5 rounded-lg text-xs font-bold bg-error/20 text-error cursor-help"
+                            title={s.templatesNeverFilled.join('\n')}
+                          >
+                            {s.templatesNeverFilled.length}
+                          </span>
                         ) : (
                           <span className="text-xs text-muted">-</span>
                         )}
@@ -1268,6 +1323,7 @@ export default function RelatoriosPage() {
               <button onClick={() => setUserSort('best')} className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${userSort === 'best' ? 'bg-success/20 text-success' : 'bg-surface-hover text-muted hover:text-main'}`}>Melhor primeiro</button>
               <button onClick={() => setUserSort('name')} className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${userSort === 'name' ? 'bg-primary/20 text-primary' : 'bg-surface-hover text-muted hover:text-main'}`}>A-Z</button>
             </div>
+            <CardExportDropdown cardType="user" />
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
