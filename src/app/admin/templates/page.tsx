@@ -464,7 +464,7 @@ export default function TemplatesPage() {
             <p className="text-muted">Nenhum checklist encontrado</p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-4 gap-2">
             {filteredTemplates.map(template => (
               <div
                 key={template.id}
