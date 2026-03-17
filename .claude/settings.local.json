@@ -20,14 +20,7 @@
       "Bash(curl:*)",
       "Bash(git:*)",
       "Bash(npm install:*)",
-      "Bash(python3:*)",
-      "Bash(npx tsx:*)",
-      "Bash(node:*)",
-      "Bash(npm uninstall:*)",
-      "Bash(read f:*)",
-      "Bash(echo EXIT: $?:*)",
-      "Bash(npx vitest:*)",
-      "Bash(cd \"C:\\\\Users\\\\Gylle do TI\\\\Downloads\\\\Projetos\\\\nocheck-app\" && npx jest src/lib/__tests__/timeUtils.test.ts 2>&1)"
+      "Bash(ls \"C:\\\\Users\\\\ENZO TI\\\\nocheck-app\\\\node_modules\\\\react-icons\\\\gi\\\\\" | grep -i goat 2>/dev/null || find \"C:/Users/ENZO TI/nocheck-app/node_modules/react-icons/gi\" -name \"index.js\" | head -1 | xargs grep -i \"goat\" | head -20)"
     ]
   }
 }

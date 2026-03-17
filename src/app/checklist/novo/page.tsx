@@ -97,6 +97,7 @@ function ChecklistForm() {
   const [sortedSections, setSortedSections] = useState<TemplateSection[]>([])
   const [sectionProgress, setSectionProgress] = useState<SectionProgress[]>([])
   const [activeSection, setActiveSection] = useState<number | null>(null) // section_id being filled
+  const [activeParentSection, setActiveParentSection] = useState<number | null>(null) // parent section for sub-etapa navigation
   const [checklistId, setChecklistId] = useState<number | null>(null) // DB checklist id for sectioned mode
   const [offlineChecklistId, setOfflineChecklistId] = useState<string | null>(null) // Offline UUID for sectioned mode
   const checklistIdRef = useRef<number | null>(null)
@@ -173,6 +174,43 @@ function ChecklistForm() {
       .filter(f => f.section_id === null && f.field_type !== 'gps')
       .sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0))
   }, [template])
+
+  // ─── Hierarquia 3 niveis: Etapa > Sub-etapa > Campos ─────────────────────
+  /** Etapas-pai: secoes sem parent_id que possuem filhas no template */
+  const parentSections = useMemo(() => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const sectionsWithParent = sortedSections.filter((s: any) => s.parent_id != null)
+    if (sectionsWithParent.length === 0) return [] // no hierarchy, use flat mode
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return sortedSections.filter((s: any) => s.parent_id == null).sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0))
+  }, [sortedSections])
+
+  // Whether this template uses the 3-level hierarchy (etapa > sub-etapa > campos)
+  const hasSubSections = parentSections.length > 0
+
+  // Get sub-sections (sub-etapas) for a given parent section
+  const getSubSections = useCallback((parentId: number): TemplateSection[] => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return sortedSections.filter((s: any) => s.parent_id === parentId).sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0))
+  }, [sortedSections])
+
+  // For hierarchical templates: get all fields for a parent section (across all its sub-sections)
+  const getFieldsForParentSection = useCallback((parentId: number): FieldWithSection[] => {
+    const subSections = getSubSections(parentId)
+    const subSectionIds = subSections.map(s => s.id)
+    if (!template) return []
+    return template.fields.filter(f => f.section_id != null && subSectionIds.includes(f.section_id))
+  }, [template, getSubSections])
+
+  // Flat sections (sections that are NOT parents in hierarchical mode) — used for section list in flat mode
+  const flatSections = useMemo(() => {
+    if (hasSubSections) {
+      // In hierarchical mode, flat sections are the sub-etapas (have parent_id)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      return sortedSections.filter((s: any) => s.parent_id != null)
+    }
+    return sortedSections
+  }, [sortedSections, hasSubSections])
 
   useEffect(() => {
     const fetchData = async () => {
@@ -461,7 +499,15 @@ function ChecklistForm() {
           })
 
           setOfflineChecklistId(offlineId)
-          setSectionProgress(sortedSections.map(s => ({
+          // Only track progress for sections that have fields (sub-etapas, not parent etapas)
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const trackableSections = sortedSections.filter((s: any) => {
+            // Parent sections (no parent_id) that have children should NOT be tracked
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const hasChildren = sortedSections.some((child: any) => child.parent_id === s.id)
+            return !hasChildren // only track leaf sections
+          })
+          setSectionProgress(trackableSections.map(s => ({
             section_id: s.id,
             status: 'pendente' as const,
             completed_at: null,
@@ -1471,9 +1517,15 @@ function ChecklistForm() {
       }
     }
 
-    setActiveSection(null)
+    // In hierarchical mode, go back to parent section list instead of main list
+    if (hasSubSections && activeParentSection !== null) {
+      setActiveSection(null) // back to sub-etapa list for this parent
+    } else {
+      setActiveSection(null)
+      setActiveParentSection(null)
+    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [autoSaveField, activeSection, getFieldsForSection, buildSingleResponseRow, supabase, checklistId, offlineChecklistId, sectionProgress])
+  }, [autoSaveField, activeSection, getFieldsForSection, buildSingleResponseRow, supabase, checklistId, offlineChecklistId, sectionProgress, hasSubSections, activeParentSection])
 
   // Handle Android back button and navigation
   // Ref estavel para o handler (evita re-registrar listener a cada campo preenchido)
@@ -1485,13 +1537,16 @@ function ChecklistForm() {
       if (hasSections && activeSection !== null) {
         window.history.pushState(null, '', window.location.href)
         await handleSectionBack()
+      } else if (hasSubSections && activeParentSection !== null) {
+        window.history.pushState(null, '', window.location.href)
+        setActiveParentSection(null)
       } else {
         autoSaveField.flush()
         await new Promise(resolve => setTimeout(resolve, 300))
         router.push(APP_CONFIG.routes.dashboard)
       }
     }
-  }, [hasSections, activeSection, handleSectionBack, autoSaveField, router])
+  }, [hasSections, activeSection, handleSectionBack, autoSaveField, router, hasSubSections, activeParentSection])
 
   // Registra listener UMA VEZ no mount + pushState UMA VEZ
   useEffect(() => {
@@ -2026,11 +2081,105 @@ function ChecklistForm() {
     )
   }
 
+  // ============ HIERARCHICAL TEMPLATE: SUB-ETAPAS LIST VIEW ============
+  if (hasSections && hasSubSections && activeParentSection !== null && activeSection === null) {
+    const parentSection = parentSections.find(s => s.id === activeParentSection)
+    const subSections = getSubSections(activeParentSection)
+    const allParentFields = getFieldsForParentSection(activeParentSection)
+    const completedSubCount = subSections.filter(sub => {
+      const progress = sectionProgress.find(sp => sp.section_id === sub.id)
+      return progress?.status === 'concluido'
+    }).length
+    const progressPct = subSections.length > 0 ? Math.round((completedSubCount / subSections.length) * 100) : 0
+
+    return (
+      <div className="min-h-screen bg-page">
+        <Header
+          onBack={() => setActiveParentSection(null)}
+          title={parentSection?.name || 'Etapa'}
+          subtitle={template.name}
+          icon={FiLayers}
+          rightSlot={
+            <div className="text-right">
+              <p className="text-xs sm:text-sm font-medium text-primary">{completedSubCount}/{subSections.length}</p>
+              <p className="text-[10px] sm:text-xs text-muted">sub-etapas</p>
+            </div>
+          }
+        >
+          <div className="h-1 bg-surface-hover">
+            <div className="h-full bg-primary transition-all duration-300" style={{ width: `${progressPct}%` }} />
+          </div>
+        </Header>
+
+        <main className="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          <div className="flex items-center gap-2 mb-1">
+            <FiLayers className="w-5 h-5 text-primary" />
+            <h2 className="text-lg font-semibold text-main">{parentSection?.name}</h2>
+          </div>
+          <p className="text-xs text-muted mb-6">{allParentFields.length} campo{allParentFields.length !== 1 ? 's' : ''} no total</p>
+
+          <div className="space-y-3">
+            {subSections.map((sub, idx) => {
+              const progress = sectionProgress.find(sp => sp.section_id === sub.id)
+              const isDone = progress?.status === 'concluido'
+              const subFields = getFieldsForSection(sub.id)
+
+              return (
+                <button
+                  key={sub.id}
+                  type="button"
+                  onClick={() => setActiveSection(sub.id)}
+                  className={`w-full text-left card p-3 sm:p-5 transition-all hover:shadow-theme-md cursor-pointer ${
+                    isDone
+                      ? 'border-success/30 hover:border-success/50'
+                      : 'border-subtle hover:border-primary/30'
+                  }`}
+                >
+                  <div className="flex items-center gap-3 sm:gap-4">
+                    <div className={`w-9 h-9 sm:w-10 sm:h-10 rounded-xl flex items-center justify-center text-sm font-bold shrink-0 ${
+                      isDone ? 'bg-success/20 text-success' : 'bg-primary/10 text-primary'
+                    }`}>
+                      {isDone ? <FiCheckCircle className="w-4 h-4 sm:w-5 sm:h-5" /> : idx + 1}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <h3 className={`font-semibold text-sm sm:text-base ${isDone ? 'text-success' : 'text-main'}`}>
+                        {sub.name}
+                      </h3>
+                      <p className="text-[10px] sm:text-xs text-muted">
+                        {subFields.length} campo{subFields.length !== 1 ? 's' : ''}
+                        {isDone && progress?.completed_at && (
+                          <> &middot; {new Date(progress.completed_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</>
+                        )}
+                      </p>
+                    </div>
+                    <FiChevronRight className={`w-4 h-4 sm:w-5 sm:h-5 shrink-0 ${isDone ? 'text-success' : 'text-muted'}`} />
+                  </div>
+                </button>
+              )
+            })}
+          </div>
+
+          <div className="mt-4">
+            <button onClick={() => setActiveParentSection(null)} className="btn-ghost w-full py-3 text-center block">
+              Voltar às Etapas
+            </button>
+          </div>
+        </main>
+      </div>
+    )
+  }
+
   // ============ SECTIONED TEMPLATE: SECTION LIST VIEW ============
   if (hasSections && activeSection === null) {
-    const completedCount = sectionProgress.filter(sp => sp.status === 'concluido').length
+    // Determine which sections to show at the top level
+    const topLevelSections = hasSubSections ? parentSections : sortedSections
+    const completedCount = hasSubSections
+      ? flatSections.filter(s => sectionProgress.find(sp => sp.section_id === s.id)?.status === 'concluido').length
+      : sectionProgress.filter(sp => sp.status === 'concluido').length
     const hasGeneralFields = generalFields.length > 0
-    const totalCount = sortedSections.length + (hasGeneralFields ? 1 : 0)
+    const totalCount = hasSubSections
+      ? flatSections.length + (hasGeneralFields ? 1 : 0)
+      : topLevelSections.length + (hasGeneralFields ? 1 : 0)
     const progressPct = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0
 
     return (
@@ -2059,7 +2208,51 @@ function ChecklistForm() {
           </div>
 
           <div className="space-y-3">
-            {sortedSections.map((section, idx) => {
+            {topLevelSections.map((section, idx) => {
+              if (hasSubSections) {
+                // Hierarchical mode: show parent sections with aggregated progress
+                const subSections = getSubSections(section.id)
+                const allFields = getFieldsForParentSection(section.id)
+                const completedSubs = subSections.filter(sub => {
+                  const p = sectionProgress.find(sp => sp.section_id === sub.id)
+                  return p?.status === 'concluido'
+                }).length
+                const allDone = completedSubs === subSections.length && subSections.length > 0
+
+                return (
+                  <button
+                    key={section.id}
+                    type="button"
+                    onClick={() => setActiveParentSection(section.id)}
+                    className={`w-full text-left card p-3 sm:p-5 transition-all hover:shadow-theme-md cursor-pointer ${
+                      allDone
+                        ? 'border-success/30 hover:border-success/50'
+                        : 'border-subtle hover:border-primary/30'
+                    }`}
+                  >
+                    <div className="flex items-center gap-3 sm:gap-4">
+                      <div className={`w-9 h-9 sm:w-10 sm:h-10 rounded-xl flex items-center justify-center text-sm font-bold shrink-0 ${
+                        allDone ? 'bg-success/20 text-success' : 'bg-primary/10 text-primary'
+                      }`}>
+                        {allDone ? <FiCheckCircle className="w-4 h-4 sm:w-5 sm:h-5" /> : idx + 1}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <h3 className={`font-semibold text-sm sm:text-base ${allDone ? 'text-success' : 'text-main'}`}>
+                          {section.name}
+                        </h3>
+                        <p className="text-[10px] sm:text-xs text-muted">
+                          {subSections.length} sub-etapa{subSections.length !== 1 ? 's' : ''} &middot; {allFields.length} campo{allFields.length !== 1 ? 's' : ''}
+                          {allDone && <> &middot; <span className="text-success">Concluida</span></>}
+                          {!allDone && completedSubs > 0 && <> &middot; {completedSubs}/{subSections.length} concluida{completedSubs !== 1 ? 's' : ''}</>}
+                        </p>
+                      </div>
+                      <FiChevronRight className={`w-4 h-4 sm:w-5 sm:h-5 shrink-0 ${allDone ? 'text-success' : 'text-muted'}`} />
+                    </div>
+                  </button>
+                )
+              }
+
+              // Flat mode (original behavior)
               const progress = sectionProgress.find(sp => sp.section_id === section.id)
               const isDone = progress?.status === 'concluido'
               const sectionFields = getFieldsForSection(section.id)
@@ -2107,7 +2300,7 @@ function ChecklistForm() {
               >
                 <div className="flex items-center gap-3 sm:gap-4">
                   <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl flex items-center justify-center text-sm font-bold shrink-0 bg-primary/10 text-primary">
-                    {sortedSections.length + 1}
+                    {topLevelSections.length + 1}
                   </div>
                   <div className="flex-1 min-w-0">
                     <h3 className="font-semibold text-sm sm:text-base text-main">Campos Gerais</h3>
@@ -2217,12 +2410,18 @@ function ChecklistForm() {
     }).length
     const progressPct = sectionFields.length > 0 ? Math.round((filledCount / sectionFields.length) * 100) : 0
 
+    // In hierarchical mode, show parent name as subtitle
+    const parentName = hasSubSections && activeParentSection !== null
+      ? parentSections.find(s => s.id === activeParentSection)?.name
+      : undefined
+    const headerSubtitle = parentName ? `${parentName} — ${template.name}` : template.name
+
     return (
       <div className="min-h-screen bg-page">
         <Header
           onBack={handleSectionBack}
           title={isGeneralSection ? 'Campos Gerais' : section?.name}
-          subtitle={template.name}
+          subtitle={headerSubtitle}
           icon={FiLayers}
           rightSlot={
             <div className="text-right">

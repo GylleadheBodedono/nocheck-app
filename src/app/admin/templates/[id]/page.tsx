@@ -28,18 +28,26 @@ import { CSS } from '@dnd-kit/utilities'
 import type { Store, FieldType, TemplateCategory, Sector, TemplateField, FunctionRow } from '@/types/database'
 import { FieldConditionEditor, type ConditionConfig, type PresetOption } from '@/components/admin/FieldConditionEditor'
 
+// ─── Tipos locais ────────────────────────────────────────────────────────────
+
+/** Configuracao de uma etapa ou sub-etapa do template.
+ *  Etapas (parent_id=null) agrupam sub-etapas (parent_id=<etapa_id>).
+ *  Campos sao atribuidos a sub-etapas ou diretamente a etapas sem sub-etapas.
+ *  `dbId` presente indica que a secao ja existe no banco. */
 type SectionConfig = {
   id: string
   dbId?: number
   name: string
   description: string
   sort_order: number
+  parent_id: string | null // null = etapa raiz; string = id da etapa pai
 }
 
+/** Campo individual de um template. `dbId` presente = ja persistido. */
 type FieldConfig = {
   id: string
-  dbId?: number // ID from database for existing fields
-  section_id: string | null // local section id
+  dbId?: number
+  section_id: string | null // id local da etapa/sub-etapa a que pertence
   name: string
   field_type: FieldType
   is_required: boolean
@@ -51,8 +59,9 @@ type FieldConfig = {
   help_text: string
 }
 
+/** Par loja/setor que define onde o template fica visivel. */
 type VisibilityConfig = {
-  id?: number // ID from database for existing visibility
+  id?: number
   store_id: number
   sector_id: number | null
   function_id: number | null
@@ -105,6 +114,7 @@ export default function EditTemplatePage() {
   const [fields, setFields] = useState<FieldConfig[]>([])
   const [editingField, setEditingField] = useState<string | null>(null)
   const [expandedSection, setExpandedSection] = useState<string | null>(null)
+  const [expandedSubSection, setExpandedSubSection] = useState<string | null>(null)
   const [deletedFieldIds, setDeletedFieldIds] = useState<number[]>([])
 
   // Visibility - now includes sector_id
@@ -228,16 +238,19 @@ export default function EditTemplatePage() {
       setAllowedEndTime(templateData.allowed_end_time ? templateData.allowed_end_time.substring(0, 5) : '')
       setJustificationDeadlineHours(templateData.justification_deadline_hours != null ? String(templateData.justification_deadline_hours) : '')
 
-      // Convert sections to SectionConfig format
-      type RawSection = { id: number; name: string; description: string | null; sort_order: number }
-      const existingSections: SectionConfig[] = (templateData.sections || [])
-        .sort((a: RawSection, b: RawSection) => (a.sort_order || 0) - (b.sort_order || 0))
-        .map((s: RawSection) => ({
+      // Converter secoes do banco para SectionConfig local.
+      // Mapeia parent_id numerico (DB) para id local (string).
+      type RawSection = { id: number; name: string; description: string | null; sort_order: number; parent_id: number | null }
+      const dbIdToLocalId: Record<number, string> = {}
+      const rawSections = (templateData.sections || []).sort((a: RawSection, b: RawSection) => (a.sort_order || 0) - (b.sort_order || 0))
+      rawSections.forEach((s: RawSection) => { dbIdToLocalId[s.id] = `section_${s.id}` })
+      const existingSections: SectionConfig[] = rawSections.map((s: RawSection) => ({
           id: `section_${s.id}`,
           dbId: s.id,
           name: s.name,
           description: s.description || '',
           sort_order: s.sort_order || 0,
+          parent_id: s.parent_id ? dbIdToLocalId[s.parent_id] || null : null,
         }))
       setSections(existingSections)
 
@@ -350,26 +363,67 @@ export default function EditTemplatePage() {
     return sectors.filter(s => s.store_id === storeId)
   }
 
+  // ─── Hierarquia de etapas / sub-etapas ──────────────────────────────────────
+  /** Etapas raiz (nivel 1) — sem parent_id */
+  const parentSections = sections.filter(s => !s.parent_id)
+  /** Sub-etapas de uma etapa pai, ordenadas */
+  const getSubSections = (parentId: string) =>
+    sections.filter(s => s.parent_id === parentId).sort((a, b) => a.sort_order - b.sort_order)
+
+  /** Cria nova etapa raiz */
   const addSection = () => {
-    const newSection: SectionConfig = {
+    setSections([...sections, {
       id: `section_${Date.now()}`,
       name: '',
       description: '',
       sort_order: sections.length + 1,
+      parent_id: null,
+    }])
+  }
+
+  /** Cria nova sub-etapa dentro de uma etapa pai */
+  const addSubSection = (parentId: string) => {
+    const newSub: SectionConfig = {
+      id: `section_${Date.now()}`,
+      name: '',
+      description: '',
+      sort_order: sections.length + 1,
+      parent_id: parentId,
     }
-    setSections([...sections, newSection])
+    setSections([...sections, newSub])
+    setExpandedSubSection(newSub.id)
   }
 
   const updateSection = (id: string, updates: Partial<SectionConfig>) => {
     setSections(sections.map(s => s.id === id ? { ...s, ...updates } : s))
   }
 
+  /** Remove etapa ou sub-etapa. Se for etapa pai, remove em cascata.
+   *  Registra dbIds removidos para exclusao no banco ao salvar. */
   const removeSection = (id: string) => {
-    if (!confirm('Deseja realmente excluir esta etapa? Os campos dela ficarao sem etapa.')) return
     const section = sections.find(s => s.id === id)
-    if (section?.dbId) setDeletedSectionIds(prev => [...prev, section.dbId!])
-    setSections(sections.filter(s => s.id !== id))
-    setFields(fields.map(f => f.section_id === id ? { ...f, section_id: null } : f))
+    if (!section) return
+
+    if (!section.parent_id) {
+      // Etapa pai: remove ela + sub-etapas + desvincula campos
+      if (!confirm('Deseja realmente excluir esta etapa e todas as suas sub-etapas?')) return
+      const childSections = sections.filter(s => s.parent_id === id)
+      const childIds = childSections.map(s => s.id)
+      if (section.dbId) setDeletedSectionIds(prev => [...prev, section.dbId!])
+      childSections.forEach(c => { if (c.dbId) setDeletedSectionIds(prev => [...prev, c.dbId!]) })
+      setSections(sections.filter(s => s.id !== id && s.parent_id !== id))
+      setFields(fields.map(f =>
+        (f.section_id === id || childIds.includes(f.section_id || ''))
+          ? { ...f, section_id: null }
+          : f
+      ))
+    } else {
+      // Sub-etapa: remove apenas ela + desvincula seus campos
+      if (!confirm('Deseja realmente excluir esta sub-etapa? Os campos dela ficarao sem etapa.')) return
+      if (section.dbId) setDeletedSectionIds(prev => [...prev, section.dbId!])
+      setSections(sections.filter(s => s.id !== id))
+      setFields(fields.map(f => f.section_id === id ? { ...f, section_id: null } : f))
+    }
   }
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }))
@@ -628,39 +682,71 @@ export default function EditTemplatePage() {
         if (delSecErr) throw delSecErr
       }
 
-      // Build local section id → db section id map
-      const sectionIdMap: Record<string, number> = {}
+      // ─── Salvar etapas/sub-etapas ── pais primeiro, filhas depois ─────────────
+      const sectionIdMap: Record<string, number> = {} // id local → id do banco
 
-      // Update existing sections (em paralelo para performance)
-      const existingSections = sections.filter(s => s.dbId)
-      if (existingSections.length > 0) {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const sb = supabase as any
-        const sectionResults = await Promise.all(existingSections.map(section =>
-          sb.from('template_sections')
-            .update({ name: section.name, description: section.description || null, sort_order: section.sort_order })
-            .eq('id', section.dbId)
-        ))
-        for (const r of sectionResults) { if (r.error) throw r.error }
-        existingSections.forEach(s => { sectionIdMap[s.id] = s.dbId! })
+      // Mapear secoes existentes para o sectionIdMap
+      for (const section of sections.filter(s => s.dbId)) {
+        sectionIdMap[section.id] = section.dbId!
       }
 
-      // Insert new sections
-      const newSections = sections.filter(s => !s.dbId)
-      if (newSections.length > 0) {
+      // Update existing parent sections first (parent_id = null)
+      for (const section of sections.filter(s => s.dbId && !s.parent_id)) {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const { data: insertedSections, error: insSecErr } = await (supabase as any)
+        const { error: updSecErr } = await (supabase as any)
           .from('template_sections')
-          .insert(newSections.map(s => ({
+          .update({ name: section.name, description: section.description || null, sort_order: section.sort_order, parent_id: null })
+          .eq('id', section.dbId)
+        if (updSecErr) throw updSecErr
+      }
+
+      // Insert new parent sections
+      const newParentSections = sections.filter(s => !s.dbId && !s.parent_id)
+      if (newParentSections.length > 0) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const { data: insertedParents, error: insParErr } = await (supabase as any)
+          .from('template_sections')
+          .insert(newParentSections.map(s => ({
             template_id: Number(templateId),
             name: s.name,
             description: s.description || null,
             sort_order: s.sort_order,
           })))
           .select()
-        if (insSecErr) throw insSecErr
-        if (insertedSections) {
-          newSections.forEach((s, i) => { sectionIdMap[s.id] = insertedSections[i].id })
+        if (insParErr) throw insParErr
+        if (insertedParents) {
+          newParentSections.forEach((s, i) => { sectionIdMap[s.id] = insertedParents[i].id })
+        }
+      }
+
+      // Update existing child sections (with parent_id)
+      for (const section of sections.filter(s => s.dbId && s.parent_id)) {
+        const dbParentId = section.parent_id ? sectionIdMap[section.parent_id] || null : null
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const { error: updSecErr } = await (supabase as any)
+          .from('template_sections')
+          .update({ name: section.name, description: section.description || null, sort_order: section.sort_order, parent_id: dbParentId })
+          .eq('id', section.dbId)
+        if (updSecErr) throw updSecErr
+      }
+
+      // Insert new child sections
+      const newChildSections = sections.filter(s => !s.dbId && s.parent_id)
+      if (newChildSections.length > 0) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const { data: insertedChildren, error: insChErr } = await (supabase as any)
+          .from('template_sections')
+          .insert(newChildSections.map(s => ({
+            template_id: Number(templateId),
+            name: s.name,
+            description: s.description || null,
+            sort_order: s.sort_order,
+            parent_id: s.parent_id ? sectionIdMap[s.parent_id] || null : null,
+          })))
+          .select()
+        if (insChErr) throw insChErr
+        if (insertedChildren) {
+          newChildSections.forEach((s, i) => { sectionIdMap[s.id] = insertedChildren[i].id })
         }
       }
 
@@ -844,6 +930,121 @@ export default function EditTemplatePage() {
   const getFieldTypeIcon = (type: FieldType) => {
     return fieldTypes.find(f => f.value === type)?.icon || '?'
   }
+
+  // ─── Renderizador de campo reutilizavel ─────────────────────────────────────
+  /** Renderiza um campo (SortableItem) com cabeçalho, condicoes e painel de edicao.
+   *  Usado tanto em etapas com campos diretos quanto em sub-etapas. */
+  const renderFieldItem = (field: FieldConfig) => (
+    <SortableItem key={field.id} id={field.id} className={`border rounded-xl transition-colors ${editingField === field.id ? 'border-primary bg-surface-hover' : 'border-subtle bg-surface'}`}>
+    {(fieldListeners) => (<>
+      <div className="flex items-center gap-2 sm:gap-3 p-2 sm:p-3">
+        <div {...fieldListeners} className="cursor-grab active:cursor-grabbing p-1 text-muted hover:text-primary touch-none">
+          <RiDraggable className="w-4 h-4" />
+        </div>
+        <IconPicker value={getFieldIcon(field)} onChange={(icon) => setFieldIcon(field.id, icon)} fallback={getFieldTypeIcon(field.field_type)} />
+        <div className="flex-1 min-w-0">
+          <input type="text" value={field.name} onChange={(e) => updateField(field.id, { name: e.target.value })} placeholder="Nome do campo" className="w-full bg-transparent border-none text-main placeholder:text-muted focus:outline-none font-medium text-xs sm:text-sm" />
+          <p className="text-[10px] sm:text-xs text-muted">{getFieldTypeLabel(field.field_type)}</p>
+        </div>
+        <div className="flex items-center gap-0.5 sm:gap-1 shrink-0">
+          <label className="flex items-center gap-0.5 sm:gap-1 text-[10px] sm:text-xs text-secondary" title="Obrigatorio">
+            <input type="checkbox" checked={field.is_required} onChange={(e) => updateField(field.id, { is_required: e.target.checked })} className="rounded border-default bg-surface text-primary focus:ring-primary w-3 h-3 sm:w-3.5 sm:h-3.5" />
+            <span className="hidden sm:inline">Obrig.</span><span className="sm:hidden">*</span>
+          </label>
+          <button type="button" onClick={() => setEditingField(editingField === field.id ? null : field.id)} className={`p-1 sm:p-1.5 rounded-lg transition-colors ${editingField === field.id ? 'bg-primary/20 text-primary' : 'text-muted hover:bg-surface-hover'}`}><FiSettings className="w-3 h-3 sm:w-3.5 sm:h-3.5" /></button>
+          <button type="button" onClick={() => removeField(field.id)} className="p-1 sm:p-1.5 text-error hover:bg-error/20 rounded-lg transition-colors"><FiTrash2 className="w-3 h-3 sm:w-3.5 sm:h-3.5" /></button>
+        </div>
+      </div>
+      <FieldConditionEditor
+        fieldType={field.field_type}
+        fieldName={field.name}
+        dropdownOptions={field.field_type === 'dropdown' ? getOptionsItems(field.options) : undefined}
+        checkboxOptions={field.field_type === 'checkbox_multiple' ? getOptionsItems(field.options) : undefined}
+        condition={fieldConditions[field.id] || null}
+        onChange={(cond) => setFieldConditions(prev => ({ ...prev, [field.id]: cond }))}
+        users={conditionUsers}
+        presets={conditionPresets}
+        onSaveAsPreset={handleSaveAsPreset}
+      />
+      {editingField === field.id && (
+        <div className="px-2 pb-2 sm:px-3 sm:pb-3 pt-2 border-t border-subtle space-y-3">
+          <div>
+            <label className="block text-xs text-muted mb-1">Tipo do campo</label>
+            <Select value={field.field_type} onChange={(v) => changeFieldType(field.id, v as FieldType)} className="text-sm" options={fieldTypes.map(ft => ({ value: ft.value, label: `${ft.icon} ${ft.label}` }))} />
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs text-muted mb-1">Placeholder</label>
+              <input type="text" value={field.placeholder} onChange={(e) => updateField(field.id, { placeholder: e.target.value })} className="input text-sm" placeholder="Texto de exemplo..." />
+            </div>
+            <div>
+              <label className="block text-xs text-muted mb-1">Texto de ajuda</label>
+              <input type="text" value={field.help_text} onChange={(e) => updateField(field.id, { help_text: e.target.value })} className="input text-sm" placeholder="Instrucoes para o usuario..." />
+            </div>
+          </div>
+          {sections.length > 0 && (
+            <div>
+              <label className="block text-xs text-muted mb-1">Mover para etapa</label>
+              <Select value={field.section_id || ''} onChange={(v) => updateField(field.id, { section_id: v || null })} className="text-sm" placeholder="Sem etapa (geral)" options={sections.filter(s => s.parent_id || getSubSections(s.id).length === 0).map(s => ({ value: String(s.id), label: s.parent_id ? `${parentSections.find(p => p.id === s.parent_id)?.name || ''} > ${s.name || '(sem nome)'}` : s.name || '(sem nome)' }))} />
+            </div>
+          )}
+          {field.field_type === 'number' && (
+            <div>
+              <label className="block text-xs text-muted mb-1">Tipo de numero</label>
+              <div className="grid grid-cols-2 gap-2">
+                {[{ value: 'monetario', label: 'Monetario (R$)' }, { value: 'quantidade', label: 'Quantidade (un)' }, { value: 'decimal', label: 'Decimal' }, { value: 'porcentagem', label: 'Porcentagem (%)' }].map(st => (
+                  <button key={st.value} type="button" onClick={() => updateField(field.id, { options: { numberSubtype: st.value, ...(getFieldIcon(field) ? { icon: getFieldIcon(field) } : {}) } })} className={`px-3 py-2 rounded-lg text-sm font-medium transition-all border ${(field.options as { numberSubtype?: string } | null)?.numberSubtype === st.value ? 'bg-primary/15 border-primary text-primary' : 'bg-surface border-subtle text-muted hover:border-primary/40'}`}>{st.label}</button>
+                ))}
+              </div>
+            </div>
+          )}
+          {(field.field_type === 'dropdown' || field.field_type === 'checkbox_multiple') && (
+            <div>
+              <label className="block text-xs text-muted mb-2">Opcoes</label>
+              <div className="space-y-2">
+                {getOptionsItems(field.options).map((opt: string, optIdx: number) => (
+                  <div key={optIdx} className="flex items-center gap-2">
+                    <span className="text-muted cursor-grab text-sm select-none">☰</span>
+                    <input type="text" value={opt} onChange={(e) => { const newOpts = [...getOptionsItems(field.options)]; newOpts[optIdx] = e.target.value; updateField(field.id, { options: getFieldIcon(field) ? { items: newOpts, icon: getFieldIcon(field) } : newOpts }) }} placeholder={`Opcao ${optIdx + 1}`} className="input text-sm flex-1" />
+                    <button type="button" onClick={() => { const newOpts = getOptionsItems(field.options).filter((_: string, i: number) => i !== optIdx); updateField(field.id, { options: getFieldIcon(field) ? { items: newOpts, icon: getFieldIcon(field) } : newOpts }) }} className="p-1 text-error hover:bg-error/20 rounded transition-colors shrink-0"><FiTrash2 className="w-3 h-3" /></button>
+                  </div>
+                ))}
+              </div>
+              <button type="button" onClick={() => { const newOpts = [...getOptionsItems(field.options), '']; updateField(field.id, { options: getFieldIcon(field) ? { items: newOpts, icon: getFieldIcon(field) } : newOpts }) }} className="mt-2 text-xs text-primary hover:text-primary/80 font-medium py-1.5 px-3 border border-primary/30 rounded-lg hover:bg-primary/5 transition-colors">+ Adicionar opcao</button>
+            </div>
+          )}
+          {field.field_type === 'yes_no' && (
+            <div className="space-y-2">
+              <label className="flex items-center gap-2 text-sm text-secondary cursor-pointer">
+                <input type="checkbox" checked={(field.options as { allowPhoto?: boolean } | null)?.allowPhoto || false} onChange={(e) => updateField(field.id, { options: { ...((field.options as Record<string, unknown>) || {}), allowPhoto: e.target.checked, photoRequired: false } })} className="rounded border-default bg-surface text-primary focus:ring-primary" />
+                Permitir foto
+              </label>
+              {(field.options as { allowPhoto?: boolean } | null)?.allowPhoto && (
+                <Select value={(field.options as { photoRequired?: boolean } | null)?.photoRequired ? 'required' : 'optional'} onChange={(v) => updateField(field.id, { options: { ...((field.options as Record<string, unknown>) || {}), photoRequired: v === 'required' } })} className="text-sm" options={[{ value: 'optional', label: 'Foto opcional' }, { value: 'required', label: 'Foto obrigatoria' }]} />
+              )}
+              <div className="mt-3 p-3 bg-emerald-500/5 border border-emerald-500/20 rounded-lg space-y-2">
+                <p className="text-xs font-medium text-emerald-500">Quando resposta for &quot;Sim&quot;:</p>
+                <label className="flex items-center gap-2 text-sm text-secondary cursor-pointer"><input type="checkbox" checked={(field.options as Record<string, unknown>)?.onYes ? ((field.options as Record<string, unknown>).onYes as Record<string, unknown>)?.showTextField === true : false} onChange={(e) => { const opts = { ...((field.options as Record<string, unknown>) || {})}; const onYes: Record<string, unknown> = { ...((opts.onYes as Record<string, unknown>) || {}), showTextField: e.target.checked }; if (!e.target.checked) { delete onYes.textFieldLabel; delete onYes.textFieldRequired }; updateField(field.id, { options: { ...opts, onYes } }) }} className="rounded border-default bg-surface text-primary focus:ring-primary" />Exigir texto explicativo</label>
+                {!!(field.options as Record<string, unknown>)?.onYes && !!((field.options as Record<string, unknown>).onYes as Record<string, unknown>)?.showTextField && (<div className="ml-6 space-y-2"><input type="text" value={((field.options as Record<string, unknown>).onYes as Record<string, unknown>)?.textFieldLabel as string || ''} onChange={(e) => { const opts = { ...((field.options as Record<string, unknown>) || {})}; const onYes = { ...((opts.onYes as Record<string, unknown>) || {}), textFieldLabel: e.target.value }; updateField(field.id, { options: { ...opts, onYes } }) }} placeholder="Label do campo (ex: Explique o motivo)" className="input text-sm" /><label className="flex items-center gap-2 text-xs text-muted cursor-pointer"><input type="checkbox" checked={((field.options as Record<string, unknown>)?.onYes as Record<string, unknown>)?.textFieldRequired === true} onChange={(e) => { const opts = { ...((field.options as Record<string, unknown>) || {})}; const onYes = { ...((opts.onYes as Record<string, unknown>) || {}), textFieldRequired: e.target.checked }; updateField(field.id, { options: { ...opts, onYes } }) }} className="rounded border-default bg-surface text-primary focus:ring-primary w-3 h-3" />Texto obrigatorio</label></div>)}
+                <label className="flex items-center gap-2 text-sm text-secondary cursor-pointer"><input type="checkbox" checked={(field.options as Record<string, unknown>)?.onYes ? ((field.options as Record<string, unknown>).onYes as Record<string, unknown>)?.showPhotoField === true : false} onChange={(e) => { const opts = { ...((field.options as Record<string, unknown>) || {})}; const onYes: Record<string, unknown> = { ...((opts.onYes as Record<string, unknown>) || {}), showPhotoField: e.target.checked }; if (!e.target.checked) { delete onYes.photoFieldLabel; delete onYes.photoFieldRequired }; updateField(field.id, { options: { ...opts, onYes } }) }} className="rounded border-default bg-surface text-primary focus:ring-primary" />Exigir foto</label>
+                {!!(field.options as Record<string, unknown>)?.onYes && !!((field.options as Record<string, unknown>).onYes as Record<string, unknown>)?.showPhotoField && (<div className="ml-6 space-y-2"><input type="text" value={((field.options as Record<string, unknown>).onYes as Record<string, unknown>)?.photoFieldLabel as string || ''} onChange={(e) => { const opts = { ...((field.options as Record<string, unknown>) || {})}; const onYes = { ...((opts.onYes as Record<string, unknown>) || {}), photoFieldLabel: e.target.value }; updateField(field.id, { options: { ...opts, onYes } }) }} placeholder="Label da foto (ex: Foto da evidencia)" className="input text-sm" /><label className="flex items-center gap-2 text-xs text-muted cursor-pointer"><input type="checkbox" checked={((field.options as Record<string, unknown>)?.onYes as Record<string, unknown>)?.photoFieldRequired === true} onChange={(e) => { const opts = { ...((field.options as Record<string, unknown>) || {})}; const onYes = { ...((opts.onYes as Record<string, unknown>) || {}), photoFieldRequired: e.target.checked }; updateField(field.id, { options: { ...opts, onYes } }) }} className="rounded border-default bg-surface text-primary focus:ring-primary w-3 h-3" />Foto obrigatoria</label></div>)}
+              </div>
+              <div className="p-3 bg-red-500/5 border border-red-500/20 rounded-lg space-y-2">
+                <p className="text-xs font-medium text-red-400">Quando resposta for &quot;Nao&quot;:</p>
+                <label className="flex items-center gap-2 text-sm text-secondary cursor-pointer"><input type="checkbox" checked={(field.options as Record<string, unknown>)?.onNo ? ((field.options as Record<string, unknown>).onNo as Record<string, unknown>)?.showTextField === true : false} onChange={(e) => { const opts = { ...((field.options as Record<string, unknown>) || {})}; const onNo: Record<string, unknown> = { ...((opts.onNo as Record<string, unknown>) || {}), showTextField: e.target.checked }; if (!e.target.checked) { delete onNo.textFieldLabel; delete onNo.textFieldRequired }; updateField(field.id, { options: { ...opts, onNo } }) }} className="rounded border-default bg-surface text-primary focus:ring-primary" />Exigir texto explicativo</label>
+                {!!(field.options as Record<string, unknown>)?.onNo && !!((field.options as Record<string, unknown>).onNo as Record<string, unknown>)?.showTextField && (<div className="ml-6 space-y-2"><input type="text" value={((field.options as Record<string, unknown>).onNo as Record<string, unknown>)?.textFieldLabel as string || ''} onChange={(e) => { const opts = { ...((field.options as Record<string, unknown>) || {})}; const onNo = { ...((opts.onNo as Record<string, unknown>) || {}), textFieldLabel: e.target.value }; updateField(field.id, { options: { ...opts, onNo } }) }} placeholder="Label do campo (ex: Explique o motivo)" className="input text-sm" /><label className="flex items-center gap-2 text-xs text-muted cursor-pointer"><input type="checkbox" checked={((field.options as Record<string, unknown>)?.onNo as Record<string, unknown>)?.textFieldRequired === true} onChange={(e) => { const opts = { ...((field.options as Record<string, unknown>) || {})}; const onNo = { ...((opts.onNo as Record<string, unknown>) || {}), textFieldRequired: e.target.checked }; updateField(field.id, { options: { ...opts, onNo } }) }} className="rounded border-default bg-surface text-primary focus:ring-primary w-3 h-3" />Texto obrigatorio</label></div>)}
+                <label className="flex items-center gap-2 text-sm text-secondary cursor-pointer"><input type="checkbox" checked={(field.options as Record<string, unknown>)?.onNo ? ((field.options as Record<string, unknown>).onNo as Record<string, unknown>)?.showPhotoField === true : false} onChange={(e) => { const opts = { ...((field.options as Record<string, unknown>) || {})}; const onNo: Record<string, unknown> = { ...((opts.onNo as Record<string, unknown>) || {}), showPhotoField: e.target.checked }; if (!e.target.checked) { delete onNo.photoFieldLabel; delete onNo.photoFieldRequired }; updateField(field.id, { options: { ...opts, onNo } }) }} className="rounded border-default bg-surface text-primary focus:ring-primary" />Exigir foto</label>
+                {!!(field.options as Record<string, unknown>)?.onNo && !!((field.options as Record<string, unknown>).onNo as Record<string, unknown>)?.showPhotoField && (<div className="ml-6 space-y-2"><input type="text" value={((field.options as Record<string, unknown>).onNo as Record<string, unknown>)?.photoFieldLabel as string || ''} onChange={(e) => { const opts = { ...((field.options as Record<string, unknown>) || {})}; const onNo = { ...((opts.onNo as Record<string, unknown>) || {}), photoFieldLabel: e.target.value }; updateField(field.id, { options: { ...opts, onNo } }) }} placeholder="Label da foto (ex: Foto da evidencia)" className="input text-sm" /><label className="flex items-center gap-2 text-xs text-muted cursor-pointer"><input type="checkbox" checked={((field.options as Record<string, unknown>)?.onNo as Record<string, unknown>)?.photoFieldRequired === true} onChange={(e) => { const opts = { ...((field.options as Record<string, unknown>) || {})}; const onNo = { ...((opts.onNo as Record<string, unknown>) || {}), photoFieldRequired: e.target.checked }; updateField(field.id, { options: { ...opts, onNo } }) }} className="rounded border-default bg-surface text-primary focus:ring-primary w-3 h-3" />Foto obrigatoria</label></div>)}
+                <label className="flex items-center gap-2 text-sm text-secondary cursor-pointer"><input type="checkbox" checked={(field.options as Record<string, unknown>)?.onNo ? ((field.options as Record<string, unknown>).onNo as Record<string, unknown>)?.allowUserActionPlan === true : false} onChange={(e) => { const opts = { ...((field.options as Record<string, unknown>) || {})}; const onNo: Record<string, unknown> = { ...((opts.onNo as Record<string, unknown>) || {}), allowUserActionPlan: e.target.checked }; updateField(field.id, { options: { ...opts, onNo } }) }} className="rounded border-default bg-surface text-primary focus:ring-primary" />Permitir preenchedor escolher responsavel</label>
+              </div>
+            </div>
+          )}
+          {!['dropdown', 'checkbox_multiple'].includes(field.field_type) && (<div><label className="block text-xs text-muted mb-1">Validacao cruzada</label><Select value={(field.options as { validationRole?: string } | null)?.validationRole || ''} onChange={(v) => updateField(field.id, { options: { ...((field.options as Record<string, unknown>) || {}), validationRole: v || null } })} className="text-sm" placeholder="Nenhum" options={[{ value: 'nota', label: 'Numero da nota' }, { value: 'valor', label: 'Valor' }]} /></div>)}
+        </div>
+      )}
+    </>)}
+    </SortableItem>
+  )
 
   if (loading) {
     return <LoadingPage />
@@ -1030,11 +1231,13 @@ export default function EditTemplatePage() {
             {sections.length > 0 ? (
               <div className="space-y-4">
                 <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleSectionDragEnd}>
-                <SortableContext items={sections.map(s => s.id)} strategy={verticalListSortingStrategy}>
-                {sections.map((section, idx) => {
-                  const sectionFields = fields
-                    .filter(f => f.section_id === section.id)
-                    .sort((a, b) => a.sort_order - b.sort_order)
+                <SortableContext items={parentSections.map(s => s.id)} strategy={verticalListSortingStrategy}>
+                {parentSections.map((section, idx) => {
+                  const subSections = getSubSections(section.id)
+                  const hasSubSections = subSections.length > 0
+                  const sectionFields = hasSubSections
+                    ? fields.filter(f => subSections.some(sub => sub.id === f.section_id)).sort((a, b) => a.sort_order - b.sort_order)
+                    : fields.filter(f => f.section_id === section.id).sort((a, b) => a.sort_order - b.sort_order)
                   const isExpanded = expandedSection === section.id
 
                   return (
@@ -1049,13 +1252,65 @@ export default function EditTemplatePage() {
                         </div>
                         <span className="w-6 h-6 sm:w-7 sm:h-7 rounded-lg bg-primary/10 flex items-center justify-center text-xs font-bold text-primary shrink-0">{idx + 1}</span>
                         <input type="text" value={section.name} onChange={(e) => updateSection(section.id, { name: e.target.value })} onClick={e => e.stopPropagation()} placeholder="Nome da etapa" className="flex-1 min-w-0 bg-transparent border-none text-main placeholder:text-muted focus:outline-none font-medium text-sm sm:text-base" />
-                        <span className="text-xs text-muted whitespace-nowrap hidden sm:inline">{sectionFields.length} campos</span>
+                        <span className="text-xs text-muted whitespace-nowrap hidden sm:inline">
+                          {hasSubSections ? `${subSections.length} sub-etapas` : `${sectionFields.length} campos`}
+                        </span>
                         {isExpanded ? <FiChevronUp className="w-4 h-4 text-primary shrink-0" /> : <FiChevronDown className="w-4 h-4 text-muted shrink-0" />}
                         <button type="button" onClick={(e) => { e.stopPropagation(); removeSection(section.id) }} className="p-1.5 sm:p-2 text-error hover:bg-error/20 rounded-lg transition-colors shrink-0"><FiTrash2 className="w-3.5 h-3.5 sm:w-4 sm:h-4" /></button>
                       </div>
 
                       {isExpanded && (
                         <div className="p-4 space-y-3">
+                          <button type="button" onClick={() => addSubSection(section.id)} className="btn-secondary flex items-center gap-2 px-3 py-2 text-sm w-full justify-center">
+                            <FiPlus className="w-4 h-4" />
+                            Adicionar Sub-etapa
+                          </button>
+
+                          {hasSubSections ? (
+                            <div className="space-y-3">
+                              {subSections.map((sub, subIdx) => {
+                                const subFields = fields.filter(f => f.section_id === sub.id).sort((a, b) => a.sort_order - b.sort_order)
+                                const isSubExpanded = expandedSubSection === sub.id
+                                return (
+                                  <div key={sub.id} className="border border-subtle rounded-lg overflow-hidden ml-4">
+                                    <div
+                                      className={`flex items-center gap-2 p-2 sm:p-3 cursor-pointer transition-colors ${isSubExpanded ? 'bg-secondary/10 border-b border-subtle' : 'bg-surface hover:bg-surface-hover'}`}
+                                      onClick={() => setExpandedSubSection(isSubExpanded ? null : sub.id)}
+                                    >
+                                      <span className="w-5 h-5 rounded bg-secondary/10 flex items-center justify-center text-[10px] font-bold text-secondary shrink-0">{subIdx + 1}</span>
+                                      <input type="text" value={sub.name} onChange={(e) => updateSection(sub.id, { name: e.target.value })} onClick={e => e.stopPropagation()} placeholder="Nome da sub-etapa" className="flex-1 min-w-0 bg-transparent border-none text-main placeholder:text-muted focus:outline-none font-medium text-xs sm:text-sm" />
+                                      <span className="text-xs text-muted whitespace-nowrap hidden sm:inline">{subFields.length} campos</span>
+                                      {isSubExpanded ? <FiChevronUp className="w-3.5 h-3.5 text-secondary shrink-0" /> : <FiChevronDown className="w-3.5 h-3.5 text-muted shrink-0" />}
+                                      <button type="button" onClick={(e) => { e.stopPropagation(); removeSection(sub.id) }} className="p-1 text-error hover:bg-error/20 rounded-lg transition-colors shrink-0"><FiTrash2 className="w-3 h-3 sm:w-3.5 sm:h-3.5" /></button>
+                                    </div>
+                                    {isSubExpanded && (
+                                      <div className="p-3 space-y-3">
+                                        <div className="flex flex-wrap gap-2 p-2 bg-surface-hover rounded-lg border border-subtle">
+                                          <p className="w-full text-xs text-muted mb-1">Adicionar campo nesta sub-etapa:</p>
+                                          {fieldTypes.map(type => (
+                                            <button key={type.value} type="button" onClick={() => addField(type.value, sub.id)} className="btn-secondary flex items-center gap-1 px-2 py-1.5 text-xs">
+                                              <span>{type.icon}</span>
+                                              <span>{type.label}</span>
+                                            </button>
+                                          ))}
+                                        </div>
+                                        {subFields.length === 0 ? (
+                                          <p className="text-center text-muted text-sm py-3">Nenhum campo nesta sub-etapa</p>
+                                        ) : (
+                                          <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleFieldDragEnd(sub.id)}>
+                                          <SortableContext items={subFields.map(f => f.id)} strategy={verticalListSortingStrategy}>
+                                          {subFields.map((field) => renderFieldItem(field))}
+                                          </SortableContext>
+                                          </DndContext>
+                                        )}
+                                      </div>
+                                    )}
+                                  </div>
+                                )
+                              })}
+                            </div>
+                          ) : (
+                            <>
                           <div className="flex flex-wrap gap-2 p-3 bg-surface-hover rounded-xl border border-subtle">
                             <p className="w-full text-xs text-muted mb-1">Adicionar campo nesta etapa:</p>
                             {fieldTypes.map(type => (
@@ -1070,57 +1325,11 @@ export default function EditTemplatePage() {
                           ) : (
                             <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleFieldDragEnd(section.id)}>
                             <SortableContext items={sectionFields.map(f => f.id)} strategy={verticalListSortingStrategy}>
-                            {sectionFields.map((field) => (
-                              <SortableItem key={field.id} id={field.id} className={`border rounded-xl transition-colors ${editingField === field.id ? 'border-primary bg-surface-hover' : 'border-subtle bg-surface'}`}>
-                              {(fieldListeners) => (<>
-                                <div className="flex items-center gap-2 sm:gap-3 p-2 sm:p-3">
-                                  <div {...fieldListeners} className="cursor-grab active:cursor-grabbing p-1 text-muted hover:text-primary touch-none">
-                                    <RiDraggable className="w-4 h-4" />
-                                  </div>
-                                  <IconPicker value={getFieldIcon(field)} onChange={(icon) => setFieldIcon(field.id, icon)} fallback={getFieldTypeIcon(field.field_type)} />
-                                  <div className="flex-1 min-w-0">
-                                    <input type="text" value={field.name} onChange={(e) => updateField(field.id, { name: e.target.value })} placeholder="Nome do campo" className="w-full bg-transparent border-none text-main placeholder:text-muted focus:outline-none font-medium text-xs sm:text-sm" />
-                                    <p className="text-[10px] sm:text-xs text-muted">{getFieldTypeLabel(field.field_type)}</p>
-                                  </div>
-                                  <div className="flex items-center gap-0.5 sm:gap-1 shrink-0">
-                                    <label className="flex items-center gap-0.5 sm:gap-1 text-[10px] sm:text-xs text-secondary" title="Obrigatorio"><input type="checkbox" checked={field.is_required} onChange={(e) => updateField(field.id, { is_required: e.target.checked })} className="rounded border-default bg-surface text-primary focus:ring-primary w-3 h-3 sm:w-3.5 sm:h-3.5" /><span className="hidden sm:inline">Obrig.</span><span className="sm:hidden">*</span></label>
-                                    <button type="button" onClick={() => setEditingField(editingField === field.id ? null : field.id)} className={`p-1 sm:p-1.5 rounded-lg transition-colors ${editingField === field.id ? 'bg-primary/20 text-primary' : 'text-muted hover:bg-surface-hover'}`}><FiSettings className="w-3 h-3 sm:w-3.5 sm:h-3.5" /></button>
-                                    <button type="button" onClick={() => removeField(field.id)} className="p-1 sm:p-1.5 text-error hover:bg-error/20 rounded-lg transition-colors"><FiTrash2 className="w-3 h-3 sm:w-3.5 sm:h-3.5" /></button>
-                                  </div>
-                                </div>
-                                <FieldConditionEditor
-                                  fieldType={field.field_type}
-                                  fieldName={field.name}
-                                  dropdownOptions={field.field_type === 'dropdown' ? getOptionsItems(field.options) : undefined}
-                                  checkboxOptions={field.field_type === 'checkbox_multiple' ? getOptionsItems(field.options) : undefined}
-                                  condition={fieldConditions[field.id] || null}
-                                  onChange={(cond) => setFieldConditions(prev => ({ ...prev, [field.id]: cond }))}
-                                  users={conditionUsers}
-                                  presets={conditionPresets}
-                                  onSaveAsPreset={handleSaveAsPreset}
-                                />
-                                {editingField === field.id && (
-                                  <div className="px-2 pb-2 sm:px-3 sm:pb-3 pt-2 border-t border-subtle space-y-3">
-                                    <div>
-                                      <label className="block text-xs text-muted mb-1">Tipo do campo</label>
-                                      <Select value={field.field_type} onChange={(v) => changeFieldType(field.id, v as FieldType)} className="text-sm" options={fieldTypes.map(ft => ({ value: ft.value, label: ft.icon + ' ' + ft.label }))} />
-                                    </div>
-                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                      <div><label className="block text-xs text-muted mb-1">Placeholder</label><input type="text" value={field.placeholder} onChange={(e) => updateField(field.id, { placeholder: e.target.value })} className="input text-sm" placeholder="Texto de exemplo..." /></div>
-                                      <div><label className="block text-xs text-muted mb-1">Texto de ajuda</label><input type="text" value={field.help_text} onChange={(e) => updateField(field.id, { help_text: e.target.value })} className="input text-sm" placeholder="Instrucoes para o usuario..." /></div>
-                                    </div>
-                                    {sections.length > 0 && (<div><label className="block text-xs text-muted mb-1">Mover para etapa</label><Select value={field.section_id || ''} onChange={(v) => updateField(field.id, { section_id: v || null })} className="text-sm" placeholder="Sem etapa (geral)" options={sections.map(s => ({ value: String(s.id), label: s.name || '(sem nome)' }))} /></div>)}
-                                    {field.field_type === 'number' && (<div><label className="block text-xs text-muted mb-1">Tipo de numero</label><div className="grid grid-cols-2 gap-2">{[{ value: 'monetario', label: 'Monetario (R$)' }, { value: 'quantidade', label: 'Quantidade (un)' }, { value: 'decimal', label: 'Decimal' }, { value: 'porcentagem', label: 'Porcentagem (%)' }].map(st => (<button key={st.value} type="button" onClick={() => updateField(field.id, { options: { numberSubtype: st.value, ...(getFieldIcon(field) ? { icon: getFieldIcon(field) } : {}) } })} className={`px-3 py-2 rounded-lg text-sm font-medium transition-all border ${(field.options as { numberSubtype?: string } | null)?.numberSubtype === st.value ? 'bg-primary/15 border-primary text-primary' : 'bg-surface border-subtle text-muted hover:border-primary/40'}`}>{st.label}</button>))}</div></div>)}
-                                    {(field.field_type === 'dropdown' || field.field_type === 'checkbox_multiple') && (<div><label className="block text-xs text-muted mb-2">Opcoes</label><div className="space-y-2">{(getOptionsItems(field.options)).map((opt: string, optIdx: number) => (<div key={optIdx} className="flex items-center gap-2"><span className="text-muted cursor-grab text-sm select-none">☰</span><input type="text" value={opt} onChange={(e) => { const newOpts = [...(getOptionsItems(field.options))]; newOpts[optIdx] = e.target.value; updateField(field.id, { options: getFieldIcon(field) ? { items: newOpts, icon: getFieldIcon(field) } : newOpts }) }} placeholder={`Opcao ${optIdx + 1}`} className="input text-sm flex-1" /><button type="button" onClick={() => { const newOpts = (getOptionsItems(field.options)).filter((_: string, i: number) => i !== optIdx); updateField(field.id, { options: getFieldIcon(field) ? { items: newOpts, icon: getFieldIcon(field) } : newOpts }) }} className="p-1 text-error hover:bg-error/20 rounded transition-colors shrink-0"><FiTrash2 className="w-3 h-3" /></button></div>))}</div><button type="button" onClick={() => { const newItems = [...getOptionsItems(field.options), '']; updateField(field.id, { options: getFieldIcon(field) ? { items: newItems, icon: getFieldIcon(field) } : newItems }) }} className="mt-2 text-xs text-primary hover:text-primary/80 font-medium py-1.5 px-3 border border-primary/30 rounded-lg hover:bg-primary/5 transition-colors">+ Adicionar opcao</button></div>)}
-                                    {field.field_type === 'yes_no' && (<div className="space-y-2"><label className="flex items-center gap-2 text-sm text-secondary cursor-pointer"><input type="checkbox" checked={(field.options as { allowPhoto?: boolean } | null)?.allowPhoto || false} onChange={(e) => updateField(field.id, { options: { ...((field.options as Record<string, unknown>) || {}), allowPhoto: e.target.checked, photoRequired: false } })} className="rounded border-default bg-surface text-primary focus:ring-primary" />Permitir foto</label>{(field.options as { allowPhoto?: boolean } | null)?.allowPhoto && (<Select value={(field.options as { photoRequired?: boolean } | null)?.photoRequired ? 'required' : 'optional'} onChange={(v) => updateField(field.id, { options: { ...((field.options as Record<string, unknown>) || {}), photoRequired: v === 'required' } })} className="text-sm" options={[{ value: 'optional', label: 'Foto opcional' }, { value: 'required', label: 'Foto obrigatoria' }]} />)}<div className="mt-3 p-3 bg-emerald-500/5 border border-emerald-500/20 rounded-lg space-y-2"><p className="text-xs font-medium text-emerald-500">Quando resposta for &quot;Sim&quot;:</p><label className="flex items-center gap-2 text-sm text-secondary cursor-pointer"><input type="checkbox" checked={(field.options as Record<string, unknown>)?.onYes ? ((field.options as Record<string, unknown>).onYes as Record<string, unknown>)?.showTextField === true : false} onChange={(e) => { const opts = { ...((field.options as Record<string, unknown>) || {})}; const onYes: Record<string, unknown> = { ...((opts.onYes as Record<string, unknown>) || {}), showTextField: e.target.checked }; if (!e.target.checked) { delete onYes.textFieldLabel; delete onYes.textFieldRequired }; updateField(field.id, { options: { ...opts, onYes } }) }} className="rounded border-default bg-surface text-primary focus:ring-primary" />Exigir texto explicativo</label>{!!(field.options as Record<string, unknown>)?.onYes && !!((field.options as Record<string, unknown>).onYes as Record<string, unknown>)?.showTextField && (<div className="ml-6 space-y-2"><input type="text" value={((field.options as Record<string, unknown>).onYes as Record<string, unknown>)?.textFieldLabel as string || ''} onChange={(e) => { const opts = { ...((field.options as Record<string, unknown>) || {})}; const onYes = { ...((opts.onYes as Record<string, unknown>) || {}), textFieldLabel: e.target.value }; updateField(field.id, { options: { ...opts, onYes } }) }} placeholder="Label do campo (ex: Explique o motivo)" className="input text-sm" /><label className="flex items-center gap-2 text-xs text-muted cursor-pointer"><input type="checkbox" checked={((field.options as Record<string, unknown>)?.onYes as Record<string, unknown>)?.textFieldRequired === true} onChange={(e) => { const opts = { ...((field.options as Record<string, unknown>) || {})}; const onYes = { ...((opts.onYes as Record<string, unknown>) || {}), textFieldRequired: e.target.checked }; updateField(field.id, { options: { ...opts, onYes } }) }} className="rounded border-default bg-surface text-primary focus:ring-primary w-3 h-3" />Texto obrigatorio</label></div>)}<label className="flex items-center gap-2 text-sm text-secondary cursor-pointer"><input type="checkbox" checked={(field.options as Record<string, unknown>)?.onYes ? ((field.options as Record<string, unknown>).onYes as Record<string, unknown>)?.showPhotoField === true : false} onChange={(e) => { const opts = { ...((field.options as Record<string, unknown>) || {})}; const onYes: Record<string, unknown> = { ...((opts.onYes as Record<string, unknown>) || {}), showPhotoField: e.target.checked }; if (!e.target.checked) { delete onYes.photoFieldLabel; delete onYes.photoFieldRequired }; updateField(field.id, { options: { ...opts, onYes } }) }} className="rounded border-default bg-surface text-primary focus:ring-primary" />Exigir foto</label>{!!(field.options as Record<string, unknown>)?.onYes && !!((field.options as Record<string, unknown>).onYes as Record<string, unknown>)?.showPhotoField && (<div className="ml-6 space-y-2"><input type="text" value={((field.options as Record<string, unknown>).onYes as Record<string, unknown>)?.photoFieldLabel as string || ''} onChange={(e) => { const opts = { ...((field.options as Record<string, unknown>) || {})}; const onYes = { ...((opts.onYes as Record<string, unknown>) || {}), photoFieldLabel: e.target.value }; updateField(field.id, { options: { ...opts, onYes } }) }} placeholder="Label da foto (ex: Foto da evidencia)" className="input text-sm" /><label className="flex items-center gap-2 text-xs text-muted cursor-pointer"><input type="checkbox" checked={((field.options as Record<string, unknown>)?.onYes as Record<string, unknown>)?.photoFieldRequired === true} onChange={(e) => { const opts = { ...((field.options as Record<string, unknown>) || {})}; const onYes = { ...((opts.onYes as Record<string, unknown>) || {}), photoFieldRequired: e.target.checked }; updateField(field.id, { options: { ...opts, onYes } }) }} className="rounded border-default bg-surface text-primary focus:ring-primary w-3 h-3" />Foto obrigatoria</label></div>)}</div><div className="p-3 bg-red-500/5 border border-red-500/20 rounded-lg space-y-2"><p className="text-xs font-medium text-red-400">Quando resposta for &quot;Nao&quot;:</p><label className="flex items-center gap-2 text-sm text-secondary cursor-pointer"><input type="checkbox" checked={(field.options as Record<string, unknown>)?.onNo ? ((field.options as Record<string, unknown>).onNo as Record<string, unknown>)?.showTextField === true : false} onChange={(e) => { const opts = { ...((field.options as Record<string, unknown>) || {})}; const onNo: Record<string, unknown> = { ...((opts.onNo as Record<string, unknown>) || {}), showTextField: e.target.checked }; if (!e.target.checked) { delete onNo.textFieldLabel; delete onNo.textFieldRequired }; updateField(field.id, { options: { ...opts, onNo } }) }} className="rounded border-default bg-surface text-primary focus:ring-primary" />Exigir texto explicativo</label>{!!(field.options as Record<string, unknown>)?.onNo && !!((field.options as Record<string, unknown>).onNo as Record<string, unknown>)?.showTextField && (<div className="ml-6 space-y-2"><input type="text" value={((field.options as Record<string, unknown>).onNo as Record<string, unknown>)?.textFieldLabel as string || ''} onChange={(e) => { const opts = { ...((field.options as Record<string, unknown>) || {})}; const onNo = { ...((opts.onNo as Record<string, unknown>) || {}), textFieldLabel: e.target.value }; updateField(field.id, { options: { ...opts, onNo } }) }} placeholder="Label do campo (ex: Explique o motivo)" className="input text-sm" /><label className="flex items-center gap-2 text-xs text-muted cursor-pointer"><input type="checkbox" checked={((field.options as Record<string, unknown>)?.onNo as Record<string, unknown>)?.textFieldRequired === true} onChange={(e) => { const opts = { ...((field.options as Record<string, unknown>) || {})}; const onNo = { ...((opts.onNo as Record<string, unknown>) || {}), textFieldRequired: e.target.checked }; updateField(field.id, { options: { ...opts, onNo } }) }} className="rounded border-default bg-surface text-primary focus:ring-primary w-3 h-3" />Texto obrigatorio</label></div>)}<label className="flex items-center gap-2 text-sm text-secondary cursor-pointer"><input type="checkbox" checked={(field.options as Record<string, unknown>)?.onNo ? ((field.options as Record<string, unknown>).onNo as Record<string, unknown>)?.showPhotoField === true : false} onChange={(e) => { const opts = { ...((field.options as Record<string, unknown>) || {})}; const onNo: Record<string, unknown> = { ...((opts.onNo as Record<string, unknown>) || {}), showPhotoField: e.target.checked }; if (!e.target.checked) { delete onNo.photoFieldLabel; delete onNo.photoFieldRequired }; updateField(field.id, { options: { ...opts, onNo } }) }} className="rounded border-default bg-surface text-primary focus:ring-primary" />Exigir foto</label>{!!(field.options as Record<string, unknown>)?.onNo && !!((field.options as Record<string, unknown>).onNo as Record<string, unknown>)?.showPhotoField && (<div className="ml-6 space-y-2"><input type="text" value={((field.options as Record<string, unknown>).onNo as Record<string, unknown>)?.photoFieldLabel as string || ''} onChange={(e) => { const opts = { ...((field.options as Record<string, unknown>) || {})}; const onNo = { ...((opts.onNo as Record<string, unknown>) || {}), photoFieldLabel: e.target.value }; updateField(field.id, { options: { ...opts, onNo } }) }} placeholder="Label da foto (ex: Foto da evidencia)" className="input text-sm" /><label className="flex items-center gap-2 text-xs text-muted cursor-pointer"><input type="checkbox" checked={((field.options as Record<string, unknown>)?.onNo as Record<string, unknown>)?.photoFieldRequired === true} onChange={(e) => { const opts = { ...((field.options as Record<string, unknown>) || {})}; const onNo = { ...((opts.onNo as Record<string, unknown>) || {}), photoFieldRequired: e.target.checked }; updateField(field.id, { options: { ...opts, onNo } }) }} className="rounded border-default bg-surface text-primary focus:ring-primary w-3 h-3" />Foto obrigatoria</label></div>)}<label className="flex items-center gap-2 text-sm text-secondary cursor-pointer"><input type="checkbox" checked={(field.options as Record<string, unknown>)?.onNo ? ((field.options as Record<string, unknown>).onNo as Record<string, unknown>)?.allowUserActionPlan === true : false} onChange={(e) => { const opts = { ...((field.options as Record<string, unknown>) || {})}; const onNo: Record<string, unknown> = { ...((opts.onNo as Record<string, unknown>) || {}), allowUserActionPlan: e.target.checked }; updateField(field.id, { options: { ...opts, onNo } }) }} className="rounded border-default bg-surface text-primary focus:ring-primary" />Permitir preenchedor escolher responsavel</label></div></div>)}
-                                    {!['dropdown', 'checkbox_multiple'].includes(field.field_type) && (<div><label className="block text-xs text-muted mb-1">Validacao cruzada</label><Select value={(field.options as { validationRole?: string } | null)?.validationRole || ''} onChange={(v) => updateField(field.id, { options: { ...((field.options as Record<string, unknown>) || {}), validationRole: v || null } })} className="text-sm" placeholder="Nenhum" options={[{ value: 'nota', label: 'Numero da nota' }, { value: 'valor', label: 'Valor' }]} /></div>)}
-                                  </div>
-                                )}
-                              </>)}
-                              </SortableItem>
-                            ))}
+                            {sectionFields.map((field) => renderFieldItem(field))}
                             </SortableContext>
                             </DndContext>
+                          )}
+                            </>
                           )}
                         </div>
                       )}

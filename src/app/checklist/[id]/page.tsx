@@ -64,6 +64,7 @@ type TemplateSection = {
   name: string
   description: string | null
   sort_order: number
+  parent_id: number | null
 }
 
 type ChecklistSectionRow = {
@@ -342,6 +343,20 @@ export default function ChecklistViewPage() {
 
   const hasSections = sections.length > 0
 
+  // ─── Hierarquia 3 niveis: Etapa > Sub-etapa > Campos ─────────────────────
+  /** Etapas-pai: detecta automaticamente se o template usa hierarquia */
+  const parentSections = useMemo(() => {
+    const withParent = sections.filter(s => s.parent_id != null)
+    if (withParent.length === 0) return []
+    return sections.filter(s => s.parent_id == null).sort((a, b) => a.sort_order - b.sort_order)
+  }, [sections])
+
+  const hasSubSections = parentSections.length > 0
+
+  const getSubSections = (parentId: number) => {
+    return sections.filter(s => s.parent_id === parentId).sort((a, b) => a.sort_order - b.sort_order)
+  }
+
   // Group fields by section
   const fieldsBySection = useMemo(() => {
     if (!hasSections) return null
@@ -472,83 +487,169 @@ export default function ChecklistViewPage() {
 
           {hasSections && fieldsBySection ? (
             <>
-              {/* Render fields grouped by section */}
-              {sections.map(section => {
-                const sectionFields = fieldsBySection.get(section.id) || []
-                const sectionStatus = checklistSections.find(cs => cs.section_id === section.id)
-                const isCollapsed = collapsedSections.has(section.id)
-                const sectionResponses = sectionFields.filter(f => responses.some(r => r.field_id === f.id))
+              {/* Render fields grouped by section — with hierarchy support */}
+              {hasSubSections ? (
+                /* Hierarchical mode: Etapa > Sub-etapa > Campos */
+                parentSections.map(parent => {
+                  const subSections = getSubSections(parent.id)
+                  const isParentCollapsed = collapsedSections.has(parent.id)
 
-                return (
-                  <div key={section.id} className="card overflow-hidden">
-                    {/* Section header */}
-                    <button
-                      onClick={() => toggleSectionCollapse(section.id)}
-                      className="w-full p-4 flex items-center justify-between bg-surface-hover/50 hover:bg-surface-hover transition-colors"
-                    >
-                      <div className="flex items-center gap-3">
-                        <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${
-                          sectionStatus?.status === 'concluido'
-                            ? 'bg-success/20'
-                            : 'bg-warning/20'
-                        }`}>
-                          {sectionStatus?.status === 'concluido' ? (
-                            <FiCheckCircle className="w-4 h-4 text-success" />
-                          ) : (
-                            <FiLayers className="w-4 h-4 text-warning" />
+                  return (
+                    <div key={parent.id} className="space-y-2">
+                      {/* Parent section (etapa) header */}
+                      <button
+                        onClick={() => toggleSectionCollapse(parent.id)}
+                        className="w-full p-4 flex items-center justify-between bg-primary/5 border border-primary/20 rounded-xl hover:bg-primary/10 transition-colors"
+                      >
+                        <div className="flex items-center gap-3">
+                          <FiLayers className="w-5 h-5 text-primary" />
+                          <h4 className="font-bold text-main text-sm">{parent.name}</h4>
+                          <span className="text-xs text-muted">{subSections.length} sub-etapa{subSections.length !== 1 ? 's' : ''}</span>
+                        </div>
+                        {isParentCollapsed ? (
+                          <FiChevronDown className="w-5 h-5 text-muted" />
+                        ) : (
+                          <FiChevronUp className="w-5 h-5 text-muted" />
+                        )}
+                      </button>
+
+                      {/* Sub-sections (sub-etapas) */}
+                      {!isParentCollapsed && subSections.map(section => {
+                        const sectionFields = fieldsBySection.get(section.id) || []
+                        const sectionStatus = checklistSections.find(cs => cs.section_id === section.id)
+                        const isCollapsed = collapsedSections.has(section.id)
+                        const sectionResponses = sectionFields.filter(f => responses.some(r => r.field_id === f.id))
+
+                        return (
+                          <div key={section.id} className="card overflow-hidden ml-4">
+                            <button
+                              onClick={() => toggleSectionCollapse(section.id)}
+                              className="w-full p-4 flex items-center justify-between bg-surface-hover/50 hover:bg-surface-hover transition-colors"
+                            >
+                              <div className="flex items-center gap-3">
+                                <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${
+                                  sectionStatus?.status === 'concluido' ? 'bg-success/20' : 'bg-warning/20'
+                                }`}>
+                                  {sectionStatus?.status === 'concluido' ? (
+                                    <FiCheckCircle className="w-4 h-4 text-success" />
+                                  ) : (
+                                    <FiLayers className="w-4 h-4 text-warning" />
+                                  )}
+                                </div>
+                                <div className="text-left">
+                                  <h4 className="font-semibold text-main text-sm">{section.name}</h4>
+                                  <p className="text-xs text-muted">
+                                    {sectionResponses.length}/{sectionFields.length} campos preenchidos
+                                    {sectionStatus?.completed_at && ` - Concluido ${formatDate(sectionStatus.completed_at)}`}
+                                  </p>
+                                </div>
+                              </div>
+                              {isCollapsed ? (
+                                <FiChevronDown className="w-5 h-5 text-muted" />
+                              ) : (
+                                <FiChevronUp className="w-5 h-5 text-muted" />
+                              )}
+                            </button>
+
+                            {!isCollapsed && (
+                              <div className="p-4 space-y-3">
+                                {sectionFields.map(field => {
+                                  const value = getFieldValue(field)
+                                  const gpsVal = field.field_type === 'gps' ? value as GPSValue : null
+                                  return (
+                                    <div key={field.id} className="p-3 bg-surface rounded-xl">
+                                      <ReadOnlyFieldRenderer field={field} value={value} />
+                                      {gpsVal?.latitude && gpsVal?.longitude && (
+                                        <a href={`https://www.google.com/maps?q=${gpsVal.latitude},${gpsVal.longitude}`} target="_blank" rel="noopener noreferrer" className="text-xs text-primary hover:underline mt-2 inline-block">Ver no Google Maps</a>
+                                      )}
+                                      {justifications[field.id] && (
+                                        <div className="mt-2 p-2 bg-warning/10 border border-warning/20 rounded-lg">
+                                          <p className="text-xs font-medium text-warning mb-1">Justificativa:</p>
+                                          <p className="text-xs text-secondary">{justifications[field.id]}</p>
+                                        </div>
+                                      )}
+                                    </div>
+                                  )
+                                })}
+                                {sectionFields.length === 0 && (
+                                  <p className="text-sm text-muted text-center py-2">Nenhum campo nesta sub-etapa</p>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )
+                })
+              ) : (
+                /* Flat mode (original behavior) */
+                sections.map(section => {
+                  const sectionFields = fieldsBySection.get(section.id) || []
+                  const sectionStatus = checklistSections.find(cs => cs.section_id === section.id)
+                  const isCollapsed = collapsedSections.has(section.id)
+                  const sectionResponses = sectionFields.filter(f => responses.some(r => r.field_id === f.id))
+
+                  return (
+                    <div key={section.id} className="card overflow-hidden">
+                      <button
+                        onClick={() => toggleSectionCollapse(section.id)}
+                        className="w-full p-4 flex items-center justify-between bg-surface-hover/50 hover:bg-surface-hover transition-colors"
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${
+                            sectionStatus?.status === 'concluido' ? 'bg-success/20' : 'bg-warning/20'
+                          }`}>
+                            {sectionStatus?.status === 'concluido' ? (
+                              <FiCheckCircle className="w-4 h-4 text-success" />
+                            ) : (
+                              <FiLayers className="w-4 h-4 text-warning" />
+                            )}
+                          </div>
+                          <div className="text-left">
+                            <h4 className="font-semibold text-main text-sm">{section.name}</h4>
+                            <p className="text-xs text-muted">
+                              {sectionResponses.length}/{sectionFields.length} campos preenchidos
+                              {sectionStatus?.completed_at && ` - Concluido ${formatDate(sectionStatus.completed_at)}`}
+                            </p>
+                          </div>
+                        </div>
+                        {isCollapsed ? (
+                          <FiChevronDown className="w-5 h-5 text-muted" />
+                        ) : (
+                          <FiChevronUp className="w-5 h-5 text-muted" />
+                        )}
+                      </button>
+
+                      {!isCollapsed && (
+                        <div className="p-4 space-y-3">
+                          {sectionFields.map(field => {
+                            const value = getFieldValue(field)
+                            const gpsVal = field.field_type === 'gps' ? value as GPSValue : null
+                            return (
+                              <div key={field.id} className="p-3 bg-surface rounded-xl">
+                                <ReadOnlyFieldRenderer field={field} value={value} />
+                                {gpsVal?.latitude && gpsVal?.longitude && (
+                                  <a href={`https://www.google.com/maps?q=${gpsVal.latitude},${gpsVal.longitude}`} target="_blank" rel="noopener noreferrer" className="text-xs text-primary hover:underline mt-2 inline-block">Ver no Google Maps</a>
+                                )}
+                                {justifications[field.id] && (
+                                  <div className="mt-2 p-2 bg-warning/10 border border-warning/20 rounded-lg">
+                                    <p className="text-xs font-medium text-warning mb-1">Justificativa:</p>
+                                    <p className="text-xs text-secondary">{justifications[field.id]}</p>
+                                  </div>
+                                )}
+                              </div>
+                            )
+                          })}
+                          {sectionFields.length === 0 && (
+                            <p className="text-sm text-muted text-center py-2">Nenhum campo nesta secao</p>
                           )}
                         </div>
-                        <div className="text-left">
-                          <h4 className="font-semibold text-main text-sm">{section.name}</h4>
-                          <p className="text-xs text-muted">
-                            {sectionResponses.length}/{sectionFields.length} campos preenchidos
-                            {sectionStatus?.completed_at && ` - Concluido ${formatDate(sectionStatus.completed_at)}`}
-                          </p>
-                        </div>
-                      </div>
-                      {isCollapsed ? (
-                        <FiChevronDown className="w-5 h-5 text-muted" />
-                      ) : (
-                        <FiChevronUp className="w-5 h-5 text-muted" />
                       )}
-                    </button>
-
-                    {/* Section fields */}
-                    {!isCollapsed && (
-                      <div className="p-4 space-y-3">
-                        {sectionFields.map(field => {
-                          const value = getFieldValue(field)
-                          const gpsVal = field.field_type === 'gps' ? value as GPSValue : null
-                          return (
-                            <div key={field.id} className="p-3 bg-surface rounded-xl">
-                              <ReadOnlyFieldRenderer field={field} value={value} />
-                              {gpsVal?.latitude && gpsVal?.longitude && (
-                                <a
-                                  href={`https://www.google.com/maps?q=${gpsVal.latitude},${gpsVal.longitude}`}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="text-xs text-primary hover:underline mt-2 inline-block"
-                                >
-                                  Ver no Google Maps
-                                </a>
-                              )}
-                              {justifications[field.id] && (
-                                <div className="mt-2 p-2 bg-warning/10 border border-warning/20 rounded-lg">
-                                  <p className="text-xs font-medium text-warning mb-1">Justificativa:</p>
-                                  <p className="text-xs text-secondary">{justifications[field.id]}</p>
-                                </div>
-                              )}
-                            </div>
-                          )
-                        })}
-                        {sectionFields.length === 0 && (
-                          <p className="text-sm text-muted text-center py-2">Nenhum campo nesta secao</p>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                )
-              })}
+                    </div>
+                  )
+                })
+              )}
 
               {/* Fields without section (orphan fields) */}
               {(() => {
