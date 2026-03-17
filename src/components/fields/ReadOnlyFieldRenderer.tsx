@@ -213,16 +213,19 @@ function YesNoReadOnly({ value }: { value: unknown }) {
     : []
 
   const isSim = answer === 'sim'
+  const isNa = answer === 'na'
   return (
     <div className="space-y-2">
       <span
         className={`inline-block px-4 py-2 rounded-xl font-semibold text-sm border-2 ${
           isSim
             ? 'bg-emerald-500/20 border-emerald-500 text-emerald-400'
+            : isNa
+            ? 'bg-amber-500/20 border-amber-500 text-amber-400'
             : 'bg-red-500/20 border-red-500 text-red-400'
         }`}
       >
-        {isSim ? 'Sim' : 'Nao'}
+        {isSim ? 'Sim' : isNa ? 'N/A' : 'Nao'}
       </span>
       {photos.length > 0 && (
         <div className="grid grid-cols-3 gap-2">
@@ -236,7 +239,7 @@ function YesNoReadOnly({ value }: { value: unknown }) {
       )}
       {(conditionalText || conditionalPhotos.length > 0) && (
         <div className={`p-3 rounded-xl border-2 space-y-2 ${
-          isSim ? 'bg-emerald-500/5 border-emerald-500/20' : 'bg-red-500/5 border-red-500/20'
+          isSim ? 'bg-emerald-500/5 border-emerald-500/20' : isNa ? 'bg-amber-500/5 border-amber-500/20' : 'bg-red-500/5 border-red-500/20'
         }`}>
           {conditionalText && (
             <p className="text-sm text-secondary">{conditionalText}</p>

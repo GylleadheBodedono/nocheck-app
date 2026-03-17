@@ -19,7 +19,7 @@ O NoCheck e um sistema web/PWA de checklists operacionais para redes de lojas do
 
 FUNCIONALIDADES PRINCIPAIS:
 1. **Dashboard** (/dashboard) — Tela inicial do operador: mostra checklists pendentes do dia, resumo de atividade, e acesso rapido para preencher novos checklists.
-2. **Novo Checklist** (/checklist/novo) — Operador seleciona a loja, o template desejado e preenche os campos. Tipos de campo: texto, numero, sim/nao (conforme/nao conforme), selecao, foto, assinatura, calculo automatico, data, hora, telefone, email, CEP, CPF, CNPJ.
+2. **Novo Checklist** (/checklist/novo) — Operador seleciona a loja, o template desejado e preenche os campos. Tipos de campo: texto, numero, sim/nao/N/A (conforme/nao conforme/nao aplicavel), selecao, foto, assinatura, calculo automatico, data, hora, telefone, email, CEP, CPF, CNPJ.
 3. **Templates** (/admin/templates) — Area admin para criar e editar modelos de checklists. Cada template tem secoes e campos configuraveis. Pode definir horarios permitidos de preenchimento, restringir a admins, e categorizar (recebimento, limpeza, abertura, fechamento, outros).
 4. **Lojas** (/admin/lojas) — Cadastro de unidades/lojas com nome, CNPJ, endereco completo, coordenadas GPS. Pode exigir localizacao GPS para preencher checklists.
 5. **Setores** (/admin/setores) — Departamentos dentro de cada loja (ex: Cozinha, Salao, Estoque, Padaria). Cada setor tem cor e icone personalizaveis.

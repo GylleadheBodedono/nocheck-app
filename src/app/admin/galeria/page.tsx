@@ -221,7 +221,7 @@ export default function GaleriaPage() {
           >
             <FiFolder className="w-5 h-5" />
             <span>Anexos</span>
-            <span className="text-xs opacity-60">(yes/no)</span>
+            <span className="text-xs opacity-60">(sim/nao/n/a)</span>
           </button>
         </div>
 

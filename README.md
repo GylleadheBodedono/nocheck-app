@@ -128,7 +128,7 @@
 | `datetime` | Data e hora |
 | `dropdown` | Lista de opções (seleção única) |
 | `checkbox_multiple` | Lista de opções (múltipla seleção) |
-| `yes_no` | Sim / Não (com foto e campos adicionais opcionais) |
+| `yes_no` | Sim / Não / N/A (com foto e campos adicionais opcionais) |
 | `photo` | Foto obrigatória |
 | `signature` | Assinatura |
 

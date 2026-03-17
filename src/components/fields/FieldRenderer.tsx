@@ -568,7 +568,7 @@ function CalculatedField({ field: _field, value }: { field: TemplateField; value
   )
 }
 
-// Yes/No Field (with optional photo support)
+// Yes/No/N/A Field (with optional photo support)
 function YesNoField({ field, value, onChange }: { field: TemplateField; value: unknown; onChange: (v: unknown) => void }) {
   const allowPhoto = (field.options as { allowPhoto?: boolean } | null)?.allowPhoto || false
   const inputRef = useRef<HTMLInputElement>(null)
@@ -604,8 +604,11 @@ function YesNoField({ field, value, onChange }: { field: TemplateField; value: u
     ? (value as Record<string, unknown>).selectedPresetId as number | null
     : null
 
+  // Parse N/A config from options
+  const onNaConfig = opts?.onNa as { showTextField?: boolean; textFieldLabel?: string; textFieldRequired?: boolean; showPhotoField?: boolean; photoFieldLabel?: string; photoFieldRequired?: boolean } | undefined
+
   // Get active conditional config based on current answer
-  const activeConditionalConfig = answer === 'nao' ? onNoConfig : answer === 'sim' ? onYesConfig : undefined
+  const activeConditionalConfig = answer === 'nao' ? onNoConfig : answer === 'sim' ? onYesConfig : answer === 'na' ? onNaConfig : undefined
   const hasConditional = activeConditionalConfig && (activeConditionalConfig.showTextField || activeConditionalConfig.showPhotoField)
   const showUserActionPlan = answer === 'nao' && onNoConfig?.allowUserActionPlan === true
 
@@ -663,7 +666,7 @@ function YesNoField({ field, value, onChange }: { field: TemplateField; value: u
     // If switching answer and the new answer has no conditional config, clear conditional data
     if (updates.answer) {
       const newAnswer = updates.answer as string
-      const newConfig = newAnswer === 'nao' ? onNoConfig : newAnswer === 'sim' ? onYesConfig : undefined
+      const newConfig = newAnswer === 'nao' ? onNoConfig : newAnswer === 'sim' ? onYesConfig : newAnswer === 'na' ? onNaConfig : undefined
       if (!newConfig || (!newConfig.showTextField && !newConfig.showPhotoField)) {
         delete merged.conditionalText
         delete merged.conditionalPhotos
@@ -740,6 +743,17 @@ function YesNoField({ field, value, onChange }: { field: TemplateField; value: u
         >
           Nao
         </button>
+        <button
+          type="button"
+          onClick={() => handleAnswer('na')}
+          className={`flex-1 py-4 rounded-xl font-semibold text-lg transition-all border-2 ${
+            answer === 'na'
+              ? 'bg-amber-500/20 border-amber-500 text-amber-400'
+              : 'bg-surface border-subtle text-muted hover:border-amber-500/50 hover:text-amber-400'
+          }`}
+        >
+          N/A
+        </button>
       </div>
 
       {allowPhoto && (
@@ -797,6 +811,8 @@ function YesNoField({ field, value, onChange }: { field: TemplateField; value: u
         <div className={`p-3 rounded-xl border-2 space-y-3 ${
           answer === 'nao'
             ? 'bg-red-500/5 border-red-500/20'
+            : answer === 'na'
+            ? 'bg-amber-500/5 border-amber-500/20'
             : 'bg-emerald-500/5 border-emerald-500/20'
         }`}>
           {activeConditionalConfig.showTextField && (

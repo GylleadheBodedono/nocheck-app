@@ -201,6 +201,7 @@ export function FieldConditionEditor({
                 options={[
                   { value: 'Nao', label: 'Quando resposta for "Nao"' },
                   { value: 'Sim', label: 'Quando resposta for "Sim"' },
+                  { value: 'N/A', label: 'Quando resposta for "N/A"' },
                 ]}
               />
             </div>

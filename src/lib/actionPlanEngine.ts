@@ -57,8 +57,15 @@ function evaluateCondition(
       if (!answer) answer = response.value_text
       if (!answer) return condition.condition_type === 'empty'
 
-      const answerNorm = answer.toLowerCase()
-      const condNorm = ((condValue.value as string) || '').toLowerCase()
+      const normalizeYesNo = (v: string) => {
+        const l = v.toLowerCase().replace(/[\/\s]/g, '')
+        if (l === 'na' || l === 'n/a' || l === 'naoaplicavel') return 'na'
+        if (l === 'nao' || l === 'não') return 'nao'
+        if (l === 'sim') return 'sim'
+        return l
+      }
+      const answerNorm = normalizeYesNo(answer)
+      const condNorm = normalizeYesNo((condValue.value as string) || '')
 
       if (condition.condition_type === 'equals') {
         return answerNorm === condNorm
@@ -182,10 +189,14 @@ async function checkReincidencia(
 function getNonConformityValueStr(field: FieldData, response: ResponseData): string {
   switch (field.field_type) {
     case 'yes_no': {
+      let ans = ''
       if (response.value_json && typeof response.value_json === 'object') {
-        return (response.value_json as Record<string, unknown>).answer as string || response.value_text || ''
+        ans = (response.value_json as Record<string, unknown>).answer as string || response.value_text || ''
+      } else {
+        ans = response.value_text || ''
       }
-      return response.value_text || ''
+      if (ans.toLowerCase() === 'na') return 'N/A'
+      return ans
     }
     case 'number':
     case 'rating':

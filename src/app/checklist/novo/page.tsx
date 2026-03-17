@@ -1296,7 +1296,7 @@ function ChecklistForm() {
           }
 
           // Campos condicionais obrigatorios (independente de is_required do campo pai)
-          const condConfig = (ans === 'nao' ? opts?.onNo : ans === 'sim' ? opts?.onYes : undefined) as
+          const condConfig = (ans === 'nao' ? opts?.onNo : ans === 'sim' ? opts?.onYes : ans === 'na' ? opts?.onNa : undefined) as
             { showTextField?: boolean; textFieldRequired?: boolean; showPhotoField?: boolean; photoFieldRequired?: boolean } | undefined
           if (condConfig) {
             if (condConfig.showTextField && condConfig.textFieldRequired) {
@@ -2661,7 +2661,7 @@ function ChecklistForm() {
                 onChange={e => setNewFieldType(e.target.value as 'yes_no' | 'text' | 'number' | 'photo')}
                 className="w-full px-3 py-2 bg-surface border border-subtle rounded-xl text-main text-sm focus:outline-none focus:ring-2 focus:ring-primary"
               >
-                <option value="yes_no">Sim / Nao</option>
+                <option value="yes_no">Sim / Nao / N/A</option>
                 <option value="text">Texto</option>
                 <option value="number">Numero</option>
                 <option value="photo">Foto</option>
