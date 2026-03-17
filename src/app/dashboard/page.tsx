@@ -7,7 +7,7 @@ import { APP_CONFIG } from '@/lib/config'
 import type { User } from '@supabase/supabase-js'
 import type { Store, ChecklistTemplate, Checklist, Sector, FunctionRow } from '@/types/database'
 import { LoadingPage, Header, PageContainer } from '@/components/ui'
-import { FiClipboard, FiClock, FiCheckCircle, FiUser, FiCalendar, FiAlertCircle, FiRefreshCw, FiAlertTriangle, FiUploadCloud, FiLayers, FiPlay, FiArrowRight, FiCloudOff, FiBell, FiTool, FiExternalLink } from 'react-icons/fi'
+import { FiClipboard, FiClock, FiCheckCircle, FiUser, FiCalendar, FiAlertCircle, FiRefreshCw, FiAlertTriangle, FiUploadCloud, FiLayers, FiPlay, FiArrowRight, FiCloudOff, FiBell, FiTool, FiExternalLink, FiBarChart2, FiChevronRight } from 'react-icons/fi'
 import Link from 'next/link'
 import {
   getAuthCache,
@@ -1197,6 +1197,21 @@ export default function DashboardPage() {
             </div>
           </div>
         )}
+
+        {/* ── Link para Meus Relatorios (todos os usuarios) ── */}
+        <Link
+          href={APP_CONFIG.routes.userReports}
+          className="card p-4 mb-6 flex items-center gap-3 hover:bg-surface-hover transition-colors"
+        >
+          <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
+            <FiBarChart2 className="w-5 h-5 text-primary" />
+          </div>
+          <div>
+            <p className="text-sm font-semibold text-main">Meus Relatorios</p>
+            <p className="text-xs text-muted">Veja estatisticas dos seus checklists</p>
+          </div>
+          <FiChevronRight className="w-4 h-4 text-muted ml-auto" />
+        </Link>
 
         {/* ── Tech user sections ── */}
         {isTechUser && (

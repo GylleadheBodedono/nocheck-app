@@ -15,6 +15,7 @@ import {
   FiChevronRight,
   FiCloud,
   FiLoader,
+  FiPlus,
 } from 'react-icons/fi'
 import type { ChecklistTemplate, TemplateField, Store, TemplateSection } from '@/types/database'
 import { APP_CONFIG } from '@/lib/config'
@@ -106,6 +107,15 @@ function ChecklistForm() {
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [savedOffline, _setSavedOffline] = useState(false)
   const [autoSaveStatus, setAutoSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
+
+  // Tech user: pode adicionar campos/etapas ao template
+  const [isTechUser, setIsTechUser] = useState(false)
+  const [showAddFieldModal, setShowAddFieldModal] = useState(false)
+  const [addFieldSectionId, setAddFieldSectionId] = useState<number | null>(null)
+  const [newFieldName, setNewFieldName] = useState('')
+  const [newFieldType, setNewFieldType] = useState<'yes_no' | 'text' | 'number' | 'photo'>('yes_no')
+  const [newFieldRequired, setNewFieldRequired] = useState(true)
+  const [addingField, setAddingField] = useState(false)
   const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const initializingRef = useRef(false) // Guard against double-init (StrictMode / fast re-renders)
 
@@ -118,6 +128,20 @@ function ChecklistForm() {
 
   useEffect(() => { checklistIdRef.current = checklistId }, [checklistId])
   useEffect(() => { offlineChecklistIdRef.current = offlineChecklistId }, [offlineChecklistId])
+
+  // Buscar is_tech do usuario para habilitar botao de adicionar campos
+  useEffect(() => {
+    const checkTech = async () => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser()
+        if (!user) return
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const { data: profile } = await (supabase as any).from('users').select('is_tech').eq('id', user.id).single()
+        if (profile?.is_tech) setIsTechUser(true)
+      } catch { /* nao critico */ }
+    }
+    checkTech()
+  }, [supabase])
 
   // Time restriction states
   const [timeBlocked, setTimeBlocked] = useState(false)
@@ -1741,6 +1765,56 @@ function ChecklistForm() {
     await handlePreFinalize()
   }
 
+  // === TECH USER: Adicionar campo ao template ===
+  const handleAddField = async () => {
+    if (!newFieldName.trim() || !template || addingField) return
+    setAddingField(true)
+
+    try {
+      // Calcular sort_order: maior sort_order da secao + 1
+      const sectionFields = addFieldSectionId
+        ? template.fields.filter(f => f.section_id === addFieldSectionId)
+        : template.fields.filter(f => !f.section_id)
+      const maxSort = sectionFields.reduce((max, f) => Math.max(max, f.sort_order || 0), 0)
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data: newField, error } = await (supabase as any)
+        .from('template_fields')
+        .insert({
+          template_id: Number(templateId),
+          section_id: addFieldSectionId,
+          name: newFieldName.trim(),
+          field_type: newFieldType,
+          is_required: newFieldRequired,
+          sort_order: maxSort + 1,
+        })
+        .select()
+        .single()
+
+      if (error) throw error
+
+      // Adicionar o campo ao template local (sem recarregar pagina)
+      if (newField && template) {
+        setTemplate({
+          ...template,
+          fields: [...template.fields, { ...newField, section_id: addFieldSectionId }],
+        })
+      }
+
+      // Limpar modal
+      setShowAddFieldModal(false)
+      setNewFieldName('')
+      setNewFieldType('yes_no')
+      setNewFieldRequired(true)
+      setAddFieldSectionId(null)
+    } catch (err) {
+      console.error('[TechUser] Erro ao adicionar campo:', err)
+      alert('Erro ao adicionar campo. Tente novamente.')
+    } finally {
+      setAddingField(false)
+    }
+  }
+
   // ========== RENDER ==========
 
   if (loading) return <LoadingPage />
@@ -2184,6 +2258,21 @@ function ChecklistForm() {
                 </div>
               ))}
 
+              {/* Botao para tech users adicionarem campos */}
+              {isTechUser && !isDone && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAddFieldSectionId(activeSection === -1 ? null : activeSection)
+                    setShowAddFieldModal(true)
+                  }}
+                  className="w-full py-3 border-2 border-dashed border-primary/30 hover:border-primary rounded-xl text-primary/70 hover:text-primary transition-colors flex items-center justify-center gap-2 text-sm"
+                >
+                  <FiPlus className="w-4 h-4" />
+                  <span>Adicionar campo nesta etapa</span>
+                </button>
+              )}
+
               {errors[0] && (
                 <div className="p-4 bg-red-500/10 border border-red-500/30 rounded-xl">
                   <p className="text-red-400">{errors[0]}</p>
@@ -2342,6 +2431,64 @@ function ChecklistForm() {
                   Voltar ao Dashboard (manter pendente)
                 </Link>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal para tech users adicionarem campo */}
+      {showAddFieldModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="bg-page rounded-2xl w-full max-w-sm shadow-xl border border-subtle p-6 space-y-4" style={{ backgroundColor: 'var(--bg-page, #09090b)' }}>
+            <h3 className="text-lg font-bold text-main">Adicionar Campo</h3>
+            <p className="text-xs text-muted">O campo sera adicionado permanentemente ao template.</p>
+
+            <div>
+              <label className="block text-sm font-medium text-secondary mb-1">Nome do campo</label>
+              <input
+                type="text"
+                value={newFieldName}
+                onChange={e => setNewFieldName(e.target.value)}
+                placeholder="Ex: Verificar temperatura..."
+                className="w-full px-3 py-2 bg-surface border border-subtle rounded-xl text-main text-sm placeholder-muted focus:outline-none focus:ring-2 focus:ring-primary"
+                autoFocus
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-secondary mb-1">Tipo</label>
+              <select
+                value={newFieldType}
+                onChange={e => setNewFieldType(e.target.value as 'yes_no' | 'text' | 'number' | 'photo')}
+                className="w-full px-3 py-2 bg-surface border border-subtle rounded-xl text-main text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+              >
+                <option value="yes_no">Sim / Nao</option>
+                <option value="text">Texto</option>
+                <option value="number">Numero</option>
+                <option value="photo">Foto</option>
+              </select>
+            </div>
+
+            <label className="flex items-center gap-2 text-sm text-secondary cursor-pointer">
+              <input type="checkbox" checked={newFieldRequired} onChange={e => setNewFieldRequired(e.target.checked)}
+                className="w-4 h-4 rounded border-subtle text-primary focus:ring-primary" />
+              Campo obrigatorio
+            </label>
+
+            <div className="flex gap-2 pt-2">
+              <button
+                onClick={() => { setShowAddFieldModal(false); setNewFieldName(''); setAddFieldSectionId(null) }}
+                className="flex-1 py-2.5 btn-secondary rounded-xl text-sm"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleAddField}
+                disabled={!newFieldName.trim() || addingField}
+                className="flex-1 py-2.5 btn-primary rounded-xl text-sm disabled:opacity-50"
+              >
+                {addingField ? 'Salvando...' : 'Adicionar'}
+              </button>
             </div>
           </div>
         </div>
