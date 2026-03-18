@@ -2,7 +2,6 @@
 
 import { useState, useEffect, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
-import Image from 'next/image'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase'
 import { APP_CONFIG } from '@/lib/config'
@@ -78,7 +77,11 @@ function LoginForm() {
         }
 
         setStatus('Redirecionando...')
-        window.location.href = APP_CONFIG.routes.dashboard
+        // Redirecionar baseado no role: superadmin → /platform, outros → /dashboard
+        const user = session.session?.user
+        const isPlatformAdmin = user?.user_metadata?.is_platform_admin === true
+          || user?.app_metadata?.is_platform_admin === true
+        window.location.href = isPlatformAdmin ? APP_CONFIG.routes.platform : APP_CONFIG.routes.dashboard
       } else {
         window.location.href = APP_CONFIG.routes.dashboard
       }
@@ -96,13 +99,13 @@ function LoginForm() {
         {/* Left Side - Decorative Panel */}
         <div className="hidden lg:flex lg:w-[55%] relative overflow-hidden rounded-[20px]">
           {/* Animated gradient background */}
-          <div className="absolute inset-0 bg-gradient-to-br from-[#B8935A] via-[#8B6E3B] to-[#2C1810] animate-gradient" />
+          <div className="absolute inset-0 bg-gradient-to-br from-[#0D9488] via-[#115E59] to-[#0F172A] animate-gradient" />
 
           {/* Mesh overlay */}
           <div className="absolute inset-0 opacity-30"
             style={{
               backgroundImage: `radial-gradient(at 20% 30%, rgba(255,255,255,0.15) 0%, transparent 50%),
-                                radial-gradient(at 80% 70%, rgba(196,122,74,0.3) 0%, transparent 50%),
+                                radial-gradient(at 80% 70%, rgba(13,148,136,0.3) 0%, transparent 50%),
                                 radial-gradient(at 50% 10%, rgba(255,255,255,0.1) 0%, transparent 40%)`
             }}
           />
@@ -125,9 +128,9 @@ function LoginForm() {
             <div>
               <div className="flex items-center gap-3 mb-2">
                 <div className="w-10 h-10 rounded-xl bg-white/10 backdrop-blur-sm border border-white/20 flex items-center justify-center">
-                  <span className="text-white font-bold text-lg">N</span>
+                  <span className="text-white font-bold text-lg">O</span>
                 </div>
-                <span className="text-white/90 font-semibold text-lg tracking-tight">NoCheck</span>
+                <span className="text-white/90 font-semibold text-lg tracking-tight">OpereCheck</span>
               </div>
             </div>
 
@@ -136,9 +139,9 @@ function LoginForm() {
               <h1 className="text-5xl xl:text-6xl font-bold text-white leading-[1.1] tracking-tight mb-6">
                 Gestao
                 <br />
-                inteligente
+                Operacional
                 <br />
-                <span className="text-white/50">de checklists</span>
+                <span className="text-white/50">e Checklists</span>
               </h1>
               <p className="text-white/60 text-lg leading-relaxed max-w-sm">
                 Controle completo das operacoes da sua empresa com checklists digitais, validacoes e planos de acao.
@@ -178,22 +181,9 @@ function LoginForm() {
               {/* Logo */}
               <div className="mb-10">
                 <div className="flex justify-center mb-6">
-                  <Image
-                    src="/Logo-dark.png"
-                    alt={APP_CONFIG.name}
-                    width={300}
-                    height={75}
-                    className="logo-for-light"
-                    priority
-                  />
-                  <Image
-                    src="/Logo.png"
-                    alt={APP_CONFIG.name}
-                    width={300}
-                    height={75}
-                    className="logo-for-dark"
-                    priority
-                  />
+                  <span className="text-3xl font-bold tracking-tight">
+                    <span className="text-secondary">Opere</span><span className="text-primary">Check</span>
+                  </span>
                 </div>
                 <p className="text-muted text-center mt-1.5 text-[15px]">
                   Entre com suas credenciais para acessar o painel
@@ -308,7 +298,7 @@ function LoginForm() {
           </div>
 
           {/* Mobile decorative bar */}
-          <div className="lg:hidden h-1.5 mx-6 mb-6 rounded-full bg-gradient-to-r from-[#B8935A] via-[#C47A4A] to-[#8B6E3B] opacity-60" />
+          <div className="lg:hidden h-1.5 mx-6 mb-6 rounded-full bg-gradient-to-r from-[#0D9488] via-[#14B8A6] to-[#115E59] opacity-60" />
         </div>
       </div>
     </div>
@@ -319,7 +309,7 @@ export default function LoginPage() {
   return (
     <Suspense fallback={
       <div className="h-screen w-screen flex items-center justify-center bg-[#0a0a0a]">
-        <div className="w-8 h-8 border-2 border-[#B8935A] border-t-transparent rounded-full animate-spin" />
+        <div className="w-8 h-8 border-2 border-[#0D9488] border-t-transparent rounded-full animate-spin" />
       </div>
     }>
       <LoginForm />

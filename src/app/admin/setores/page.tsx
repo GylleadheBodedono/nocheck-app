@@ -63,7 +63,7 @@ export default function SetoresPage() {
     store_ids: [] as number[],
     name: '',
     description: '',
-    color: '#6366f1',
+    color: '#0D9488',
     is_active: true,
   })
   const [saving, setSaving] = useState(false)
@@ -250,7 +250,7 @@ export default function SetoresPage() {
         store_ids: storeId ? [storeId] : [],
         name: '',
         description: '',
-        color: '#6366f1',
+        color: '#0D9488',
         is_active: true,
       })
     }
@@ -728,7 +728,7 @@ export default function SetoresPage() {
                     value={sectorFormData.color}
                     onChange={(e) => setSectorFormData({ ...sectorFormData, color: e.target.value })}
                     className="input flex-1"
-                    placeholder="#6366f1"
+                    placeholder="#0D9488"
                   />
                 </div>
               </div>

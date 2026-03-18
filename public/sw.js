@@ -1,9 +1,9 @@
-// NoCheck Service Worker v13.0.0
+// OpereCheck Service Worker v13.0.0
 // Estrategia: Precache COMPLETO + notificacoes do sistema + auto-update
 
 const CACHE_VERSION = 'v13'
-const APP_CACHE = `nocheck-app-${CACHE_VERSION}`
-const STATIC_CACHE = `nocheck-static-${CACHE_VERSION}`
+const APP_CACHE = `operecheck-app-${CACHE_VERSION}`
+const STATIC_CACHE = `operecheck-static-${CACHE_VERSION}`
 
 // URLs que NUNCA devem ser cacheadas
 const NEVER_CACHE = [
@@ -58,8 +58,8 @@ self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys()
       .then(async (keys) => {
-        const oldAppCaches = keys.filter(k => k.startsWith('nocheck-app-') && k !== APP_CACHE)
-        const oldStaticCaches = keys.filter(k => k.startsWith('nocheck-static-') && k !== STATIC_CACHE)
+        const oldAppCaches = keys.filter(k => k.startsWith('operecheck-app-') && k !== APP_CACHE)
+        const oldStaticCaches = keys.filter(k => k.startsWith('operecheck-static-') && k !== STATIC_CACHE)
 
         // Migra entradas dos caches antigos para os novos
         if (oldAppCaches.length > 0) {
@@ -278,7 +278,7 @@ function getOfflineHTML() {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>NoCheck - Offline</title>
+  <title>OpereCheck - Offline</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
@@ -390,7 +390,7 @@ self.addEventListener('message', async (event) => {
         await self.registration.showNotification(payload.title, {
           body: payload.body || '',
           icon: '/web-app-manifest-192x192.png',
-          tag: 'nocheck-' + (payload.id != null ? payload.id : Date.now()),
+          tag: 'operecheck-' + (payload.id != null ? payload.id : Date.now()),
           data: { url: fullUrl }
         })
       }

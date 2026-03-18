@@ -18,6 +18,7 @@ import {
   FiBookmark,
   FiCheckCircle,
   FiChevronDown,
+  FiCreditCard,
 } from 'react-icons/fi'
 import type { IconType } from 'react-icons'
 
@@ -76,6 +77,7 @@ const SIDEBAR_ITEMS: SidebarItem[] = [
   },
   { label: 'Galeria', href: routes.adminGallery, icon: FiImage },
   { label: 'Configuracoes', href: routes.adminSettings, icon: FiSettings },
+  { label: 'Faturamento', href: '/admin/configuracoes/billing', icon: FiCreditCard },
 ]
 
 type AdminSidebarProps = {

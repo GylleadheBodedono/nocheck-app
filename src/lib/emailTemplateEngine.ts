@@ -56,12 +56,12 @@ export const TEMPLATE_VARIABLES: TemplateVariableMeta[] = [
   { key: 'deadline', label: 'Prazo', description: 'Data limite formatada', example: '01/03/2026' },
   { key: 'non_conformity_value', label: 'Valor Nao Conforme', description: 'Resposta que gerou a nao conformidade', example: 'Nao' },
   { key: 'description', label: 'Descricao', description: 'Descricao da condicao/plano', example: 'Funcionario nao higienizou as maos ao iniciar turno' },
-  { key: 'plan_url', label: 'URL do Plano', description: 'Link completo para acessar o plano', example: 'https://app.nocheck.com/admin/planos-de-acao/42' },
+  { key: 'plan_url', label: 'URL do Plano', description: 'Link completo para acessar o plano', example: 'https://app.operecheck.com/admin/planos-de-acao/42' },
   { key: 'plan_id', label: 'ID do Plano', description: 'Numero identificador do plano', example: '42' },
   { key: 'is_reincidencia', label: 'Reincidencia?', description: '"Sim" ou "Nao"', example: 'Sim' },
   { key: 'reincidencia_count', label: 'Qtd Reincidencias', description: 'Numero de ocorrencias anteriores', example: '3' },
   { key: 'reincidencia_prefix', label: 'Prefixo Reincidencia', description: '"REINCIDENCIA - " ou vazio', example: 'REINCIDENCIA - ' },
-  { key: 'app_name', label: 'Nome do App', description: 'Nome do sistema', example: 'NoCheck' },
+  { key: 'app_name', label: 'Nome do App', description: 'Nome do sistema', example: 'OpereCheck' },
 ]
 
 // ============================================
@@ -79,7 +79,7 @@ export const SEVERITY_COLORS: Record<string, string> = {
 // TEMPLATES PADRAO
 // ============================================
 
-export const DEFAULT_ACTION_PLAN_EMAIL_SUBJECT = '[NoCheck] {{reincidencia_prefix}}Plano de Acao: {{field_name}}'
+export const DEFAULT_ACTION_PLAN_EMAIL_SUBJECT = '[OpereCheck] {{reincidencia_prefix}}Plano de Acao: {{field_name}}'
 
 export const DEFAULT_ACTION_PLAN_EMAIL_HTML = `<!DOCTYPE html>
 <html>
@@ -220,6 +220,6 @@ export function getSampleVariables(): EmailTemplateVariables {
     is_reincidencia: 'Sim',
     reincidencia_count: '3',
     reincidencia_prefix: 'REINCIDENCIA - ',
-    app_name: 'NoCheck',
+    app_name: 'OpereCheck',
   }
 }

@@ -5,11 +5,11 @@
 
 export const APP_CONFIG = {
   // Informacoes do App
-  name: 'NoCheck',
-  fullName: 'NoCheck - Sistema de Checklists',
-  description: 'Sistema de checklists do Grupo Do No',
-  version: '2.0.0',
-  company: 'Grupo Do No',
+  name: 'OpereCheck',
+  fullName: 'OpereCheck - Gestão Operacional e Checklists',
+  description: 'Gestão operacional e checklists inteligentes',
+  version: '2.1.0',
+  company: 'OpereCheck',
   year: new Date().getFullYear(),
 
   // Rotas
@@ -35,6 +35,9 @@ export const APP_CONFIG = {
     adminActionPlanNew: '/admin/planos-de-acao/novo',
     adminActionPlanPresets: '/admin/planos-de-acao/modelos',
     adminSettings: '/admin/configuracoes',
+    platform: '/platform',
+    platformClientes: '/platform/clientes',
+    platformConfiguracoes: '/platform/configuracoes',
     checklistNew: '/checklist/novo',
     cadastro: '/cadastro',
     esqueciSenha: '/esqueci-senha',
@@ -61,7 +64,7 @@ export const APP_CONFIG = {
 
   // Configuracoes de storage
   storage: {
-    themeKey: 'nocheck-theme',
+    themeKey: 'operecheck-theme',
   },
 
   // Categorias de templates

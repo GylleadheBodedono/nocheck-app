@@ -293,7 +293,7 @@ export async function processarNaoConformidades(
 
     const appUrl = typeof window !== 'undefined'
       ? window.location.origin
-      : process.env.NEXT_PUBLIC_APP_URL || 'https://nocheck-app.vercel.app'
+      : process.env.NEXT_PUBLIC_APP_URL || 'https://operecheck.vercel.app'
 
     // 3. Avaliar cada condicao contra as respostas
     let plansCreated = 0
@@ -463,7 +463,7 @@ export async function processarNaoConformidades(
           is_reincidencia: reincidencia.isReincidencia ? 'Sim' : 'Nao',
           reincidencia_count: String(reincidencia.count),
           reincidencia_prefix: reincidencia.isReincidencia ? `REINCIDENCIA #${reincidencia.count + 1} - ` : '',
-          app_name: 'NoCheck',
+          app_name: 'OpereCheck',
         }
 
         const { html: htmlBody, subject: emailSubject } = buildEmailFromTemplate(
@@ -613,7 +613,7 @@ export async function checkOverduePlans(
         try {
           const appUrl = typeof window !== 'undefined'
             ? window.location.origin
-            : process.env.NEXT_PUBLIC_APP_URL || 'https://nocheck-app.vercel.app'
+            : process.env.NEXT_PUBLIC_APP_URL || 'https://operecheck.vercel.app'
           const planUrl = `${appUrl}/admin/planos-de-acao/${plan.id}`
           const deadlineFormatted = new Date(plan.deadline).toLocaleDateString('pt-BR')
 
@@ -629,7 +629,7 @@ export async function checkOverduePlans(
                 <p style="font-size: 14px; color: #a0a0a0; margin-bottom: 24px;">
                   Por favor, acesse o sistema para tomar as providencias necessarias.
                 </p>
-                <a href="${planUrl}" style="display: inline-block; background: #6366f1; color: white; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: 600;">
+                <a href="${planUrl}" style="display: inline-block; background: #0D9488; color: white; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: 600;">
                   Ver Plano de Acao
                 </a>
               </div>

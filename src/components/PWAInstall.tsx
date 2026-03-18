@@ -227,7 +227,7 @@ export function PWAInstall() {
           </div>
 
           <div className="flex-1">
-            <h3 className="font-semibold text-main text-sm">Instalar NoCheck</h3>
+            <h3 className="font-semibold text-main text-sm">Instalar OpereCheck</h3>
 
             {isIOS ? (
               <>

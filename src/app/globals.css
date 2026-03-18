@@ -3,45 +3,45 @@
 @tailwind utilities;
 
 /* ============================================
-   SISTEMA DE TEMAS - NoCheck
+   SISTEMA DE TEMAS - OpereCheck
    ============================================ */
 
 :root {
   /* ── Backgrounds ── */
-  --bg-page: #FAF8F5;            /* creme suave, como linho */
+  --bg-page: #F8FAFC;            /* slate-50, neutro frio */
   --bg-surface: #FFFFFF;
-  --bg-surface-hover: #F5F0EA;   /* hover com tom quente */
-  --bg-surface-active: #EBE3D8;  /* active mais saturado */
+  --bg-surface-hover: #F1F5F9;   /* slate-100 */
+  --bg-surface-active: #E2E8F0;  /* slate-200 */
 
   /* RGB variants para transparência */
   --bg-surface-rgb: 255, 255, 255;
-  --bg-surface-hover-rgb: 245, 240, 234;
+  --bg-surface-hover-rgb: 241, 245, 249;
 
   /* ── Textos ── */
-  --text-main: #2C1810;          /* marrom escuro profundo */
-  --text-secondary: #5C4A3A;     /* marrom médio */
-  --text-muted: #9C8B7A;         /* marrom claro / muted */
+  --text-main: #0F172A;          /* slate-900 */
+  --text-secondary: #475569;     /* slate-600 */
+  --text-muted: #94A3B8;         /* slate-400 */
   --text-inverse: #FFFFFF;
 
-  /* ── Primary – dourado/caramelo (identidade do restaurante) ── */
-  --primary: #B8935A;            /* dourado quente */
-  --primary-hover: #A07D45;      /* dourado mais escuro no hover */
+  /* ── Primary – teal (identidade OpereCheck) ── */
+  --primary: #0D9488;            /* teal-600 */
+  --primary-hover: #0F766E;      /* teal-700 */
   --primary-foreground: #FFFFFF;
 
-  /* ── Secondary – marrom neutro ── */
-  --secondary: #6B5744;          /* marrom tabaco */
-  --secondary-hover: #54432F;    /* marrom mais fechado */
+  /* ── Secondary – slate escuro ── */
+  --secondary: #334155;          /* slate-700 */
+  --secondary-hover: #1E293B;    /* slate-800 */
   --secondary-foreground: #FFFFFF;
 
-  /* ── Accent – terracota quente (CTAs, destaques) ── */
-  --accent: #C47A4A;             /* terracota / cobre */
-  --accent-hover: #AD6838;
+  /* ── Accent – amber (apoio, destaques, avisos) ── */
+  --accent: #F59E0B;             /* amber-500 */
+  --accent-hover: #D97706;       /* amber-600 */
   --accent-foreground: #FFFFFF;
 
   /* ── Borders ── */
-  --border-subtle: #EBE3D8;      /* quase invisível, quente */
-  --border-default: #D4C8B8;     /* borda padrão */
-  --border-strong: #9C8B7A;      /* borda forte */
+  --border-subtle: #E2E8F0;      /* slate-200 */
+  --border-default: #CBD5E1;     /* slate-300 */
+  --border-strong: #94A3B8;      /* slate-400 */
 
   /* ── Status ── */
   --status-success-bg: #F2F8F0;
@@ -60,14 +60,14 @@
   --status-info-text: #3B6AA0;
   --status-info-border: #A0C0E0;
 
-  /* ── Shadows (tom quente) ── */
-  --shadow-sm: 0 1px 2px rgba(44, 24, 16, 0.05);
-  --shadow-md: 0 4px 8px rgba(44, 24, 16, 0.07);
-  --shadow-lg: 0 10px 20px rgba(44, 24, 16, 0.09);
-  --shadow-xl: 0 20px 30px rgba(44, 24, 16, 0.12);
+  /* ── Shadows (tom neutro) ── */
+  --shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.05);
+  --shadow-md: 0 4px 8px rgba(15, 23, 42, 0.07);
+  --shadow-lg: 0 10px 20px rgba(15, 23, 42, 0.09);
+  --shadow-xl: 0 20px 30px rgba(15, 23, 42, 0.12);
 
   /* ── Focus ring ── */
-  --ring-color: rgba(184, 147, 90, 0.35);
+  --ring-color: rgba(13, 148, 136, 0.35);
 }
 
 [data-theme='dark'] {
@@ -94,7 +94,7 @@
   --secondary-hover: #3f3f46;
   --secondary-foreground: #fafafa;
 
-  --accent: #C5A572;
+  --accent: #F59E0B;
   --accent-foreground: #18181b;
 
   --border-subtle: #27272a;
@@ -130,7 +130,7 @@
    ============================================ */
 
 body {
-  font-family: var(--font-inter), system-ui, -apple-system, sans-serif;
+  font-family: var(--font-poppins), "Poppins", system-ui, -apple-system, sans-serif;
   background-color: var(--bg-page);
   color: var(--text-main);
   transition: background-color 0.3s ease, color 0.3s ease;

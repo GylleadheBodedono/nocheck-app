@@ -34,7 +34,7 @@ export default function FuncoesPage() {
   const [formData, setFormData] = useState({
     name: '',
     description: '',
-    color: '#6366f1',
+    color: '#0D9488',
     icon: 'briefcase',
     is_active: true,
     teams_webhook_url: '',
@@ -165,7 +165,7 @@ export default function FuncoesPage() {
       setFormData({
         name: '',
         description: '',
-        color: '#6366f1',
+        color: '#0D9488',
         icon: 'briefcase',
         is_active: true,
         teams_webhook_url: '',
@@ -451,7 +451,7 @@ export default function FuncoesPage() {
                     value={formData.color}
                     onChange={(e) => setFormData({ ...formData, color: e.target.value })}
                     className="input flex-1"
-                    placeholder="#6366f1"
+                    placeholder="#0D9488"
                   />
                 </div>
               </div>

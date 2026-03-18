@@ -94,7 +94,7 @@ export function useNotifications() {
 
           // Notificacao do sistema (celular/navegador) quando permissao concedida
           if (typeof window === 'undefined' || !('Notification' in window) || Notification.permission !== 'granted') return
-          const title = newNotification.title || 'NoCheck'
+          const title = newNotification.title || 'OpereCheck'
           const body = newNotification.message || ''
           const link = newNotification.link || '/dashboard'
           const id = newNotification.id
@@ -105,7 +105,7 @@ export function useNotifications() {
             const n = new Notification(title, {
               body,
               icon: '/web-app-manifest-192x192.png',
-              tag: 'nocheck-' + id,
+              tag: 'operecheck-' + id,
               data: { url: link.startsWith('http') ? link : window.location.origin + (link.startsWith('/') ? link : '/' + link) },
             })
             n.onclick = () => {

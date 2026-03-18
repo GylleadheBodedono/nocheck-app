@@ -1,13 +1,13 @@
 {
-  "name": "NoCheck - Sistema de Checklists",
-  "short_name": "NoCheck",
-  "description": "Sistema de checklists do Grupo Do No",
+  "name": "OpereCheck - Gestão Operacional e Checklists",
+  "short_name": "OpereCheck",
+  "description": "Gestão operacional e checklists inteligentes",
   "start_url": "/dashboard",
   "id": "/dashboard",
   "scope": "/",
   "display": "standalone",
-  "background_color": "#FDFBF7",
-  "theme_color": "#4A3728",
+  "background_color": "#F8FAFC",
+  "theme_color": "#0D9488",
   "orientation": "portrait",
   "icons": [
     {

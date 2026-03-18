@@ -24,10 +24,13 @@
       "Bash(npx tsx:*)",
       "Bash(node:*)",
       "Bash(npm uninstall:*)",
-      "Bash(read f:*)",
-      "Bash(echo EXIT: $?:*)",
       "Bash(npx vitest:*)",
-      "Bash(cd \"C:\\\\Users\\\\Gylle do TI\\\\Downloads\\\\Projetos\\\\nocheck-app\" && npx jest src/lib/__tests__/timeUtils.test.ts 2>&1)"
+      "Bash(docker restart:*)",
+      "Bash(docker exec:*)",
+      "mcp__claude_ai_ClickUp__clickup_search",
+      "mcp__claude_ai_ClickUp__clickup_update_task",
+      "mcp__claude_ai_Supabase__list_projects",
+      "mcp__claude_ai_Supabase__execute_sql"
     ]
   }
 }

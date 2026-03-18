@@ -260,7 +260,7 @@ export default function ConfiguracoesPage() {
             value={emailSubject}
             onChange={(e) => setEmailSubject(e.target.value)}
             className="input font-mono text-sm"
-            placeholder="[NoCheck] Plano de Acao: {{field_name}}"
+            placeholder="[OpereCheck] Plano de Acao: {{field_name}}"
           />
         </div>
 

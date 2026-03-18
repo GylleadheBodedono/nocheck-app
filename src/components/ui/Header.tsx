@@ -2,7 +2,6 @@
 
 import { useEffect, useState, useMemo, useRef, useCallback } from 'react'
 import Link from 'next/link'
-import Image from 'next/image'
 import { useRouter } from 'next/navigation'
 import { FiArrowLeft, FiLogOut, FiUser, FiBell, FiSettings, FiCheck, FiAlertTriangle, FiCheckCircle, FiClock, FiTrash2, FiX, FiMenu } from 'react-icons/fi'
 import { GlobalSearch } from './GlobalSearch'
@@ -260,8 +259,9 @@ export function Header({
               {/* Logo or Icon + Title */}
               {showLogo ? (
                 <Link href={APP_CONFIG.routes.dashboard} className="flex items-center">
-                  <Image src="/Logo-dark.png" alt={APP_CONFIG.name} width={120} height={32} className="logo-for-light" />
-                  <Image src="/Logo.png" alt={APP_CONFIG.name} width={120} height={32} className="logo-for-dark" />
+                  <span className="text-xl font-bold tracking-tight">
+                    <span className="text-secondary">Opere</span><span className="text-primary">Check</span>
+                  </span>
                 </Link>
               ) : (
                 <>

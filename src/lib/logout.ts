@@ -31,14 +31,14 @@ function clearServiceWorkerCache(): Promise<void> {
  * Usa window.location.href para hard redirect (ignora cache do Next.js router).
  */
 export async function fullLogout(supabase: AnySupabaseClient): Promise<void> {
-  // 1. Limpar IndexedDB (nocheck-cache) — dados offline do app
+  // 1. Limpar IndexedDB (operecheck-cache) — dados offline do app
   try {
     await clearAllCache()
   } catch {
     // Não bloquear logout se falhar
   }
 
-  // 2. Limpar IndexedDB (nocheck-offline) — checklists pendentes
+  // 2. Limpar IndexedDB (operecheck-offline) — checklists pendentes
   try {
     await clearOfflineData()
   } catch {

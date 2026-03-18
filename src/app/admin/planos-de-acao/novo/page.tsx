@@ -216,7 +216,7 @@ export default function NovoPlanoDeAcaoPage() {
               is_reincidencia: 'Nao',
               reincidencia_count: '0',
               reincidencia_prefix: '',
-              app_name: 'NoCheck',
+              app_name: 'OpereCheck',
             }
 
             const { html, subject } = buildEmailFromTemplate(

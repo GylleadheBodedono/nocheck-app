@@ -114,10 +114,10 @@ describe('replaceTemplatePlaceholders', () => {
 
   it('does NOT escape plan_url (RAW_VARIABLE)', () => {
     const vars = makeVariables({
-      plan_url: 'https://app.nocheck.com/admin/planos?id=42&view=detail',
+      plan_url: 'https://app.operecheck.com/admin/planos?id=42&view=detail',
     })
     const result = replaceTemplatePlaceholders('<a href="{{plan_url}}">', vars)
-    expect(result).toBe('<a href="https://app.nocheck.com/admin/planos?id=42&view=detail">')
+    expect(result).toBe('<a href="https://app.operecheck.com/admin/planos?id=42&view=detail">')
   })
 
   it('does NOT escape reincidencia_prefix (RAW_VARIABLE)', () => {
@@ -173,7 +173,7 @@ describe('buildEmailFromTemplate', () => {
     const result = buildEmailFromTemplate('<div>{{store_name}}</div>', null, vars)
     expect(result.html).toBe('<div>Loja Centro</div>')
     // Subject should use the default template pattern
-    expect(result.subject).toContain('[NoCheck]')
+    expect(result.subject).toContain('[OpereCheck]')
     expect(result.subject).toContain('Higienizar maos')
   })
 
@@ -183,7 +183,7 @@ describe('buildEmailFromTemplate', () => {
     expect(result.html).toContain('<!DOCTYPE html>')
     expect(result.html).toContain('Higienizar maos')
     // Subject should come from default
-    expect(result.subject).toContain('[NoCheck]')
+    expect(result.subject).toContain('[OpereCheck]')
     expect(result.subject).toContain('Plano de Acao')
   })
 

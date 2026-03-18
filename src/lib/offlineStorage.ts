@@ -2,7 +2,7 @@
  * IndexedDB helper for offline storage
  */
 
-const DB_NAME = 'nocheck-offline'
+const DB_NAME = 'operecheck-offline'
 const DB_VERSION = 1
 const STORE_NAME = 'pending_checklists'
 

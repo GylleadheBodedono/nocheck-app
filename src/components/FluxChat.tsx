@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useRef, useEffect, useCallback } from 'react'
+import { usePathname } from 'next/navigation'
 import { FiMessageCircle, FiX, FiSend } from 'react-icons/fi'
 
 type Message = {
@@ -8,9 +9,14 @@ type Message = {
   content: string
 }
 
-const WELCOME_MESSAGE = 'Opa! Eu sou o Flux, seu assistente do NoCheck! Pode me perguntar qualquer coisa sobre o sistema — como preencher checklists, interpretar relatorios, gerenciar planos de acao... Estou aqui pra ajudar! 😄'
+const WELCOME_MESSAGE = 'Opa! Eu sou o Flux, seu assistente do OpereCheck! Pode me perguntar qualquer coisa sobre o sistema — como preencher checklists, interpretar relatorios, gerenciar planos de acao... Estou aqui pra ajudar! 😄'
 
 export function FluxChat() {
+  const pathname = usePathname()
+  // Esconder o bot em: landing, login, cadastro, platform (superadmin), esqueci-senha
+  const hiddenPaths = ['/', '/login', '/cadastro', '/esqueci-senha', '/offline']
+  const shouldHide = hiddenPaths.includes(pathname) || pathname.startsWith('/platform') || pathname.startsWith('/auth')
+
   const [isOpen, setIsOpen] = useState(false)
   const [messages, setMessages] = useState<Message[]>([
     { role: 'assistant', content: WELCOME_MESSAGE },
@@ -76,6 +82,8 @@ export function FluxChat() {
     }
   }
 
+  if (shouldHide) return null
+
   return (
     <>
       {/* Chat Panel */}
@@ -89,7 +97,7 @@ export function FluxChat() {
               </div>
               <div>
                 <h3 className="font-bold text-white text-sm">Flux</h3>
-                <p className="text-white/70 text-xs">Assistente NoCheck</p>
+                <p className="text-white/70 text-xs">Assistente OpereCheck</p>
               </div>
             </div>
             <button

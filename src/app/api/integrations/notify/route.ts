@@ -183,7 +183,7 @@ async function enviarParaTeams(data: ValidationData): Promise<{ success: boolean
             {
               type: 'Action.OpenUrl',
               title: 'Abrir Validações',
-              url: `${process.env.NEXT_PUBLIC_APP_URL || 'https://nocheck-app.vercel.app'}/admin/validacoes`,
+              url: `${process.env.NEXT_PUBLIC_APP_URL || 'https://operecheck.vercel.app'}/admin/validacoes`,
             },
           ],
         },
@@ -298,7 +298,7 @@ async function enviarPlanoAcaoParaTeams(data: ActionPlanData): Promise<{ success
             {
               type: 'Action.OpenUrl',
               title: 'Ver Planos de Ação',
-              url: `${process.env.NEXT_PUBLIC_APP_URL || 'https://nocheck-app.vercel.app'}/admin/planos-de-acao`,
+              url: `${process.env.NEXT_PUBLIC_APP_URL || 'https://operecheck.vercel.app'}/admin/planos-de-acao`,
             },
           ],
           ...(entities.length > 0 ? { msteams: { entities } } : {}),
