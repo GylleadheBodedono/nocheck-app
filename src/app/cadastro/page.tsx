@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { APP_CONFIG } from '@/lib/config'
 import { ThemeToggle, LoadingInline } from '@/components/ui'
-import { FiLock, FiMail, FiUser, FiPhone, FiCheckCircle, FiArrowLeft } from 'react-icons/fi'
+import { FiLock, FiMail, FiUser, FiPhone, FiCheckCircle, FiArrowLeft, FiEye, FiEyeOff } from 'react-icons/fi'
 
 export default function CadastroPage() {
   const [fullName, setFullName] = useState('')
@@ -21,6 +21,8 @@ export default function CadastroPage() {
   const [verifying, setVerifying] = useState(false)
   const [verified, setVerified] = useState(false)
   const [resending, setResending] = useState(false)
+  const [showPassword, setShowPassword] = useState(false)
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false)
   const otpRefs = useRef<(HTMLInputElement | null)[]>([])
   const router = useRouter()
 
@@ -430,16 +432,25 @@ export default function CadastroPage() {
                     <FiLock className="absolute left-4 top-1/2 -translate-y-1/2 w-[18px] h-[18px] text-muted pointer-events-none" />
                     <input
                       id="password"
-                      type="password"
+                      type={showPassword ? 'text' : 'password'}
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
                       required
                       minLength={6}
                       autoComplete="new-password"
                       className="input"
-                      style={{ paddingLeft: '2.75rem' }}
+                      style={{ paddingLeft: '2.75rem', paddingRight: '2.75rem' }}
                       placeholder="Minimo 6 caracteres"
                     />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(prev => !prev)}
+                      className="absolute right-4 top-1/2 -translate-y-1/2 text-muted hover:text-main transition-colors"
+                      tabIndex={-1}
+                      aria-label={showPassword ? 'Ocultar senha' : 'Mostrar senha'}
+                    >
+                      {showPassword ? <FiEyeOff className="w-[18px] h-[18px]" /> : <FiEye className="w-[18px] h-[18px]" />}
+                    </button>
                   </div>
                 </div>
 
@@ -452,16 +463,25 @@ export default function CadastroPage() {
                     <FiLock className="absolute left-4 top-1/2 -translate-y-1/2 w-[18px] h-[18px] text-muted pointer-events-none" />
                     <input
                       id="confirmPassword"
-                      type="password"
+                      type={showConfirmPassword ? 'text' : 'password'}
                       value={confirmPassword}
                       onChange={(e) => setConfirmPassword(e.target.value)}
                       required
                       minLength={6}
                       autoComplete="new-password"
                       className="input"
-                      style={{ paddingLeft: '2.75rem' }}
+                      style={{ paddingLeft: '2.75rem', paddingRight: '2.75rem' }}
                       placeholder="Repita a senha"
                     />
+                    <button
+                      type="button"
+                      onClick={() => setShowConfirmPassword(prev => !prev)}
+                      className="absolute right-4 top-1/2 -translate-y-1/2 text-muted hover:text-main transition-colors"
+                      tabIndex={-1}
+                      aria-label={showConfirmPassword ? 'Ocultar senha' : 'Mostrar senha'}
+                    >
+                      {showConfirmPassword ? <FiEyeOff className="w-[18px] h-[18px]" /> : <FiEye className="w-[18px] h-[18px]" />}
+                    </button>
                   </div>
                 </div>
 

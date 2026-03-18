@@ -3,7 +3,7 @@
 import { useEffect, useState, useMemo } from 'react'
 import { createClient } from '@/lib/supabase'
 import Link from 'next/link'
-import { FiSave, FiUserPlus, FiCheckCircle, FiMail } from 'react-icons/fi'
+import { FiSave, FiUserPlus, FiCheckCircle, FiMail, FiEye, FiEyeOff } from 'react-icons/fi'
 import type { Store, Sector, FunctionRow } from '@/types/database'
 import { APP_CONFIG } from '@/lib/config'
 import { Header, Select, PageContainer } from '@/components/ui'
@@ -22,6 +22,7 @@ export default function NovoUsuarioPage() {
   // Form state
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
   const [fullName, setFullName] = useState('')
   const [phone, setPhone] = useState('')
   const [isAdmin, setIsAdmin] = useState(false)
@@ -224,15 +225,27 @@ export default function NovoUsuarioPage() {
                   <label className="block text-sm font-medium text-secondary mb-2">
                     Senha *
                   </label>
-                  <input
-                    type="password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    required
-                    minLength={6}
-                    className="input"
-                    placeholder="Minimo 6 caracteres"
-                  />
+                  <div className="relative">
+                    <input
+                      type={showPassword ? 'text' : 'password'}
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      required
+                      minLength={6}
+                      className="input"
+                      style={{ paddingRight: '2.75rem' }}
+                      placeholder="Minimo 6 caracteres"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(prev => !prev)}
+                      className="absolute right-4 top-1/2 -translate-y-1/2 text-muted hover:text-main transition-colors"
+                      tabIndex={-1}
+                      aria-label={showPassword ? 'Ocultar senha' : 'Mostrar senha'}
+                    >
+                      {showPassword ? <FiEyeOff className="w-[18px] h-[18px]" /> : <FiEye className="w-[18px] h-[18px]" />}
+                    </button>
+                  </div>
                 </div>
 
                 <div>
