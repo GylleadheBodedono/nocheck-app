@@ -15,26 +15,7 @@ export const runtime = 'edge'
 
 import { NextRequest, NextResponse } from 'next/server'
 import Stripe from 'stripe'
-import { createClient } from '@supabase/supabase-js'
-import { PLAN_CONFIGS } from '@/types/tenant'
-
-function getStripe() {
-  return new Stripe(process.env.STRIPE_SECRET_KEY!, { apiVersion: '2026-02-25.clover' })
-}
-
-// Mapear price_id → plan name
-function getPlanFromPriceId(priceId: string): string | null {
-  for (const [plan, config] of Object.entries(PLAN_CONFIGS)) {
-    if (config.stripePriceId === priceId) return plan
-  }
-  return null
-}
-
-// Buscar features do plano
-function getFeaturesForPlan(plan: string): string[] {
-  const config = PLAN_CONFIGS[plan as keyof typeof PLAN_CONFIGS]
-  return config?.features || PLAN_CONFIGS.trial.features
-}
+import { getStripe, getSupabaseAdmin, getPlanFromPriceId, updateOrgPlan } from '@/lib/stripe'
 
 export async function POST(req: NextRequest) {
   const body = await req.text()
@@ -58,10 +39,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Signature invalida' }, { status: 400 })
   }
 
-  const supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-  )
+  const supabase = getSupabaseAdmin()
 
   console.log('[Stripe Webhook] Evento:', event.type)
 
@@ -84,18 +62,11 @@ export async function POST(req: NextRequest) {
           if (priceId) plan = getPlanFromPriceId(priceId) || 'starter'
         }
 
-        const features = getFeaturesForPlan(plan)
-        const config = PLAN_CONFIGS[plan as keyof typeof PLAN_CONFIGS]
-
-        await supabase.from('organizations').update({
-          plan,
-          features,
-          max_users: config?.maxUsers || 5,
-          max_stores: config?.maxStores || 3,
+        await updateOrgPlan(orgId, plan, {
           stripe_customer_id: customerId,
           stripe_subscription_id: subscriptionId,
           trial_ends_at: null, // Nao e mais trial
-        }).eq('id', orgId)
+        })
 
         console.log(`[Stripe] Org ${orgId} → plano ${plan}`)
         break
@@ -109,15 +80,8 @@ export async function POST(req: NextRequest) {
 
         const priceId = sub.items.data[0]?.price?.id
         const plan = priceId ? getPlanFromPriceId(priceId) || 'starter' : 'starter'
-        const features = getFeaturesForPlan(plan)
-        const config = PLAN_CONFIGS[plan as keyof typeof PLAN_CONFIGS]
 
-        await supabase.from('organizations').update({
-          plan,
-          features,
-          max_users: config?.maxUsers || 5,
-          max_stores: config?.maxStores || 3,
-        }).eq('id', orgId)
+        await updateOrgPlan(orgId, plan)
 
         console.log(`[Stripe] Subscription updated: org ${orgId} → ${plan}`)
         break
@@ -129,16 +93,10 @@ export async function POST(req: NextRequest) {
         const orgId = sub.metadata?.org_id
         if (!orgId) break
 
-        const trialFeatures = PLAN_CONFIGS.trial.features
-
-        await supabase.from('organizations').update({
-          plan: 'trial',
-          features: trialFeatures,
-          max_users: PLAN_CONFIGS.trial.maxUsers,
-          max_stores: PLAN_CONFIGS.trial.maxStores,
+        await updateOrgPlan(orgId, 'trial', {
           stripe_subscription_id: null,
           trial_ends_at: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString(), // 14 dias trial
-        }).eq('id', orgId)
+        })
 
         console.log(`[Stripe] Subscription deleted: org ${orgId} → trial`)
         break

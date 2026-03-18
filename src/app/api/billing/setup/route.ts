@@ -9,11 +9,7 @@
 export const runtime = 'edge'
 
 import { NextResponse } from 'next/server'
-import Stripe from 'stripe'
-
-function getStripe() {
-  return new Stripe(process.env.STRIPE_SECRET_KEY!, { apiVersion: '2026-02-25.clover' })
-}
+import { getStripe } from '@/lib/stripe'
 
 const PLANS = [
   { name: 'OpereCheck Starter', price: 29700, plan: 'starter' },       // R$ 297

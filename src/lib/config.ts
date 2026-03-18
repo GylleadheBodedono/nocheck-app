@@ -3,6 +3,16 @@
 // Altere aqui para mudar em todo o projeto
 // ============================================
 
+/** Cor primaria padrao (teal) usada como fallback quando o tenant nao define tema */
+const DEFAULT_PRIMARY_COLOR = '#0D9488'
+
+/**
+ * Configuracao global da aplicacao.
+ *
+ * Contem informacoes do app, rotas, mensagens padrao,
+ * categorias de templates e roles de usuarios.
+ * Valores aqui sao fallbacks — tenants podem sobrescrever via settings.
+ */
 export const APP_CONFIG = {
   // Informacoes do App
   name: 'OpereCheck',
@@ -84,7 +94,7 @@ export const APP_CONFIG = {
   ],
 } as const
 
-// Tipos para autocomplete
+/** Tipo inferido da configuracao global (readonly) */
 export type AppConfig = typeof APP_CONFIG
 
 // ============================================
@@ -94,22 +104,44 @@ export type AppConfig = typeof APP_CONFIG
 
 import type { Organization } from '@/types/tenant'
 
-/** Retorna o nome do app do tenant ou fallback "OpereCheck" */
+/**
+ * Retorna o nome do app configurado pelo tenant.
+ * Usa "OpereCheck" como fallback se nao houver configuracao.
+ *
+ * @param org - Organizacao atual (pode ser null durante carregamento)
+ * @returns Nome do app do tenant ou fallback
+ */
 export function getTenantAppName(org: Organization | null | undefined): string {
   return org?.settings?.theme?.appName || APP_CONFIG.name
 }
 
-/** Retorna a URL do logo do tenant ou null */
+/**
+ * Retorna a URL do logo configurado pelo tenant.
+ *
+ * @param org - Organizacao atual (pode ser null durante carregamento)
+ * @returns URL do logo ou null se nao configurado
+ */
 export function getTenantLogoUrl(org: Organization | null | undefined): string | null {
   return org?.settings?.theme?.logoUrl || null
 }
 
-/** Retorna a URL do favicon do tenant ou null */
+/**
+ * Retorna a URL do favicon configurado pelo tenant.
+ *
+ * @param org - Organizacao atual (pode ser null durante carregamento)
+ * @returns URL do favicon ou null se nao configurado
+ */
 export function getTenantFaviconUrl(org: Organization | null | undefined): string | null {
   return org?.settings?.theme?.faviconUrl || null
 }
 
-/** Retorna a cor primaria do tenant ou o teal padrao */
+/**
+ * Retorna a cor primaria do tenant para uso em temas.
+ * Usa teal padrao ({@link DEFAULT_PRIMARY_COLOR}) como fallback.
+ *
+ * @param org - Organizacao atual (pode ser null durante carregamento)
+ * @returns Cor hexadecimal (ex: "#0D9488")
+ */
 export function getTenantPrimaryColor(org: Organization | null | undefined): string {
-  return org?.settings?.theme?.primaryColor || '#0D9488'
+  return org?.settings?.theme?.primaryColor || DEFAULT_PRIMARY_COLOR
 }

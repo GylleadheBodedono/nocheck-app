@@ -8,16 +8,37 @@
 
 import { PLAN_CONFIGS, type Plan } from '@/types/tenant'
 
+/**
+ * Resultado da verificacao de limite de um recurso.
+ * Indica se a organizacao pode adicionar mais itens
+ * e os valores atuais/maximos para exibicao na UI.
+ */
 export type PlanLimitCheck = {
+  /** Se a organizacao pode adicionar mais itens */
   allowed: boolean
+  /** Quantidade atual de itens */
   current: number
+  /** Limite maximo do plano (ou override) */
   max: number
+  /** Nome do plano atual */
   plan: string
 }
 
 /**
- * Verifica se a org pode adicionar mais usuarios.
- * Retorna { allowed, current, max, plan }
+ * Verifica se a organizacao pode adicionar mais usuarios.
+ *
+ * @param currentUsers - Numero atual de usuarios na organizacao
+ * @param plan - Plano atual da organizacao
+ * @param maxUsersOverride - Limite customizado (sobrescreve o padrao do plano)
+ * @returns Resultado com `allowed` indicando se pode adicionar mais
+ *
+ * @example
+ * ```ts
+ * const check = checkUserLimit(5, 'starter')
+ * if (!check.allowed) {
+ *   toast.error(getLimitMessage('users', check))
+ * }
+ * ```
  */
 export function checkUserLimit(
   currentUsers: number,
@@ -36,8 +57,20 @@ export function checkUserLimit(
 }
 
 /**
- * Verifica se a org pode adicionar mais lojas.
- * Retorna { allowed, current, max, plan }
+ * Verifica se a organizacao pode adicionar mais lojas.
+ *
+ * @param currentStores - Numero atual de lojas na organizacao
+ * @param plan - Plano atual da organizacao
+ * @param maxStoresOverride - Limite customizado (sobrescreve o padrao do plano)
+ * @returns Resultado com `allowed` indicando se pode adicionar mais
+ *
+ * @example
+ * ```ts
+ * const check = checkStoreLimit(3, 'professional')
+ * if (!check.allowed) {
+ *   toast.error(getLimitMessage('stores', check))
+ * }
+ * ```
  */
 export function checkStoreLimit(
   currentStores: number,
@@ -56,7 +89,11 @@ export function checkStoreLimit(
 }
 
 /**
- * Mensagem de erro padrao para limite atingido.
+ * Gera mensagem de erro padrao para exibir quando o limite e atingido.
+ *
+ * @param type - Tipo de recurso ("users" ou "stores")
+ * @param check - Resultado da verificacao de limite
+ * @returns Mensagem formatada para exibir ao usuario
  */
 export function getLimitMessage(type: 'users' | 'stores', check: PlanLimitCheck): string {
   const label = type === 'users' ? 'usuários' : 'lojas'

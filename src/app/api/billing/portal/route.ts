@@ -8,12 +8,7 @@
 export const runtime = 'edge'
 
 import { NextRequest, NextResponse } from 'next/server'
-import Stripe from 'stripe'
-import { createClient } from '@supabase/supabase-js'
-
-function getStripe() {
-  return new Stripe(process.env.STRIPE_SECRET_KEY!, { apiVersion: '2026-02-25.clover' })
-}
+import { getStripe, getSupabaseAdmin } from '@/lib/stripe'
 
 export async function POST(req: NextRequest) {
   try {
@@ -23,10 +18,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'orgId obrigatorio' }, { status: 400 })
     }
 
-    const supabase = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!
-    )
+    const supabase = getSupabaseAdmin()
 
     const { data: org } = await supabase
       .from('organizations')

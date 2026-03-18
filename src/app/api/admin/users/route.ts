@@ -1,11 +1,8 @@
 export const runtime = 'edge'
 
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
 import { verifyApiAuth } from '@/lib/api-auth'
-
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
+import { getSupabaseAdmin } from '@/lib/stripe'
 
 /**
  * GET /api/admin/users
@@ -17,9 +14,7 @@ export async function GET(request: NextRequest) {
   if (auth.error) return auth.error
 
   try {
-    const supabase = createClient(supabaseUrl, supabaseServiceKey, {
-      auth: { autoRefreshToken: false, persistSession: false }
-    })
+    const supabase = getSupabaseAdmin()
 
     // 1. Busca todos usuarios do auth.users
     const { data: authList, error: authError } = await supabase.auth.admin.listUsers()
@@ -129,9 +124,7 @@ export async function POST(request: NextRequest) {
     }
 
     // 0. Verificar limite de usuarios do plano
-    const adminClient = createClient(supabaseUrl, supabaseServiceKey, {
-      auth: { autoRefreshToken: false, persistSession: false }
-    })
+    const adminClient = getSupabaseAdmin()
 
     // Buscar org do usuario autenticado
     const { data: memberData } = await adminClient
@@ -169,10 +162,6 @@ export async function POST(request: NextRequest) {
 
     if (autoConfirm) {
       // Auto-confirm: usa admin API para criar usuario ja confirmado
-      const adminClient = createClient(supabaseUrl, supabaseServiceKey, {
-        auth: { autoRefreshToken: false, persistSession: false }
-      })
-
       const { data: adminData, error: adminError } = await adminClient.auth.admin.createUser({
         email,
         password,
@@ -198,10 +187,6 @@ export async function POST(request: NextRequest) {
       userId = adminData.user.id
     } else {
       // Sem auto-confirm: cria usuario com email NAO confirmado + envia email via Resend
-      const adminClient = createClient(supabaseUrl, supabaseServiceKey, {
-        auth: { autoRefreshToken: false, persistSession: false }
-      })
-
       const { data: userData, error: createError } = await adminClient.auth.admin.createUser({
         email,
         password,
@@ -301,9 +286,7 @@ export async function POST(request: NextRequest) {
     }
 
     // 2. Service role para atualizar perfil e roles
-    const supabase = createClient(supabaseUrl, supabaseServiceKey, {
-      auth: { autoRefreshToken: false, persistSession: false }
-    })
+    const supabase = getSupabaseAdmin()
 
     // Monta lista de lojas: novo formato (storeAssignments) ou legado (storeId/sectorId)
     let assignments: { store_id: number; sector_id: number | null; is_primary: boolean }[] = []

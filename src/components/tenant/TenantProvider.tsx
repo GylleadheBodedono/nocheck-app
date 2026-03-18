@@ -19,24 +19,30 @@ import { useEffect, useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { createClient } from '@/lib/supabase'
 import { TenantCtx } from '@/hooks/useTenant'
+import { darkenColor, hexToRgb } from '@/lib/color-utils'
 import type { Organization, OrgRole, Feature, TenantContext } from '@/types/tenant'
 
+/** Props do componente TenantProvider */
 interface TenantProviderProps {
   children: React.ReactNode
+  /** Slug da organizacao extraido da URL (ex: "minha-empresa") */
   orgSlug: string
 }
 
 /**
- * Escurece uma cor hex em ~15% para gerar hover state
+ * Provedor de contexto multi-tenant.
+ *
+ * Busca a organizacao pelo slug, valida a sessao do usuario,
+ * aplica o tema white-label via CSS custom properties e
+ * disponibiliza o {@link TenantContext} para toda a arvore de componentes.
+ *
+ * @example
+ * ```tsx
+ * <TenantProvider orgSlug={params.orgSlug}>
+ *   <AppLayout />
+ * </TenantProvider>
+ * ```
  */
-function darkenColor(hex: string, amount = 0.15): string {
-  const h = hex.replace('#', '')
-  const r = Math.max(0, Math.round(parseInt(h.substring(0, 2), 16) * (1 - amount)))
-  const g = Math.max(0, Math.round(parseInt(h.substring(2, 4), 16) * (1 - amount)))
-  const b = Math.max(0, Math.round(parseInt(h.substring(4, 6), 16) * (1 - amount)))
-  return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`
-}
-
 export function TenantProvider({ children, orgSlug }: TenantProviderProps) {
   const supabase = createClient()
 
@@ -84,10 +90,7 @@ export function TenantProvider({ children, orgSlug }: TenantProviderProps) {
       root.style.setProperty('--primary', theme.primaryColor)
       root.style.setProperty('--primary-hover', darkenColor(theme.primaryColor))
       // Ring color com opacidade
-      const h = theme.primaryColor.replace('#', '')
-      const r = parseInt(h.substring(0, 2), 16)
-      const g = parseInt(h.substring(2, 4), 16)
-      const b = parseInt(h.substring(4, 6), 16)
+      const { r, g, b } = hexToRgb(theme.primaryColor)
       root.style.setProperty('--ring-color', `rgba(${r}, ${g}, ${b}, 0.35)`)
     }
 

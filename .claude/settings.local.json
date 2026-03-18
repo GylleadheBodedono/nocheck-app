@@ -40,7 +40,12 @@
       "Bash(cd \"C:/Users/ENZO TI/projetos/operecheck\" && npx next lint --file src/app/dashboard/page.tsx --file src/components/tenant/TrialBanner.tsx --file src/app/admin/configuracoes/billing/page.tsx --file src/app/api/billing/status/route.ts --file src/app/api/webhooks/stripe/route.ts --file src/services/billing.service.ts 2>&1)",
       "mcp__claude_ai_ClickUp__clickup_get_list",
       "Bash(cd \"/c/Users/ENZO TI/projetos/operecheck\" && npx next lint --file src/app/page.tsx --file src/components/landing/FAQSection.tsx --file src/components/landing/PricingSection.tsx 2>&1 | head -20)",
-      "Bash(cd \"/c/Users/ENZO TI/projetos/operecheck\" && docker rm -f supabase_vector_operecheck-app 2>&1)"
+      "Bash(cd \"/c/Users/ENZO TI/projetos/operecheck\" && docker rm -f supabase_vector_operecheck-app 2>&1)",
+      "Bash(cd \"/c/Users/ENZO TI/projetos/operecheck\" && npx vercel ls 2>&1 | head -20)",
+      "Bash(cd \"/c/Users/ENZO TI/projetos/operecheck\" && npx tsc --noEmit --pretty 2>&1 | head -50)",
+      "Bash(cd \"/c/Users/ENZO TI/projetos/operecheck\" && npx next lint --dir src/lib/stripe.ts src/app/api/billing src/app/api/webhooks/stripe src/app/api/admin/users 2>&1 | head -30)",
+      "Bash(cd \"/c/Users/ENZO TI/projetos/operecheck\" && npx next lint --dir src/lib/stripe.ts src/app/api/billing src/app/api/webhooks/stripe src/app/api/admin/users 2>&1 | head -20)",
+      "Bash(cd \"/c/Users/ENZO TI/projetos/operecheck\" && ./node_modules/.bin/tsc --noEmit --pretty 2>&1 | head -60)"
     ]
   }
 }
