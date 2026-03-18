@@ -401,8 +401,9 @@ export async function processarNaoConformidades(
         .eq('field_id', field.id)
         .single()
 
-      // 6. Criar plano de acao
-      const { data: plan, error: planError } = await sb
+      // 6. Criar plano de acao (service role quando funcao, pois assigned_to pode ser null)
+      const insertClient = assignedFunctionId ? getServiceSupabase() : sb
+      const { data: plan, error: planError } = await insertClient
         .from('action_plans')
         .insert({
           checklist_id: checklistId,
