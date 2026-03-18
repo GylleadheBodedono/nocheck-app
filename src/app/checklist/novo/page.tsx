@@ -2493,6 +2493,64 @@ function ChecklistForm() {
               </div>
             </div>
         </main>
+
+        {/* Modal para tech users adicionarem campo (view com secoes) */}
+        {showAddFieldModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+            <div className="bg-page rounded-2xl w-full max-w-sm shadow-xl border border-subtle p-6 space-y-4">
+              <h3 className="text-lg font-bold text-main">Adicionar Campo</h3>
+              <p className="text-xs text-muted">O campo sera adicionado permanentemente ao template.</p>
+
+              <div>
+                <label className="block text-sm font-medium text-secondary mb-1">Nome do campo</label>
+                <input
+                  type="text"
+                  value={newFieldName}
+                  onChange={e => setNewFieldName(e.target.value)}
+                  placeholder="Ex: Verificar temperatura..."
+                  className="w-full px-3 py-2 bg-surface border border-subtle rounded-xl text-main text-sm placeholder-muted focus:outline-none focus:ring-2 focus:ring-primary"
+                  autoFocus
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-secondary mb-1">Tipo</label>
+                <select
+                  value={newFieldType}
+                  onChange={e => setNewFieldType(e.target.value as 'yes_no' | 'text' | 'number' | 'photo')}
+                  className="w-full px-3 py-2 bg-surface border border-subtle rounded-xl text-main text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                >
+                  <option value="yes_no">Sim / Nao / N/A</option>
+                  <option value="text">Texto</option>
+                  <option value="number">Numero</option>
+                  <option value="photo">Foto</option>
+                </select>
+              </div>
+
+              <label className="flex items-center gap-2 text-sm text-secondary cursor-pointer">
+                <input type="checkbox" checked={newFieldRequired} onChange={e => setNewFieldRequired(e.target.checked)}
+                  className="w-4 h-4 rounded border-subtle text-primary focus:ring-primary" />
+                Campo obrigatorio
+              </label>
+
+              <div className="flex gap-2 pt-2">
+                <button
+                  onClick={() => { setShowAddFieldModal(false); setNewFieldName(''); setAddFieldSectionId(null) }}
+                  className="flex-1 py-2.5 btn-secondary rounded-xl text-sm"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={handleAddField}
+                  disabled={!newFieldName.trim() || addingField}
+                  className="flex-1 py-2.5 btn-primary rounded-xl text-sm disabled:opacity-50"
+                >
+                  {addingField ? 'Salvando...' : 'Adicionar'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     )
   }
