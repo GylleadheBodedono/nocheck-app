@@ -1580,8 +1580,8 @@ export default function DashboardPage() {
               )
             })()}
 
-            {/* Available Checklists — hidden for tech users */}
-            {!isTechUser && (
+            {/* Available Checklists */}
+            {(
             <>
             <h2 className="text-lg font-semibold text-main mb-4 flex items-center gap-2">
               <FiClipboard className="w-5 h-5 text-primary" />
