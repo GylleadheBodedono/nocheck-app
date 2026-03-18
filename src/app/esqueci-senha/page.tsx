@@ -82,7 +82,11 @@ export default function EsqueciSenhaPage() {
       })
 
       if (error) {
-        setError('Erro ao enviar email. Tente novamente.')
+        if (error.message.includes('rate') || error.message.includes('limit')) {
+          setError('Aguarde alguns minutos antes de solicitar outro codigo.')
+        } else {
+          setError(error.message)
+        }
         setLoading(false)
         return
       }
