@@ -82,6 +82,7 @@ export default function PlanoDeAcaoPage() {
 
     let userId: string | null = null
     let isAdminUser = false
+    let userFunctionId: number | null = null
 
     // Tenta verificar acesso online
     try {
@@ -91,10 +92,11 @@ export default function PlanoDeAcaoPage() {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const { data: profile } = await (supabase as any)
           .from('users')
-          .select('is_admin')
+          .select('is_admin, function_id')
           .eq('id', user.id)
           .single()
         isAdminUser = profile && 'is_admin' in profile ? (profile as { is_admin: boolean }).is_admin : false
+        userFunctionId = (profile as { function_id?: number } | null)?.function_id || null
       }
     } catch {
       console.log('[PlanosDeAcao] Falha ao verificar online, tentando cache...')
@@ -132,7 +134,10 @@ export default function PlanoDeAcaoPage() {
         .order('created_at', { ascending: false })
 
       if (!isAdminUser) {
-        plansQuery = plansQuery.eq('assigned_to', userId)
+        const orFilter = userFunctionId
+          ? `assigned_to.eq.${userId},assigned_function_id.eq.${userFunctionId}`
+          : `assigned_to.eq.${userId}`
+        plansQuery = plansQuery.or(orFilter)
       }
 
       const [plansRes, storesRes, usersRes] = await Promise.all([

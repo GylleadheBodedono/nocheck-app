@@ -532,13 +532,19 @@ export default function DashboardPage() {
       pendingSync: pendingSyncCount,
     })
 
+    // Filtro de planos: usuario direto OU funcao do usuario
+    const userFunctionId = profileData?.function_id
+    const apFilter = userFunctionId
+      ? `assigned_to.eq.${user.id},assigned_function_id.eq.${userFunctionId}`
+      : `assigned_to.eq.${user.id}`
+
     // Buscar planos de acao pendentes do usuario
     try {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { count: apCount } = await (supabase as any)
         .from('action_plans')
         .select('id', { count: 'exact', head: true })
-        .eq('assigned_to', user.id)
+        .or(apFilter)
         .in('status', ['aberto', 'em_andamento'])
 
       setPendingActionPlans(apCount || 0)
@@ -556,7 +562,7 @@ export default function DashboardPage() {
           (supabase as any)
             .from('action_plans')
             .select(`id, title, severity, status, deadline, created_at, is_reincidencia, store:stores!action_plans_store_id_fkey(id, name)`)
-            .eq('assigned_to', user.id)
+            .or(apFilter)
             .neq('status', 'cancelado')
             .order('created_at', { ascending: false })
             .limit(20),
