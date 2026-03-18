@@ -3,6 +3,7 @@
 import { useEffect, useState, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
+import { useRealtimeDashboard } from '@/hooks/useRealtimeDashboard'
 import { APP_CONFIG } from '@/lib/config'
 import type { User } from '@supabase/supabase-js'
 import type { Store, ChecklistTemplate, Checklist, Sector, FunctionRow } from '@/types/database'
@@ -161,6 +162,16 @@ export default function DashboardPage() {
   const [notificationBannerMounted, setNotificationBannerMounted] = useState(false)
   const router = useRouter()
   const supabase = useMemo(() => createClient(), [])
+
+  // Realtime: derive store IDs from allStores for subscriptions
+  const realtimeStoreIds = useMemo(() => allStores.map(s => s.id), [allStores])
+
+  // Realtime dashboard subscriptions (only active when online)
+  const { refreshTrigger } = useRealtimeDashboard({
+    userId: profile?.id ?? null,
+    userFunctionId: profile?.function_id ?? null,
+    storeIds: realtimeStoreIds,
+  })
 
   // Monitora status de conexao
   useEffect(() => {
@@ -824,6 +835,15 @@ export default function DashboardPage() {
       return false
     }
   }
+
+  // Realtime: refetch data when any subscribed table changes
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (refreshTrigger === 0) return // skip initial
+    if (!navigator.onLine) return
+    console.log('[Dashboard] Realtime refresh triggered:', refreshTrigger)
+    fetchData()
+  }, [refreshTrigger])
 
   const handleSignOut = async () => {
     await fullLogout(supabase)

@@ -7,6 +7,10 @@ export type { OfflineAuthState, OfflineAuthActions } from './useOfflineAuth'
 export { useOfflineData } from './useOfflineData'
 export type { OfflineDataState, OfflineDataActions } from './useOfflineData'
 
+// Hooks de realtime
+export { useRealtimeActionPlans } from './useRealtimeActionPlans'
+export { useRealtimeDashboard } from './useRealtimeDashboard'
+
 // Hooks utilitarios
 export { useOnlineStatus } from './useOnlineStatus'
 export { useTheme } from './useTheme'
