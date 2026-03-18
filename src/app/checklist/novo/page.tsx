@@ -1016,12 +1016,18 @@ function ChecklistForm() {
       valueJson = { photos: photos || [], uploadedToDrive: false }
     } else if (field.field_type === 'yes_no') {
       if (typeof value === 'object' && value !== null && 'answer' in (value as Record<string, unknown>)) {
-        const yesNoObj = value as { answer: string; photos?: string[]; conditionalText?: string; conditionalPhotos?: string[] }
-        valueText = yesNoObj.answer
+        const yesNoObj = value as Record<string, unknown>
+        valueText = yesNoObj.answer as string
         const jsonParts: Record<string, unknown> = {}
-        if (yesNoObj.photos && yesNoObj.photos.length > 0) jsonParts.photos = yesNoObj.photos
+        if (yesNoObj.photos && (yesNoObj.photos as string[]).length > 0) jsonParts.photos = yesNoObj.photos
         if (yesNoObj.conditionalText) jsonParts.conditionalText = yesNoObj.conditionalText
-        if (yesNoObj.conditionalPhotos && yesNoObj.conditionalPhotos.length > 0) jsonParts.conditionalPhotos = yesNoObj.conditionalPhotos
+        if (yesNoObj.conditionalPhotos && (yesNoObj.conditionalPhotos as string[]).length > 0) jsonParts.conditionalPhotos = yesNoObj.conditionalPhotos
+        // Plano de acao: funcao responsavel, severidade e modelo
+        if (yesNoObj.selectedFunctionId) jsonParts.selectedFunctionId = yesNoObj.selectedFunctionId
+        if (yesNoObj.selectedSeverity) jsonParts.selectedSeverity = yesNoObj.selectedSeverity
+        if (yesNoObj.selectedPresetId) jsonParts.selectedPresetId = yesNoObj.selectedPresetId
+        // Legado: selectedAssigneeId (UUID de usuario)
+        if (yesNoObj.selectedAssigneeId) jsonParts.selectedAssigneeId = yesNoObj.selectedAssigneeId
         if (Object.keys(jsonParts).length > 0) valueJson = jsonParts
       } else {
         valueText = value as string
