@@ -29,6 +29,7 @@ type Preset = {
   description_template: string | null
   severity: Severity
   default_assignee_id: string | null
+  default_function_id: number | null
   deadline_days: number
   is_active: boolean
   require_photo_on_completion: boolean
@@ -37,16 +38,16 @@ type Preset = {
   created_at: string
 }
 
-type UserOption = {
-  id: string
-  full_name: string
+type FunctionOption = {
+  id: number
+  name: string
 }
 
 type PresetForm = {
   name: string
   description_template: string
   severity: Severity
-  default_assignee_id: string
+  default_function_id: string
   deadline_days: number
   require_photo_on_completion: boolean
   require_text_on_completion: boolean
@@ -57,7 +58,7 @@ const EMPTY_FORM: PresetForm = {
   name: '',
   description_template: '',
   severity: 'media',
-  default_assignee_id: '',
+  default_function_id: '',
   deadline_days: 7,
   require_photo_on_completion: true,
   require_text_on_completion: true,
@@ -85,7 +86,7 @@ const SEVERITY_BADGE: Record<string, string> = {
 export default function ModelosPlanoDeAcaoPage() {
   const [loading, setLoading] = useState(true)
   const [presets, setPresets] = useState<Preset[]>([])
-  const [users, setUsers] = useState<UserOption[]>([])
+  const [functions, setFunctions] = useState<FunctionOption[]>([])
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
@@ -145,18 +146,18 @@ export default function ModelosPlanoDeAcaoPage() {
     const sb = supabase as any
 
     try {
-      const [presetsRes, usersRes] = await Promise.all([
+      const [presetsRes, functionsRes] = await Promise.all([
         sb.from('action_plan_presets')
           .select('*')
           .order('name'),
-        sb.from('users')
-          .select('id, full_name')
+        sb.from('functions')
+          .select('id, name')
           .eq('is_active', true)
-          .order('full_name'),
+          .order('name'),
       ])
 
       if (presetsRes.data) setPresets(presetsRes.data)
-      if (usersRes.data) setUsers(usersRes.data)
+      if (functionsRes.data) setFunctions(functionsRes.data)
     } catch (err) {
       console.error('[Modelos] Erro ao buscar dados:', err)
     }
@@ -185,7 +186,7 @@ export default function ModelosPlanoDeAcaoPage() {
       name: preset.name,
       description_template: preset.description_template || '',
       severity: preset.severity,
-      default_assignee_id: preset.default_assignee_id || '',
+      default_function_id: preset.default_function_id ? String(preset.default_function_id) : '',
       deadline_days: preset.deadline_days,
       require_photo_on_completion: preset.require_photo_on_completion || false,
       require_text_on_completion: preset.require_text_on_completion || false,
@@ -219,7 +220,7 @@ export default function ModelosPlanoDeAcaoPage() {
         name: form.name.trim(),
         description_template: form.description_template.trim() || null,
         severity: form.severity,
-        default_assignee_id: form.default_assignee_id || null,
+        default_function_id: form.default_function_id ? Number(form.default_function_id) : null,
         deadline_days: form.deadline_days,
         require_photo_on_completion: form.require_photo_on_completion,
         require_text_on_completion: form.require_text_on_completion,
@@ -380,12 +381,12 @@ export default function ModelosPlanoDeAcaoPage() {
             </div>
 
             <div>
-              <label className="block text-xs font-medium text-secondary mb-1">Responsavel padrao</label>
+              <label className="block text-xs font-medium text-secondary mb-1">Funcao responsavel</label>
               <Select
-                value={form.default_assignee_id}
-                onChange={(v) => setForm(f => ({ ...f, default_assignee_id: v }))}
+                value={form.default_function_id}
+                onChange={(v) => setForm(f => ({ ...f, default_function_id: v }))}
                 placeholder="Quem preencheu o checklist"
-                options={users.map(u => ({ value: u.id, label: u.full_name }))}
+                options={functions.map(f => ({ value: String(f.id), label: f.name }))}
               />
               <p className="text-xs text-muted mt-1">
                 Se nao selecionado, o plano sera atribuido a quem preencheu o checklist.
@@ -483,9 +484,9 @@ export default function ModelosPlanoDeAcaoPage() {
                   <div className="flex items-center gap-4 text-xs text-muted">
                     <span>Prazo: {preset.deadline_days} dia(s)</span>
                     <span>
-                      Responsavel: {
-                        preset.default_assignee_id
-                          ? users.find(u => u.id === preset.default_assignee_id)?.full_name || 'Usuario'
+                      Funcao: {
+                        preset.default_function_id
+                          ? functions.find(f => f.id === preset.default_function_id)?.name || 'Funcao'
                           : 'Quem preencheu'
                       }
                     </span>

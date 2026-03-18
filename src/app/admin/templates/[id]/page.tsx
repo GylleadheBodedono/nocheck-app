@@ -122,7 +122,7 @@ export default function EditTemplatePage() {
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [_originalVisibilityIds, setOriginalVisibilityIds] = useState<number[]>([])
   const [fieldConditions, setFieldConditions] = useState<Record<string, ConditionConfig | null>>({})
-  const [conditionUsers, setConditionUsers] = useState<{ id: string; name: string }[]>([])
+  const [conditionFunctions, setConditionFunctions] = useState<{ id: number; name: string }[]>([])
   const [conditionPresets, setConditionPresets] = useState<PresetOption[]>([])
   const [showSectorModal, setShowSectorModal] = useState(false)
   const [showFunctionModal, setShowFunctionModal] = useState(false)
@@ -161,46 +161,34 @@ export default function EditTemplatePage() {
 
       if (functionsData) setFunctions(functionsData as FunctionRow[])
 
-      // Fetch users for condition editor
+      // Fetch functions for condition editor
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data: usersData, error: usersError } = await (supabase as any)
-        .from('users')
-        .select('id, full_name')
+      const { data: condFunctionsData } = await (supabase as any)
+        .from('functions')
+        .select('id, name')
         .eq('is_active', true)
-        .order('full_name')
-      if (usersError) {
-        console.error('[Template] Erro ao buscar usuarios para condicoes:', usersError.message)
-      }
-      if (usersData && usersData.length > 0) {
-        setConditionUsers((usersData as { id: string; full_name: string }[]).map((u) => ({ id: u.id, name: u.full_name })))
-      } else {
-        console.warn('[Template] Nenhum usuario encontrado para condicoes. RLS pode estar bloqueando. Tentando sem filtro...')
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const { data: usersRetry } = await (supabase as any)
-          .from('users')
-          .select('id, full_name')
-          .order('full_name')
-        if (usersRetry && usersRetry.length > 0) {
-          setConditionUsers((usersRetry as { id: string; full_name: string }[]).map((u) => ({ id: u.id, name: u.full_name })))
-        }
+        .order('name')
+      if (condFunctionsData && condFunctionsData.length > 0) {
+        setConditionFunctions((condFunctionsData as { id: number; name: string }[]).map((f) => ({ id: f.id, name: f.name })))
       }
 
       // Fetch action plan presets
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { data: presetsData } = await (supabase as any)
         .from('action_plan_presets')
-        .select('id, name, severity, deadline_days, default_assignee_id, description_template, require_photo_on_completion, require_text_on_completion, completion_max_chars')
+        .select('id, name, severity, deadline_days, default_function_id, description_template, require_photo_on_completion, require_text_on_completion, completion_max_chars')
         .eq('is_active', true)
         .order('name')
       if (presetsData) {
         setConditionPresets(
-          (presetsData as { id: number; name: string; severity: string; deadline_days: number; default_assignee_id: string | null; description_template: string | null; require_photo_on_completion?: boolean; require_text_on_completion?: boolean; completion_max_chars?: number }[])
+          (presetsData as { id: number; name: string; severity: string; deadline_days: number; default_function_id: number | null; description_template: string | null; require_photo_on_completion?: boolean; require_text_on_completion?: boolean; completion_max_chars?: number }[])
             .map(p => ({
               id: p.id,
               name: p.name,
               severity: p.severity as PresetOption['severity'],
               deadlineDays: p.deadline_days,
-              defaultAssigneeId: p.default_assignee_id,
+              defaultAssigneeId: null,
+              defaultFunctionId: p.default_function_id,
               descriptionTemplate: p.description_template || '',
               requirePhotoOnCompletion: p.require_photo_on_completion || false,
               requireTextOnCompletion: p.require_text_on_completion || false,
@@ -291,7 +279,7 @@ export default function EditTemplatePage() {
           .eq('is_active', true)
         if (existingConditions) {
           const condMap: Record<string, ConditionConfig | null> = {}
-          existingConditions.forEach((ec: { field_id: number; condition_type: string; condition_value: Record<string, unknown>; severity: string; default_assignee_id: string | null; deadline_days: number; description_template: string | null; require_photo_on_completion?: boolean; require_text_on_completion?: boolean; completion_max_chars?: number }) => {
+          existingConditions.forEach((ec: { field_id: number; condition_type: string; condition_value: Record<string, unknown>; severity: string; default_assignee_id: string | null; default_function_id: number | null; deadline_days: number; description_template: string | null; require_photo_on_completion?: boolean; require_text_on_completion?: boolean; completion_max_chars?: number }) => {
             const localField = existingFields.find(f => f.dbId === ec.field_id)
             if (localField) {
               condMap[localField.id] = {
@@ -300,6 +288,7 @@ export default function EditTemplatePage() {
                 conditionValue: ec.condition_value,
                 severity: ec.severity as ConditionConfig['severity'],
                 defaultAssigneeId: ec.default_assignee_id,
+                defaultFunctionId: ec.default_function_id,
                 deadlineDays: ec.deadline_days,
                 descriptionTemplate: ec.description_template || '',
                 requirePhotoOnCompletion: ec.require_photo_on_completion || false,
@@ -517,7 +506,7 @@ export default function EditTemplatePage() {
     return []
   }
 
-  const handleSaveAsPreset = async (data: { name: string; severity: string; deadlineDays: number; defaultAssigneeId: string | null; descriptionTemplate: string }) => {
+  const handleSaveAsPreset = async (data: { name: string; severity: string; deadlineDays: number; defaultFunctionId: number | null; descriptionTemplate: string }) => {
     try {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { error: insertErr } = await (supabase as any)
@@ -526,7 +515,7 @@ export default function EditTemplatePage() {
           name: data.name,
           severity: data.severity,
           deadline_days: data.deadlineDays,
-          default_assignee_id: data.defaultAssigneeId,
+          default_function_id: data.defaultFunctionId,
           description_template: data.descriptionTemplate,
           is_active: true,
         })
@@ -538,18 +527,19 @@ export default function EditTemplatePage() {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { data: presetsData } = await (supabase as any)
         .from('action_plan_presets')
-        .select('id, name, severity, deadline_days, default_assignee_id, description_template, require_photo_on_completion, require_text_on_completion, completion_max_chars')
+        .select('id, name, severity, deadline_days, default_function_id, description_template, require_photo_on_completion, require_text_on_completion, completion_max_chars')
         .eq('is_active', true)
         .order('name')
       if (presetsData) {
         setConditionPresets(
-          (presetsData as { id: number; name: string; severity: string; deadline_days: number; default_assignee_id: string | null; description_template: string | null; require_photo_on_completion?: boolean; require_text_on_completion?: boolean; completion_max_chars?: number }[])
+          (presetsData as { id: number; name: string; severity: string; deadline_days: number; default_function_id: number | null; description_template: string | null; require_photo_on_completion?: boolean; require_text_on_completion?: boolean; completion_max_chars?: number }[])
             .map(p => ({
               id: p.id,
               name: p.name,
               severity: p.severity as PresetOption['severity'],
               deadlineDays: p.deadline_days,
-              defaultAssigneeId: p.default_assignee_id,
+              defaultAssigneeId: null,
+              defaultFunctionId: p.default_function_id,
               descriptionTemplate: p.description_template || '',
               requirePhotoOnCompletion: p.require_photo_on_completion || false,
               requireTextOnCompletion: p.require_text_on_completion || false,
@@ -886,7 +876,7 @@ export default function EditTemplatePage() {
           newFields.forEach((f, i) => { newFieldIdMap[f.id] = insertedNewFields[i]?.id })
         }
 
-        const conditionsToInsert: { field_id: number; condition_type: string; condition_value: Record<string, unknown>; severity: string; default_assignee_id: string | null; deadline_days: number; description_template: string | null; is_active: boolean; require_photo_on_completion: boolean; require_text_on_completion: boolean; completion_max_chars: number }[] = []
+        const conditionsToInsert: { field_id: number; condition_type: string; condition_value: Record<string, unknown>; severity: string; default_function_id: number | null; deadline_days: number; description_template: string | null; is_active: boolean; require_photo_on_completion: boolean; require_text_on_completion: boolean; completion_max_chars: number }[] = []
         for (const field of fields) {
           const cond = fieldConditions[field.id]
           if (!cond) continue
@@ -897,7 +887,7 @@ export default function EditTemplatePage() {
             condition_type: cond.conditionType,
             condition_value: cond.conditionValue,
             severity: cond.severity,
-            default_assignee_id: cond.defaultAssigneeId,
+            default_function_id: cond.defaultFunctionId,
             deadline_days: cond.deadlineDays,
             description_template: cond.descriptionTemplate || null,
             is_active: true,
@@ -962,7 +952,7 @@ export default function EditTemplatePage() {
         checkboxOptions={field.field_type === 'checkbox_multiple' ? getOptionsItems(field.options) : undefined}
         condition={fieldConditions[field.id] || null}
         onChange={(cond) => setFieldConditions(prev => ({ ...prev, [field.id]: cond }))}
-        users={conditionUsers}
+        functions={conditionFunctions}
         presets={conditionPresets}
         onSaveAsPreset={handleSaveAsPreset}
       />
@@ -1391,7 +1381,7 @@ export default function EditTemplatePage() {
                             checkboxOptions={field.field_type === 'checkbox_multiple' ? getOptionsItems(field.options) : undefined}
                             condition={fieldConditions[field.id] || null}
                             onChange={(cond) => setFieldConditions(prev => ({ ...prev, [field.id]: cond }))}
-                            users={conditionUsers}
+                            functions={conditionFunctions}
                             presets={conditionPresets}
                             onSaveAsPreset={handleSaveAsPreset}
                           />
@@ -1466,7 +1456,7 @@ export default function EditTemplatePage() {
                           checkboxOptions={field.field_type === 'checkbox_multiple' ? getOptionsItems(field.options) : undefined}
                           condition={fieldConditions[field.id] || null}
                           onChange={(cond) => setFieldConditions(prev => ({ ...prev, [field.id]: cond }))}
-                          users={conditionUsers}
+                          functions={conditionFunctions}
                           presets={conditionPresets}
                           onSaveAsPreset={handleSaveAsPreset}
                         />

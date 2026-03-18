@@ -114,8 +114,20 @@ function ChecklistForm() {
   const [showAddFieldModal, setShowAddFieldModal] = useState(false)
   const [addFieldSectionId, setAddFieldSectionId] = useState<number | null>(null)
   const [newFieldName, setNewFieldName] = useState('')
-  const [newFieldType, setNewFieldType] = useState<'yes_no' | 'text' | 'number' | 'photo'>('yes_no')
+  const [newFieldType, setNewFieldType] = useState<'yes_no' | 'text' | 'number' | 'photo' | 'dropdown' | 'checkbox_multiple' | 'rating' | 'signature'>('yes_no')
   const [newFieldRequired, setNewFieldRequired] = useState(true)
+  const [newFieldPlaceholder, setNewFieldPlaceholder] = useState('')
+  const [newFieldHelpText, setNewFieldHelpText] = useState('')
+  const [newFieldOptions, setNewFieldOptions] = useState<string[]>([])
+  const [newFieldOptionInput, setNewFieldOptionInput] = useState('')
+  const [newFieldAllowPhoto, setNewFieldAllowPhoto] = useState(false)
+  const [newFieldOnNo, setNewFieldOnNo] = useState({
+    showTextField: false,
+    textFieldRequired: false,
+    showPhotoField: false,
+    photoFieldRequired: false,
+    allowUserActionPlan: false,
+  })
   const [addingField, setAddingField] = useState(false)
   const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const initializingRef = useRef(false) // Guard against double-init (StrictMode / fast re-renders)
@@ -1820,6 +1832,27 @@ function ChecklistForm() {
     await handlePreFinalize()
   }
 
+  // === TECH USER: Reset all add-field modal states ===
+  const resetAddFieldModal = () => {
+    setShowAddFieldModal(false)
+    setNewFieldName('')
+    setNewFieldType('yes_no')
+    setNewFieldRequired(true)
+    setNewFieldPlaceholder('')
+    setNewFieldHelpText('')
+    setNewFieldOptions([])
+    setNewFieldOptionInput('')
+    setNewFieldAllowPhoto(false)
+    setNewFieldOnNo({
+      showTextField: false,
+      textFieldRequired: false,
+      showPhotoField: false,
+      photoFieldRequired: false,
+      allowUserActionPlan: false,
+    })
+    setAddFieldSectionId(null)
+  }
+
   // === TECH USER: Adicionar campo ao template ===
   const handleAddField = async () => {
     if (!newFieldName.trim() || !template || addingField) return
@@ -1832,6 +1865,23 @@ function ChecklistForm() {
         : template.fields.filter(f => !f.section_id)
       const maxSort = sectionFields.reduce((max, f) => Math.max(max, f.sort_order || 0), 0)
 
+      // Build options JSONB
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const fieldOptions: Record<string, unknown> = {}
+      if (newFieldType === 'yes_no') {
+        if (newFieldAllowPhoto) fieldOptions.allowPhoto = true
+        if (newFieldOnNo.showTextField || newFieldOnNo.showPhotoField || newFieldOnNo.allowUserActionPlan) {
+          fieldOptions.onNo = { ...newFieldOnNo }
+        }
+      }
+      if ((newFieldType === 'dropdown' || newFieldType === 'checkbox_multiple') && newFieldOptions.length > 0) {
+        fieldOptions.items = newFieldOptions
+      }
+
+      const optionsValue = Object.keys(fieldOptions).length > 0
+        ? fieldOptions
+        : (newFieldType === 'dropdown' || newFieldType === 'checkbox_multiple') ? [] : null
+
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { data: newField, error } = await (supabase as any)
         .from('template_fields')
@@ -1842,6 +1892,9 @@ function ChecklistForm() {
           field_type: newFieldType,
           is_required: newFieldRequired,
           sort_order: maxSort + 1,
+          placeholder: newFieldPlaceholder.trim() || null,
+          help_text: newFieldHelpText.trim() || null,
+          options: optionsValue,
         })
         .select()
         .single()
@@ -1857,11 +1910,7 @@ function ChecklistForm() {
       }
 
       // Limpar modal
-      setShowAddFieldModal(false)
-      setNewFieldName('')
-      setNewFieldType('yes_no')
-      setNewFieldRequired(true)
-      setAddFieldSectionId(null)
+      resetAddFieldModal()
     } catch (err) {
       console.error('[TechUser] Erro ao adicionar campo:', err)
       alert('Erro ao adicionar campo. Tente novamente.')
@@ -2497,10 +2546,11 @@ function ChecklistForm() {
         {/* Modal para tech users adicionarem campo (view com secoes) */}
         {showAddFieldModal && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-            <div className="bg-page rounded-2xl w-full max-w-sm shadow-xl border border-subtle p-6 space-y-4">
+            <div className="bg-page rounded-2xl w-full max-w-md shadow-xl border border-subtle p-6 max-h-[80vh] overflow-y-auto space-y-4">
               <h3 className="text-lg font-bold text-main">Adicionar Campo</h3>
               <p className="text-xs text-muted">O campo sera adicionado permanentemente ao template.</p>
 
+              {/* Nome do campo */}
               <div>
                 <label className="block text-sm font-medium text-secondary mb-1">Nome do campo</label>
                 <input
@@ -2513,36 +2563,175 @@ function ChecklistForm() {
                 />
               </div>
 
+              {/* Tipo */}
               <div>
                 <label className="block text-sm font-medium text-secondary mb-1">Tipo</label>
                 <select
                   value={newFieldType}
-                  onChange={e => setNewFieldType(e.target.value as 'yes_no' | 'text' | 'number' | 'photo')}
+                  onChange={e => {
+                    const val = e.target.value as typeof newFieldType
+                    setNewFieldType(val)
+                    // Reset type-specific states on type change
+                    setNewFieldAllowPhoto(false)
+                    setNewFieldOnNo({ showTextField: false, textFieldRequired: false, showPhotoField: false, photoFieldRequired: false, allowUserActionPlan: false })
+                    setNewFieldOptions([])
+                    setNewFieldOptionInput('')
+                  }}
                   className="w-full px-3 py-2 bg-surface border border-subtle rounded-xl text-main text-sm focus:outline-none focus:ring-2 focus:ring-primary"
                 >
                   <option value="yes_no">Sim / Nao / N/A</option>
                   <option value="text">Texto</option>
                   <option value="number">Numero</option>
                   <option value="photo">Foto</option>
+                  <option value="dropdown">Lista (Dropdown)</option>
+                  <option value="checkbox_multiple">Multipla Escolha</option>
+                  <option value="rating">Avaliacao (Estrelas)</option>
+                  <option value="signature">Assinatura</option>
                 </select>
               </div>
 
+              {/* Campo obrigatorio */}
               <label className="flex items-center gap-2 text-sm text-secondary cursor-pointer">
                 <input type="checkbox" checked={newFieldRequired} onChange={e => setNewFieldRequired(e.target.checked)}
                   className="w-4 h-4 rounded border-subtle text-primary focus:ring-primary" />
                 Campo obrigatorio
               </label>
 
+              {/* Condicoes para yes_no */}
+              {newFieldType === 'yes_no' && (
+                <div className="space-y-3 p-3 bg-surface rounded-xl border border-subtle">
+                  <p className="text-xs font-medium text-muted uppercase tracking-wide">Opcoes Sim/Nao</p>
+                  <label className="flex items-center gap-2 text-sm text-secondary cursor-pointer">
+                    <input type="checkbox" checked={newFieldAllowPhoto} onChange={e => setNewFieldAllowPhoto(e.target.checked)}
+                      className="w-4 h-4 rounded border-subtle text-primary focus:ring-primary" />
+                    Permitir foto
+                  </label>
+                  <div className="border-t border-subtle pt-3 space-y-2">
+                    <p className="text-xs font-medium text-muted">Condicoes &quot;Quando Nao&quot;</p>
+                    <label className="flex items-center gap-2 text-sm text-secondary cursor-pointer">
+                      <input type="checkbox" checked={newFieldOnNo.showTextField} onChange={e => setNewFieldOnNo(prev => ({ ...prev, showTextField: e.target.checked, textFieldRequired: e.target.checked ? prev.textFieldRequired : false }))}
+                        className="w-4 h-4 rounded border-subtle text-primary focus:ring-primary" />
+                      Exigir texto explicativo
+                    </label>
+                    {newFieldOnNo.showTextField && (
+                      <label className="flex items-center gap-2 text-sm text-secondary cursor-pointer ml-6">
+                        <input type="checkbox" checked={newFieldOnNo.textFieldRequired} onChange={e => setNewFieldOnNo(prev => ({ ...prev, textFieldRequired: e.target.checked }))}
+                          className="w-4 h-4 rounded border-subtle text-primary focus:ring-primary" />
+                        Texto obrigatorio
+                      </label>
+                    )}
+                    <label className="flex items-center gap-2 text-sm text-secondary cursor-pointer">
+                      <input type="checkbox" checked={newFieldOnNo.showPhotoField} onChange={e => setNewFieldOnNo(prev => ({ ...prev, showPhotoField: e.target.checked, photoFieldRequired: e.target.checked ? prev.photoFieldRequired : false }))}
+                        className="w-4 h-4 rounded border-subtle text-primary focus:ring-primary" />
+                      Exigir foto
+                    </label>
+                    {newFieldOnNo.showPhotoField && (
+                      <label className="flex items-center gap-2 text-sm text-secondary cursor-pointer ml-6">
+                        <input type="checkbox" checked={newFieldOnNo.photoFieldRequired} onChange={e => setNewFieldOnNo(prev => ({ ...prev, photoFieldRequired: e.target.checked }))}
+                          className="w-4 h-4 rounded border-subtle text-primary focus:ring-primary" />
+                        Foto obrigatoria
+                      </label>
+                    )}
+                    <label className="flex items-center gap-2 text-sm text-secondary cursor-pointer">
+                      <input type="checkbox" checked={newFieldOnNo.allowUserActionPlan} onChange={e => setNewFieldOnNo(prev => ({ ...prev, allowUserActionPlan: e.target.checked }))}
+                        className="w-4 h-4 rounded border-subtle text-primary focus:ring-primary" />
+                      Permitir preenchedor escolher responsavel
+                    </label>
+                  </div>
+                </div>
+              )}
+
+              {/* Opcoes para dropdown / checkbox_multiple */}
+              {(newFieldType === 'dropdown' || newFieldType === 'checkbox_multiple') && (
+                <div className="space-y-3 p-3 bg-surface rounded-xl border border-subtle">
+                  <p className="text-xs font-medium text-muted uppercase tracking-wide">Opcoes da lista</p>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={newFieldOptionInput}
+                      onChange={e => setNewFieldOptionInput(e.target.value)}
+                      onKeyDown={e => {
+                        if (e.key === 'Enter' && newFieldOptionInput.trim()) {
+                          e.preventDefault()
+                          if (!newFieldOptions.includes(newFieldOptionInput.trim())) {
+                            setNewFieldOptions(prev => [...prev, newFieldOptionInput.trim()])
+                          }
+                          setNewFieldOptionInput('')
+                        }
+                      }}
+                      placeholder="Digite uma opcao..."
+                      className="flex-1 px-3 py-2 bg-page border border-subtle rounded-xl text-main text-sm placeholder-muted focus:outline-none focus:ring-2 focus:ring-primary"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (newFieldOptionInput.trim() && !newFieldOptions.includes(newFieldOptionInput.trim())) {
+                          setNewFieldOptions(prev => [...prev, newFieldOptionInput.trim()])
+                        }
+                        setNewFieldOptionInput('')
+                      }}
+                      disabled={!newFieldOptionInput.trim()}
+                      className="px-3 py-2 btn-primary rounded-xl text-sm disabled:opacity-50"
+                    >
+                      <FiPlus className="w-4 h-4" />
+                    </button>
+                  </div>
+                  {newFieldOptions.length > 0 && (
+                    <div className="space-y-1">
+                      {newFieldOptions.map((opt, i) => (
+                        <div key={i} className="flex items-center justify-between px-3 py-1.5 bg-page rounded-lg border border-subtle">
+                          <span className="text-sm text-main">{opt}</span>
+                          <button
+                            type="button"
+                            onClick={() => setNewFieldOptions(prev => prev.filter((_, idx) => idx !== i))}
+                            className="text-red-400 hover:text-red-300 text-xs ml-2"
+                          >
+                            Remover
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {newFieldOptions.length === 0 && (
+                    <p className="text-xs text-muted">Nenhuma opcao adicionada ainda.</p>
+                  )}
+                </div>
+              )}
+
+              {/* Placeholder */}
+              <div>
+                <label className="block text-sm font-medium text-secondary mb-1">Placeholder <span className="text-muted font-normal">(opcional)</span></label>
+                <input
+                  type="text"
+                  value={newFieldPlaceholder}
+                  onChange={e => setNewFieldPlaceholder(e.target.value)}
+                  placeholder="Texto exibido quando o campo esta vazio..."
+                  className="w-full px-3 py-2 bg-surface border border-subtle rounded-xl text-main text-sm placeholder-muted focus:outline-none focus:ring-2 focus:ring-primary"
+                />
+              </div>
+
+              {/* Texto de ajuda */}
+              <div>
+                <label className="block text-sm font-medium text-secondary mb-1">Texto de ajuda <span className="text-muted font-normal">(opcional)</span></label>
+                <input
+                  type="text"
+                  value={newFieldHelpText}
+                  onChange={e => setNewFieldHelpText(e.target.value)}
+                  placeholder="Instrucao para quem preenche o campo..."
+                  className="w-full px-3 py-2 bg-surface border border-subtle rounded-xl text-main text-sm placeholder-muted focus:outline-none focus:ring-2 focus:ring-primary"
+                />
+              </div>
+
               <div className="flex gap-2 pt-2">
                 <button
-                  onClick={() => { setShowAddFieldModal(false); setNewFieldName(''); setAddFieldSectionId(null) }}
+                  onClick={resetAddFieldModal}
                   className="flex-1 py-2.5 btn-secondary rounded-xl text-sm"
                 >
                   Cancelar
                 </button>
                 <button
                   onClick={handleAddField}
-                  disabled={!newFieldName.trim() || addingField}
+                  disabled={!newFieldName.trim() || addingField || ((newFieldType === 'dropdown' || newFieldType === 'checkbox_multiple') && newFieldOptions.length === 0)}
                   className="flex-1 py-2.5 btn-primary rounded-xl text-sm disabled:opacity-50"
                 >
                   {addingField ? 'Salvando...' : 'Adicionar'}
@@ -2696,10 +2885,11 @@ function ChecklistForm() {
       {/* Modal para tech users adicionarem campo */}
       {showAddFieldModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-          <div className="bg-page rounded-2xl w-full max-w-sm shadow-xl border border-subtle p-6 space-y-4" style={{ backgroundColor: 'var(--bg-page, #09090b)' }}>
+          <div className="bg-page rounded-2xl w-full max-w-md shadow-xl border border-subtle p-6 max-h-[80vh] overflow-y-auto space-y-4" style={{ backgroundColor: 'var(--bg-page, #09090b)' }}>
             <h3 className="text-lg font-bold text-main">Adicionar Campo</h3>
             <p className="text-xs text-muted">O campo sera adicionado permanentemente ao template.</p>
 
+            {/* Nome do campo */}
             <div>
               <label className="block text-sm font-medium text-secondary mb-1">Nome do campo</label>
               <input
@@ -2712,36 +2902,175 @@ function ChecklistForm() {
               />
             </div>
 
+            {/* Tipo */}
             <div>
               <label className="block text-sm font-medium text-secondary mb-1">Tipo</label>
               <select
                 value={newFieldType}
-                onChange={e => setNewFieldType(e.target.value as 'yes_no' | 'text' | 'number' | 'photo')}
+                onChange={e => {
+                  const val = e.target.value as typeof newFieldType
+                  setNewFieldType(val)
+                  // Reset type-specific states on type change
+                  setNewFieldAllowPhoto(false)
+                  setNewFieldOnNo({ showTextField: false, textFieldRequired: false, showPhotoField: false, photoFieldRequired: false, allowUserActionPlan: false })
+                  setNewFieldOptions([])
+                  setNewFieldOptionInput('')
+                }}
                 className="w-full px-3 py-2 bg-surface border border-subtle rounded-xl text-main text-sm focus:outline-none focus:ring-2 focus:ring-primary"
               >
                 <option value="yes_no">Sim / Nao / N/A</option>
                 <option value="text">Texto</option>
                 <option value="number">Numero</option>
                 <option value="photo">Foto</option>
+                <option value="dropdown">Lista (Dropdown)</option>
+                <option value="checkbox_multiple">Multipla Escolha</option>
+                <option value="rating">Avaliacao (Estrelas)</option>
+                <option value="signature">Assinatura</option>
               </select>
             </div>
 
+            {/* Campo obrigatorio */}
             <label className="flex items-center gap-2 text-sm text-secondary cursor-pointer">
               <input type="checkbox" checked={newFieldRequired} onChange={e => setNewFieldRequired(e.target.checked)}
                 className="w-4 h-4 rounded border-subtle text-primary focus:ring-primary" />
               Campo obrigatorio
             </label>
 
+            {/* Condicoes para yes_no */}
+            {newFieldType === 'yes_no' && (
+              <div className="space-y-3 p-3 bg-surface rounded-xl border border-subtle">
+                <p className="text-xs font-medium text-muted uppercase tracking-wide">Opcoes Sim/Nao</p>
+                <label className="flex items-center gap-2 text-sm text-secondary cursor-pointer">
+                  <input type="checkbox" checked={newFieldAllowPhoto} onChange={e => setNewFieldAllowPhoto(e.target.checked)}
+                    className="w-4 h-4 rounded border-subtle text-primary focus:ring-primary" />
+                  Permitir foto
+                </label>
+                <div className="border-t border-subtle pt-3 space-y-2">
+                  <p className="text-xs font-medium text-muted">Condicoes &quot;Quando Nao&quot;</p>
+                  <label className="flex items-center gap-2 text-sm text-secondary cursor-pointer">
+                    <input type="checkbox" checked={newFieldOnNo.showTextField} onChange={e => setNewFieldOnNo(prev => ({ ...prev, showTextField: e.target.checked, textFieldRequired: e.target.checked ? prev.textFieldRequired : false }))}
+                      className="w-4 h-4 rounded border-subtle text-primary focus:ring-primary" />
+                    Exigir texto explicativo
+                  </label>
+                  {newFieldOnNo.showTextField && (
+                    <label className="flex items-center gap-2 text-sm text-secondary cursor-pointer ml-6">
+                      <input type="checkbox" checked={newFieldOnNo.textFieldRequired} onChange={e => setNewFieldOnNo(prev => ({ ...prev, textFieldRequired: e.target.checked }))}
+                        className="w-4 h-4 rounded border-subtle text-primary focus:ring-primary" />
+                      Texto obrigatorio
+                    </label>
+                  )}
+                  <label className="flex items-center gap-2 text-sm text-secondary cursor-pointer">
+                    <input type="checkbox" checked={newFieldOnNo.showPhotoField} onChange={e => setNewFieldOnNo(prev => ({ ...prev, showPhotoField: e.target.checked, photoFieldRequired: e.target.checked ? prev.photoFieldRequired : false }))}
+                      className="w-4 h-4 rounded border-subtle text-primary focus:ring-primary" />
+                    Exigir foto
+                  </label>
+                  {newFieldOnNo.showPhotoField && (
+                    <label className="flex items-center gap-2 text-sm text-secondary cursor-pointer ml-6">
+                      <input type="checkbox" checked={newFieldOnNo.photoFieldRequired} onChange={e => setNewFieldOnNo(prev => ({ ...prev, photoFieldRequired: e.target.checked }))}
+                        className="w-4 h-4 rounded border-subtle text-primary focus:ring-primary" />
+                      Foto obrigatoria
+                    </label>
+                  )}
+                  <label className="flex items-center gap-2 text-sm text-secondary cursor-pointer">
+                    <input type="checkbox" checked={newFieldOnNo.allowUserActionPlan} onChange={e => setNewFieldOnNo(prev => ({ ...prev, allowUserActionPlan: e.target.checked }))}
+                      className="w-4 h-4 rounded border-subtle text-primary focus:ring-primary" />
+                    Permitir preenchedor escolher responsavel
+                  </label>
+                </div>
+              </div>
+            )}
+
+            {/* Opcoes para dropdown / checkbox_multiple */}
+            {(newFieldType === 'dropdown' || newFieldType === 'checkbox_multiple') && (
+              <div className="space-y-3 p-3 bg-surface rounded-xl border border-subtle">
+                <p className="text-xs font-medium text-muted uppercase tracking-wide">Opcoes da lista</p>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={newFieldOptionInput}
+                    onChange={e => setNewFieldOptionInput(e.target.value)}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter' && newFieldOptionInput.trim()) {
+                        e.preventDefault()
+                        if (!newFieldOptions.includes(newFieldOptionInput.trim())) {
+                          setNewFieldOptions(prev => [...prev, newFieldOptionInput.trim()])
+                        }
+                        setNewFieldOptionInput('')
+                      }
+                    }}
+                    placeholder="Digite uma opcao..."
+                    className="flex-1 px-3 py-2 bg-page border border-subtle rounded-xl text-main text-sm placeholder-muted focus:outline-none focus:ring-2 focus:ring-primary"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (newFieldOptionInput.trim() && !newFieldOptions.includes(newFieldOptionInput.trim())) {
+                        setNewFieldOptions(prev => [...prev, newFieldOptionInput.trim()])
+                      }
+                      setNewFieldOptionInput('')
+                    }}
+                    disabled={!newFieldOptionInput.trim()}
+                    className="px-3 py-2 btn-primary rounded-xl text-sm disabled:opacity-50"
+                  >
+                    <FiPlus className="w-4 h-4" />
+                  </button>
+                </div>
+                {newFieldOptions.length > 0 && (
+                  <div className="space-y-1">
+                    {newFieldOptions.map((opt, i) => (
+                      <div key={i} className="flex items-center justify-between px-3 py-1.5 bg-page rounded-lg border border-subtle">
+                        <span className="text-sm text-main">{opt}</span>
+                        <button
+                          type="button"
+                          onClick={() => setNewFieldOptions(prev => prev.filter((_, idx) => idx !== i))}
+                          className="text-red-400 hover:text-red-300 text-xs ml-2"
+                        >
+                          Remover
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {newFieldOptions.length === 0 && (
+                  <p className="text-xs text-muted">Nenhuma opcao adicionada ainda.</p>
+                )}
+              </div>
+            )}
+
+            {/* Placeholder */}
+            <div>
+              <label className="block text-sm font-medium text-secondary mb-1">Placeholder <span className="text-muted font-normal">(opcional)</span></label>
+              <input
+                type="text"
+                value={newFieldPlaceholder}
+                onChange={e => setNewFieldPlaceholder(e.target.value)}
+                placeholder="Texto exibido quando o campo esta vazio..."
+                className="w-full px-3 py-2 bg-surface border border-subtle rounded-xl text-main text-sm placeholder-muted focus:outline-none focus:ring-2 focus:ring-primary"
+              />
+            </div>
+
+            {/* Texto de ajuda */}
+            <div>
+              <label className="block text-sm font-medium text-secondary mb-1">Texto de ajuda <span className="text-muted font-normal">(opcional)</span></label>
+              <input
+                type="text"
+                value={newFieldHelpText}
+                onChange={e => setNewFieldHelpText(e.target.value)}
+                placeholder="Instrucao para quem preenche o campo..."
+                className="w-full px-3 py-2 bg-surface border border-subtle rounded-xl text-main text-sm placeholder-muted focus:outline-none focus:ring-2 focus:ring-primary"
+              />
+            </div>
+
             <div className="flex gap-2 pt-2">
               <button
-                onClick={() => { setShowAddFieldModal(false); setNewFieldName(''); setAddFieldSectionId(null) }}
+                onClick={resetAddFieldModal}
                 className="flex-1 py-2.5 btn-secondary rounded-xl text-sm"
               >
                 Cancelar
               </button>
               <button
                 onClick={handleAddField}
-                disabled={!newFieldName.trim() || addingField}
+                disabled={!newFieldName.trim() || addingField || ((newFieldType === 'dropdown' || newFieldType === 'checkbox_multiple') && newFieldOptions.length === 0)}
                 className="flex-1 py-2.5 btn-primary rounded-xl text-sm disabled:opacity-50"
               >
                 {addingField ? 'Salvando...' : 'Adicionar'}

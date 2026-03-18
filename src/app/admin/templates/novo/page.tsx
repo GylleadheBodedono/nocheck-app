@@ -104,7 +104,7 @@ export default function NovoTemplatePage() {
   const [expandedSection, setExpandedSection] = useState<string | null>(null)
   const [expandedSubSection, setExpandedSubSection] = useState<string | null>(null)
   const [fieldConditions, setFieldConditions] = useState<Record<string, ConditionConfig | null>>({})
-  const [conditionUsers, setConditionUsers] = useState<{ id: string; name: string }[]>([])
+  const [conditionFunctions, setConditionFunctions] = useState<{ id: number; name: string }[]>([])
   const [conditionPresets, setConditionPresets] = useState<PresetOption[]>([])
 
   // Visibility - now includes sector_id
@@ -146,44 +146,32 @@ export default function NovoTemplatePage() {
 
       if (functionsData) setFunctions(functionsData as FunctionRow[])
 
-      // Fetch users for condition editor
+      // Fetch functions for condition editor
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data: usersData, error: usersError } = await (supabase as any)
-        .from('users')
-        .select('id, full_name')
+      const { data: condFunctionsData } = await (supabase as any)
+        .from('functions')
+        .select('id, name')
         .eq('is_active', true)
-        .order('full_name')
-      if (usersError) {
-        console.error('[Template] Erro ao buscar usuarios para condicoes:', usersError.message)
-      }
-      if (usersData && usersData.length > 0) {
-        setConditionUsers((usersData as { id: string; full_name: string }[]).map((u) => ({ id: u.id, name: u.full_name })))
-      } else {
-        console.warn('[Template] Nenhum usuario encontrado para condicoes. Tentando sem filtro...')
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const { data: usersRetry } = await (supabase as any)
-          .from('users')
-          .select('id, full_name')
-          .order('full_name')
-        if (usersRetry && usersRetry.length > 0) {
-          setConditionUsers((usersRetry as { id: string; full_name: string }[]).map((u) => ({ id: u.id, name: u.full_name })))
-        }
+        .order('name')
+      if (condFunctionsData && condFunctionsData.length > 0) {
+        setConditionFunctions((condFunctionsData as { id: number; name: string }[]).map((f) => ({ id: f.id, name: f.name })))
       }
 
       // Fetch presets for condition editor
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { data: presetsData } = await (supabase as any)
         .from('action_plan_presets')
-        .select('id, name, severity, deadline_days, default_assignee_id, description_template, require_photo_on_completion, require_text_on_completion, completion_max_chars')
+        .select('id, name, severity, deadline_days, default_function_id, description_template, require_photo_on_completion, require_text_on_completion, completion_max_chars')
         .eq('is_active', true)
         .order('name')
       if (presetsData) {
-        setConditionPresets((presetsData as { id: number; name: string; severity: string; deadline_days: number; default_assignee_id: string | null; description_template: string | null; require_photo_on_completion?: boolean; require_text_on_completion?: boolean; completion_max_chars?: number }[]).map((p) => ({
+        setConditionPresets((presetsData as { id: number; name: string; severity: string; deadline_days: number; default_function_id: number | null; description_template: string | null; require_photo_on_completion?: boolean; require_text_on_completion?: boolean; completion_max_chars?: number }[]).map((p) => ({
           id: p.id,
           name: p.name,
           severity: p.severity as PresetOption['severity'],
           deadlineDays: p.deadline_days,
-          defaultAssigneeId: p.default_assignee_id,
+          defaultAssigneeId: null,
+          defaultFunctionId: p.default_function_id,
           descriptionTemplate: p.description_template || '',
           requirePhotoOnCompletion: p.require_photo_on_completion || false,
           requireTextOnCompletion: p.require_text_on_completion || false,
@@ -427,7 +415,7 @@ export default function NovoTemplatePage() {
     return storeSectors.length > 0 && storeSectors.every(s => isSectorEnabled(storeId, s.id))
   }
 
-  const handleSaveAsPreset = async (data: { name: string; severity: string; deadlineDays: number; defaultAssigneeId: string | null; descriptionTemplate: string }) => {
+  const handleSaveAsPreset = async (data: { name: string; severity: string; deadlineDays: number; defaultFunctionId: number | null; descriptionTemplate: string }) => {
     try {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { data: preset, error: presetErr } = await (supabase as any)
@@ -436,11 +424,11 @@ export default function NovoTemplatePage() {
           name: data.name,
           severity: data.severity,
           deadline_days: data.deadlineDays,
-          default_assignee_id: data.defaultAssigneeId,
+          default_function_id: data.defaultFunctionId,
           description_template: data.descriptionTemplate,
           is_active: true,
         })
-        .select('id, name, severity, deadline_days, default_assignee_id, description_template, require_photo_on_completion, require_text_on_completion, completion_max_chars')
+        .select('id, name, severity, deadline_days, default_function_id, description_template, require_photo_on_completion, require_text_on_completion, completion_max_chars')
         .single()
 
       if (presetErr) throw presetErr
@@ -450,7 +438,8 @@ export default function NovoTemplatePage() {
         name: preset.name,
         severity: preset.severity as PresetOption['severity'],
         deadlineDays: preset.deadline_days,
-        defaultAssigneeId: preset.default_assignee_id,
+        defaultAssigneeId: null,
+        defaultFunctionId: preset.default_function_id,
         descriptionTemplate: preset.description_template || '',
         requirePhotoOnCompletion: preset.require_photo_on_completion || false,
         requireTextOnCompletion: preset.require_text_on_completion || false,
@@ -573,7 +562,7 @@ export default function NovoTemplatePage() {
 
       // 3b. Save field conditions
       if (insertedFields) {
-        const conditionsToInsert: { field_id: number; condition_type: string; condition_value: Record<string, unknown>; severity: string; default_assignee_id: string | null; deadline_days: number; description_template: string | null; is_active: boolean; require_photo_on_completion: boolean; require_text_on_completion: boolean; completion_max_chars: number }[] = []
+        const conditionsToInsert: { field_id: number; condition_type: string; condition_value: Record<string, unknown>; severity: string; default_function_id: number | null; deadline_days: number; description_template: string | null; is_active: boolean; require_photo_on_completion: boolean; require_text_on_completion: boolean; completion_max_chars: number }[] = []
         fields.forEach((f, idx) => {
           const cond = fieldConditions[f.id]
           if (cond && insertedFields[idx]) {
@@ -582,7 +571,7 @@ export default function NovoTemplatePage() {
               condition_type: cond.conditionType,
               condition_value: cond.conditionValue,
               severity: cond.severity,
-              default_assignee_id: cond.defaultAssigneeId,
+              default_function_id: cond.defaultFunctionId,
               deadline_days: cond.deadlineDays,
               description_template: cond.descriptionTemplate || null,
               is_active: true,
@@ -683,7 +672,7 @@ export default function NovoTemplatePage() {
         checkboxOptions={field.field_type === 'checkbox_multiple' ? getOptionsItems(field.options) : undefined}
         condition={fieldConditions[field.id] || null}
         onChange={(cond) => setFieldConditions(prev => ({ ...prev, [field.id]: cond }))}
-        users={conditionUsers}
+        functions={conditionFunctions}
         presets={conditionPresets}
         onSaveAsPreset={handleSaveAsPreset}
       />
@@ -1070,7 +1059,7 @@ export default function NovoTemplatePage() {
                                   checkboxOptions={field.field_type === 'checkbox_multiple' ? getOptionsItems(field.options) : undefined}
                                   condition={fieldConditions[field.id] || null}
                                   onChange={(cond) => setFieldConditions(prev => ({ ...prev, [field.id]: cond }))}
-                                  users={conditionUsers}
+                                  functions={conditionFunctions}
                                   presets={conditionPresets}
                                   onSaveAsPreset={handleSaveAsPreset}
                                 />
@@ -1289,7 +1278,7 @@ export default function NovoTemplatePage() {
                             checkboxOptions={field.field_type === 'checkbox_multiple' ? getOptionsItems(field.options) : undefined}
                             condition={fieldConditions[field.id] || null}
                             onChange={(cond) => setFieldConditions(prev => ({ ...prev, [field.id]: cond }))}
-                            users={conditionUsers}
+                            functions={conditionFunctions}
                             presets={conditionPresets}
                             onSaveAsPreset={handleSaveAsPreset}
                           />
@@ -1436,7 +1425,7 @@ export default function NovoTemplatePage() {
                               checkboxOptions={field.field_type === 'checkbox_multiple' ? getOptionsItems(field.options) : undefined}
                               condition={fieldConditions[field.id] || null}
                               onChange={(cond) => setFieldConditions(prev => ({ ...prev, [field.id]: cond }))}
-                              users={conditionUsers}
+                              functions={conditionFunctions}
                               presets={conditionPresets}
                               onSaveAsPreset={handleSaveAsPreset}
                             />

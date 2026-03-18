@@ -12,6 +12,7 @@ export type ConditionConfig = {
   conditionValue: Record<string, unknown>
   severity: Severity
   defaultAssigneeId: string | null
+  defaultFunctionId: number | null
   deadlineDays: number
   descriptionTemplate: string
   requirePhotoOnCompletion: boolean
@@ -25,14 +26,15 @@ export type PresetOption = {
   severity: Severity
   deadlineDays: number
   defaultAssigneeId: string | null
+  defaultFunctionId: number | null
   descriptionTemplate: string
   requirePhotoOnCompletion: boolean
   requireTextOnCompletion: boolean
   completionMaxChars: number
 }
 
-type UserOption = {
-  id: string
+type FunctionOption = {
+  id: number
   name: string
 }
 
@@ -43,9 +45,9 @@ type Props = {
   checkboxOptions?: string[]
   condition: ConditionConfig | null
   onChange: (condition: ConditionConfig | null) => void
-  users: UserOption[]
+  functions: FunctionOption[]
   presets?: PresetOption[]
-  onSaveAsPreset?: (data: { name: string; severity: Severity; deadlineDays: number; defaultAssigneeId: string | null; descriptionTemplate: string }) => void
+  onSaveAsPreset?: (data: { name: string; severity: Severity; deadlineDays: number; defaultFunctionId: number | null; descriptionTemplate: string }) => void
 }
 
 const SEVERITY_OPTIONS: { value: Severity; label: string; color: string }[] = [
@@ -61,6 +63,7 @@ const DEFAULT_CONDITION: ConditionConfig = {
   conditionValue: {},
   severity: 'media',
   defaultAssigneeId: null,
+  defaultFunctionId: null,
   deadlineDays: 7,
   descriptionTemplate: '',
   requirePhotoOnCompletion: true,
@@ -75,7 +78,7 @@ export function FieldConditionEditor({
   checkboxOptions = [],
   condition,
   onChange,
-  users,
+  functions,
   presets = [],
   onSaveAsPreset,
 }: Props) {
@@ -139,6 +142,7 @@ export function FieldConditionEditor({
       severity: preset.severity,
       deadlineDays: preset.deadlineDays,
       defaultAssigneeId: preset.defaultAssigneeId,
+      defaultFunctionId: preset.defaultFunctionId,
       descriptionTemplate: preset.descriptionTemplate || condition.descriptionTemplate,
       requirePhotoOnCompletion: preset.requirePhotoOnCompletion,
       requireTextOnCompletion: preset.requireTextOnCompletion,
@@ -152,7 +156,7 @@ export function FieldConditionEditor({
       name: presetName.trim(),
       severity: condition.severity,
       deadlineDays: condition.deadlineDays,
-      defaultAssigneeId: condition.defaultAssigneeId,
+      defaultFunctionId: condition.defaultFunctionId,
       descriptionTemplate: condition.descriptionTemplate,
     })
     setPresetName('')
@@ -464,12 +468,12 @@ export function FieldConditionEditor({
             </div>
 
             <div>
-              <label className="block text-xs font-medium text-secondary mb-1">Responsavel padrao</label>
+              <label className="block text-xs font-medium text-secondary mb-1">Funcao responsavel</label>
               <Select
-                value={condition.defaultAssigneeId || ''}
-                onChange={(v) => update({ defaultAssigneeId: v || null })}
+                value={condition.defaultFunctionId ? String(condition.defaultFunctionId) : ''}
+                onChange={(v) => update({ defaultFunctionId: v ? Number(v) : null })}
                 placeholder="Quem preencheu o checklist"
-                options={users.map(u => ({ value: u.id, label: u.name }))}
+                options={functions.map(f => ({ value: String(f.id), label: f.name }))}
               />
               <p className="text-xs text-muted mt-1">
                 Se nao selecionado, o plano sera atribuido ao usuario que preencheu o checklist.
