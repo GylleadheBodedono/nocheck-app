@@ -1252,8 +1252,9 @@ function ChecklistForm() {
           } else if (yesNoObj.conditionalPhotos && yesNoObj.conditionalPhotos.length > 0) {
             jsonParts.conditionalPhotos = yesNoObj.conditionalPhotos
           }
-          // Preservar selectedAssigneeId e selectedSeverity para processarNaoConformidades
+          // Preservar dados do plano de acao para processarNaoConformidades
           const fullObj = value as Record<string, unknown>
+          if (fullObj.selectedFunctionId) jsonParts.selectedFunctionId = fullObj.selectedFunctionId
           if (fullObj.selectedAssigneeId) jsonParts.selectedAssigneeId = fullObj.selectedAssigneeId
           if (fullObj.selectedSeverity) jsonParts.selectedSeverity = fullObj.selectedSeverity
           if (fullObj.selectedPresetId) jsonParts.selectedPresetId = fullObj.selectedPresetId
