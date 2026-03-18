@@ -13,23 +13,9 @@
  *    e. Se reincidencia, notifica admins
  */
 
-import { createClient } from '@supabase/supabase-js'
 import { createNotification, sendActionPlanEmail, sendActionPlanTeamsAlert } from './notificationService'
 import { buildEmailFromTemplate, SEVERITY_COLORS, type EmailTemplateVariables } from './emailTemplateEngine'
 import type { FieldCondition } from '@/types/database'
-
-// Service role client (lazy init - so cria quando chamado server-side)
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-let _serviceSupabase: any = null
-function getServiceSupabase() {
-  if (!_serviceSupabase) {
-    const url = process.env.NEXT_PUBLIC_SUPABASE_URL
-    const key = process.env.SUPABASE_SERVICE_ROLE_KEY
-    if (!url || !key) throw new Error('[ActionPlan] SUPABASE_SERVICE_ROLE_KEY nao configurada')
-    _serviceSupabase = createClient(url, key, { auth: { autoRefreshToken: false, persistSession: false } })
-  }
-  return _serviceSupabase
-}
 
 type ResponseData = {
   field_id: number
@@ -401,9 +387,8 @@ export async function processarNaoConformidades(
         .eq('field_id', field.id)
         .single()
 
-      // 6. Criar plano de acao (service role quando funcao, pois assigned_to pode ser null)
-      const insertClient = assignedFunctionId ? getServiceSupabase() : sb
-      const { data: plan, error: planError } = await insertClient
+      // 6. Criar plano de acao
+      const { data: plan, error: planError } = await sb
         .from('action_plans')
         .insert({
           checklist_id: checklistId,
@@ -417,7 +402,7 @@ export async function processarNaoConformidades(
           description: condition.description_template || null,
           severity,
           status: 'aberto',
-          assigned_to: assignedFunctionId ? null : assigneeId,
+          assigned_to: assigneeId,
           assigned_function_id: assignedFunctionId,
           assigned_by: userId,
           deadline: deadlineStr,
@@ -447,38 +432,38 @@ export async function processarNaoConformidades(
       let functionName = ''
 
       if (assignedFunctionId) {
-        // Buscar TODOS os usuarios ativos dessa funcao (service role para bypass RLS)
-        const { data: fnUsers, error: fnUsersErr } = await getServiceSupabase()
-          .from('users')
-          .select('id, email, full_name')
-          .eq('function_id', assignedFunctionId)
-          .eq('is_active', true)
-        if (fnUsersErr) console.error('[ActionPlan] Erro ao buscar usuarios da funcao:', fnUsersErr)
-        responsibleUsers = fnUsers || []
-        console.log(`[ActionPlan] Funcao ID ${assignedFunctionId}: ${responsibleUsers.length} usuarios encontrados`)
-        // Buscar nome e webhook da funcao
-        const { data: fnData } = await getServiceSupabase()
-          .from('functions')
-          .select('name, teams_webhook_url')
-          .eq('id', assignedFunctionId)
-          .single()
-        if (fnData) {
-          functionName = fnData.name
-          functionWebhookUrl = fnData.teams_webhook_url
+        // Buscar membros da funcao via API (server-side com service role)
+        try {
+          const membersRes = await fetch(`${appUrl}/api/functions/${assignedFunctionId}/members`, {
+            headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {},
+          })
+          if (membersRes.ok) {
+            const membersData = await membersRes.json()
+            responsibleUsers = membersData.users || []
+            functionName = membersData.functionName || ''
+            functionWebhookUrl = membersData.teamsWebhookUrl || null
+            console.log(`[ActionPlan] Funcao "${functionName}" (ID ${assignedFunctionId}): ${responsibleUsers.length} usuarios`)
+          } else {
+            console.error(`[ActionPlan] Erro ao buscar membros da funcao ${assignedFunctionId}: HTTP ${membersRes.status}`)
+          }
+        } catch (fetchErr) {
+          console.error('[ActionPlan] Erro fetch membros da funcao:', fetchErr)
         }
       } else {
-        // Fallback legado: usuario unico (service role para bypass RLS)
-        const { data: userData } = await getServiceSupabase()
-          .from('users')
-          .select('id, email, full_name, function_ref:functions!users_function_id_fkey(teams_webhook_url)')
-          .eq('id', assigneeId)
-          .single()
-        if (userData) {
-          responsibleUsers = [{ id: userData.id, email: userData.email, full_name: userData.full_name }]
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const fnRef = (userData as any)?.function_ref
-          if (fnRef?.teams_webhook_url) functionWebhookUrl = fnRef.teams_webhook_url
-        }
+        // Fallback legado: usuario unico
+        try {
+          const { data: userData } = await sb
+            .from('users')
+            .select('id, email, full_name, function_ref:functions!users_function_id_fkey(teams_webhook_url)')
+            .eq('id', assigneeId)
+            .single()
+          if (userData) {
+            responsibleUsers = [{ id: userData.id, email: userData.email, full_name: userData.full_name }]
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const fnRef = (userData as any)?.function_ref
+            if (fnRef?.teams_webhook_url) functionWebhookUrl = fnRef.teams_webhook_url
+          }
+        } catch { /* ignora erro na busca do usuario */ }
       }
 
       // 7a. Criar notificacao in-app para CADA usuario responsavel
