@@ -9,7 +9,9 @@ import { NextRequest, NextResponse } from 'next/server'
 import Stripe from 'stripe'
 import { createClient } from '@supabase/supabase-js'
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, { apiVersion: '2026-02-25.clover' })
+function getStripe() {
+  return new Stripe(process.env.STRIPE_SECRET_KEY!, { apiVersion: '2026-02-25.clover' })
+}
 
 export async function POST(req: NextRequest) {
   try {
@@ -34,6 +36,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Organizacao nao tem assinatura ativa' }, { status: 400 })
     }
 
+    const stripe = getStripe()
     const session = await stripe.billingPortal.sessions.create({
       customer: org.stripe_customer_id,
       return_url: returnUrl || `${req.headers.get('origin')}/admin/configuracoes`,

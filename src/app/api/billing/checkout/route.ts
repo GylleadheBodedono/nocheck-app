@@ -9,7 +9,9 @@ import { NextRequest, NextResponse } from 'next/server'
 import Stripe from 'stripe'
 import { createClient } from '@supabase/supabase-js'
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, { apiVersion: '2026-02-25.clover' })
+function getStripe() {
+  return new Stripe(process.env.STRIPE_SECRET_KEY!, { apiVersion: '2026-02-25.clover' })
+}
 
 export async function POST(req: NextRequest) {
   try {
@@ -18,6 +20,8 @@ export async function POST(req: NextRequest) {
     if (!orgId || !priceId) {
       return NextResponse.json({ error: 'orgId e priceId sao obrigatorios' }, { status: 400 })
     }
+
+    const stripe = getStripe()
 
     // Buscar org no banco (service role bypassa RLS)
     const supabase = createClient(

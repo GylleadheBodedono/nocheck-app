@@ -6,7 +6,9 @@ import { NextRequest, NextResponse } from 'next/server'
 import Stripe from 'stripe'
 import { createClient } from '@supabase/supabase-js'
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, { apiVersion: '2026-02-25.clover' })
+function getStripe() {
+  return new Stripe(process.env.STRIPE_SECRET_KEY!, { apiVersion: '2026-02-25.clover' })
+}
 
 export async function POST(req: NextRequest) {
   try {
@@ -35,6 +37,7 @@ export async function POST(req: NextRequest) {
       })
     }
 
+    const stripe = getStripe()
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const sub = await stripe.subscriptions.retrieve(org.stripe_subscription_id) as any
 

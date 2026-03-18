@@ -9,7 +9,9 @@
 import { NextResponse } from 'next/server'
 import Stripe from 'stripe'
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, { apiVersion: '2026-02-25.clover' })
+function getStripe() {
+  return new Stripe(process.env.STRIPE_SECRET_KEY!, { apiVersion: '2026-02-25.clover' })
+}
 
 const PLANS = [
   { name: 'OpereCheck Starter', price: 29700, plan: 'starter' },       // R$ 297
@@ -21,6 +23,7 @@ export async function POST() {
   try {
     const results: Record<string, { productId: string; priceId: string }> = {}
 
+    const stripe = getStripe()
     for (const plan of PLANS) {
       // Criar produto
       const product = await stripe.products.create({
