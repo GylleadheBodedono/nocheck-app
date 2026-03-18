@@ -13,9 +13,17 @@
  *    e. Se reincidencia, notifica admins
  */
 
+import { createClient } from '@supabase/supabase-js'
 import { createNotification, sendActionPlanEmail, sendActionPlanTeamsAlert } from './notificationService'
 import { buildEmailFromTemplate, SEVERITY_COLORS, type EmailTemplateVariables } from './emailTemplateEngine'
 import type { FieldCondition } from '@/types/database'
+
+// Service role client para queries que precisam bypass RLS (buscar usuarios de outra funcao)
+const serviceSupabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL || '',
+  process.env.SUPABASE_SERVICE_ROLE_KEY || '',
+  { auth: { autoRefreshToken: false, persistSession: false } }
+)
 
 type ResponseData = {
   field_id: number
@@ -432,15 +440,17 @@ export async function processarNaoConformidades(
       let functionName = ''
 
       if (assignedFunctionId) {
-        // Buscar TODOS os usuarios ativos dessa funcao
-        const { data: fnUsers } = await sb
+        // Buscar TODOS os usuarios ativos dessa funcao (service role para bypass RLS)
+        const { data: fnUsers, error: fnUsersErr } = await serviceSupabase
           .from('users')
           .select('id, email, full_name')
           .eq('function_id', assignedFunctionId)
           .eq('is_active', true)
+        if (fnUsersErr) console.error('[ActionPlan] Erro ao buscar usuarios da funcao:', fnUsersErr)
         responsibleUsers = fnUsers || []
+        console.log(`[ActionPlan] Funcao ID ${assignedFunctionId}: ${responsibleUsers.length} usuarios encontrados`)
         // Buscar nome e webhook da funcao
-        const { data: fnData } = await sb
+        const { data: fnData } = await serviceSupabase
           .from('functions')
           .select('name, teams_webhook_url')
           .eq('id', assignedFunctionId)
@@ -450,8 +460,8 @@ export async function processarNaoConformidades(
           functionWebhookUrl = fnData.teams_webhook_url
         }
       } else {
-        // Fallback legado: usuario unico
-        const { data: userData } = await sb
+        // Fallback legado: usuario unico (service role para bypass RLS)
+        const { data: userData } = await serviceSupabase
           .from('users')
           .select('id, email, full_name, function_ref:functions!users_function_id_fkey(teams_webhook_url)')
           .eq('id', assigneeId)
