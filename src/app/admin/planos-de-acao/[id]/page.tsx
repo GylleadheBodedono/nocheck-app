@@ -3,6 +3,7 @@
 export const runtime = 'edge'
 
 import { useEffect, useState, useMemo, useCallback, useRef } from 'react'
+import { useRealtimeRefresh } from '@/hooks/useRealtimeRefresh'
 import { useRouter, useParams } from 'next/navigation'
 import Link from 'next/link'
 import { createClient, isSupabaseConfigured } from '@/lib/supabase'
@@ -178,6 +179,7 @@ export default function ActionPlanDetailPage() {
   const params = useParams()
   const planId = params.id as string
   const supabase = useMemo(() => createClient(), [])
+  const { refreshKey } = useRealtimeRefresh(['action_plans', 'action_plan_updates'])
 
   // ============================================
   // FETCH DATA
@@ -325,6 +327,17 @@ export default function ActionPlanDetailPage() {
     loadData()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [planId])
+
+  useEffect(() => {
+    if (refreshKey > 0 && navigator.onLine) {
+      // Refresh both plan details and updates list
+      Promise.all([fetchPlan(), fetchUpdates()]).then(([planData, updatesData]) => {
+        if (planData) setPlan(planData)
+        if (updatesData) setUpdates(updatesData)
+      })
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [refreshKey])
 
   // ============================================
   // STATUS CHANGE

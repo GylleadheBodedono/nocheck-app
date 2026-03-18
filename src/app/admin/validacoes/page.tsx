@@ -20,6 +20,7 @@ import {
 } from 'react-icons/fi'
 import type { Store } from '@/types/database'
 import { getAuthCache, getUserCache, getStoresCache } from '@/lib/offlineCache'
+import { useRealtimeRefresh } from '@/hooks/useRealtimeRefresh'
 
 type CrossValidation = {
   id: number
@@ -74,6 +75,7 @@ export default function ValidacoesPage() {
   const [savingExpiration, setSavingExpiration] = useState(false)
   const router = useRouter()
   const supabase = useMemo(() => createClient(), [])
+  const { refreshKey } = useRealtimeRefresh(['cross_validations'])
 
   const handleExpirationChange = async (minutes: number) => {
     setExpirationMinutes(minutes)
@@ -158,6 +160,11 @@ export default function ValidacoesPage() {
     fetchData()
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  useEffect(() => {
+    if (refreshKey > 0 && navigator.onLine) fetchData()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [refreshKey])
 
   const fetchData = async () => {
     if (!isSupabaseConfigured || !supabase) {

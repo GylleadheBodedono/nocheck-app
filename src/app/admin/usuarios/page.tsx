@@ -19,6 +19,7 @@ import type { User, Store, Sector, FunctionRow, UserStoreWithDetails } from '@/t
 import { APP_CONFIG } from '@/lib/config'
 import { LoadingPage, Header, PageContainer } from '@/components/ui'
 import { getAuthCache, getUserCache, getAllUsersCache } from '@/lib/offlineCache'
+import { useRealtimeRefresh } from '@/hooks/useRealtimeRefresh'
 
 type UserWithAssignment = User & {
   store: Store | null
@@ -38,11 +39,17 @@ export default function UsuariosPage() {
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
   const router = useRouter()
   const supabase = useMemo(() => createClient(), [])
+  const { refreshKey } = useRealtimeRefresh(['users'])
 
   useEffect(() => {
     fetchUsers()
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  useEffect(() => {
+    if (refreshKey > 0 && navigator.onLine) fetchUsers()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [refreshKey])
 
   const fetchUsers = async () => {
     let userId: string | null = null

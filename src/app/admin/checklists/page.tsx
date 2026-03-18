@@ -21,6 +21,7 @@ import {
 import Link from 'next/link'
 import type { Store, ChecklistTemplate, User } from '@/types/database'
 import { getAuthCache, getUserCache } from '@/lib/offlineCache'
+import { useRealtimeRefresh } from '@/hooks/useRealtimeRefresh'
 
 type ChecklistWithDetails = {
   id: number
@@ -59,11 +60,17 @@ export default function AdminChecklistsPage() {
   const [isOffline, setIsOffline] = useState(false)
   const router = useRouter()
   const supabase = useMemo(() => createClient(), [])
+  const { refreshKey } = useRealtimeRefresh(['checklists', 'checklist_responses'])
 
   useEffect(() => {
     fetchData()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  useEffect(() => {
+    if (refreshKey > 0 && navigator.onLine) fetchData()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [refreshKey])
 
   const fetchData = async () => {
     let userId: string | null = null

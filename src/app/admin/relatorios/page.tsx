@@ -24,6 +24,7 @@ import Link from 'next/link'
 import { APP_CONFIG } from '@/lib/config'
 import { LoadingPage, Header, Select, PageContainer } from '@/components/ui'
 import { getAuthCache, getUserCache } from '@/lib/offlineCache'
+import { useRealtimeRefresh } from '@/hooks/useRealtimeRefresh'
 import { fetchComplianceData, fetchReincidenciaData, fetchStoreHeatmap, type ComplianceSummary, type FieldComplianceRow, type StoreComplianceRow, type ReincidenciaSummary, type ReincidenciaRow, type AssigneeStats, type HeatmapCell } from '@/lib/analyticsQueries'
 import {
   computeOverallAdherence, computeTemplateAdherence, computeStoreAdherence,
@@ -146,11 +147,17 @@ export default function RelatoriosPage() {
   const responsePerPage = 20
   const router = useRouter()
   const supabase = useMemo(() => createClient(), [])
+  const { refreshKey } = useRealtimeRefresh(['checklists'])
 
   useEffect(() => {
     fetchReportData()
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [period])
+
+  useEffect(() => {
+    if (refreshKey > 0 && navigator.onLine) fetchReportData()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [refreshKey])
 
   const fetchReportData = async () => {
     if (!isSupabaseConfigured || !supabase) {

@@ -36,6 +36,7 @@ import {
 } from 'react-icons/fi'
 import type { IconType } from 'react-icons'
 import { useDebouncedCallback } from 'use-debounce'
+import { useRealtimeRefresh } from '@/hooks/useRealtimeRefresh'
 
 type Stats = {
   totalUsers: number
@@ -89,6 +90,7 @@ export default function AdminPage() {
   const [notificationBannerMounted, setNotificationBannerMounted] = useState(false)
   const router = useRouter()
   const supabase = useMemo(() => createClient(), [])
+  const { refreshKey } = useRealtimeRefresh(['checklists', 'action_plans', 'users', 'stores'])
 
   useEffect(() => {
     const fetchStats = async () => {
@@ -259,6 +261,67 @@ export default function AdminPage() {
 
     fetchStats()
   }, [supabase, router])
+
+  useEffect(() => {
+    if (refreshKey > 0 && navigator.onLine) {
+      // Re-fetch stats without full auth check (already verified on mount)
+      const refetchStats = async () => {
+        try {
+          const [
+            usersRes, templatesRes, storesRes, sectorsRes, functionsRes, checklistsRes, validationsRes,
+            recentUsersRes, recentTemplatesRes, recentStoresRes, recentSectorsRes, recentFunctionsRes, recentChecklistsRes, recentValidationsRes,
+          ] = await Promise.all([
+            supabase.from('users').select('id', { count: 'exact', head: true }),
+            supabase.from('checklist_templates').select('id', { count: 'exact', head: true }).eq('is_active', true),
+            supabase.from('stores').select('id', { count: 'exact', head: true }).eq('is_active', true),
+            supabase.from('sectors').select('id', { count: 'exact', head: true }).eq('is_active', true),
+            supabase.from('functions').select('id', { count: 'exact', head: true }).eq('is_active', true),
+            supabase.from('checklists').select('id', { count: 'exact', head: true }),
+            supabase.from('cross_validations').select('id', { count: 'exact', head: true }).eq('status', 'pendente'),
+            supabase.from('users').select('id, full_name, email, is_active, created_at').order('created_at', { ascending: false }).limit(3),
+            supabase.from('checklist_templates').select('id, name, category, is_active').eq('is_active', true).order('created_at', { ascending: false }).limit(3),
+            supabase.from('stores').select('id, name, is_active').eq('is_active', true).order('created_at', { ascending: false }).limit(3),
+            supabase.from('sectors').select('id, name, color, is_active, store:stores(name)').eq('is_active', true).order('created_at', { ascending: false }).limit(3),
+            supabase.from('functions').select('id, name, color, is_active').eq('is_active', true).order('created_at', { ascending: false }).limit(3),
+            supabase.from('checklists').select('id, status, created_at, template:checklist_templates(name), store:stores(name), user:users(full_name)').order('created_at', { ascending: false }).limit(3),
+            supabase.from('cross_validations').select('id, status, numero_nota, created_at, store:stores(name)').eq('status', 'pendente').order('created_at', { ascending: false }).limit(3),
+          ])
+
+          const today = new Date()
+          today.setHours(0, 0, 0, 0)
+          const { count: checklistsTodayCount } = await supabase
+            .from('checklists')
+            .select('id', { count: 'exact', head: true })
+            .gte('created_at', today.toISOString())
+
+          setStats({
+            totalUsers: usersRes.count || 0,
+            totalTemplates: templatesRes.count || 0,
+            totalStores: storesRes.count || 0,
+            totalSectors: sectorsRes.count || 0,
+            totalFunctions: functionsRes.count || 0,
+            totalChecklists: checklistsRes.count || 0,
+            checklistsToday: checklistsTodayCount || 0,
+            pendingValidations: validationsRes.count || 0,
+          })
+
+          setPreview({
+            recentUsers: recentUsersRes.data || [],
+            recentTemplates: recentTemplatesRes.data || [],
+            recentStores: recentStoresRes.data || [],
+            recentSectors: recentSectorsRes.data || [],
+            recentFunctions: recentFunctionsRes.data || [],
+            recentChecklists: recentChecklistsRes.data || [],
+            recentValidations: recentValidationsRes.data || [],
+          })
+        } catch (err) {
+          console.error('[Admin] Erro ao re-buscar estatísticas:', err)
+        }
+      }
+      refetchStats()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [refreshKey])
 
   // Permissao de notificacoes do sistema (para o banner)
   useEffect(() => {

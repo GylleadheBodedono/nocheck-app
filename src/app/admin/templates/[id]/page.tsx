@@ -3,6 +3,7 @@
 export const runtime = 'edge'
 
 import React, { useEffect, useState, useMemo } from 'react'
+import { useRealtimeRefresh } from '@/hooks/useRealtimeRefresh'
 import { useRouter, useParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { APP_CONFIG } from '@/lib/config'
@@ -126,6 +127,13 @@ export default function EditTemplatePage() {
   const [conditionPresets, setConditionPresets] = useState<PresetOption[]>([])
   const [showSectorModal, setShowSectorModal] = useState(false)
   const [showFunctionModal, setShowFunctionModal] = useState(false)
+  const { refreshKey } = useRealtimeRefresh(['template_fields', 'field_conditions'])
+  const [reloadTrigger, setReloadTrigger] = useState(0)
+
+  useEffect(() => {
+    if (refreshKey > 0 && navigator.onLine) setReloadTrigger(prev => prev + 1)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [refreshKey])
 
   useEffect(() => {
     const fetchData = async () => {
@@ -331,7 +339,7 @@ export default function EditTemplatePage() {
     }
 
     fetchData()
-  }, [supabase, templateId])
+  }, [supabase, templateId, reloadTrigger]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const fieldTypes: { value: FieldType; label: string; icon: string }[] = [
     { value: 'text', label: 'Texto', icon: 'Aa' },

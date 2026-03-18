@@ -3,6 +3,7 @@
 export const runtime = 'edge'
 
 import { useEffect, useState, useMemo } from 'react'
+import { useRealtimeRefresh } from '@/hooks/useRealtimeRefresh'
 import { useRouter, useParams } from 'next/navigation'
 import { createClient, isSupabaseConfigured } from '@/lib/supabase'
 import { APP_CONFIG } from '@/lib/config'
@@ -90,11 +91,17 @@ export default function ChecklistViewPage() {
   const params = useParams()
   const checklistId = params.id as string
   const supabase = useMemo(() => createClient(), [])
+  const { refreshKey } = useRealtimeRefresh(['checklist_responses'])
 
   useEffect(() => {
     fetchChecklist()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [checklistId])
+
+  useEffect(() => {
+    if (refreshKey > 0 && navigator.onLine) fetchChecklist()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [refreshKey])
 
   /**
    * Carrega checklist do cache IndexedDB (modo offline)

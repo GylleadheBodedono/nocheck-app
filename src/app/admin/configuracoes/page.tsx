@@ -7,6 +7,7 @@ import { FiSettings, FiCopy, FiEye, FiSave, FiRotateCcw, FiSend, FiChevronDown, 
 import { APP_CONFIG } from '@/lib/config'
 import { LoadingPage, Header, PageContainer } from '@/components/ui'
 import { getAuthCache, getUserCache } from '@/lib/offlineCache'
+import { useRealtimeRefresh } from '@/hooks/useRealtimeRefresh'
 import {
   TEMPLATE_VARIABLES,
   DEFAULT_ACTION_PLAN_EMAIL_HTML,
@@ -24,6 +25,7 @@ export default function ConfiguracoesPage() {
   const [error, setError] = useState<string | null>(null)
   const router = useRouter()
   const supabase = useMemo(() => createClient(), [])
+  const { refreshKey } = useRealtimeRefresh(['app_settings'])
 
   // Template state
   const [emailSubject, setEmailSubject] = useState(DEFAULT_ACTION_PLAN_EMAIL_SUBJECT)
@@ -94,6 +96,28 @@ export default function ConfiguracoesPage() {
     init()
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  useEffect(() => {
+    if (refreshKey > 0 && navigator.onLine) {
+      // Reload settings from app_settings
+      const reloadSettings = async () => {
+        try {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const sb = supabase as any
+          const [tplRes, subjRes] = await Promise.all([
+            sb.from('app_settings').select('value').eq('key', 'action_plan_email_template').maybeSingle(),
+            sb.from('app_settings').select('value').eq('key', 'action_plan_email_subject').maybeSingle(),
+          ])
+          if (tplRes.data?.value) setEmailTemplate(tplRes.data.value)
+          if (subjRes.data?.value) setEmailSubject(subjRes.data.value)
+        } catch {
+          console.log('[Config] Erro ao recarregar settings via realtime')
+        }
+      }
+      reloadSettings()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [refreshKey])
 
   const handleSave = useCallback(async () => {
     setSaving(true)

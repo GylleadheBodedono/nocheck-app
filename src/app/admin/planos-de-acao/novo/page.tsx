@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState, useMemo } from 'react'
+import { useRealtimeRefresh } from '@/hooks/useRealtimeRefresh'
 import { useRouter } from 'next/navigation'
 import { createClient, isSupabaseConfigured } from '@/lib/supabase'
 import { FiSave, FiFileText } from 'react-icons/fi'
@@ -30,6 +31,8 @@ export default function NovoPlanoDeAcaoPage() {
   const [users, setUsers] = useState<UserOption[]>([])
   const router = useRouter()
   const supabase = useMemo(() => createClient(), [])
+  const { refreshKey } = useRealtimeRefresh(['action_plan_presets'])
+  const [reloadTrigger, setReloadTrigger] = useState(0)
 
   // Form state
   const [title, setTitle] = useState('')
@@ -42,6 +45,11 @@ export default function NovoPlanoDeAcaoPage() {
     d.setDate(d.getDate() + 7)
     return d.toISOString().split('T')[0]
   })
+
+  useEffect(() => {
+    if (refreshKey > 0 && navigator.onLine) setReloadTrigger(prev => prev + 1)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [refreshKey])
 
   useEffect(() => {
     const init = async () => {
@@ -117,7 +125,7 @@ export default function NovoPlanoDeAcaoPage() {
 
     init()
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [reloadTrigger])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()

@@ -24,6 +24,7 @@ import Link from 'next/link'
 import { APP_CONFIG } from '@/lib/config'
 import { LoadingPage, Header, Select, PageContainer } from '@/components/ui'
 import { getAuthCache, getUserCache } from '@/lib/offlineCache'
+import { useRealtimeRefresh } from '@/hooks/useRealtimeRefresh'
 import {
   fetchActionPlanReport,
   type ActionPlanReportItem,
@@ -94,6 +95,7 @@ const PAGE_SIZE = 20
 export default function PlanoDeAcaoReportPage() {
   const router = useRouter()
   const supabase = useMemo(() => createClient(), [])
+  const { refreshKey } = useRealtimeRefresh(['action_plans'])
 
   // State
   const [loading, setLoading] = useState(true)
@@ -208,6 +210,11 @@ export default function PlanoDeAcaoReportPage() {
   useEffect(() => {
     fetchData()
   }, [fetchData])
+
+  useEffect(() => {
+    if (refreshKey > 0 && navigator.onLine) fetchData()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [refreshKey])
 
   // Pagination
   const totalPages = Math.ceil(items.length / PAGE_SIZE)

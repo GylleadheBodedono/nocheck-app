@@ -6,6 +6,7 @@ import { createClient, isSupabaseConfigured } from '@/lib/supabase'
 import { APP_CONFIG } from '@/lib/config'
 import { LoadingPage, Header, PageContainer } from '@/components/ui'
 import { getAuthCache, getUserCache } from '@/lib/offlineCache'
+import { useRealtimeRefresh } from '@/hooks/useRealtimeRefresh'
 import {
   FiImage,
   FiSearch,
@@ -39,6 +40,7 @@ export default function GaleriaPage() {
   const uploadRef = useRef<HTMLInputElement>(null)
   const router = useRouter()
   const supabase = useMemo(() => createClient(), [])
+  const { refreshKey } = useRealtimeRefresh(['checklist_responses'])
 
   // Auth check
   useEffect(() => {
@@ -101,6 +103,11 @@ export default function GaleriaPage() {
     setSearch('')
     setVisibleCount(ITEMS_PER_PAGE)
   }, [currentFolder, fetchFiles])
+
+  useEffect(() => {
+    if (refreshKey > 0 && navigator.onLine) fetchFiles(currentFolder)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [refreshKey])
 
   const switchFolder = (folder: Folder) => {
     if (folder !== currentFolder) {

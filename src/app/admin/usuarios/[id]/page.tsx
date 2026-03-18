@@ -3,6 +3,7 @@
 export const runtime = 'edge'
 
 import { useEffect, useState, useMemo } from 'react'
+import { useRealtimeRefresh } from '@/hooks/useRealtimeRefresh'
 import { useRouter, useParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import Link from 'next/link'
@@ -38,6 +39,7 @@ export default function EditarUsuarioPage() {
   const [success, setSuccess] = useState<string | null>(null)
   const router = useRouter()
   const supabase = useMemo(() => createClient(), [])
+  const { refreshKey } = useRealtimeRefresh(['users'])
 
   // Form state
   const [fullName, setFullName] = useState('')
@@ -53,6 +55,11 @@ export default function EditarUsuarioPage() {
     fetchData()
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userId])
+
+  useEffect(() => {
+    if (refreshKey > 0 && navigator.onLine) fetchData()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [refreshKey])
 
   const fetchData = async () => {
     if (!userId) return
