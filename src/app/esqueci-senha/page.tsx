@@ -286,7 +286,7 @@ export default function EsqueciSenhaPage() {
               <FiMail className="w-8 h-8 text-primary" />
             </div>
             <h1 className="text-2xl font-bold text-main mb-2">
-              Digite o codigo
+              Verifique seu email
             </h1>
             <p className="text-muted mb-2">
               Enviamos um codigo de 6 digitos para
@@ -330,7 +330,7 @@ export default function EsqueciSenhaPage() {
                   Verificando...
                 </>
               ) : (
-                'Verificar codigo'
+                'Confirmar codigo'
               )}
             </button>
 
@@ -352,7 +352,7 @@ export default function EsqueciSenhaPage() {
               className="mt-4 inline-flex items-center gap-1 text-sm text-muted hover:text-main transition-colors"
             >
               <FiArrowLeft className="w-3.5 h-3.5" />
-              Voltar
+              Voltar ao email
             </button>
           </div>
         )}
