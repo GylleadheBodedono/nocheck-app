@@ -354,6 +354,7 @@ export async function processarNaoConformidades(
       const assignedFunctionId = userSelectedFunctionId || presetData?.default_function_id || condition.default_function_id || null
       // Fallback: se nenhuma funcao, usa assigned_to legado (usuario direto)
       const assigneeId = legacyAssigneeId || presetData?.default_assignee_id || condition.default_assignee_id || userId
+      console.log(`[ActionPlan] Campo "${field.name}": assignedFunctionId=${assignedFunctionId}, assigneeId=${assigneeId}, userSelected=${userSelectedFunctionId}, conditionDefault=${condition.default_function_id}`)
 
       // Calcular deadline (preset pode sobrescrever)
       const deadlineDays = presetData?.deadline_days ?? condition.deadline_days
@@ -433,8 +434,10 @@ export async function processarNaoConformidades(
 
       if (assignedFunctionId) {
         // Buscar membros da funcao via API (server-side com service role)
+        const membersUrl = `${appUrl}/api/functions/${assignedFunctionId}/members`
+        console.log(`[ActionPlan] Buscando membros: ${membersUrl} (token: ${accessToken ? 'SIM' : 'NAO'})`)
         try {
-          const membersRes = await fetch(`${appUrl}/api/functions/${assignedFunctionId}/members`, {
+          const membersRes = await fetch(membersUrl, {
             headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {},
           })
           if (membersRes.ok) {
@@ -442,7 +445,7 @@ export async function processarNaoConformidades(
             responsibleUsers = membersData.users || []
             functionName = membersData.functionName || ''
             functionWebhookUrl = membersData.teamsWebhookUrl || null
-            console.log(`[ActionPlan] Funcao "${functionName}" (ID ${assignedFunctionId}): ${responsibleUsers.length} usuarios`)
+            console.log(`[ActionPlan] Funcao "${functionName}" (ID ${assignedFunctionId}): ${responsibleUsers.length} usuarios`, responsibleUsers.map((u: {full_name: string}) => u.full_name))
           } else {
             console.error(`[ActionPlan] Erro ao buscar membros da funcao ${assignedFunctionId}: HTTP ${membersRes.status}`)
           }
@@ -471,7 +474,9 @@ export async function processarNaoConformidades(
         ? `Reincidencia #${reincidencia.count + 1}: ${field.name}`
         : `Novo plano de acao: ${field.name}`
 
+      console.log(`[ActionPlan] Notificando ${responsibleUsers.length} responsaveis:`, responsibleUsers.map(u => `${u.full_name} (${u.id})`))
       for (const responsible of responsibleUsers) {
+        console.log(`[ActionPlan] Criando notificacao para: ${responsible.full_name} (${responsible.id})`)
         await createNotification(supabase, responsible.id, {
           type: reincidencia.isReincidencia ? 'reincidencia_detected' : 'action_plan_assigned',
           title: notifTitle,
@@ -537,8 +542,11 @@ export async function processarNaoConformidades(
         )
 
         // Enviar email para CADA usuario da funcao
+        console.log(`[ActionPlan] Enviando email para ${responsibleUsers.length} responsaveis`)
         for (const responsible of responsibleUsers) {
+          console.log(`[ActionPlan] Email → ${responsible.full_name} (${responsible.id})`)
           const emailResult = await sendActionPlanEmail(responsible.id, emailSubject, htmlBody, accessToken)
+          console.log(`[ActionPlan] Email resultado: ${emailResult.success ? 'OK' : 'FALHA'} - ${emailResult.error || ''}`)
           if (!emailResult.success) {
             console.error(`[ActionPlan] FALHA ao enviar email para ${responsible.email}:`, emailResult.error)
           }
