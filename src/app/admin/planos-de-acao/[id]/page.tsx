@@ -287,17 +287,31 @@ export default function ActionPlanDetailPage() {
     } else {
       // Nao-admin: verificar se tem acesso ao plano
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      // Buscar function_id do usuario para verificar acesso por funcao
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data: userProfile } = await (supabase as any)
+        .from('users')
+        .select('function_id')
+        .eq('id', user.id)
+        .single()
+      const userFunctionId = userProfile?.function_id || null
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { data: planCheck } = await (supabase as any)
         .from('action_plans')
-        .select('assigned_to, created_by')
+        .select('assigned_to, created_by, assigned_function_id')
         .eq('id', planId)
         .single()
 
-      if (!planCheck || (planCheck.assigned_to !== user.id && planCheck.created_by !== user.id)) {
+      const isAssignedDirectly = planCheck?.assigned_to === user.id
+      const isAssignedByFunction = userFunctionId && planCheck?.assigned_function_id === userFunctionId
+      const isCreator = planCheck?.created_by === user.id
+
+      if (!planCheck || (!isAssignedDirectly && !isAssignedByFunction && !isCreator)) {
         router.push(APP_CONFIG.routes.dashboard)
         return
       }
-      setAccessLevel(planCheck.assigned_to === user.id ? 'assignee' : 'viewer')
+      setAccessLevel(isAssignedDirectly || isAssignedByFunction ? 'assignee' : 'viewer')
     }
 
     const [planData, updatesData] = await Promise.all([fetchPlan(), fetchUpdates()])
