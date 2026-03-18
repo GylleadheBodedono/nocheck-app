@@ -3,23 +3,27 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { usePathname } from 'next/navigation'
 import { FiMessageCircle, FiX, FiSend } from 'react-icons/fi'
+import { useTenant } from '@/hooks/useTenant'
+import { getTenantAppName } from '@/lib/config'
 
 type Message = {
   role: 'user' | 'assistant'
   content: string
 }
 
-const WELCOME_MESSAGE = 'Opa! Eu sou o Flux, seu assistente do OpereCheck! Pode me perguntar qualquer coisa sobre o sistema — como preencher checklists, interpretar relatorios, gerenciar planos de acao... Estou aqui pra ajudar! 😄'
-
 export function FluxChat() {
+  const tenant = useTenant()
+  const tenantAppName = getTenantAppName(tenant.organization)
   const pathname = usePathname()
   // Esconder o bot em: landing, login, cadastro, platform (superadmin), esqueci-senha
   const hiddenPaths = ['/', '/login', '/cadastro', '/esqueci-senha', '/offline']
   const shouldHide = hiddenPaths.includes(pathname) || pathname.startsWith('/platform') || pathname.startsWith('/auth')
 
+  const welcomeMessage = `Opa! Eu sou o Flux, seu assistente do ${tenantAppName}! Pode me perguntar qualquer coisa sobre o sistema — como preencher checklists, interpretar relatorios, gerenciar planos de acao... Estou aqui pra ajudar! 😄`
+
   const [isOpen, setIsOpen] = useState(false)
   const [messages, setMessages] = useState<Message[]>([
-    { role: 'assistant', content: WELCOME_MESSAGE },
+    { role: 'assistant', content: welcomeMessage },
   ])
   const [input, setInput] = useState('')
   const [isLoading, setIsLoading] = useState(false)
@@ -56,6 +60,7 @@ export function FluxChat() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           messages: newMessages.map(m => ({ role: m.role, content: m.content })),
+          appName: tenantAppName,
         }),
       })
 
@@ -97,7 +102,7 @@ export function FluxChat() {
               </div>
               <div>
                 <h3 className="font-bold text-white text-sm">Flux</h3>
-                <p className="text-white/70 text-xs">Assistente OpereCheck</p>
+                <p className="text-white/70 text-xs">Assistente {tenantAppName}</p>
               </div>
             </div>
             <button

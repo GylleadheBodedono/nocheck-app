@@ -76,7 +76,16 @@ const SIDEBAR_ITEMS: SidebarItem[] = [
     ],
   },
   { label: 'Galeria', href: routes.adminGallery, icon: FiImage },
-  { label: 'Configuracoes', href: routes.adminSettings, icon: FiSettings },
+  {
+    label: 'Configuracoes',
+    href: routes.adminSettings,
+    icon: FiSettings,
+    children: [
+      { label: 'Email / Geral', href: routes.adminSettings },
+      { label: 'Branding', href: '/admin/configuracoes/branding' },
+      { label: 'Equipe', href: '/admin/configuracoes/equipe' },
+    ],
+  },
   { label: 'Faturamento', href: '/admin/configuracoes/billing', icon: FiCreditCard },
 ]
 

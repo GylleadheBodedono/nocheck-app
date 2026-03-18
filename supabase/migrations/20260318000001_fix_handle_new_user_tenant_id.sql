@@ -1,10 +1,15 @@
 -- ============================================
 -- FIX: handle_new_user deve setar tenant_id no user
 -- e usar defaults corretos de trial (max_users=3, max_stores=1)
+-- IMPORTANTE: usar public.* em todas as tabelas pois o GoTrue
+-- executa triggers com search_path diferente.
 -- ============================================
 
 CREATE OR REPLACE FUNCTION public.handle_new_user()
-RETURNS TRIGGER AS $$
+RETURNS TRIGGER
+SECURITY DEFINER
+SET search_path = public
+AS $$
 DECLARE
   new_org_id UUID;
   user_name TEXT;
@@ -29,7 +34,7 @@ BEGIN
   org_slug := org_slug || '-' || substr(gen_random_uuid()::text, 1, 6);
 
   -- Criar organizacao com defaults de trial
-  INSERT INTO organizations (name, slug, plan, max_users, max_stores, features, trial_ends_at)
+  INSERT INTO public.organizations (name, slug, plan, max_users, max_stores, features, trial_ends_at)
   VALUES (
     user_name,
     org_slug,
@@ -42,7 +47,7 @@ BEGIN
   RETURNING id INTO new_org_id;
 
   -- Vincular como owner
-  INSERT INTO organization_members (organization_id, user_id, role, accepted_at)
+  INSERT INTO public.organization_members (organization_id, user_id, role, accepted_at)
   VALUES (new_org_id, NEW.id, 'owner', now());
 
   -- Setar tenant_id no usuario
@@ -50,4 +55,12 @@ BEGIN
 
   RETURN NEW;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql;
+
+-- Garantir que supabase_auth_admin pode executar o trigger e acessar as tabelas
+GRANT USAGE ON SCHEMA public TO supabase_auth_admin;
+GRANT EXECUTE ON FUNCTION public.handle_new_user TO supabase_auth_admin;
+GRANT INSERT, UPDATE ON public.users TO supabase_auth_admin;
+GRANT INSERT, SELECT ON public.organizations TO supabase_auth_admin;
+GRANT INSERT ON public.organization_members TO supabase_auth_admin;
+GRANT USAGE ON ALL SEQUENCES IN SCHEMA public TO supabase_auth_admin;

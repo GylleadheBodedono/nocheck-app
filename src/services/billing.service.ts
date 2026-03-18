@@ -41,6 +41,26 @@ export async function createPortalSession(params: {
   return res.json()
 }
 
+/** Consulta status da subscription no Stripe */
+export async function getSubscriptionStatus(params: {
+  orgId: string
+}): Promise<{
+  status: string
+  currentPeriodEnd: string | null
+  cancelAtPeriodEnd: boolean
+}> {
+  const res = await fetch('/api/billing/status', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(params),
+  })
+  if (!res.ok) {
+    const err = await res.json()
+    throw new Error(err.error || 'Erro ao consultar status')
+  }
+  return res.json()
+}
+
 /** Calcula dias restantes do trial */
 export function getTrialDaysRemaining(trialEndsAt: string | null): number {
   if (!trialEndsAt) return 0

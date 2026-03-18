@@ -7,11 +7,13 @@ import { FiArrowLeft, FiLogOut, FiUser, FiBell, FiSettings, FiCheck, FiAlertTria
 import { GlobalSearch } from './GlobalSearch'
 import { AdminSidebar } from './AdminSidebar'
 import { APP_CONFIG } from '@/lib/config'
+import { getTenantAppName, getTenantLogoUrl } from '@/lib/config'
 import { ThemeToggle } from './ThemeToggle'
 import { createClient } from '@/lib/supabase'
 import { fullLogout } from '@/lib/logout'
 import { getAuthCache, getUserCache } from '@/lib/offlineCache'
 import { useNotifications, type AppNotification } from '@/hooks/useNotifications'
+import { useTenant } from '@/hooks/useTenant'
 import type { IconType } from 'react-icons'
 import { BsFillHouseFill } from 'react-icons/bs'
 
@@ -216,6 +218,11 @@ export function Header({
 
   const effectiveUnread = showNotifications ? (notificationCount || unreadCount) : 0
 
+  // Tenant branding
+  const tenant = useTenant()
+  const tenantLogoUrl = getTenantLogoUrl(tenant.organization)
+  const tenantAppName = getTenantAppName(tenant.organization)
+
   // Show logo when no title or icon is specified
   const showLogo = !title && !Icon
 
@@ -259,9 +266,24 @@ export function Header({
               {/* Logo or Icon + Title */}
               {showLogo ? (
                 <Link href={APP_CONFIG.routes.dashboard} className="flex items-center">
-                  <span className="text-xl font-bold tracking-tight">
-                    <span className="text-secondary">Opere</span><span className="text-primary">Check</span>
-                  </span>
+                  {tenantLogoUrl ? (
+                    <img
+                      src={tenantLogoUrl}
+                      alt={tenantAppName}
+                      className="h-8 max-w-[140px] object-contain"
+                    />
+                  ) : (
+                    <span className="text-xl font-bold tracking-tight">
+                      {tenantAppName !== APP_CONFIG.name ? (
+                        <span className="text-primary">{tenantAppName}</span>
+                      ) : (
+                        <>
+                          <span className="text-secondary">Opere</span>
+                          <span className="text-primary">Check</span>
+                        </>
+                      )}
+                    </span>
+                  )}
                 </Link>
               ) : (
                 <>

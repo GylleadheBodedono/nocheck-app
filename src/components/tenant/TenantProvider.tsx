@@ -26,6 +26,17 @@ interface TenantProviderProps {
   orgSlug: string
 }
 
+/**
+ * Escurece uma cor hex em ~15% para gerar hover state
+ */
+function darkenColor(hex: string, amount = 0.15): string {
+  const h = hex.replace('#', '')
+  const r = Math.max(0, Math.round(parseInt(h.substring(0, 2), 16) * (1 - amount)))
+  const g = Math.max(0, Math.round(parseInt(h.substring(2, 4), 16) * (1 - amount)))
+  const b = Math.max(0, Math.round(parseInt(h.substring(4, 6), 16) * (1 - amount)))
+  return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`
+}
+
 export function TenantProvider({ children, orgSlug }: TenantProviderProps) {
   const supabase = createClient()
 
@@ -65,17 +76,52 @@ export function TenantProvider({ children, orgSlug }: TenantProviderProps) {
   useEffect(() => {
     if (!organization?.settings?.theme) return
 
-    const { primaryColor, appName } = organization.settings.theme
-    if (primaryColor) {
-      document.documentElement.style.setProperty('--color-primary', primaryColor)
+    const theme = organization.settings.theme
+    const root = document.documentElement
+
+    // Aplicar cor primaria + hover (versao escurecida)
+    if (theme.primaryColor) {
+      root.style.setProperty('--primary', theme.primaryColor)
+      root.style.setProperty('--primary-hover', darkenColor(theme.primaryColor))
+      // Ring color com opacidade
+      const h = theme.primaryColor.replace('#', '')
+      const r = parseInt(h.substring(0, 2), 16)
+      const g = parseInt(h.substring(2, 4), 16)
+      const b = parseInt(h.substring(4, 6), 16)
+      root.style.setProperty('--ring-color', `rgba(${r}, ${g}, ${b}, 0.35)`)
     }
-    if (appName) {
-      document.title = appName
+
+    // Aplicar accent se definido (via campo extra no theme)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const accentColor = (theme as any).accentColor as string | undefined
+    if (accentColor) {
+      root.style.setProperty('--accent', accentColor)
+      root.style.setProperty('--accent-hover', darkenColor(accentColor))
+    }
+
+    // Titulo da aba do navegador
+    if (theme.appName) {
+      document.title = theme.appName
+    }
+
+    // Favicon dinamico
+    if (theme.faviconUrl) {
+      let link = document.querySelector("link[rel~='icon']") as HTMLLinkElement | null
+      if (!link) {
+        link = document.createElement('link')
+        link.rel = 'icon'
+        document.head.appendChild(link)
+      }
+      link.href = theme.faviconUrl
     }
 
     // Limpar ao desmontar
     return () => {
-      document.documentElement.style.removeProperty('--color-primary')
+      root.style.removeProperty('--primary')
+      root.style.removeProperty('--primary-hover')
+      root.style.removeProperty('--ring-color')
+      root.style.removeProperty('--accent')
+      root.style.removeProperty('--accent-hover')
     }
   }, [organization])
 

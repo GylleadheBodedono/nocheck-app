@@ -9,32 +9,32 @@ import { TRIAL_DAYS } from '@/lib/plans'
 
 const faqs = [
   {
-    q: 'O que e o OpereCheck?',
-    a: 'O OpereCheck e um sistema de checklists digitais para restaurantes e redes de alimentacao. Substitui formularios em papel por checklists interativos com fotos, assinaturas, GPS e planos de acao automaticos.',
+    q: 'O que é o OpereCheck?',
+    a: 'O OpereCheck é um sistema de checklists digitais para restaurantes e redes de alimentação. Substitui formulários em papel por checklists interativos com fotos, assinaturas, GPS e planos de ação automáticos.',
   },
   {
     q: 'Como funciona o trial gratuito?',
-    a: `Voce tem ${TRIAL_DAYS} dias para testar todas as funcionalidades do plano Professional sem precisar de cartao de credito. Ao final do periodo, pode escolher um plano pago ou continuar no plano gratuito com funcoes basicas.`,
+    a: `Você tem ${TRIAL_DAYS} dias para testar todas as funcionalidades do plano Professional sem precisar de cartão de crédito. Ao final do período, pode escolher um plano pago ou continuar no plano gratuito com funções básicas.`,
   },
   {
     q: 'Posso cancelar a qualquer momento?',
-    a: 'Sim! Nao ha fidelidade ou multa. Voce pode cancelar pelo portal de assinatura e continuara tendo acesso ate o fim do periodo pago.',
+    a: 'Sim! Não há fidelidade ou multa. Você pode cancelar pelo portal de assinatura e continuará tendo acesso até o fim do período pago.',
   },
   {
     q: 'Os dados ficam seguros?',
-    a: 'Sim. Usamos Supabase (infraestrutura baseada em PostgreSQL) com Row Level Security, criptografia em transito (TLS) e backups automaticos. Cada organizacao tem seus dados completamente isolados.',
+    a: 'Sim. Usamos Supabase (infraestrutura baseada em PostgreSQL) com Row Level Security, criptografia em trânsito (TLS) e backups automáticos. Cada organização tem seus dados completamente isolados.',
   },
   {
     q: 'Funciona no celular?',
-    a: 'Sim! O OpereCheck e uma PWA (Progressive Web App) que funciona como um app nativo no celular. Funciona ate offline — os dados sao sincronizados quando a conexao voltar.',
+    a: 'Sim! O OpereCheck é uma PWA (Progressive Web App) que funciona como um app nativo no celular. Funciona até offline — os dados são sincronizados quando a conexão voltar.',
   },
   {
     q: 'Posso personalizar os checklists?',
-    a: 'Totalmente. Voce cria templates com campos de texto, fotos, Sim/Nao, assinaturas, GPS, calculos automaticos, e muito mais. Pode definir horarios permitidos, regras de nao-conformidade e planos de acao automaticos.',
+    a: 'Totalmente. Você cria templates com campos de texto, fotos, Sim/Não, assinaturas, GPS, cálculos automáticos, e muito mais. Pode definir horários permitidos, regras de não-conformidade e planos de ação automáticos.',
   },
   {
     q: 'Quantas lojas posso ter?',
-    a: 'Depende do plano: Starter ate 3 lojas, Professional ate 10, e Enterprise ilimitado. Cada loja pode ter setores, funcionarios e checklists independentes.',
+    a: 'Depende do plano: Starter até 3 lojas, Professional até 10, e Enterprise ilimitado. Cada loja pode ter setores, funcionários e checklists independentes.',
   },
 ]
 
@@ -46,7 +46,7 @@ export function FAQSection() {
   return (
     <section id="faq" ref={ref} className="py-32 px-6">
       <div className="max-w-3xl mx-auto">
-        <AnimatedTitle label="Duvidas" className="mb-16">
+        <AnimatedTitle label="Dúvidas" className="mb-16">
           <TitleWord word="Perguntas" delay={0.1} />
           <TitleWord word="frequentes" delay={0.22} gradient />
         </AnimatedTitle>

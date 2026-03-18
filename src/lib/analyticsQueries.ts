@@ -431,3 +431,138 @@ export async function fetchStoreHeatmap(
     fields: Array.from(fieldSet).sort(),
   }
 }
+
+// ============================================
+// QUERIES USANDO MATERIALIZED VIEWS
+// Alternativas performaticas para dashboards
+// ============================================
+
+export type DailyKpi = {
+  tenant_id: string
+  store_id: number
+  report_date: string
+  total_checklists: number
+  completed: number
+  in_progress: number
+  plans_created: number
+  plans_resolved: number
+}
+
+export type WeeklyCompliance = {
+  tenant_id: string
+  store_id: number
+  template_id: number
+  week: string
+  total_responses: number
+  non_conformities: number
+  compliance_rate: number
+}
+
+/**
+ * Busca KPIs diarios da materialized view (via funcao RPC com filtro de tenant)
+ * Fallback: retorna null se a view nao existir (tenant novo / view vazia)
+ */
+export async function fetchDailyKpis(
+  supabase: SupabaseClient,
+  tenantId: string,
+  from: Date,
+  to: Date
+): Promise<DailyKpi[] | null> {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data, error } = await (supabase as any).rpc('get_daily_kpis', {
+      p_tenant_id: tenantId,
+      p_from: from.toISOString().split('T')[0],
+      p_to: to.toISOString().split('T')[0],
+    })
+
+    if (error) {
+      console.warn('[Analytics] get_daily_kpis error (view may not exist yet):', error.message)
+      return null
+    }
+
+    return (data || []) as DailyKpi[]
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Busca conformidade semanal da materialized view
+ * Fallback: retorna null se a view nao existir
+ */
+export async function fetchWeeklyCompliance(
+  supabase: SupabaseClient,
+  tenantId: string,
+  from: Date,
+  to: Date
+): Promise<WeeklyCompliance[] | null> {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data, error } = await (supabase as any).rpc('get_compliance_summary', {
+      p_tenant_id: tenantId,
+      p_from: from.toISOString().split('T')[0],
+      p_to: to.toISOString().split('T')[0],
+    })
+
+    if (error) {
+      console.warn('[Analytics] get_compliance_summary error:', error.message)
+      return null
+    }
+
+    return (data || []) as WeeklyCompliance[]
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Agrega KPIs diarios em um resumo para o dashboard
+ */
+export function aggregateDailyKpis(kpis: DailyKpi[]): {
+  totalChecklists: number
+  totalCompleted: number
+  totalInProgress: number
+  totalPlansCreated: number
+  totalPlansResolved: number
+  dailyStats: { date: string; count: number; completed: number }[]
+} {
+  const dailyMap = new Map<string, { count: number; completed: number }>()
+  let totalChecklists = 0
+  let totalCompleted = 0
+  let totalInProgress = 0
+  let totalPlansCreated = 0
+  let totalPlansResolved = 0
+
+  for (const kpi of kpis) {
+    totalChecklists += kpi.total_checklists
+    totalCompleted += kpi.completed
+    totalInProgress += kpi.in_progress
+    totalPlansCreated += kpi.plans_created
+    totalPlansResolved += kpi.plans_resolved
+
+    const existing = dailyMap.get(kpi.report_date)
+    if (existing) {
+      existing.count += kpi.total_checklists
+      existing.completed += kpi.completed
+    } else {
+      dailyMap.set(kpi.report_date, {
+        count: kpi.total_checklists,
+        completed: kpi.completed,
+      })
+    }
+  }
+
+  const dailyStats = Array.from(dailyMap.entries())
+    .map(([date, stats]) => ({ date, ...stats }))
+    .sort((a, b) => a.date.localeCompare(b.date))
+
+  return {
+    totalChecklists,
+    totalCompleted,
+    totalInProgress,
+    totalPlansCreated,
+    totalPlansResolved,
+    dailyStats,
+  }
+}

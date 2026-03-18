@@ -21,7 +21,7 @@ import {
 
 // ─── WhatsApp config ───
 const WHATSAPP_NUMBER = '5511999999999'
-const WHATSAPP_MESSAGE = encodeURIComponent('Ola! Tenho interesse no OpereCheck. Gostaria de saber mais.')
+const WHATSAPP_MESSAGE = encodeURIComponent('Olá! Tenho interesse no OpereCheck. Gostaria de saber mais.')
 const WHATSAPP_URL = `https://wa.me/${WHATSAPP_NUMBER}?text=${WHATSAPP_MESSAGE}`
 
 // ─── Feature Bento Card ───
@@ -126,8 +126,8 @@ const features = [
       </svg>
     ),
     title: 'Checklists Personalizados',
-    description: 'Crie templates sob medida para cada processo da sua operacao, com campos customizaveis e regras de validacao.',
-    tags: ['Templates', 'Campos', 'Validacao'],
+    description: 'Crie templates sob medida para cada processo da sua operação, com campos customizáveis e regras de validação.',
+    tags: ['Templates', 'Campos', 'Validação'],
   },
   {
     icon: (
@@ -135,9 +135,9 @@ const features = [
         <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 13.5l10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75z" />
       </svg>
     ),
-    title: 'Planos de Acao Automaticos',
-    description: 'Nao-conformidades detectadas geram planos de acao instantaneamente com responsavel e prazo definidos.',
-    tags: ['Automatico', 'Prazos', 'Responsaveis'],
+    title: 'Planos de Ação Automáticos',
+    description: 'Não-conformidades detectadas geram planos de ação instantaneamente com responsável e prazo definidos.',
+    tags: ['Automático', 'Prazos', 'Responsáveis'],
   },
   {
     icon: (
@@ -146,7 +146,7 @@ const features = [
       </svg>
     ),
     title: 'Funciona Offline',
-    description: 'Continue trabalhando sem internet. Dados sincronizam automaticamente quando a conexao voltar.',
+    description: 'Continue trabalhando sem internet. Dados sincronizam automaticamente quando a conexão voltar.',
     tags: ['PWA', 'Sync', 'Sem Internet'],
   },
   {
@@ -155,9 +155,9 @@ const features = [
         <path strokeLinecap="round" strokeLinejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z" />
       </svg>
     ),
-    title: 'Relatorios em Tempo Real',
-    description: 'Dashboards e metricas atualizados instantaneamente para decisoes rapidas e baseadas em dados.',
-    tags: ['Dashboard', 'Metricas', 'Exportar'],
+    title: 'Relatórios em Tempo Real',
+    description: 'Dashboards e métricas atualizados instantaneamente para decisões rápidas e baseadas em dados.',
+    tags: ['Dashboard', 'Métricas', 'Exportar'],
   },
 ]
 
@@ -166,17 +166,17 @@ const steps = [
   {
     number: '01',
     title: 'Configure',
-    description: 'Crie seus templates de checklist, defina campos, regras de validacao e condicoes de nao-conformidade.',
+    description: 'Crie seus templates de checklist, defina campos, regras de validação e condições de não-conformidade.',
   },
   {
     number: '02',
     title: 'Execute',
-    description: 'Sua equipe preenche os checklists pelo celular ou tablet — funciona ate sem internet.',
+    description: 'Sua equipe preenche os checklists pelo celular ou tablet — funciona até sem internet.',
   },
   {
     number: '03',
     title: 'Acompanhe',
-    description: 'Veja resultados em tempo real, receba alertas de nao-conformidade e gerencie planos de acao.',
+    description: 'Veja resultados em tempo real, receba alertas de não-conformidade e gerencie planos de ação.',
   },
 ]
 
@@ -184,7 +184,7 @@ const steps = [
 const stats = [
   { value: 99.9, suffix: '%', label: 'Uptime garantido' },
   { value: 100, suffix: '%', label: 'Funcional offline' },
-  { value: 500, prefix: '+', label: 'Checklists por mes' },
+  { value: 500, prefix: '+', label: 'Checklists por mês' },
   { value: 0, suffix: 's', label: 'Tempo de resposta', displayOverride: 'Tempo real' },
 ]
 
@@ -600,7 +600,7 @@ export default function LandingPage() {
               onClick={(e) => scrollToSection(e, 'precos')}
               className="text-sm text-[#a1a1aa] hover:text-[#fafafa] transition-colors duration-300 px-3 py-1.5 rounded-full hover:bg-white/[0.06] whitespace-nowrap hidden sm:inline-block"
             >
-              Precos
+              Preços
             </a>
             <a
               href="#processo"
@@ -645,6 +645,7 @@ export default function LandingPage() {
           >
             <span className="w-1.5 h-1.5 rounded-full bg-[#0D9488] animate-pulse" />
             <span className="text-sm text-[#0D9488] font-medium tracking-wide">Plataforma SaaS de Checklists Inteligentes</span>
+
           </motion.div>
 
           {/* Headline */}
@@ -669,13 +670,13 @@ export default function LandingPage() {
               </motion.span>
             ))}
             <br />
-            {['da', 'sua', 'operacao'].map((word, i) => (
+            {['da', 'sua', 'operação'].map((word, i) => (
               <motion.span
                 key={`l2-${i}`}
                 variants={fadeInUp}
                 className="inline-block mr-[0.3em]"
                 style={
-                  word === 'operacao'
+                  word === 'operação'
                     ? { background: 'linear-gradient(135deg, #0D9488, #14B8A6)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }
                     : undefined
                 }
@@ -692,7 +693,7 @@ export default function LandingPage() {
             transition={{ duration: 0.7, delay: 0.7, ease: easeOut }}
             className="text-lg sm:text-xl text-[#a1a1aa] max-w-2xl mx-auto mb-10 leading-relaxed"
           >
-            Checklists digitais, deteccao automatica de nao-conformidades e planos de acao em tempo real.
+            Checklists digitais, detecção automática de não-conformidades e planos de ação em tempo real.
             Tudo na nuvem, com dados isolados e seguros para sua empresa.
           </motion.p>
 
@@ -708,7 +709,7 @@ export default function LandingPage() {
               className="group relative inline-flex items-center gap-3 px-8 py-4 rounded-2xl font-semibold text-[#09090b] transition-all duration-300 hover:scale-[1.03] hover:shadow-[0_0_40px_rgba(13,148,136,0.3)]"
               style={{ background: 'linear-gradient(135deg, #0D9488, #14B8A6)' }}
             >
-              Teste gratis por {TRIAL_DAYS} dias
+              Teste grátis por {TRIAL_DAYS} dias
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-4 h-4 transition-transform group-hover:translate-x-1">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
               </svg>
@@ -718,7 +719,7 @@ export default function LandingPage() {
               href="/login"
               className="inline-flex items-center gap-2 px-8 py-4 rounded-2xl font-medium text-[#a1a1aa] border border-white/[0.08] hover:border-white/[0.16] hover:text-[#fafafa] hover:bg-white/[0.04] transition-all duration-300"
             >
-              Ja sou cliente
+              Já sou cliente
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-4 h-4">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
               </svg>
@@ -732,7 +733,7 @@ export default function LandingPage() {
             transition={{ duration: 0.7, delay: 1.1 }}
             className="text-sm text-[#71717a] mt-4"
           >
-            Sem cartao de credito. Planos a partir de R$97/mes.
+            Sem cartão de crédito. Planos a partir de R$97/mês.
           </motion.p>
         </div>
 
@@ -880,7 +881,7 @@ export default function LandingPage() {
               </div>
 
               <p className="text-xl sm:text-2xl leading-relaxed text-[#a1a1aa] mb-8 font-light">
-                &ldquo;O OpereCheck transformou a forma como gerenciamos a qualidade na nossa operacao.
+                &ldquo;O OpereCheck transformou a forma como gerenciamos a qualidade na nossa operação.
                 Antes era tudo no papel, agora temos controle total em tempo real.&rdquo;
               </p>
 
@@ -890,7 +891,7 @@ export default function LandingPage() {
                 </div>
                 <div className="text-left">
                   <div className="text-sm font-semibold text-[#fafafa]">OpereCheck</div>
-                  <div className="text-xs text-[#71717a]">Gestao de Qualidade</div>
+                  <div className="text-xs text-[#71717a]">Gestão de Qualidade</div>
                 </div>
               </div>
             </div>
@@ -927,7 +928,7 @@ export default function LandingPage() {
             transition={{ duration: 0.7, delay: 0.5, ease: easeOut }}
             className="text-lg text-[#a1a1aa] mb-10 max-w-xl mx-auto"
           >
-            {TRIAL_DAYS} dias gratis no plano Professional. Sem cartao de credito.
+            {TRIAL_DAYS} dias grátis no plano Professional. Sem cartão de crédito.
             Cancele quando quiser.
           </motion.p>
 
@@ -943,7 +944,7 @@ export default function LandingPage() {
               className="group relative inline-flex items-center gap-3 px-10 py-5 rounded-2xl font-semibold text-lg text-[#09090b] transition-all duration-300 hover:scale-[1.03] hover:shadow-[0_0_60px_rgba(13,148,136,0.35)]"
               style={{ background: 'linear-gradient(135deg, #0D9488, #14B8A6)' }}
             >
-              Teste gratis por {TRIAL_DAYS} dias
+              Teste grátis por {TRIAL_DAYS} dias
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} className="w-5 h-5 transition-transform group-hover:translate-x-1">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
               </svg>
@@ -981,7 +982,7 @@ export default function LandingPage() {
               onClick={(e) => scrollToSection(e, 'precos')}
               className="text-sm text-[#71717a] hover:text-[#a1a1aa] transition-colors duration-300"
             >
-              Precos
+              Preços
             </a>
             <Link
               href="/login"

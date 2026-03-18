@@ -30,7 +30,17 @@
       "mcp__claude_ai_ClickUp__clickup_search",
       "mcp__claude_ai_ClickUp__clickup_update_task",
       "mcp__claude_ai_Supabase__list_projects",
-      "mcp__claude_ai_Supabase__execute_sql"
+      "mcp__claude_ai_Supabase__execute_sql",
+      "Bash(mkdir -p \"C:/Users/ENZO TI/projetos/operecheck/src/components/fields/__tests__\" && mkdir -p \"C:/Users/ENZO TI/projetos/operecheck/src/components/admin/__tests__\")",
+      "mcp__claude_ai_ClickUp__clickup_get_task",
+      "Bash(cd \"C:/Users/ENZO TI/projetos/operecheck\" && npx tsc --noEmit 2>&1 | head -40)",
+      "Bash(cd \"C:/Users/ENZO TI/projetos/operecheck\" && npx next lint 2>&1 | head -40)",
+      "Bash(cd \"C:/Users/ENZO TI/projetos/operecheck\" && ./node_modules/.bin/tsc --noEmit 2>&1 | head -20)",
+      "Bash(cd \"C:/Users/ENZO TI/projetos/operecheck\" && npx next lint --file src/components/tenant/TenantProvider.tsx --file src/components/ui/Header.tsx --file src/lib/config.ts --file src/lib/analyticsQueries.ts --file src/app/admin/configuracoes/branding/page.tsx --file src/app/api/organizations/upload-logo/route.ts --file src/components/FluxChat.tsx --file src/app/api/chat/route.ts 2>&1)",
+      "Bash(cd \"C:/Users/ENZO TI/projetos/operecheck\" && npx next lint --file src/app/dashboard/page.tsx --file src/components/tenant/TrialBanner.tsx --file src/app/admin/configuracoes/billing/page.tsx --file src/app/api/billing/status/route.ts --file src/app/api/webhooks/stripe/route.ts --file src/services/billing.service.ts 2>&1)",
+      "mcp__claude_ai_ClickUp__clickup_get_list",
+      "Bash(cd \"/c/Users/ENZO TI/projetos/operecheck\" && npx next lint --file src/app/page.tsx --file src/components/landing/FAQSection.tsx --file src/components/landing/PricingSection.tsx 2>&1 | head -20)",
+      "Bash(cd \"/c/Users/ENZO TI/projetos/operecheck\" && docker rm -f supabase_vector_operecheck-app 2>&1)"
     ]
   }
 }

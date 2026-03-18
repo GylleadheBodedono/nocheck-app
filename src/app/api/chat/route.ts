@@ -3,7 +3,8 @@ export const runtime = 'edge'
 import { NextRequest, NextResponse } from 'next/server'
 import { verifyApiAuth } from '@/lib/api-auth'
 
-const SYSTEM_PROMPT = `Voce e o Flux, o assistente virtual do OpereCheck — Sistema de Checklists do OpereCheck.
+function buildSystemPrompt(appName: string) {
+  return `Voce e o Flux, o assistente virtual do ${appName} — Sistema de Checklists do ${appName}.
 
 SUA PERSONALIDADE:
 - Amigavel, extrovertido e engracado
@@ -53,13 +54,14 @@ REGRAS IMPORTANTES:
 - NAO invente funcionalidades que nao existem no sistema
 - Se a pergunta for sobre algo tecnico fora do escopo do OpereCheck, ajude brevemente mas redirecione para o tema principal
 - Nunca revele informacoes tecnicas sensiveis (chaves de API, senhas, configuracoes internas do servidor)`
+}
 
 export async function POST(request: NextRequest) {
   const auth = await verifyApiAuth(request)
   if (auth.error) return auth.error
 
   try {
-    const { messages } = await request.json()
+    const { messages, appName } = await request.json()
 
     if (!Array.isArray(messages) || messages.length === 0) {
       return NextResponse.json({ error: 'Mensagens invalidas' }, { status: 400 })
@@ -67,6 +69,7 @@ export async function POST(request: NextRequest) {
 
     // Limit history to last 20 messages to avoid large payloads
     const recentMessages = messages.slice(-20)
+    const systemPrompt = buildSystemPrompt(appName || 'OpereCheck')
 
     const groqRes = await fetch('https://api.groq.com/openai/v1/chat/completions', {
       method: 'POST',
@@ -77,7 +80,7 @@ export async function POST(request: NextRequest) {
       body: JSON.stringify({
         model: 'llama-3.3-70b-versatile',
         messages: [
-          { role: 'system', content: SYSTEM_PROMPT },
+          { role: 'system', content: systemPrompt },
           ...recentMessages,
         ],
         max_tokens: 1024,

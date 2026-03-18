@@ -20,6 +20,9 @@ import { APP_CONFIG } from '@/lib/config'
 import { LoadingPage, Header, PageContainer } from '@/components/ui'
 import { LocationPicker } from '@/components/ui/LocationPickerDynamic'
 import { getAuthCache, getUserCache, getStoresCache } from '@/lib/offlineCache'
+import { useTenant } from '@/hooks/useTenant'
+import { checkStoreLimit, getLimitMessage } from '@/lib/planLimits'
+import type { Plan } from '@/types/tenant'
 
 type StoreWithStats = Store & {
   user_count: number
@@ -36,8 +39,11 @@ export default function LojasPage() {
   const [formData, setFormData] = useState({ name: '', is_active: true, require_gps: true, latitude: null as number | null, longitude: null as number | null })
   const [saving, setSaving] = useState(false)
   const [isOffline, setIsOffline] = useState(false)
+  const [limitReached, setLimitReached] = useState(false)
+  const [limitMessage, setLimitMessage] = useState('')
   const router = useRouter()
   const supabase = useMemo(() => createClient(), [])
+  const { organization } = useTenant()
 
   useEffect(() => {
     fetchStores()
@@ -152,6 +158,8 @@ export default function LojasPage() {
   }
 
   const openModal = (store?: Store) => {
+    setLimitReached(false)
+    setLimitMessage('')
     if (store) {
       setEditingStore(store)
       setFormData({ name: store.name, is_active: store.is_active, require_gps: store.require_gps ?? true, latitude: store.latitude ?? null, longitude: store.longitude ?? null })
@@ -175,6 +183,19 @@ export default function LojasPage() {
     setSaving(true)
 
     try {
+      // Verificar limite de lojas ao criar nova
+      if (!editingStore && organization) {
+        const plan = (organization.plan || 'trial') as Plan
+        const maxStores = organization.max_stores || 3
+        const check = checkStoreLimit(stores.length, plan, maxStores)
+        if (!check.allowed) {
+          setLimitReached(true)
+          setLimitMessage(getLimitMessage('stores', check))
+          setSaving(false)
+          return
+        }
+      }
+
       if (editingStore) {
         // Update existing store
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -483,6 +504,12 @@ export default function LojasPage() {
             <h2 className="text-xl font-bold text-main mb-6">
               {editingStore ? 'Editar Loja' : 'Nova Loja'}
             </h2>
+
+            {limitReached && (
+              <div className="p-3 bg-error/10 border border-error/30 rounded-xl mb-4 text-error text-sm">
+                {limitMessage}
+              </div>
+            )}
 
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>

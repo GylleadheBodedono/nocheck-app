@@ -139,12 +139,42 @@ export async function POST(req: NextRequest) {
         break
       }
 
-      // Pagamento falhou
+      // Pagamento falhou → notificar admins da org
       case 'invoice.payment_failed': {
         const invoice = event.data.object as Stripe.Invoice
         const customerId = typeof invoice.customer === 'string' ? invoice.customer : ''
         console.log(`[Stripe] Payment failed for customer ${customerId}`)
-        // TODO: enviar notificacao para o admin da org
+
+        if (customerId) {
+          // Buscar org pelo stripe_customer_id
+          const { data: failedOrg } = await supabase
+            .from('organizations')
+            .select('id, name')
+            .eq('stripe_customer_id', customerId)
+            .single()
+
+          if (failedOrg) {
+            // Buscar admins/owners da org para notificar
+            const { data: admins } = await supabase
+              .from('organization_members')
+              .select('user_id')
+              .eq('organization_id', failedOrg.id)
+              .in('role', ['owner', 'admin'])
+
+            if (admins && admins.length > 0) {
+              const notifications = admins.map((a: { user_id: string }) => ({
+                user_id: a.user_id,
+                title: 'Falha no pagamento',
+                message: `O pagamento da assinatura de ${failedOrg.name} falhou. Atualize seu metodo de pagamento para evitar interrupcao do servico.`,
+                type: 'payment_failed',
+                link: '/admin/configuracoes/billing',
+              }))
+
+              await supabase.from('notifications').insert(notifications)
+              console.log(`[Stripe] Notificou ${admins.length} admin(s) da org ${failedOrg.id}`)
+            }
+          }
+        }
         break
       }
 

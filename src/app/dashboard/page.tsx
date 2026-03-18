@@ -27,6 +27,7 @@ import { getPendingChecklists, type PendingChecklist } from '@/lib/offlineStorag
 import { syncAll, subscribeSyncStatus } from '@/lib/syncService'
 import { fullLogout } from '@/lib/logout'
 import { isWithinTimeRange } from '@/lib/timeUtils'
+import { TrialBanner } from '@/components/tenant/TrialBanner'
 
 type TemplateSection = {
   id: number
@@ -988,6 +989,9 @@ export default function DashboardPage() {
         showNotifications
         onSignOut={handleSignOut}
       />
+
+      {/* Banner de trial */}
+      <TrialBanner />
 
       {/* Aviso para ativar notificacoes do sistema (PWA) */}
       {notificationBannerMounted && typeof window !== 'undefined' && 'Notification' in window && notificationPermission === 'default' && (

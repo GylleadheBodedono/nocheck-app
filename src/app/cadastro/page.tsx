@@ -1,11 +1,12 @@
  'use client'
 
-import { useState } from 'react'
+import { useState, useRef, useCallback } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { APP_CONFIG } from '@/lib/config'
 import { ThemeToggle, LoadingInline } from '@/components/ui'
-import { FiLock, FiMail, FiUser, FiPhone, FiCheckCircle } from 'react-icons/fi'
+import { FiLock, FiMail, FiUser, FiPhone, FiCheckCircle, FiArrowLeft } from 'react-icons/fi'
 
 export default function CadastroPage() {
   const [fullName, setFullName] = useState('')
@@ -16,6 +17,100 @@ export default function CadastroPage() {
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [success, setSuccess] = useState(false)
+  const [otpCode, setOtpCode] = useState(['', '', '', '', '', ''])
+  const [verifying, setVerifying] = useState(false)
+  const [verified, setVerified] = useState(false)
+  const [resending, setResending] = useState(false)
+  const otpRefs = useRef<(HTMLInputElement | null)[]>([])
+  const router = useRouter()
+
+  const handleOtpChange = useCallback((index: number, value: string) => {
+    if (value.length > 1) value = value.slice(-1)
+    if (value && !/^\d$/.test(value)) return
+
+    const newCode = [...otpCode]
+    newCode[index] = value
+    setOtpCode(newCode)
+
+    // Auto-focus next input
+    if (value && index < 5) {
+      otpRefs.current[index + 1]?.focus()
+    }
+  }, [otpCode])
+
+  const handleOtpKeyDown = useCallback((index: number, e: React.KeyboardEvent) => {
+    if (e.key === 'Backspace' && !otpCode[index] && index > 0) {
+      otpRefs.current[index - 1]?.focus()
+    }
+  }, [otpCode])
+
+  const handleOtpPaste = useCallback((e: React.ClipboardEvent) => {
+    e.preventDefault()
+    const pasted = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, 6)
+    if (!pasted) return
+    const newCode = [...otpCode]
+    for (let i = 0; i < pasted.length; i++) {
+      newCode[i] = pasted[i]
+    }
+    setOtpCode(newCode)
+    const focusIndex = Math.min(pasted.length, 5)
+    otpRefs.current[focusIndex]?.focus()
+  }, [otpCode])
+
+  const handleVerifyOtp = async () => {
+    const code = otpCode.join('')
+    if (code.length !== 6) {
+      setError('Digite o codigo completo de 6 digitos.')
+      return
+    }
+
+    setVerifying(true)
+    setError(null)
+
+    try {
+      const supabase = createClient()
+      const { error: verifyError } = await supabase.auth.verifyOtp({
+        email,
+        token: code,
+        type: 'signup',
+      })
+
+      if (verifyError) {
+        setError('Codigo invalido ou expirado. Tente novamente.')
+        setVerifying(false)
+        return
+      }
+
+      setVerified(true)
+    } catch {
+      setError('Erro ao verificar codigo. Tente novamente.')
+    } finally {
+      setVerifying(false)
+    }
+  }
+
+  const handleResendCode = async () => {
+    setResending(true)
+    setError(null)
+    try {
+      const supabase = createClient()
+      const { error: resendError } = await supabase.auth.resend({
+        type: 'signup',
+        email,
+      })
+      if (resendError) {
+        setError(resendError.message)
+      } else {
+        setError(null)
+        setOtpCode(['', '', '', '', '', ''])
+        otpRefs.current[0]?.focus()
+      }
+    } catch {
+      setError('Erro ao reenviar codigo.')
+    } finally {
+      setResending(false)
+    }
+  }
 
   const formatPhone = (value: string) => {
     const digits = value.replace(/\D/g, '').slice(0, 11)
@@ -72,7 +167,8 @@ export default function CadastroPage() {
     }
   }
 
-  if (success) {
+  // Tela de confirmacao concluida
+  if (verified) {
     return (
       <div className="min-h-screen bg-page flex items-center justify-center p-4">
         <div className="card p-8 max-w-md w-full text-center">
@@ -80,17 +176,99 @@ export default function CadastroPage() {
             <FiCheckCircle className="w-10 h-10 text-success" />
           </div>
           <h1 className="text-2xl font-bold text-main mb-2">
-            Verifique seu email
+            Email confirmado!
           </h1>
           <p className="text-muted mb-8">
-            Enviamos um link de confirmacao para <strong className="text-main">{email}</strong>. Clique no link para ativar sua conta.
+            Sua conta foi verificada com sucesso. Agora voce pode acessar o sistema.
           </p>
-          <Link
-            href={APP_CONFIG.routes.login}
+          <button
+            onClick={() => router.push('/dashboard')}
             className="btn-primary inline-flex items-center gap-2 px-6 py-3 text-base"
           >
-            Voltar para Login
-          </Link>
+            Acessar o sistema
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  // Tela de verificacao OTP
+  if (success) {
+    return (
+      <div className="min-h-screen bg-page flex items-center justify-center p-4">
+        <div className="card p-8 max-w-md w-full text-center">
+          <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-6">
+            <FiMail className="w-8 h-8 text-primary" />
+          </div>
+          <h1 className="text-2xl font-bold text-main mb-2">
+            Verifique seu email
+          </h1>
+          <p className="text-muted mb-2">
+            Enviamos um codigo de 6 digitos para
+          </p>
+          <p className="text-main font-semibold mb-8">{email}</p>
+
+          {/* OTP Input */}
+          <div className="flex justify-center gap-2 mb-6" onPaste={handleOtpPaste}>
+            {otpCode.map((digit, i) => (
+              <input
+                key={i}
+                ref={(el) => { otpRefs.current[i] = el }}
+                type="text"
+                inputMode="numeric"
+                maxLength={1}
+                value={digit}
+                onChange={(e) => handleOtpChange(i, e.target.value)}
+                onKeyDown={(e) => handleOtpKeyDown(i, e)}
+                className="w-12 h-14 text-center text-2xl font-bold rounded-xl border-2 border-subtle bg-surface text-main focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none transition-all"
+                autoFocus={i === 0}
+              />
+            ))}
+          </div>
+
+          {/* Error */}
+          {error && (
+            <div className="p-3 bg-red-500/10 rounded-xl border border-red-500/20 mb-4">
+              <p className="text-red-500 text-sm">{error}</p>
+            </div>
+          )}
+
+          {/* Verify button */}
+          <button
+            onClick={handleVerifyOtp}
+            disabled={verifying || otpCode.join('').length !== 6}
+            className="btn-primary w-full py-3.5 flex items-center justify-center gap-2 text-[15px] font-semibold mb-4 disabled:opacity-50"
+          >
+            {verifying ? (
+              <>
+                <LoadingInline />
+                Verificando...
+              </>
+            ) : (
+              'Confirmar codigo'
+            )}
+          </button>
+
+          {/* Resend */}
+          <p className="text-sm text-muted">
+            Nao recebeu o codigo?{' '}
+            <button
+              onClick={handleResendCode}
+              disabled={resending}
+              className="text-primary font-medium hover:underline disabled:opacity-50"
+            >
+              {resending ? 'Reenviando...' : 'Reenviar'}
+            </button>
+          </p>
+
+          {/* Back */}
+          <button
+            onClick={() => { setSuccess(false); setError(null); setOtpCode(['', '', '', '', '', '']) }}
+            className="mt-4 inline-flex items-center gap-1 text-sm text-muted hover:text-main transition-colors"
+          >
+            <FiArrowLeft className="w-3.5 h-3.5" />
+            Voltar ao cadastro
+          </button>
         </div>
       </div>
     )

@@ -23,7 +23,7 @@ export function PricingSection() {
   return (
     <section id="pricing" ref={ref} className="py-32 px-6 relative">
       <div className="max-w-6xl mx-auto">
-        <AnimatedTitle label="Precos" className="mb-16">
+        <AnimatedTitle label="Preços" className="mb-16">
           <TitleWord word="Planos" delay={0.1} />
           <TitleWord word="simples" delay={0.22} gradient />
         </AnimatedTitle>
@@ -67,11 +67,11 @@ export function PricingSection() {
 
                 <div className="mb-6">
                   <span className="text-4xl font-bold text-white">R$ {price}</span>
-                  <span className="text-white/40 text-sm">/{annual ? 'ano' : 'mes'}</span>
+                  <span className="text-white/40 text-sm">/{annual ? 'ano' : 'mês'}</span>
                 </div>
 
                 <p className="text-sm text-white/50 mb-6">
-                  Ate {config.maxUsers} usuarios e {config.maxStores} lojas
+                  Até {config.maxUsers} usuários e {config.maxStores} lojas
                 </p>
 
                 <Link href="/cadastro"
@@ -80,7 +80,7 @@ export function PricingSection() {
                       ? 'bg-[#0D9488] text-black hover:bg-[#0F766E]'
                       : 'bg-white/5 text-white border border-white/10 hover:bg-white/10'
                   }`}>
-                  Comecar {TRIAL_DAYS} dias gratis
+                  Começar {TRIAL_DAYS} dias grátis
                 </Link>
 
                 <ul className="mt-8 space-y-3">

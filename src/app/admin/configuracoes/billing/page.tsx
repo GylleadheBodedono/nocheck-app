@@ -20,10 +20,17 @@ import { LoadingPage } from '@/components/ui'
 type OrgBilling = {
   id: string; name: string; plan: Plan; stripe_customer_id: string | null
   stripe_subscription_id: string | null; trial_ends_at: string | null; features: string[]
+  max_users: number; max_stores: number
+}
+
+type UsageStats = {
+  currentUsers: number
+  currentStores: number
 }
 
 export default function BillingPage() {
   const [org, setOrg] = useState<OrgBilling | null>(null)
+  const [usage, setUsage] = useState<UsageStats>({ currentUsers: 0, currentStores: 0 })
   const [loading, setLoading] = useState(true)
   const [upgrading, setUpgrading] = useState<string | null>(null)
   const router = useRouter()
@@ -41,13 +48,23 @@ export default function BillingPage() {
       if (!orgId) { setLoading(false); return }
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data } = await (supabase as any)
-        .from('organizations')
-        .select('id, name, plan, stripe_customer_id, stripe_subscription_id, trial_ends_at, features')
-        .eq('id', orgId)
-        .single()
+      const sb = supabase as any
 
-      if (data) setOrg(data as OrgBilling)
+      // Fetch org + usage stats in parallel
+      const [orgRes, usersRes, storesRes] = await Promise.all([
+        sb.from('organizations')
+          .select('id, name, plan, stripe_customer_id, stripe_subscription_id, trial_ends_at, features, max_users, max_stores')
+          .eq('id', orgId)
+          .single(),
+        sb.from('users').select('id', { count: 'exact', head: true }),
+        sb.from('stores').select('id', { count: 'exact', head: true }),
+      ])
+
+      if (orgRes.data) setOrg(orgRes.data as OrgBilling)
+      setUsage({
+        currentUsers: usersRes.count || 0,
+        currentStores: storesRes.count || 0,
+      })
       setLoading(false)
     }
     load()
@@ -141,6 +158,40 @@ export default function BillingPage() {
             )}
           </div>
         </div>
+
+        {/* Uso atual */}
+        {org && (
+          <div className="grid grid-cols-2 gap-4 mb-8">
+            <div className="card p-4">
+              <p className="text-xs text-muted uppercase tracking-wider mb-1">Usuarios</p>
+              <p className="text-2xl font-bold text-main">
+                {usage.currentUsers} <span className="text-base font-normal text-muted">/ {org.max_users}</span>
+              </p>
+              <div className="mt-2 h-2 rounded-full bg-surface-hover overflow-hidden">
+                <div
+                  className={`h-full rounded-full transition-all ${
+                    usage.currentUsers >= org.max_users ? 'bg-error' : usage.currentUsers >= org.max_users * 0.8 ? 'bg-warning' : 'bg-primary'
+                  }`}
+                  style={{ width: `${Math.min(100, (usage.currentUsers / org.max_users) * 100)}%` }}
+                />
+              </div>
+            </div>
+            <div className="card p-4">
+              <p className="text-xs text-muted uppercase tracking-wider mb-1">Lojas</p>
+              <p className="text-2xl font-bold text-main">
+                {usage.currentStores} <span className="text-base font-normal text-muted">/ {org.max_stores}</span>
+              </p>
+              <div className="mt-2 h-2 rounded-full bg-surface-hover overflow-hidden">
+                <div
+                  className={`h-full rounded-full transition-all ${
+                    usage.currentStores >= org.max_stores ? 'bg-error' : usage.currentStores >= org.max_stores * 0.8 ? 'bg-warning' : 'bg-primary'
+                  }`}
+                  style={{ width: `${Math.min(100, (usage.currentStores / org.max_stores) * 100)}%` }}
+                />
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Cards de planos */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
