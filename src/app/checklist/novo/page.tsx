@@ -1286,6 +1286,10 @@ function ChecklistForm() {
         if (value === undefined || value === null || value === '' || (Array.isArray(value) && value.length === 0)) {
           return true
         }
+        // Texto obrigatorio: minimo 3 caracteres reais
+        if (field.field_type === 'text' && typeof value === 'string' && value.trim().length < 3) {
+          return true
+        }
       }
 
       // 2. Validacoes especificas de yes_no (sub-campos obrigatorios)
@@ -1320,7 +1324,7 @@ function ChecklistForm() {
           if (condConfig) {
             if (condConfig.showTextField && condConfig.textFieldRequired) {
               const text = obj.conditionalText as string | undefined
-              if (!text || !text.trim()) return true
+              if (!text || text.trim().length < 3) return true
             }
             if (condConfig.showPhotoField && condConfig.photoFieldRequired) {
               const photos = obj.conditionalPhotos as string[] | undefined
@@ -1447,6 +1451,8 @@ function ChecklistForm() {
         // Campo is_required sem valor
         if (field.is_required) {
           if (v === undefined || v === null || v === '' || (Array.isArray(v) && v.length === 0)) return false
+          // Texto obrigatorio: minimo 3 caracteres reais
+          if (field.field_type === 'text' && typeof v === 'string' && v.trim().length < 3) return false
         }
 
         // Validacoes yes_no (sub-campos obrigatorios)
@@ -1478,7 +1484,7 @@ function ChecklistForm() {
             if (condConfig) {
               if (condConfig.showTextField && condConfig.textFieldRequired) {
                 const text = obj.conditionalText as string | undefined
-                if (!text || !text.trim()) return false
+                if (!text || text.trim().length < 3) return false
               }
               if (condConfig.showPhotoField && condConfig.photoFieldRequired) {
                 const photos = obj.conditionalPhotos as string[] | undefined
@@ -1734,7 +1740,7 @@ function ChecklistForm() {
   // === FINALIZE WITH JUSTIFICATIONS (incomplete checklist) ===
   const handleFinalizeWithJustifications = async () => {
     // Validate all justifications are filled
-    const missing = emptyRequiredFields.filter(f => !justifications[f.id]?.trim())
+    const missing = emptyRequiredFields.filter(f => !justifications[f.id]?.trim() || justifications[f.id].trim().length < 3)
     if (missing.length > 0) return
 
     if (!navigator.onLine || !checklistId) {
@@ -2013,7 +2019,7 @@ function ChecklistForm() {
 
   // Justification screen (for incomplete checklist finalization)
   if (showJustificationScreen) {
-    const allJustified = emptyRequiredFields.every(f => justifications[f.id]?.trim())
+    const allJustified = emptyRequiredFields.every(f => justifications[f.id]?.trim() && justifications[f.id].trim().length >= 3)
     return (
       <div className="min-h-screen bg-page">
         <Header
