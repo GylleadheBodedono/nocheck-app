@@ -330,9 +330,11 @@ export async function processarNaoConformidades(
       // 4. Nao-conformidade detectada! Verificar reincidencia
       const reincidencia = await checkReincidencia(supabase, field.id, storeId, templateId)
 
-      // Verificar se o usuario selecionou um responsavel, severidade e/ou modelo
+      // Verificar se o usuario selecionou uma funcao, severidade e/ou modelo
       const valueJson = response.value_json as Record<string, unknown> | null
-      const userSelectedAssigneeId = valueJson?.selectedAssigneeId as string | null
+      const userSelectedFunctionId = valueJson?.selectedFunctionId as number | null
+      // Fallback para dados antigos (selectedAssigneeId era UUID de usuario)
+      const legacyAssigneeId = valueJson?.selectedAssigneeId as string | null
       const userSelectedSeverity = valueJson?.selectedSeverity as string | null
       const userSelectedPresetId = valueJson?.selectedPresetId as number | null
 
@@ -348,8 +350,10 @@ export async function processarNaoConformidades(
         }
       }
 
-      // Determinar responsavel: prioridade para o selecionado pelo preenchedor, depois preset, depois condition
-      const assigneeId = userSelectedAssigneeId || presetData?.default_assignee_id || condition.default_assignee_id || userId
+      // Determinar funcao responsavel: prioridade para a selecionada pelo preenchedor, depois preset, depois condition
+      const assignedFunctionId = userSelectedFunctionId || presetData?.default_function_id || condition.default_function_id || null
+      // Fallback: se nenhuma funcao, usa assigned_to legado (usuario direto)
+      const assigneeId = legacyAssigneeId || presetData?.default_assignee_id || condition.default_assignee_id || userId
 
       // Calcular deadline (preset pode sobrescrever)
       const deadlineDays = presetData?.deadline_days ?? condition.deadline_days
@@ -398,7 +402,8 @@ export async function processarNaoConformidades(
           description: condition.description_template || null,
           severity,
           status: 'aberto',
-          assigned_to: assigneeId,
+          assigned_to: assignedFunctionId ? null : assigneeId,
+          assigned_function_id: assignedFunctionId,
           assigned_by: userId,
           deadline: deadlineStr,
           is_reincidencia: reincidencia.isReincidencia,
@@ -420,28 +425,73 @@ export async function processarNaoConformidades(
 
       plansCreated++
 
-      // 7. Criar notificacao in-app para o responsavel
-      await createNotification(supabase, assigneeId, {
-        type: reincidencia.isReincidencia ? 'reincidencia_detected' : 'action_plan_assigned',
-        title: reincidencia.isReincidencia
-          ? `Reincidencia #${reincidencia.count + 1}: ${field.name}`
-          : `Novo plano de acao: ${field.name}`,
-        message: `${storeName} - Prazo: ${new Date(deadlineStr).toLocaleDateString('pt-BR')}`,
-        link: `/admin/planos-de-acao/${plan.id}`,
-        metadata: {
-          action_plan_id: plan.id,
-          store_id: storeId,
-          severity,
-          is_reincidencia: reincidencia.isReincidencia,
-        },
-      })
-      // 7b. Notificar quem respondeu o checklist (se nao for o mesmo que o responsavel)
-      if (userId !== assigneeId) {
-        // Nao buscar assignee name via client (RLS bloqueia) — usar fallback
+      // 7. Buscar usuarios responsaveis (todos da funcao ou fallback para usuario unico)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      let responsibleUsers: { id: string; email: string; full_name: string }[] = []
+      let functionWebhookUrl: string | null = null
+      let functionName = ''
+
+      if (assignedFunctionId) {
+        // Buscar TODOS os usuarios ativos dessa funcao
+        const { data: fnUsers } = await sb
+          .from('users')
+          .select('id, email, full_name')
+          .eq('function_id', assignedFunctionId)
+          .eq('is_active', true)
+        responsibleUsers = fnUsers || []
+        // Buscar nome e webhook da funcao
+        const { data: fnData } = await sb
+          .from('functions')
+          .select('name, teams_webhook_url')
+          .eq('id', assignedFunctionId)
+          .single()
+        if (fnData) {
+          functionName = fnData.name
+          functionWebhookUrl = fnData.teams_webhook_url
+        }
+      } else {
+        // Fallback legado: usuario unico
+        const { data: userData } = await sb
+          .from('users')
+          .select('id, email, full_name, function_ref:functions!users_function_id_fkey(teams_webhook_url)')
+          .eq('id', assigneeId)
+          .single()
+        if (userData) {
+          responsibleUsers = [{ id: userData.id, email: userData.email, full_name: userData.full_name }]
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const fnRef = (userData as any)?.function_ref
+          if (fnRef?.teams_webhook_url) functionWebhookUrl = fnRef.teams_webhook_url
+        }
+      }
+
+      // 7a. Criar notificacao in-app para CADA usuario responsavel
+      const notifTitle = reincidencia.isReincidencia
+        ? `Reincidencia #${reincidencia.count + 1}: ${field.name}`
+        : `Novo plano de acao: ${field.name}`
+
+      for (const responsible of responsibleUsers) {
+        await createNotification(supabase, responsible.id, {
+          type: reincidencia.isReincidencia ? 'reincidencia_detected' : 'action_plan_assigned',
+          title: notifTitle,
+          message: `${storeName} - Prazo: ${new Date(deadlineStr).toLocaleDateString('pt-BR')}`,
+          link: `/admin/planos-de-acao/${plan.id}`,
+          metadata: {
+            action_plan_id: plan.id,
+            store_id: storeId,
+            severity,
+            is_reincidencia: reincidencia.isReincidencia,
+          },
+        })
+      }
+
+      // 7b. Notificar quem respondeu o checklist
+      const isFillerAlsoResponsible = responsibleUsers.some(u => u.id === userId)
+      if (!isFillerAlsoResponsible) {
+        const assigneeLabel = functionName || responsibleUsers.map(u => u.full_name).join(', ') || 'Nao atribuido'
         await createNotification(supabase, userId, {
           type: 'action_plan_created',
           title: `Plano de acao gerado: ${field.name}`,
-          message: `Voce respondeu "${templateName}" e o campo "${field.name}" foi marcado como "${nonConformityValue}". O responsavel ja foi notificado.`,
+          message: `Voce respondeu "${templateName}" e o campo "${field.name}" foi marcado como "${nonConformityValue}". Responsavel: ${assigneeLabel}.`,
           link: `/admin/planos-de-acao/${plan.id}`,
           metadata: {
             action_plan_id: plan.id,
@@ -452,8 +502,9 @@ export async function processarNaoConformidades(
         })
       }
 
-      // 8. Enviar email + Teams (busca do email do assignee e feita server-side para contornar RLS)
+      // 8. Enviar email para CADA usuario responsavel + Teams
       try {
+        const assigneeLabel = functionName || responsibleUsers.map(u => u.full_name).join(', ') || 'Nao atribuido'
         const emailVars: EmailTemplateVariables = {
           plan_title: planTitle,
           field_name: field.name,
@@ -462,7 +513,7 @@ export async function processarNaoConformidades(
           template_name: templateName,
           respondent_name: respondentName,
           respondent_time: new Date(respondentTime).toLocaleString('pt-BR'),
-          assignee_name: 'Responsavel',
+          assignee_name: assigneeLabel,
           severity,
           severity_label: severity.charAt(0).toUpperCase() + severity.slice(1),
           severity_color: SEVERITY_COLORS[severity] || '#f59e0b',
@@ -474,7 +525,7 @@ export async function processarNaoConformidades(
           is_reincidencia: reincidencia.isReincidencia ? 'Sim' : 'Nao',
           reincidencia_count: String(reincidencia.count),
           reincidencia_prefix: reincidencia.isReincidencia ? `REINCIDENCIA #${reincidencia.count + 1} - ` : '',
-          app_name: 'NoCheck',
+          app_name: 'OpereCheck',
         }
 
         const { html: htmlBody, subject: emailSubject } = buildEmailFromTemplate(
@@ -483,43 +534,29 @@ export async function processarNaoConformidades(
           emailVars
         )
 
-        // Envia email via API route (resolve email do assignee server-side com service role)
-        const emailResult = await sendActionPlanEmail(assigneeId, emailSubject, htmlBody, accessToken)
-        const assigneeName = emailResult.assigneeName || 'Nao atribuido'
-
-        if (!emailResult.success) {
-          console.error(`[ActionPlan] FALHA ao enviar email para assignee ${assigneeId}:`, emailResult.error)
+        // Enviar email para CADA usuario da funcao
+        for (const responsible of responsibleUsers) {
+          const emailResult = await sendActionPlanEmail(responsible.id, emailSubject, htmlBody, accessToken)
+          if (!emailResult.success) {
+            console.error(`[ActionPlan] FALHA ao enviar email para ${responsible.email}:`, emailResult.error)
+          }
         }
 
-        // Teams alert — busca webhook da funcao do assignee
-        let assigneeWebhookUrl: string | null = null
-        let assigneeEmail = ''
-        try {
-          const { data: assigneeFnData } = await sb
-            .from('users')
-            .select('email, function_ref:functions!users_function_id_fkey(teams_webhook_url)')
-            .eq('id', assigneeId)
-            .single()
-          if (assigneeFnData?.email) assigneeEmail = assigneeFnData.email
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const fnRef = (assigneeFnData as any)?.function_ref
-          if (fnRef?.teams_webhook_url) assigneeWebhookUrl = fnRef.teams_webhook_url
-        } catch { /* ignora erro na busca extra */ }
-
+        // Teams alert — uma vez por funcao
         await sendActionPlanTeamsAlert({
           title: planTitle,
           fieldName: field.name,
           storeName,
           severity,
           deadline: new Date(deadlineStr).toLocaleDateString('pt-BR'),
-          assigneeName,
+          assigneeName: assigneeLabel,
           nonConformityValue,
           isReincidencia: reincidencia.isReincidencia,
           reincidenciaCount: reincidencia.count,
           respondentName,
           respondentEmail,
-          assigneeEmail,
-          webhookUrl: assigneeWebhookUrl,
+          assigneeEmail: responsibleUsers[0]?.email || '',
+          webhookUrl: functionWebhookUrl,
         })
       } catch (notifErr) {
         console.error('[ActionPlan] Erro ao enviar notificacoes:', notifErr)

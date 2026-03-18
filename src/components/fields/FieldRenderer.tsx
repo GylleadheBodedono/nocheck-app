@@ -9,9 +9,9 @@ import {
 } from 'react-icons/fi'
 import { Select } from '@/components/ui/Select'
 
-type AssignableUser = {
-  id: string
-  full_name: string
+type AssignableFunction = {
+  id: number
+  name: string
 }
 
 type ActionPlanPreset = {
@@ -21,7 +21,7 @@ type ActionPlanPreset = {
   deadline_days: number
 }
 
-let _usersCache: AssignableUser[] | null = null
+let _functionsCache: AssignableFunction[] | null = null
 let _presetsCache: ActionPlanPreset[] | null = null
 
 interface FieldRendererProps {
@@ -594,8 +594,8 @@ function YesNoField({ field, value, onChange }: { field: TemplateField; value: u
   const conditionalPhotos: string[] = typeof value === 'object' && value !== null && 'conditionalPhotos' in (value as Record<string, unknown>)
     ? (value as Record<string, unknown>).conditionalPhotos as string[] || []
     : []
-  const selectedAssigneeId: string | null = typeof value === 'object' && value !== null && 'selectedAssigneeId' in (value as Record<string, unknown>)
-    ? (value as Record<string, unknown>).selectedAssigneeId as string | null
+  const selectedFunctionId: number | null = typeof value === 'object' && value !== null && 'selectedFunctionId' in (value as Record<string, unknown>)
+    ? (value as Record<string, unknown>).selectedFunctionId as number | null
     : null
   const selectedSeverity: string = typeof value === 'object' && value !== null && 'selectedSeverity' in (value as Record<string, unknown>)
     ? (value as Record<string, unknown>).selectedSeverity as string || ''
@@ -612,26 +612,26 @@ function YesNoField({ field, value, onChange }: { field: TemplateField; value: u
   const hasConditional = activeConditionalConfig && (activeConditionalConfig.showTextField || activeConditionalConfig.showPhotoField)
   const showUserActionPlan = answer === 'nao' && onNoConfig?.allowUserActionPlan === true
 
-  const [assignableUsers, setAssignableUsers] = useState<AssignableUser[]>(_usersCache || [])
-  const [usersLoading, setUsersLoading] = useState(false)
+  const [assignableFunctions, setAssignableFunctions] = useState<AssignableFunction[]>(_functionsCache || [])
+  const [functionsLoading, setFunctionsLoading] = useState(false)
   const [presets, setPresets] = useState<ActionPlanPreset[]>(_presetsCache || [])
   const [presetsLoading, setPresetsLoading] = useState(false)
 
   useEffect(() => {
     if (!showUserActionPlan) return
-    if (_usersCache) { setAssignableUsers(_usersCache); return }
+    if (_functionsCache) { setAssignableFunctions(_functionsCache); return }
     let cancelled = false
-    setUsersLoading(true)
+    setFunctionsLoading(true)
     fetch('/api/users/assignable')
       .then(res => res.ok ? res.json() : Promise.reject(res.status))
-      .then(({ users }: { users: AssignableUser[] }) => {
+      .then(({ functions }: { functions: AssignableFunction[] }) => {
         if (cancelled) return
-        const list = users || []
-        _usersCache = list
-        setAssignableUsers(list)
-        setUsersLoading(false)
+        const list = functions || []
+        _functionsCache = list
+        setAssignableFunctions(list)
+        setFunctionsLoading(false)
       })
-      .catch(() => { if (!cancelled) setUsersLoading(false) })
+      .catch(() => { if (!cancelled) setFunctionsLoading(false) })
     return () => { cancelled = true }
   }, [showUserActionPlan])
 
@@ -659,7 +659,7 @@ function YesNoField({ field, value, onChange }: { field: TemplateField; value: u
     if (photos.length > 0) base.photos = photos
     if (conditionalText) base.conditionalText = conditionalText
     if (conditionalPhotos.length > 0) base.conditionalPhotos = conditionalPhotos
-    if (selectedAssigneeId) base.selectedAssigneeId = selectedAssigneeId
+    if (selectedFunctionId) base.selectedFunctionId = selectedFunctionId
     if (selectedSeverity) base.selectedSeverity = selectedSeverity
     if (selectedPresetId) base.selectedPresetId = selectedPresetId
     const merged = { ...base, ...updates }
@@ -928,20 +928,20 @@ function YesNoField({ field, value, onChange }: { field: TemplateField; value: u
               />
             )}
           </div>
-          {usersLoading ? (
+          {functionsLoading ? (
             <div className="flex items-center gap-2 text-sm text-muted">
               <div className="w-4 h-4 border-2 border-secondary border-t-transparent rounded-full animate-spin" />
-              Carregando responsaveis...
+              Carregando funcoes...
             </div>
           ) : (
             <>
               <div>
-                <label className="block text-sm font-medium text-secondary mb-1">Responsavel</label>
+                <label className="block text-sm font-medium text-secondary mb-1">Funcao Responsavel</label>
                 <Select
-                  value={selectedAssigneeId || ''}
-                  onChange={(v) => onChange(buildValue({ selectedAssigneeId: v || null }))}
-                  placeholder="Selecione o responsavel..."
-                  options={assignableUsers.map(u => ({ value: u.id, label: u.full_name }))}
+                  value={selectedFunctionId ? String(selectedFunctionId) : ''}
+                  onChange={(v) => onChange(buildValue({ selectedFunctionId: v ? Number(v) : null }))}
+                  placeholder="Selecione a funcao responsavel..."
+                  options={assignableFunctions.map(f => ({ value: String(f.id), label: f.name }))}
                 />
               </div>
               <div>
