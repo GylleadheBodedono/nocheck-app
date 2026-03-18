@@ -1559,6 +1559,8 @@ function ChecklistForm() {
   // Atualiza a ref quando as dependencias mudam (sem re-registrar o listener)
   useEffect(() => {
     popStateHandlerRef.current = async () => {
+      // Sempre salvar pendencias antes de qualquer navegacao
+      autoSaveField.flush()
       if (hasSections && activeSection !== null) {
         window.history.pushState(null, '', window.location.href)
         await handleSectionBack()
@@ -1566,7 +1568,6 @@ function ChecklistForm() {
         window.history.pushState(null, '', window.location.href)
         setActiveParentSection(null)
       } else {
-        autoSaveField.flush()
         await new Promise(resolve => setTimeout(resolve, 300))
         router.push(APP_CONFIG.routes.dashboard)
       }

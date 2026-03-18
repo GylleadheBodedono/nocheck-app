@@ -30,7 +30,7 @@ export function useRealtimeDashboard({ userId, userFunctionId, storeIds }: UseRe
       .on(
         'postgres_changes' as 'system',
         {
-          event: 'INSERT',
+          event: '*',
           schema: 'public',
           table: 'notifications',
           filter: `user_id=eq.${userId}`,
@@ -47,17 +47,7 @@ export function useRealtimeDashboard({ userId, userFunctionId, storeIds }: UseRe
       .on(
         'postgres_changes' as 'system',
         {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'action_plans',
-          filter: `assigned_to=eq.${userId}`,
-        } as Record<string, unknown>,
-        triggerRefresh as unknown as (payload: Record<string, unknown>) => void
-      )
-      .on(
-        'postgres_changes' as 'system',
-        {
-          event: 'UPDATE',
+          event: '*',
           schema: 'public',
           table: 'action_plans',
           filter: `assigned_to=eq.${userId}`,
@@ -75,17 +65,7 @@ export function useRealtimeDashboard({ userId, userFunctionId, storeIds }: UseRe
         .on(
           'postgres_changes' as 'system',
           {
-            event: 'INSERT',
-            schema: 'public',
-            table: 'action_plans',
-            filter: `assigned_function_id=eq.${userFunctionId}`,
-          } as Record<string, unknown>,
-          triggerRefresh as unknown as (payload: Record<string, unknown>) => void
-        )
-        .on(
-          'postgres_changes' as 'system',
-          {
-            event: 'UPDATE',
+            event: '*',
             schema: 'public',
             table: 'action_plans',
             filter: `assigned_function_id=eq.${userFunctionId}`,
@@ -97,24 +77,14 @@ export function useRealtimeDashboard({ userId, userFunctionId, storeIds }: UseRe
       channels.push(apFnChannel)
     }
 
-    // 4. Checklists channel (one per store)
+    // 4. Checklists channel (one per store — INSERT, UPDATE, DELETE)
     for (const storeId of storeIds) {
       const clChannel = supabase
         .channel(`dashboard:checklists:store_${storeId}`)
         .on(
           'postgres_changes' as 'system',
           {
-            event: 'INSERT',
-            schema: 'public',
-            table: 'checklists',
-            filter: `store_id=eq.${storeId}`,
-          } as Record<string, unknown>,
-          triggerRefresh as unknown as (payload: Record<string, unknown>) => void
-        )
-        .on(
-          'postgres_changes' as 'system',
-          {
-            event: 'UPDATE',
+            event: '*',
             schema: 'public',
             table: 'checklists',
             filter: `store_id=eq.${storeId}`,
