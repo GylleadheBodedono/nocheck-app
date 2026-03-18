@@ -5,6 +5,8 @@
 // - Trocar plano, atualizar cartao, cancelar assinatura
 // ============================================
 
+export const runtime = 'edge'
+
 import { NextRequest, NextResponse } from 'next/server'
 import Stripe from 'stripe'
 import { createClient } from '@supabase/supabase-js'

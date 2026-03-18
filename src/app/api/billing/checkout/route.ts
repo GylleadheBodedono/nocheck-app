@@ -5,6 +5,8 @@
 // Se a org nao tem stripe_customer_id, cria um customer novo.
 // ============================================
 
+export const runtime = 'edge'
+
 import { NextRequest, NextResponse } from 'next/server'
 import Stripe from 'stripe'
 import { createClient } from '@supabase/supabase-js'
