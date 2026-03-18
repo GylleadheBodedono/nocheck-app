@@ -18,12 +18,18 @@ import { createNotification, sendActionPlanEmail, sendActionPlanTeamsAlert } fro
 import { buildEmailFromTemplate, SEVERITY_COLORS, type EmailTemplateVariables } from './emailTemplateEngine'
 import type { FieldCondition } from '@/types/database'
 
-// Service role client para queries que precisam bypass RLS (buscar usuarios de outra funcao)
-const serviceSupabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL || '',
-  process.env.SUPABASE_SERVICE_ROLE_KEY || '',
-  { auth: { autoRefreshToken: false, persistSession: false } }
-)
+// Service role client (lazy init - so cria quando chamado server-side)
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let _serviceSupabase: any = null
+function getServiceSupabase() {
+  if (!_serviceSupabase) {
+    const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+    const key = process.env.SUPABASE_SERVICE_ROLE_KEY
+    if (!url || !key) throw new Error('[ActionPlan] SUPABASE_SERVICE_ROLE_KEY nao configurada')
+    _serviceSupabase = createClient(url, key, { auth: { autoRefreshToken: false, persistSession: false } })
+  }
+  return _serviceSupabase
+}
 
 type ResponseData = {
   field_id: number
@@ -441,7 +447,7 @@ export async function processarNaoConformidades(
 
       if (assignedFunctionId) {
         // Buscar TODOS os usuarios ativos dessa funcao (service role para bypass RLS)
-        const { data: fnUsers, error: fnUsersErr } = await serviceSupabase
+        const { data: fnUsers, error: fnUsersErr } = await getServiceSupabase()
           .from('users')
           .select('id, email, full_name')
           .eq('function_id', assignedFunctionId)
@@ -450,7 +456,7 @@ export async function processarNaoConformidades(
         responsibleUsers = fnUsers || []
         console.log(`[ActionPlan] Funcao ID ${assignedFunctionId}: ${responsibleUsers.length} usuarios encontrados`)
         // Buscar nome e webhook da funcao
-        const { data: fnData } = await serviceSupabase
+        const { data: fnData } = await getServiceSupabase()
           .from('functions')
           .select('name, teams_webhook_url')
           .eq('id', assignedFunctionId)
@@ -461,7 +467,7 @@ export async function processarNaoConformidades(
         }
       } else {
         // Fallback legado: usuario unico (service role para bypass RLS)
-        const { data: userData } = await serviceSupabase
+        const { data: userData } = await getServiceSupabase()
           .from('users')
           .select('id, email, full_name, function_ref:functions!users_function_id_fkey(teams_webhook_url)')
           .eq('id', assigneeId)
