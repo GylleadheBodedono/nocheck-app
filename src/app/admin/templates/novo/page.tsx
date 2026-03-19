@@ -90,7 +90,7 @@ export default function NovoTemplatePage() {
   const [description, setDescription] = useState('')
   const [category, setCategory] = useState<TemplateCategory>('recebimento')
   const [adminOnly, setAdminOnly] = useState(false)
-  const [skipJustifications, setSkipJustifications] = useState(true)
+  const [skipJustifications, setSkipJustifications] = useState(false)
 
   // Time settings
   const [allowedStartTime, setAllowedStartTime] = useState('')
@@ -834,19 +834,20 @@ export default function NovoTemplatePage() {
               </div>
               <div>
                 <label className="block text-sm font-medium text-secondary mb-2">
-                  Justificativas
+                  Exigir justificativas?
                 </label>
-                <label className="flex items-center gap-3 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={skipJustifications}
-                    onChange={(e) => setSkipJustifications(e.target.checked)}
-                    className="w-5 h-5 rounded border-default bg-surface text-primary focus:ring-primary"
-                  />
-                  <span className={skipJustifications ? 'text-warning' : 'text-muted'}>
-                    {skipJustifications ? 'Sem justificativas' : 'Exigir justificativas'}
-                  </span>
-                </label>
+                <div className="flex items-center gap-4">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input type="radio" name="skipJust" checked={!skipJustifications} onChange={() => setSkipJustifications(false)}
+                      className="w-4 h-4 text-primary focus:ring-primary" />
+                    <span className={!skipJustifications ? 'text-success font-medium' : 'text-muted'}>Sim</span>
+                  </label>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input type="radio" name="skipJust" checked={skipJustifications} onChange={() => setSkipJustifications(true)}
+                      className="w-4 h-4 text-primary focus:ring-primary" />
+                    <span className={skipJustifications ? 'text-warning font-medium' : 'text-muted'}>Nao</span>
+                  </label>
+                </div>
               </div>
             </div>
 
