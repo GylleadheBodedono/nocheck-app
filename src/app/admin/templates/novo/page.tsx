@@ -90,7 +90,7 @@ export default function NovoTemplatePage() {
   const [description, setDescription] = useState('')
   const [category, setCategory] = useState<TemplateCategory>('recebimento')
   const [adminOnly, setAdminOnly] = useState(false)
-  const [skipJustifications, setSkipJustifications] = useState(false)
+  const [skipJustifications, setSkipJustifications] = useState(true)
 
   // Time settings
   const [allowedStartTime, setAllowedStartTime] = useState('')
