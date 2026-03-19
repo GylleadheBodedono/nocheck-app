@@ -1631,6 +1631,54 @@ function ChecklistForm() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoSaveField, activeSection, getFieldsForSection, buildSingleResponseRow, supabase, checklistId, offlineChecklistId, sectionProgress, hasSubSections, activeParentSection])
 
+  // === SWITCH SECTION: flush + bulk save ANTES de trocar de secao ===
+  // Previne perda de respostas quando o usuario clica direto em outra secao
+  const switchSection = async (newSectionId: number | null) => {
+    // 1. Flush pending debounced auto-save
+    autoSaveField.flush()
+    await new Promise(resolve => setTimeout(resolve, 200))
+
+    // 2. Bulk save current section responses
+    if (activeSection !== null && activeSection !== -1 && navigator.onLine && checklistIdRef.current) {
+      try {
+        const sectionFields = getFieldsForSection(activeSection)
+        let userId: string | null = null
+        try {
+          const { data: { user } } = await supabase.auth.getUser()
+          userId = user?.id || null
+        } catch { /* offline */ }
+
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const rows: any[] = sectionFields
+          .map(f => {
+            const row = buildSingleResponseRow(f.id, responsesRef.current[f.id])
+            if (!row) return null
+            return {
+              checklist_id: checklistIdRef.current,
+              field_id: row.fieldId,
+              value_text: row.valueText,
+              value_number: row.valueNumber,
+              value_json: row.valueJson,
+              answered_by: userId,
+            }
+          })
+          .filter(Boolean)
+
+        if (rows.length > 0) {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          await (supabase as any)
+            .from('checklist_responses')
+            .upsert(rows, { onConflict: 'checklist_id,field_id' })
+        }
+      } catch (err) {
+        console.error('[SwitchSection] Erro ao salvar secao:', err)
+      }
+    }
+
+    // 3. Switch to new section
+    setActiveSection(newSectionId)
+  }
+
   // Handle Android back button and navigation
   // Ref estavel para o handler (evita re-registrar listener a cada campo preenchido)
   const popStateHandlerRef = useRef<() => Promise<void>>()
@@ -2270,7 +2318,7 @@ function ChecklistForm() {
                 <button
                   key={sub.id}
                   type="button"
-                  onClick={() => setActiveSection(sub.id)}
+                  onClick={() => switchSection(sub.id)}
                   className={`w-full text-left card p-3 sm:p-5 transition-all hover:shadow-theme-md cursor-pointer ${
                     isDone
                       ? 'border-success/30 hover:border-success/50'
@@ -2403,7 +2451,7 @@ function ChecklistForm() {
                 <button
                   key={section.id}
                   type="button"
-                  onClick={() => setActiveSection(section.id)}
+                  onClick={() => switchSection(section.id)}
                   className={`w-full text-left card p-3 sm:p-5 transition-all hover:shadow-theme-md cursor-pointer ${
                     isDone
                       ? 'border-success/30 hover:border-success/50'
@@ -2437,7 +2485,7 @@ function ChecklistForm() {
             {hasGeneralFields && (
               <button
                 type="button"
-                onClick={() => setActiveSection(-1)}
+                onClick={() => switchSection(-1)}
                 className="w-full text-left card p-3 sm:p-5 transition-all hover:shadow-theme-md cursor-pointer border-subtle hover:border-primary/30"
               >
                 <div className="flex items-center gap-3 sm:gap-4">
