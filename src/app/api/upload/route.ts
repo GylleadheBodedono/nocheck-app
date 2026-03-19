@@ -3,100 +3,109 @@ export const runtime = 'edge'
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { verifyApiAuth } from '@/lib/api-auth'
+import { isAllowedImageType, isValidBase64, estimateBase64Size, MAX_FILE_SIZE, ALLOWED_IMAGE_TYPES } from '@/lib/validation'
 
 export const dynamic = 'force-dynamic'
+
+// ── Supabase Config ──
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
 
-const MAX_FILE_SIZE = 5 * 1024 * 1024 // 5MB
+// ── Route Handler ──
 
 /**
- * POST /api/upload
- * Faz upload de imagem para o Supabase Storage
+ * Uploads a base64-encoded image to Supabase Storage (`checklist-images` bucket).
+ *
+ * `POST /api/upload` with body:
+ * ```json
+ * { "image": "data:image/jpeg;base64,...", "fileName": "photo.jpg", "folder": "uploads" }
+ * ```
+ *
+ * Validates MIME type, base64 format, and file size before uploading.
+ * Returns the public URL and storage path on success.
+ *
+ * @requires Authentication via `verifyApiAuth`
  */
 export async function POST(request: NextRequest) {
   const auth = await verifyApiAuth(request)
   if (auth.error) return auth.error
 
-  console.log('[Upload] Recebendo requisição de upload')
+  console.log('[Upload] Recebendo requisicao de upload')
 
   try {
     const body = await request.json()
     const { image, fileName, folder } = body as {
-      image: string // base64 image
+      image: string
       fileName: string
-      folder?: string // pasta no bucket (default: 'uploads')
+      folder?: string
     }
 
     if (!image || typeof image !== 'string') {
       return NextResponse.json(
-        { success: false, error: 'Imagem não fornecida' },
+        { success: false, error: 'Imagem nao fornecida' },
         { status: 400 }
       )
     }
 
-    // Validar que é uma imagem (verificar header base64 ou data URL)
-    const allowedMimeTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif']
-    const dataUrlMatch = image.match(/^data:(image\/\w+);base64,/)
-    if (dataUrlMatch && !allowedMimeTypes.includes(dataUrlMatch[1])) {
+    // ── Image Type Validation ──
+
+    if (!isAllowedImageType(image)) {
       return NextResponse.json(
-        { success: false, error: 'Tipo de arquivo não permitido. Use JPEG, PNG, WebP ou GIF.' },
+        { success: false, error: `Tipo de arquivo nao permitido. Use ${ALLOWED_IMAGE_TYPES.join(', ')}.` },
         { status: 400 }
       )
     }
 
-    // Remove data URL prefix if present
+    // ── Base64 Validation ──
+
     const base64Data = image.replace(/^data:image\/\w+;base64,/, '')
 
-    // Validar que é base64 válido
-    if (!/^[A-Za-z0-9+/]+=*$/.test(base64Data.slice(0, 100))) {
+    if (!isValidBase64(image)) {
       return NextResponse.json(
-        { success: false, error: 'Dados de imagem inválidos' },
+        { success: false, error: 'Dados de imagem invalidos' },
         { status: 400 }
       )
     }
 
-    // Check file size (base64 is ~33% larger than binary)
-    const estimatedSize = (base64Data.length * 3) / 4
+    // ── File Size Validation ──
+
+    const estimatedSize = estimateBase64Size(base64Data)
     console.log('[Upload] Tamanho estimado:', Math.round(estimatedSize / 1024), 'KB')
 
     if (estimatedSize > MAX_FILE_SIZE) {
       return NextResponse.json(
-        { success: false, error: `Imagem muito grande (máx ${MAX_FILE_SIZE / 1024 / 1024}MB)` },
+        { success: false, error: `Imagem muito grande (max ${MAX_FILE_SIZE / 1024 / 1024}MB)` },
         { status: 400 }
       )
     }
 
-    // Convert base64 to buffer
-    const buffer = Buffer.from(base64Data, 'base64')
+    // ── Upload to Storage ──
 
-    // Create Supabase client with service role
+    const buffer = Buffer.from(base64Data, 'base64')
     const supabase = createClient(supabaseUrl, supabaseServiceKey)
 
-    // Generate unique filename
     const timestamp = Date.now()
     const uniqueFileName = fileName || `checklist_${timestamp}.jpg`
     const filePath = `${folder || 'uploads'}/${uniqueFileName}`
 
-    // Upload to Supabase Storage
     console.log('[Upload] Tentando upload para bucket checklist-images, path:', filePath)
     const { data, error } = await supabase.storage
       .from('checklist-images')
       .upload(filePath, buffer, {
         contentType: 'image/jpeg',
-        upsert: true, // Permite sobrescrever se já existir
+        upsert: true,
       })
 
     if (error) {
       console.error('[Upload] Erro Supabase Storage:', error.message, error)
-      // Tenta verificar se o bucket existe
       const { data: buckets } = await supabase.storage.listBuckets()
-      console.log('[Upload] Buckets disponíveis:', buckets?.map(b => b.name))
+      console.log('[Upload] Buckets disponiveis:', buckets?.map(b => b.name))
       throw new Error(error.message)
     }
 
-    // Get public URL
+    // ── Build Public URL ──
+
     const { data: urlData } = supabase.storage
       .from('checklist-images')
       .getPublicUrl(filePath)

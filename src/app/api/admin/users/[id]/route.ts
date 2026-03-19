@@ -4,12 +4,23 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { verifyApiAuth } from '@/lib/api-auth'
 
+// ── Supabase Config ──
+
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
 
+// ── Route Handlers ──
+
 /**
- * PUT /api/admin/users/[id]
- * Atualiza perfil do usuario e seus vínculos com lojas (user_stores)
+ * Updates a user's profile and their store assignments.
+ *
+ * `PUT /api/admin/users/[id]` with body containing profile fields
+ * and optional `storeAssignments` array.
+ *
+ * Replaces all existing `user_stores` entries with the new assignments.
+ * Admin users have their store/sector/function fields cleared.
+ *
+ * @requires Admin authentication via `verifyApiAuth`
  */
 export async function PUT(
   request: NextRequest,
@@ -44,11 +55,11 @@ export async function PUT(
       auth: { autoRefreshToken: false, persistSession: false }
     })
 
-    // Loja primária para manter users.store_id sincronizado
+    // Determine primary store for the legacy `users.store_id` field
     const assignments = (!isAdmin && storeAssignments) ? storeAssignments : []
     const primary = assignments.find(a => a.is_primary) || assignments[0] || null
 
-    // Atualiza perfil em public.users
+    // Update profile
     const { error: profileError } = await supabase
       .from('users')
       .update({
@@ -68,7 +79,7 @@ export async function PUT(
       return NextResponse.json({ error: profileError.message }, { status: 400 })
     }
 
-    // Substituir vínculos de lojas: deletar todos e re-inserir
+    // Replace store assignments: delete all then re-insert
     const { error: deleteError } = await supabase
       .from('user_stores')
       .delete()
@@ -107,8 +118,15 @@ export async function PUT(
 }
 
 /**
- * DELETE /api/admin/users/[id]
- * Deleta usuario do auth.users (CASCADE deleta de public.users automaticamente)
+ * Deletes a user from `auth.users` and cleans up all related records.
+ *
+ * `DELETE /api/admin/users/[id]`
+ *
+ * Before deleting, nullifies or reassigns foreign key references in:
+ * `activity_log`, `checklists`, `checklist_responses`, `attachments`, etc.
+ * The CASCADE from `auth.users` then removes the `public.users` row.
+ *
+ * @requires Admin authentication via `verifyApiAuth`
  */
 export async function DELETE(
   request: NextRequest,
@@ -131,18 +149,16 @@ export async function DELETE(
       auth: { autoRefreshToken: false, persistSession: false }
     })
 
-    // Limpar TODAS as referencias a public.users(id) antes de deletar
-    // (necessario porque FKs podem nao ter ON DELETE CASCADE/SET NULL)
     const adminUserId = auth.user.id
 
-    // 1. Deletar registros filhos (junction tables)
+    // Delete junction table records
     await Promise.allSettled([
       supabase.from('user_stores').delete().eq('user_id', userId),
       supabase.from('user_store_roles').delete().eq('user_id', userId),
       supabase.from('notifications').delete().eq('user_id', userId),
     ])
 
-    // 2. Nullificar FKs que referenciam public.users(id)
+    // Nullify foreign keys referencing this user
     await Promise.allSettled([
       supabase.from('activity_log').update({ user_id: null }).eq('user_id', userId),
       supabase.from('checklist_templates').update({ created_by: null }).eq('created_by', userId),
@@ -154,7 +170,7 @@ export async function DELETE(
       supabase.from('user_store_roles').update({ assigned_by: null }).eq('assigned_by', userId),
     ])
 
-    // 3. checklists.created_by pode ser NOT NULL — tenta null, senao reatribui ao admin
+    // Handle checklists.created_by (may be NOT NULL) — fallback to admin
     const { error: nullErr } = await supabase
       .from('checklists')
       .update({ created_by: null })
@@ -167,7 +183,7 @@ export async function DELETE(
         .eq('created_by', userId)
     }
 
-    // 4. Agora deletar do auth.users (CASCADE deleta public.users sem bloqueio)
+    // Delete from auth.users (CASCADE removes public.users)
     const { error } = await supabase.auth.admin.deleteUser(userId)
 
     if (error) {

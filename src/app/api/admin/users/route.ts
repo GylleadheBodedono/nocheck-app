@@ -3,11 +3,19 @@ export const runtime = 'edge'
 import { NextRequest, NextResponse } from 'next/server'
 import { verifyApiAuth } from '@/lib/api-auth'
 import { getSupabaseAdmin } from '@/lib/stripe'
+import { escapeHtml } from '@/lib/validation'
+
+// ── Route Handlers ──
 
 /**
- * GET /api/admin/users
- * Sincroniza auth.users com public.users e retorna a lista completa
- * Usuarios que existem no auth mas nao no public sao inseridos automaticamente
+ * Syncs `auth.users` with `public.users` and returns the full user list.
+ *
+ * `GET /api/admin/users`
+ *
+ * Users that exist in auth but not in public are inserted automatically.
+ * Returns users with their store, function, sector, and multi-store assignments.
+ *
+ * @requires Admin authentication via `verifyApiAuth`
  */
 export async function GET(request: NextRequest) {
   const auth = await verifyApiAuth(request, true)
@@ -16,7 +24,7 @@ export async function GET(request: NextRequest) {
   try {
     const supabase = getSupabaseAdmin()
 
-    // 1. Busca todos usuarios do auth.users
+    // Fetch all auth users
     const { data: authList, error: authError } = await supabase.auth.admin.listUsers()
 
     if (authError) {
@@ -24,14 +32,14 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: authError.message }, { status: 500 })
     }
 
-    // 2. Busca todos usuarios do public.users
+    // Fetch existing public.users IDs
     const { data: publicUsers } = await supabase
       .from('users')
       .select('id')
 
     const publicIds = new Set((publicUsers || []).map(u => u.id))
 
-    // 3. Insere usuarios que existem no auth mas nao no public
+    // Insert missing users (exist in auth but not in public)
     const missing = authList.users.filter(u => !publicIds.has(u.id))
 
     for (const authUser of missing) {
@@ -53,7 +61,7 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // 4. Retorna lista completa de public.users com loja/funcao/setor + multi-lojas
+    // Return full list with relations
     const { data: users, error: usersError } = await supabase
       .from('users')
       .select(`
@@ -91,9 +99,19 @@ export async function GET(request: NextRequest) {
 }
 
 /**
- * POST /api/admin/users
- * Cria usuario no auth.users (trigger cria em public.users automaticamente)
- * Depois atualiza o perfil e insere os roles
+ * Creates a new user in `auth.users` and configures their profile.
+ *
+ * `POST /api/admin/users` with body containing user details.
+ *
+ * Flow:
+ * 1. Checks the organization's user limit
+ * 2. Creates the auth user (auto-confirmed or with email confirmation)
+ * 3. Updates the profile in `public.users`
+ * 4. Inserts store assignments in `user_stores`
+ *
+ * When `autoConfirm` is false, sends a confirmation email via Resend.
+ *
+ * @requires Admin authentication via `verifyApiAuth`
  */
 export async function POST(request: NextRequest) {
   const auth = await verifyApiAuth(request, true)
@@ -123,10 +141,10 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // 0. Verificar limite de usuarios do plano
+    // ── Plan User Limit Check ──
+
     const adminClient = getSupabaseAdmin()
 
-    // Buscar org do usuario autenticado
     const { data: memberData } = await adminClient
       .from('organization_members')
       .select('organization_id')
@@ -150,18 +168,18 @@ export async function POST(request: NextRequest) {
 
         if (currentUsers >= maxUsers) {
           return NextResponse.json(
-            { error: `Limite de usuários atingido (${currentUsers}/${maxUsers}). Faça upgrade do plano para adicionar mais.` },
+            { error: `Limite de usuarios atingido (${currentUsers}/${maxUsers}). Faca upgrade do plano para adicionar mais.` },
             { status: 403 }
           )
         }
       }
     }
 
-    // 1. Criar usuario - auto-confirm usa admin API, senao usa signUp normal
+    // ── Create Auth User ──
+
     let userId: string
 
     if (autoConfirm) {
-      // Auto-confirm: usa admin API para criar usuario ja confirmado
       const { data: adminData, error: adminError } = await adminClient.auth.admin.createUser({
         email,
         password,
@@ -171,22 +189,16 @@ export async function POST(request: NextRequest) {
 
       if (adminError) {
         console.error('[API Users] Erro no admin.createUser:', adminError)
-        return NextResponse.json(
-          { error: adminError.message },
-          { status: 400 }
-        )
+        return NextResponse.json({ error: adminError.message }, { status: 400 })
       }
 
       if (!adminData.user) {
-        return NextResponse.json(
-          { error: 'Erro ao criar usuario' },
-          { status: 500 }
-        )
+        return NextResponse.json({ error: 'Erro ao criar usuario' }, { status: 500 })
       }
 
       userId = adminData.user.id
     } else {
-      // Sem auto-confirm: cria usuario com email NAO confirmado + envia email via Resend
+      // Create user with unconfirmed email, then send confirmation via Resend
       const { data: userData, error: createError } = await adminClient.auth.admin.createUser({
         email,
         password,
@@ -196,22 +208,16 @@ export async function POST(request: NextRequest) {
 
       if (createError) {
         console.error('[API Users] Erro no admin.createUser (sem confirm):', createError)
-        return NextResponse.json(
-          { error: createError.message },
-          { status: 400 }
-        )
+        return NextResponse.json({ error: createError.message }, { status: 400 })
       }
 
       if (!userData.user) {
-        return NextResponse.json(
-          { error: 'Erro ao criar usuario' },
-          { status: 500 }
-        )
+        return NextResponse.json({ error: 'Erro ao criar usuario' }, { status: 500 })
       }
 
       userId = userData.user.id
 
-      // Gerar link de confirmacao de email
+      // Send confirmation email
       try {
         const { data: linkData, error: linkError } = await adminClient.auth.admin.generateLink({
           type: 'signup',
@@ -223,72 +229,18 @@ export async function POST(request: NextRequest) {
         if (linkError) {
           console.warn('[API Users] Erro ao gerar link de confirmacao:', linkError)
         } else if (linkData?.properties?.action_link) {
-          // Enviar email de confirmacao diretamente via Resend API
-          const confirmUrl = linkData.properties.action_link
-          const emailHtml = buildConfirmationEmailHtml(fullName, confirmUrl)
-          const resendApiKey = process.env.RESEND_API_KEY
-          const fromEmail = process.env.RESEND_FROM_EMAIL || 'onboarding@resend.dev'
-
-          if (resendApiKey) {
-            const FALLBACK_FROM = 'onboarding@resend.dev'
-            const emailRes = await fetch('https://api.resend.com/emails', {
-              method: 'POST',
-              headers: {
-                'Authorization': `Bearer ${resendApiKey}`,
-                'Content-Type': 'application/json',
-              },
-              body: JSON.stringify({
-                from: fromEmail,
-                to: [email],
-                subject: 'Confirme seu email - OpereCheck',
-                html: emailHtml,
-              }),
-            })
-
-            if (emailRes.ok) {
-              const result = await emailRes.json()
-              console.log('[API Users] Email de confirmacao enviado para:', email, 'from:', fromEmail, 'id:', (result as { id?: string }).id)
-            } else if (fromEmail !== FALLBACK_FROM) {
-              // Fallback: dominio customizado falhou, tenta com onboarding@resend.dev
-              console.warn(`[API Users] Falha com ${fromEmail}, tentando fallback ${FALLBACK_FROM}...`)
-              const fallbackRes = await fetch('https://api.resend.com/emails', {
-                method: 'POST',
-                headers: {
-                  'Authorization': `Bearer ${resendApiKey}`,
-                  'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                  from: FALLBACK_FROM,
-                  to: [email],
-                  subject: 'Confirme seu email',
-                  html: emailHtml,
-                }),
-              })
-
-              if (fallbackRes.ok) {
-                const result = await fallbackRes.json()
-                console.log('[API Users] Email enviado via fallback para:', email, 'id:', (result as { id?: string }).id)
-              } else {
-                const errData = await fallbackRes.json().catch(() => ({}))
-                console.warn('[API Users] Fallback tambem falhou:', errData)
-              }
-            } else {
-              const errData = await emailRes.json().catch(() => ({}))
-              console.warn('[API Users] Falha ao enviar email via Resend:', errData)
-            }
-          } else {
-            console.warn('[API Users] RESEND_API_KEY nao configurada, email nao enviado')
-          }
+          await sendConfirmationEmail(email, fullName, linkData.properties.action_link)
         }
       } catch (linkErr) {
         console.warn('[API Users] Erro no fluxo de email de confirmacao:', linkErr)
       }
     }
 
-    // 2. Service role para atualizar perfil e roles
+    // ── Update Profile & Store Assignments ──
+
     const supabase = getSupabaseAdmin()
 
-    // Monta lista de lojas: novo formato (storeAssignments) ou legado (storeId/sectorId)
+    // Build store assignments from new format or legacy fields
     let assignments: { store_id: number; sector_id: number | null; is_primary: boolean }[] = []
     if (storeAssignments && storeAssignments.length > 0) {
       assignments = storeAssignments
@@ -296,10 +248,8 @@ export async function POST(request: NextRequest) {
       assignments = [{ store_id: storeId, sector_id: sectorId || null, is_primary: true }]
     }
 
-    // Loja primária para manter users.store_id sincronizado
     const primary = assignments.find(a => a.is_primary) || assignments[0] || null
 
-    // Atualiza perfil em public.users (trigger ja criou o registro)
     const { error: profileError } = await supabase
       .from('users')
       .update({
@@ -317,7 +267,6 @@ export async function POST(request: NextRequest) {
       console.error('[API Users] Erro ao atualizar perfil:', profileError)
     }
 
-    // Insere vínculos em user_stores
     if (assignments.length > 0 && !isAdmin) {
       const rows = assignments.map(a => ({
         user_id: userId,
@@ -338,10 +287,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       success: true,
       needsConfirmation: !autoConfirm,
-      user: {
-        id: userId,
-        email,
-      },
+      user: { id: userId, email },
     })
   } catch (error) {
     console.error('[API Users] Erro:', error)
@@ -352,19 +298,78 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// ============================================
-// EMAIL HTML BUILDER
-// ============================================
+// ── Email Helpers ──
 
-function escapeHtml(str: string): string {
-  return str
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#039;')
+/**
+ * Sends a confirmation email to a newly created user via the Resend API.
+ * Falls back to `onboarding@resend.dev` if the configured sender domain fails.
+ */
+async function sendConfirmationEmail(email: string, fullName: string, confirmUrl: string): Promise<void> {
+  const resendApiKey = process.env.RESEND_API_KEY
+  const fromEmail = process.env.RESEND_FROM_EMAIL || 'onboarding@resend.dev'
+
+  if (!resendApiKey) {
+    console.warn('[API Users] RESEND_API_KEY nao configurada, email nao enviado')
+    return
+  }
+
+  const FALLBACK_FROM = 'onboarding@resend.dev'
+  const emailHtml = buildConfirmationEmailHtml(fullName, confirmUrl)
+
+  const emailRes = await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${resendApiKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      from: fromEmail,
+      to: [email],
+      subject: 'Confirme seu email - OpereCheck',
+      html: emailHtml,
+    }),
+  })
+
+  if (emailRes.ok) {
+    const result = await emailRes.json()
+    console.log('[API Users] Email de confirmacao enviado para:', email, 'from:', fromEmail, 'id:', (result as { id?: string }).id)
+    return
+  }
+
+  // Fallback: try default sender if custom domain failed
+  if (fromEmail !== FALLBACK_FROM) {
+    console.warn(`[API Users] Falha com ${fromEmail}, tentando fallback ${FALLBACK_FROM}...`)
+    const fallbackRes = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${resendApiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        from: FALLBACK_FROM,
+        to: [email],
+        subject: 'Confirme seu email',
+        html: emailHtml,
+      }),
+    })
+
+    if (fallbackRes.ok) {
+      const result = await fallbackRes.json()
+      console.log('[API Users] Email enviado via fallback para:', email, 'id:', (result as { id?: string }).id)
+    } else {
+      const errData = await fallbackRes.json().catch(() => ({}))
+      console.warn('[API Users] Fallback tambem falhou:', errData)
+    }
+  } else {
+    const errData = await emailRes.json().catch(() => ({}))
+    console.warn('[API Users] Falha ao enviar email via Resend:', errData)
+  }
 }
 
+/**
+ * Builds the HTML template for the email confirmation message.
+ * Uses `escapeHtml` to prevent XSS in user-supplied values.
+ */
 function buildConfirmationEmailHtml(userName: string, confirmUrl: string, appName = 'OpereCheck', primaryColor = '#0D9488'): string {
   const safeName = escapeHtml(userName)
   const safeAppName = escapeHtml(appName)

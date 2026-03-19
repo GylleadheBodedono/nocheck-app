@@ -4,8 +4,17 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { verifyApiAuth } from '@/lib/api-auth'
 
+// ── Route Handler ──
+
+/**
+ * Checks whether a given email address already exists in the `users` table.
+ *
+ * `POST /api/auth/check-email` with body `{ email: string }`.
+ * Returns `{ exists: false }` for invalid input to prevent email enumeration.
+ *
+ * @requires Authentication via `verifyApiAuth`
+ */
 export async function POST(request: NextRequest) {
-  // Requer autenticação para prevenir email enumeration
   const auth = await verifyApiAuth(request)
   if (auth.error) return auth.error
 
@@ -16,7 +25,6 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ exists: false })
     }
 
-    // Validar formato de email
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
     if (!emailRegex.test(email)) {
       return NextResponse.json({ exists: false })

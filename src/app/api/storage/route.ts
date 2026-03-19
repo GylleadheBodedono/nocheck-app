@@ -3,13 +3,19 @@ export const runtime = 'edge'
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { verifyApiAuth } from '@/lib/api-auth'
+import { isValidStoragePath } from '@/lib/validation'
 
 export const dynamic = 'force-dynamic'
+
+// ── Supabase Config ──
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
 const BUCKET = 'checklist-images'
 
+// ── Types ──
+
+/** Represents a file entry returned by the storage listing. */
 type StorageFileItem = {
   name: string
   created_at: string
@@ -18,6 +24,12 @@ type StorageFileItem = {
   path: string
 }
 
+// ── Helpers ──
+
+/**
+ * Recursively lists all files in a storage folder up to `maxDepth` levels deep.
+ * Returns file metadata including public URLs.
+ */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function listRecursive(supabase: any, folder: string, maxDepth = 4): Promise<StorageFileItem[]> {
   const { data: entries } = await supabase.storage
@@ -54,9 +66,17 @@ async function listRecursive(supabase: any, folder: string, maxDepth = 4): Promi
   return files
 }
 
+// ── Route Handlers ──
+
 /**
- * GET /api/storage?folder=uploads
- * Lista arquivos de uma pasta no bucket (recursivo)
+ * Lists files in a storage folder recursively.
+ *
+ * `GET /api/storage?folder=uploads`
+ *
+ * Only allows access to `uploads/` and `anexos/` folders.
+ * Validates paths against traversal attacks.
+ *
+ * @requires Admin authentication via `verifyApiAuth`
  */
 export async function GET(request: NextRequest) {
   const auth = await verifyApiAuth(request, true)
@@ -65,13 +85,7 @@ export async function GET(request: NextRequest) {
   try {
     const folder = request.nextUrl.searchParams.get('folder') || 'uploads'
 
-    if ((!folder.startsWith('uploads/') && folder !== 'uploads') &&
-        (!folder.startsWith('anexos/') && folder !== 'anexos')) {
-      return NextResponse.json({ success: false, error: 'Pasta invalida' }, { status: 400 })
-    }
-
-    // Prevenir path traversal
-    if (folder.includes('..') || folder.includes('//')) {
+    if (!isValidStoragePath(folder)) {
       return NextResponse.json({ success: false, error: 'Caminho invalido' }, { status: 400 })
     }
 
@@ -89,9 +103,13 @@ export async function GET(request: NextRequest) {
 }
 
 /**
- * DELETE /api/storage
- * Remove arquivos do bucket
- * Body: { paths: ['uploads/file1.jpg'] }
+ * Removes files from the storage bucket.
+ *
+ * `DELETE /api/storage` with body `{ paths: string[] }`.
+ *
+ * Validates that all paths are within allowed folders before deletion.
+ *
+ * @requires Admin authentication via `verifyApiAuth`
  */
 export async function DELETE(request: NextRequest) {
   const auth = await verifyApiAuth(request, true)
@@ -105,12 +123,8 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ success: false, error: 'Nenhum arquivo especificado' }, { status: 400 })
     }
 
-    // Validate paths are in allowed folders and prevent path traversal
     for (const p of paths) {
-      if (!p.startsWith('uploads/') && !p.startsWith('anexos/')) {
-        return NextResponse.json({ success: false, error: 'Caminho invalido' }, { status: 400 })
-      }
-      if (p.includes('..') || p.includes('//')) {
+      if (!isValidStoragePath(p)) {
         return NextResponse.json({ success: false, error: 'Caminho invalido' }, { status: 400 })
       }
     }

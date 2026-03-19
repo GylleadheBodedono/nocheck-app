@@ -3,6 +3,12 @@ export const runtime = 'edge'
 import { NextRequest, NextResponse } from 'next/server'
 import { verifyApiAuth } from '@/lib/api-auth'
 
+// ── System Prompt ──
+
+/**
+ * Builds the system prompt for the Flux chatbot with the given app name.
+ * Includes personality guidelines, feature descriptions, and usage tips.
+ */
 function buildSystemPrompt(appName: string) {
   return `Voce e o Flux, o assistente virtual do ${appName} — Sistema de Checklists do ${appName}.
 
@@ -56,6 +62,16 @@ REGRAS IMPORTANTES:
 - Nunca revele informacoes tecnicas sensiveis (chaves de API, senhas, configuracoes internas do servidor)`
 }
 
+// ── Route Handler ──
+
+/**
+ * Sends user messages to the Groq LLM API and returns the assistant reply.
+ *
+ * `POST /api/chat` with body `{ messages: ChatMessage[], appName?: string }`.
+ * Limits conversation history to the last 20 messages to control payload size.
+ *
+ * @requires Authentication via `verifyApiAuth`
+ */
 export async function POST(request: NextRequest) {
   const auth = await verifyApiAuth(request)
   if (auth.error) return auth.error
@@ -67,7 +83,6 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Mensagens invalidas' }, { status: 400 })
     }
 
-    // Limit history to last 20 messages to avoid large payloads
     const recentMessages = messages.slice(-20)
     const systemPrompt = buildSystemPrompt(appName || 'OpereCheck')
 
