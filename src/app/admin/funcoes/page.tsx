@@ -16,7 +16,7 @@ import {
 } from 'react-icons/fi'
 import type { FunctionRow } from '@/types/database'
 import { APP_CONFIG } from '@/lib/config'
-import { LoadingPage, Header, PageContainer } from '@/components/ui'
+import { LoadingPage, PageContainer } from '@/components/ui'
 import { getAuthCache, getUserCache, getFunctionsCache } from '@/lib/offlineCache'
 import { useRealtimeRefresh } from '@/hooks/useRealtimeRefresh'
 
@@ -279,22 +279,17 @@ export default function FuncoesPage() {
   }
 
   return (
-    <div className="min-h-screen bg-page">
-      <Header
-        title="Funcoes"
-        icon={FiBriefcase}
-        backHref={APP_CONFIG.routes.admin}
-        actions={isOffline ? [] : [
-          {
-            label: 'Nova Funcao',
-            onClick: () => openModal(),
-            icon: FiPlus,
-            variant: 'primary',
-          },
-        ]}
-      />
-
+    <>
       <PageContainer>
+        {/* Top actions */}
+        {!isOffline && (
+          <div className="flex items-center justify-end mb-6">
+            <button onClick={() => openModal()} className="btn-primary flex items-center gap-2">
+              <FiPlus className="w-4 h-4" />
+              Nova Funcao
+            </button>
+          </div>
+        )}
         {/* Offline Warning */}
         {isOffline && (
           <div className="bg-warning/10 border border-warning/30 rounded-xl p-4 mb-6 flex items-center gap-3">
@@ -509,6 +504,6 @@ export default function FuncoesPage() {
           </div>
         </div>
       )}
-    </div>
+    </>
   )
 }

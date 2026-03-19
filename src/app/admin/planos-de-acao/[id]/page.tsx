@@ -8,7 +8,7 @@ import { useRouter, useParams } from 'next/navigation'
 import Link from 'next/link'
 import { createClient, isSupabaseConfigured } from '@/lib/supabase'
 import { APP_CONFIG } from '@/lib/config'
-import { LoadingPage, Header, PageContainer } from '@/components/ui'
+import { LoadingPage, PageContainer } from '@/components/ui'
 import {
   FiPlay,
   FiCheckCircle,
@@ -753,8 +753,6 @@ export default function ActionPlanDetailPage() {
 
   if (error && !plan) {
     return (
-      <div className="min-h-screen bg-page">
-        <Header title="Plano de Acao" backHref="/admin/planos-de-acao" />
         <PageContainer size="md">
           <div className="card p-8 text-center">
             <FiAlertCircle className="w-12 h-12 text-error mx-auto mb-4" />
@@ -767,7 +765,6 @@ export default function ActionPlanDetailPage() {
             </Link>
           </div>
         </PageContainer>
-      </div>
     )
   }
 
@@ -778,9 +775,7 @@ export default function ActionPlanDetailPage() {
   const severityConfig = SEVERITY_CONFIG[plan.severity] || SEVERITY_CONFIG.baixa
 
   return (
-    <div className="min-h-screen bg-page">
-      <Header title="Plano de Acao" backHref="/admin/planos-de-acao" />
-
+    <>
       <PageContainer size="md" className="space-y-6">
         {/* Error alert */}
         {error && (
@@ -1260,6 +1255,6 @@ export default function ActionPlanDetailPage() {
           </div>
         </div>
       )}
-    </div>
+    </>
   )
 }

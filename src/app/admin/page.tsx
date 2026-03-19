@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { createClient, isSupabaseConfigured } from '@/lib/supabase'
 import Link from 'next/link'
 import { APP_CONFIG } from '@/lib/config'
-import { LoadingPage, Header } from '@/components/ui'
+import { LoadingPage } from '@/components/ui'
 import {
   getAuthCache,
   getUserCache,
@@ -81,7 +81,6 @@ export default function AdminPage() {
     recentValidations: [],
   })
   const [loading, setLoading] = useState(true)
-  const [userName, setUserName] = useState('Admin User')
   const [ignoreTimeRestrictions, setIgnoreTimeRestrictions] = useState(false)
   const [togglingTime, setTogglingTime] = useState(false)
   const [bypassStoreIds, setBypassStoreIds] = useState<number[] | 'all'>('all')
@@ -114,9 +113,7 @@ export default function AdminPage() {
             .eq('id', user.id)
             .single()
           isAdmin = profile && 'is_admin' in profile ? (profile as { is_admin: boolean }).is_admin : false
-          if (profile && 'full_name' in profile && (profile as { full_name: string }).full_name) {
-            setUserName((profile as { full_name: string }).full_name)
-          }
+          // full_name available in profile if needed
         }
       } catch {
         console.log('[Admin] Falha ao buscar online, tentando cache...')
@@ -130,7 +127,7 @@ export default function AdminPage() {
             userId = cachedAuth.userId
             const cachedUser = await getUserCache(cachedAuth.userId)
             isAdmin = cachedUser?.is_admin || false
-            if (cachedUser?.full_name) setUserName(cachedUser.full_name)
+            // cachedUser full_name available if needed
           }
         } catch {
           console.log('[Admin] Falha ao buscar cache')
@@ -377,18 +374,6 @@ export default function AdminPage() {
     saveBypassStores(mode)
   }
 
-  const handleSignOut = async () => {
-    try {
-      if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
-        navigator.serviceWorker.controller.postMessage({ type: 'CLEAR_CACHE' })
-      }
-    } catch { /* ignore */ }
-    if (supabase) {
-      await supabase.auth.signOut()
-    }
-    router.push(APP_CONFIG.routes.login)
-  }
-
   if (loading) {
     return <LoadingPage />
   }
@@ -547,20 +532,7 @@ export default function AdminPage() {
   ]
 
   return (
-    <div className="min-h-screen bg-page">
-      <Header
-        title="Painel Admin"
-        subtitle={`${APP_CONFIG.name} v${APP_CONFIG.version}`}
-        icon={FiSettings}
-        showSearch
-        showNotifications
-        notificationCount={stats.pendingValidations}
-        userName={userName}
-        userRole="Super Admin"
-        isAdmin={true}
-        onSignOut={handleSignOut}
-      />
-
+    <>
       {/* Aviso para ativar notificacoes do sistema (PWA) */}
       {notificationBannerMounted && typeof window !== 'undefined' && 'Notification' in window && notificationPermission === 'default' && (
         <div className="mx-auto px-4 sm:px-6 lg:px-8 pt-4">
@@ -938,6 +910,6 @@ export default function AdminPage() {
           </aside>
         </div>
       </div>
-    </div>
+    </>
   )
 }

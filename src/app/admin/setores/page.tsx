@@ -21,7 +21,7 @@ import {
 } from 'react-icons/fi'
 import type { Store, Sector } from '@/types/database'
 import { APP_CONFIG } from '@/lib/config'
-import { LoadingPage, Header, Select, PageContainer } from '@/components/ui'
+import { LoadingPage, Select, PageContainer } from '@/components/ui'
 import { getAuthCache, getUserCache, getStoresCache, getSectorsCache } from '@/lib/offlineCache'
 import { useRealtimeRefresh } from '@/hooks/useRealtimeRefresh'
 
@@ -445,22 +445,17 @@ export default function SetoresPage() {
   }
 
   return (
-    <div className="min-h-screen bg-page">
-      <Header
-        title="Setores"
-        icon={FiGrid}
-        backHref={APP_CONFIG.routes.admin}
-        actions={isOffline ? [] : [
-          {
-            label: 'Novo Setor',
-            onClick: () => openSectorModal(),
-            icon: FiPlus,
-            variant: 'primary',
-          },
-        ]}
-      />
-
+    <>
       <PageContainer>
+        {/* Top actions */}
+        {!isOffline && (
+          <div className="flex items-center justify-end mb-6">
+            <button onClick={() => openSectorModal()} className="btn-primary flex items-center gap-2">
+              <FiPlus className="w-4 h-4" />
+              Novo Setor
+            </button>
+          </div>
+        )}
         {/* Offline Warning */}
         {isOffline && (
           <div className="bg-warning/10 border border-warning/30 rounded-xl p-4 mb-6 flex items-center gap-3">
@@ -876,6 +871,6 @@ export default function SetoresPage() {
           </div>
         </div>
       )}
-    </div>
+    </>
   )
 }

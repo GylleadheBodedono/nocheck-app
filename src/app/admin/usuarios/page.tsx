@@ -11,13 +11,12 @@ import {
   FiUserCheck,
   FiUserX,
   FiSearch,
-  FiUsers,
   FiWifiOff,
   FiStar,
 } from 'react-icons/fi'
 import type { User, Store, Sector, FunctionRow, UserStoreWithDetails } from '@/types/database'
 import { APP_CONFIG } from '@/lib/config'
-import { LoadingPage, Header, PageContainer } from '@/components/ui'
+import { LoadingPage, PageContainer } from '@/components/ui'
 import { getAuthCache, getUserCache, getAllUsersCache } from '@/lib/offlineCache'
 import { useRealtimeRefresh } from '@/hooks/useRealtimeRefresh'
 
@@ -308,23 +307,16 @@ export default function UsuariosPage() {
   }
 
   return (
-    <div className="min-h-screen bg-page">
-      <Header
-        title="Usuarios"
-        icon={FiUsers}
-        backHref={APP_CONFIG.routes.admin}
-        actions={isOffline ? [] : [
-          {
-            label: 'Novo Usuario',
-            href: APP_CONFIG.routes.adminUsersNew,
-            icon: FiPlus,
-            variant: 'primary',
-          },
-        ]}
-      />
-
-      {/* Main Content */}
       <PageContainer>
+        {/* Top actions */}
+        {!isOffline && (
+          <div className="flex items-center justify-end mb-6">
+            <Link href={APP_CONFIG.routes.adminUsersNew} className="btn-primary flex items-center gap-2">
+              <FiPlus className="w-4 h-4" />
+              Novo Usuario
+            </Link>
+          </div>
+        )}
         {/* Offline Warning */}
         {isOffline && (
           <div className="bg-warning/10 border border-warning/30 rounded-xl p-4 mb-6 flex items-center gap-3">
@@ -568,6 +560,5 @@ export default function UsuariosPage() {
           </p>
         </div>
       </PageContainer>
-    </div>
   )
 }

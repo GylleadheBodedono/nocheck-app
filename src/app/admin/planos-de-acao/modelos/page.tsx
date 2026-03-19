@@ -16,7 +16,7 @@ import {
   FiFileText,
 } from 'react-icons/fi'
 import { APP_CONFIG } from '@/lib/config'
-import { LoadingPage, Header, Select, PageContainer } from '@/components/ui'
+import { LoadingPage, Select, PageContainer } from '@/components/ui'
 import { getAuthCache, getUserCache } from '@/lib/offlineCache'
 import type { Severity } from '@/types/database'
 
@@ -307,13 +307,6 @@ export default function ModelosPlanoDeAcaoPage() {
   const inactivePresets = presets.filter(p => !p.is_active)
 
   return (
-    <div className="min-h-screen bg-page">
-      <Header
-        title="Modelos de Plano de Acao"
-        icon={FiLayers}
-        backHref="/admin/planos-de-acao"
-      />
-
       <PageContainer size="md" className="space-y-6">
 
         {/* Messages */}
@@ -569,6 +562,5 @@ export default function ModelosPlanoDeAcaoPage() {
           </div>
         )}
       </PageContainer>
-    </div>
   )
 }

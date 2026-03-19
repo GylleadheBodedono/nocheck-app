@@ -4,7 +4,7 @@ import { useEffect, useState, useMemo, useRef, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient, isSupabaseConfigured } from '@/lib/supabase'
 import { APP_CONFIG } from '@/lib/config'
-import { LoadingPage, Header, PageContainer } from '@/components/ui'
+import { LoadingPage, PageContainer } from '@/components/ui'
 import { getAuthCache, getUserCache } from '@/lib/offlineCache'
 import { useRealtimeRefresh } from '@/hooks/useRealtimeRefresh'
 import {
@@ -195,14 +195,7 @@ export default function GaleriaPage() {
   }
 
   return (
-    <div className="min-h-screen bg-page">
-      <Header
-        title="Galeria"
-        subtitle="Fotos e anexos do storage"
-        icon={FiImage}
-        backHref={APP_CONFIG.routes.admin}
-      />
-
+    <>
       <PageContainer className="!py-6">
         {/* Folder tabs */}
         <div className="flex gap-3 mb-6">
@@ -389,7 +382,7 @@ export default function GaleriaPage() {
           </div>
         </div>
       )}
-    </div>
+    </>
   )
 }
 

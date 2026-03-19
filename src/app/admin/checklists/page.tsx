@@ -4,7 +4,7 @@ import { useEffect, useState, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { APP_CONFIG } from '@/lib/config'
-import { LoadingPage, Header, Select, PageContainer } from '@/components/ui'
+import { LoadingPage, Select, PageContainer } from '@/components/ui'
 import {
   FiTrash2,
   FiSearch,
@@ -335,12 +335,6 @@ export default function AdminChecklistsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-page">
-      <Header
-        title="Gerenciar Checklists"
-        backHref={APP_CONFIG.routes.admin}
-      />
-
       <PageContainer>
         {/* Offline Warning */}
         {isOffline && (
@@ -582,6 +576,5 @@ export default function AdminChecklistsPage() {
           )}
         </div>
       </PageContainer>
-    </div>
   )
 }

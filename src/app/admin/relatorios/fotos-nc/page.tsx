@@ -17,7 +17,7 @@ import {
 } from 'react-icons/fi'
 import Link from 'next/link'
 import { APP_CONFIG } from '@/lib/config'
-import { LoadingPage, Header, Select, PageContainer } from '@/components/ui'
+import { LoadingPage, Select, PageContainer } from '@/components/ui'
 import { getAuthCache, getUserCache } from '@/lib/offlineCache'
 import { useRealtimeRefresh } from '@/hooks/useRealtimeRefresh'
 import {
@@ -280,13 +280,7 @@ export default function FotosNCPage() {
   if (loading) return <LoadingPage />
 
   return (
-    <div className="min-h-screen bg-background">
-      <Header
-        title="Relatorio Fotografico NC"
-        icon={FiCamera}
-        backHref={APP_CONFIG.routes.adminReports}
-      />
-
+    <>
       <PageContainer className="!py-6 space-y-6">
         {/* Filters */}
         <div className="card p-4 sticky top-0 z-10 space-y-3">
@@ -504,7 +498,7 @@ export default function FotosNCPage() {
           />
         </div>
       )}
-    </div>
+    </>
   )
 }
 

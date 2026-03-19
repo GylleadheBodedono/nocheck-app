@@ -7,7 +7,7 @@ import { useRealtimeDashboard } from '@/hooks/useRealtimeDashboard'
 import { APP_CONFIG } from '@/lib/config'
 import type { User } from '@supabase/supabase-js'
 import type { Store, ChecklistTemplate, Checklist, Sector, FunctionRow } from '@/types/database'
-import { LoadingPage, Header, PageContainer } from '@/components/ui'
+import { LoadingPage, PageContainer } from '@/components/ui'
 import { FiClipboard, FiClock, FiCheckCircle, FiUser, FiCalendar, FiAlertCircle, FiRefreshCw, FiAlertTriangle, FiUploadCloud, FiLayers, FiPlay, FiArrowRight, FiCloudOff, FiBell, FiTool, FiExternalLink, FiBarChart2, FiChevronRight } from 'react-icons/fi'
 import Link from 'next/link'
 import {
@@ -845,6 +845,7 @@ export default function DashboardPage() {
     fetchData()
   }, [refreshTrigger])
 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const handleSignOut = async () => {
     await fullLogout(supabase)
   }
@@ -974,47 +975,30 @@ export default function DashboardPage() {
   // User has no access (no store assigned, not admin)
   if (!profile?.is_admin && stores.length === 0) {
     return (
-      <div className="min-h-screen bg-page">
-        <Header
-          userName={profile?.full_name}
-          isAdmin={profile?.is_admin}
-          showAdminLink
-          onSignOut={handleSignOut}
-        />
-
-        <PageContainer>
-          <div className="text-center py-16">
-            <div className="w-20 h-20 rounded-full bg-warning/20 flex items-center justify-center mx-auto mb-6">
-              <FiAlertCircle className="w-10 h-10 text-warning" />
-            </div>
-            <h2 className="text-2xl font-bold text-main mb-2">
-              Acesso Pendente
-            </h2>
-            <p className="text-muted max-w-md mx-auto mb-6">
-              Sua conta ainda nao foi configurada com acesso a nenhuma loja.
-              Entre em contato com o administrador para liberar seu acesso.
-            </p>
-            <div className="card p-6 max-w-sm mx-auto">
-              <p className="text-sm text-secondary mb-2">Seus dados:</p>
-              <p className="font-medium text-main">{profile?.full_name}</p>
-              <p className="text-sm text-muted">{profile?.email}</p>
-            </div>
+      <PageContainer>
+        <div className="text-center py-16">
+          <div className="w-20 h-20 rounded-full bg-warning/20 flex items-center justify-center mx-auto mb-6">
+            <FiAlertCircle className="w-10 h-10 text-warning" />
           </div>
-        </PageContainer>
-      </div>
+          <h2 className="text-2xl font-bold text-main mb-2">
+            Acesso Pendente
+          </h2>
+          <p className="text-muted max-w-md mx-auto mb-6">
+            Sua conta ainda nao foi configurada com acesso a nenhuma loja.
+            Entre em contato com o administrador para liberar seu acesso.
+          </p>
+          <div className="card p-6 max-w-sm mx-auto">
+            <p className="text-sm text-secondary mb-2">Seus dados:</p>
+            <p className="font-medium text-main">{profile?.full_name}</p>
+            <p className="text-sm text-muted">{profile?.email}</p>
+          </div>
+        </div>
+      </PageContainer>
     )
   }
 
   return (
-    <div className="min-h-screen bg-page">
-      <Header
-        userName={profile?.full_name}
-        isAdmin={profile?.is_admin}
-        showAdminLink
-        showNotifications
-        onSignOut={handleSignOut}
-      />
-
+    <>
       {/* Aviso para ativar notificacoes do sistema (PWA) */}
       {notificationBannerMounted && typeof window !== 'undefined' && 'Notification' in window && notificationPermission === 'default' && (
         <div className="mx-auto px-4 sm:px-6 lg:px-8 pt-4">
@@ -1831,6 +1815,6 @@ export default function DashboardPage() {
           </div>
         </div>
       </PageContainer>
-    </div>
+    </>
   )
 }

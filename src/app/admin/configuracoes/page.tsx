@@ -3,9 +3,9 @@
 import { useEffect, useState, useMemo, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient, isSupabaseConfigured } from '@/lib/supabase'
-import { FiSettings, FiCopy, FiEye, FiSave, FiRotateCcw, FiSend, FiChevronDown, FiChevronUp, FiCheck } from 'react-icons/fi'
+import { FiCopy, FiEye, FiSave, FiRotateCcw, FiSend, FiChevronDown, FiChevronUp, FiCheck } from 'react-icons/fi'
 import { APP_CONFIG } from '@/lib/config'
-import { LoadingPage, Header, PageContainer } from '@/components/ui'
+import { LoadingPage, PageContainer } from '@/components/ui'
 import { getAuthCache, getUserCache } from '@/lib/offlineCache'
 import { useRealtimeRefresh } from '@/hooks/useRealtimeRefresh'
 import {
@@ -215,13 +215,6 @@ export default function ConfiguracoesPage() {
   if (loading) return <LoadingPage />
 
   return (
-    <div className="min-h-screen bg-page">
-      <Header
-        title="Configuracoes"
-        icon={FiSettings}
-        backHref="/admin"
-      />
-
       <PageContainer size="md" className="space-y-6">
 
         {/* Variaveis Disponiveis */}
@@ -397,6 +390,5 @@ export default function ConfiguracoesPage() {
           </p>
         )}
       </PageContainer>
-    </div>
   )
 }

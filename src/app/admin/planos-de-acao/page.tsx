@@ -5,7 +5,6 @@ import { useRealtimeRefresh } from '@/hooks/useRealtimeRefresh'
 import { useRouter } from 'next/navigation'
 import { createClient, isSupabaseConfigured } from '@/lib/supabase'
 import {
-  FiAlertTriangle,
   FiAlertCircle,
   FiCheckCircle,
   FiFilter,
@@ -21,7 +20,7 @@ import {
 } from 'react-icons/fi'
 import Link from 'next/link'
 import { APP_CONFIG } from '@/lib/config'
-import { LoadingPage, Header, Select, PageContainer } from '@/components/ui'
+import { LoadingPage, Select, PageContainer } from '@/components/ui'
 import { getAuthCache, getUserCache, getActionPlansCache, getStoresCache, getAllUsersCache } from '@/lib/offlineCache'
 
 type ActionPlan = {
@@ -390,13 +389,6 @@ export default function PlanoDeAcaoPage() {
   }
 
   return (
-    <div className="min-h-screen bg-page">
-      <Header
-        title={isAdmin ? 'Planos de Acao' : 'Meus Planos de Acao'}
-        icon={FiAlertTriangle}
-        backHref={isAdmin ? APP_CONFIG.routes.admin : APP_CONFIG.routes.dashboard}
-      />
-
       <PageContainer>
         {/* Offline Warning */}
         {isOffline && (
@@ -711,6 +703,5 @@ export default function PlanoDeAcaoPage() {
           )}
         </div>
       </PageContainer>
-    </div>
   )
 }

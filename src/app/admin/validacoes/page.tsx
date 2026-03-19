@@ -4,7 +4,7 @@ import { useEffect, useState, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient, isSupabaseConfigured } from '@/lib/supabase'
 import { APP_CONFIG } from '@/lib/config'
-import { LoadingPage, Header, Select, PageContainer } from '@/components/ui'
+import { LoadingPage, Select, PageContainer } from '@/components/ui'
 import {
   FiCheckCircle,
   FiXCircle,
@@ -401,13 +401,6 @@ export default function ValidacoesPage() {
   }
 
   return (
-    <div className="min-h-screen bg-page">
-      <Header
-        title="Validacoes Cruzadas"
-        icon={FiCheckCircle}
-        backHref={APP_CONFIG.routes.admin}
-      />
-
       <PageContainer>
         {/* Offline Warning */}
         {isOffline && (
@@ -712,6 +705,5 @@ export default function ValidacoesPage() {
           Mostrando {groupedValidations.length} validacoes
         </div>
       </PageContainer>
-    </div>
   )
 }

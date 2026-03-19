@@ -7,10 +7,10 @@ import { useRealtimeRefresh } from '@/hooks/useRealtimeRefresh'
 import { useRouter, useParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import Link from 'next/link'
-import { FiSave, FiUserCheck } from 'react-icons/fi'
+import { FiSave } from 'react-icons/fi'
 import type { User, Store, Sector, FunctionRow, UserStoreWithDetails } from '@/types/database'
 import { APP_CONFIG } from '@/lib/config'
-import { LoadingPage, Header, Select, PageContainer } from '@/components/ui'
+import { LoadingPage, Select, PageContainer } from '@/components/ui'
 
 type UserWithAssignment = User & {
   store: Store | null
@@ -239,13 +239,6 @@ export default function EditarUsuarioPage() {
   }
 
   return (
-    <div className="min-h-screen bg-page">
-      <Header
-        title="Editar Usuario"
-        icon={FiUserCheck}
-        backHref={APP_CONFIG.routes.adminUsers}
-      />
-
       <PageContainer size="sm">
         <form onSubmit={handleSubmit} className="space-y-6">
           {/* Success Message */}
@@ -454,6 +447,5 @@ export default function EditarUsuarioPage() {
           </div>
         </form>
       </PageContainer>
-    </div>
   )
 }

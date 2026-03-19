@@ -4,9 +4,9 @@ import { useEffect, useState, useMemo } from 'react'
 import { useRealtimeRefresh } from '@/hooks/useRealtimeRefresh'
 import { useRouter } from 'next/navigation'
 import { createClient, isSupabaseConfigured } from '@/lib/supabase'
-import { FiSave, FiFileText } from 'react-icons/fi'
+import { FiSave } from 'react-icons/fi'
 import { APP_CONFIG } from '@/lib/config'
-import { LoadingPage, Header, Select, PageContainer } from '@/components/ui'
+import { LoadingPage, Select, PageContainer } from '@/components/ui'
 import { getAuthCache, getUserCache } from '@/lib/offlineCache'
 import { createNotification, sendEmailNotification } from '@/lib/notificationService'
 import { buildEmailFromTemplate, SEVERITY_COLORS, type EmailTemplateVariables } from '@/lib/emailTemplateEngine'
@@ -256,13 +256,6 @@ export default function NovoPlanoDeAcaoPage() {
   }
 
   return (
-    <div className="min-h-screen bg-page">
-      <Header
-        title="Novo Plano de Acao"
-        icon={FiFileText}
-        backHref="/admin/planos-de-acao"
-      />
-
       <PageContainer size="sm">
         <form onSubmit={handleSubmit} className="space-y-6">
           <div className="card p-6">
@@ -411,6 +404,5 @@ export default function NovoPlanoDeAcaoPage() {
           </div>
         </form>
       </PageContainer>
-    </div>
   )
 }

@@ -19,7 +19,7 @@ import {
 } from 'react-icons/fi'
 import type { ChecklistTemplate, TemplateField, Store, TemplateSection } from '@/types/database'
 import { APP_CONFIG } from '@/lib/config'
-import { LoadingPage, Header } from '@/components/ui'
+import { LoadingPage } from '@/components/ui'
 import { processarValidacaoCruzada } from '@/lib/crossValidation'
 import { processarNaoConformidades } from '@/lib/actionPlanEngine'
 import { saveOfflineChecklist, updateChecklistStatus, getPendingChecklists, updateOfflineFieldResponse, putOfflineChecklist, getOfflineChecklist, deleteOfflineChecklist, type PendingChecklist } from '@/lib/offlineStorage'
@@ -2150,12 +2150,6 @@ function ChecklistForm() {
     const allJustified = emptyRequiredFields.every(f => justifications[f.id]?.trim() && justifications[f.id].trim().length >= 3)
     return (
       <div className="min-h-screen bg-page">
-        <Header
-          onBack={() => setShowJustificationScreen(false)}
-          title="Justificativas"
-          subtitle={template.name}
-          icon={FiAlertCircle}
-        />
         <main className="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           <div className="card p-4 sm:p-6 mb-6 border-l-4 border-warning">
             <p className="text-sm text-secondary">
@@ -2280,27 +2274,11 @@ function ChecklistForm() {
       const progress = sectionProgress.find(sp => sp.section_id === sub.id)
       return progress?.status === 'concluido'
     }).length
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const progressPct = subSections.length > 0 ? Math.round((completedSubCount / subSections.length) * 100) : 0
 
     return (
       <div className="min-h-screen bg-page">
-        <Header
-          onBack={() => setActiveParentSection(null)}
-          title={parentSection?.name || 'Etapa'}
-          subtitle={template.name}
-          icon={FiLayers}
-          rightSlot={
-            <div className="text-right">
-              <p className="text-xs sm:text-sm font-medium text-primary">{completedSubCount}/{subSections.length}</p>
-              <p className="text-[10px] sm:text-xs text-muted">sub-etapas</p>
-            </div>
-          }
-        >
-          <div className="h-1 bg-surface-hover">
-            <div className="h-full bg-primary transition-all duration-300" style={{ width: `${progressPct}%` }} />
-          </div>
-        </Header>
-
         <main className="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           <div className="flex items-center gap-2 mb-1">
             <FiLayers className="w-5 h-5 text-primary" />
@@ -2370,27 +2348,11 @@ function ChecklistForm() {
     const totalCount = hasSubSections
       ? flatSections.length + (hasGeneralFields ? 1 : 0)
       : topLevelSections.length + (hasGeneralFields ? 1 : 0)
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const progressPct = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0
 
     return (
       <div className="min-h-screen bg-page">
-        <Header
-          onBack={handleBackToDashboard}
-          title={template.name}
-          subtitle={store.name}
-          icon={FiLayers}
-          rightSlot={
-            <div className="text-right">
-              <p className="text-xs sm:text-sm font-medium text-primary">{completedCount}/{totalCount}</p>
-              <p className="text-[10px] sm:text-xs text-muted">etapas</p>
-            </div>
-          }
-        >
-          <div className="h-1 bg-surface-hover">
-            <div className="h-full bg-primary transition-all duration-300" style={{ width: `${progressPct}%` }} />
-          </div>
-        </Header>
-
         <main className="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           <div className="flex items-center gap-2 mb-6">
             <FiLayers className="w-5 h-5 text-primary" />
@@ -2587,6 +2549,7 @@ function ChecklistForm() {
   // ============ SECTIONED TEMPLATE: FILLING A SPECIFIC SECTION ============
   if (hasSections && activeSection !== null) {
     const isGeneralSection = activeSection === -1
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const section = isGeneralSection ? null : sortedSections.find(s => s.id === activeSection)
     const sectionFields = isGeneralSection
       ? generalFields
@@ -2598,33 +2561,18 @@ function ChecklistForm() {
       const v = responses[f.id]
       return v !== undefined && v !== null && v !== '' && !(Array.isArray(v) && v.length === 0)
     }).length
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const progressPct = sectionFields.length > 0 ? Math.round((filledCount / sectionFields.length) * 100) : 0
 
     // In hierarchical mode, show parent name as subtitle
     const parentName = hasSubSections && activeParentSection !== null
       ? parentSections.find(s => s.id === activeParentSection)?.name
       : undefined
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const headerSubtitle = parentName ? `${parentName} — ${template.name}` : template.name
 
     return (
       <div className="min-h-screen bg-page">
-        <Header
-          onBack={handleSectionBack}
-          title={isGeneralSection ? 'Campos Gerais' : section?.name}
-          subtitle={headerSubtitle}
-          icon={FiLayers}
-          rightSlot={
-            <div className="text-right">
-              <p className="text-xs sm:text-sm font-medium text-primary">{progressPct}%</p>
-              <p className="text-[10px] sm:text-xs text-muted">completo</p>
-            </div>
-          }
-        >
-          <div className="h-1 bg-surface-hover">
-            <div className="h-full bg-primary transition-all duration-300" style={{ width: `${progressPct}%` }} />
-          </div>
-        </Header>
-
         <main className="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
             <div className="space-y-6">
               {isDone && (
@@ -2888,6 +2836,7 @@ function ChecklistForm() {
   // ============ NON-SECTIONED TEMPLATE: ORIGINAL LINEAR FORM ============
   const visibleFields = template.fields.filter(f => f.field_type !== 'gps')
 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const progress = visibleFields.length > 0
     ? Math.round((Object.keys(responses).filter(k => {
         const v = responses[Number(k)]
@@ -2897,23 +2846,6 @@ function ChecklistForm() {
 
   return (
     <div className="min-h-screen bg-page">
-      <Header
-        onBack={handleBackToDashboard}
-        title={template.name}
-        subtitle={store.name}
-        icon={FiLayers}
-        rightSlot={
-          <div className="text-right">
-            <p className="text-xs sm:text-sm font-medium text-primary">{progress}%</p>
-            <p className="text-[10px] sm:text-xs text-muted">completo</p>
-          </div>
-        }
-      >
-        <div className="h-1 bg-surface-hover">
-          <div className="h-full bg-primary transition-all duration-300" style={{ width: `${progress}%` }} />
-        </div>
-      </Header>
-
       <main className="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
         <div className="space-y-4 sm:space-y-6">
           {visibleFields.map((field, index) => (

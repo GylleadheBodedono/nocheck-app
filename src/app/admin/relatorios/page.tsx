@@ -22,7 +22,7 @@ import {
 } from 'react-icons/fi'
 import Link from 'next/link'
 import { APP_CONFIG } from '@/lib/config'
-import { LoadingPage, Header, Select, PageContainer } from '@/components/ui'
+import { LoadingPage, Select, PageContainer } from '@/components/ui'
 import { getAuthCache, getUserCache } from '@/lib/offlineCache'
 import { useRealtimeRefresh } from '@/hooks/useRealtimeRefresh'
 import { fetchComplianceData, fetchReincidenciaData, fetchStoreHeatmap, type ComplianceSummary, type FieldComplianceRow, type StoreComplianceRow, type ReincidenciaSummary, type ReincidenciaRow, type AssigneeStats, type HeatmapCell } from '@/lib/analyticsQueries'
@@ -761,14 +761,6 @@ export default function RelatoriosPage() {
   }
 
   return (
-    <div className="min-h-screen bg-page">
-      <Header
-        title="Relatorios"
-        icon={FiBarChart2}
-        backHref={APP_CONFIG.routes.admin}
-      />
-
-      {/* Main Content */}
       <PageContainer>
         {/* Offline Warning */}
         {isOffline && (
@@ -1679,6 +1671,5 @@ export default function RelatoriosPage() {
           </div>
         )}
       </PageContainer>
-    </div>
   )
 }

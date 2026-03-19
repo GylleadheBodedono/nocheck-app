@@ -3,10 +3,10 @@
 import { useEffect, useState, useMemo } from 'react'
 import { createClient } from '@/lib/supabase'
 import Link from 'next/link'
-import { FiSave, FiUserPlus, FiCheckCircle, FiMail } from 'react-icons/fi'
+import { FiSave, FiCheckCircle, FiMail } from 'react-icons/fi'
 import type { Store, Sector, FunctionRow } from '@/types/database'
 import { APP_CONFIG } from '@/lib/config'
-import { Header, Select, PageContainer } from '@/components/ui'
+import { Select, PageContainer } from '@/components/ui'
 
 export default function NovoUsuarioPage() {
   const [stores, setStores] = useState<Store[]>([])
@@ -144,13 +144,6 @@ export default function NovoUsuarioPage() {
   }
 
   return (
-    <div className="min-h-screen bg-page">
-      <Header
-        title="Novo Usuario"
-        icon={FiUserPlus}
-        backHref={APP_CONFIG.routes.adminUsers}
-      />
-
       <PageContainer size="sm">
         {/* Success screen */}
         {success && (
@@ -415,6 +408,5 @@ export default function NovoUsuarioPage() {
           </form>
         )}
       </PageContainer>
-    </div>
   )
 }

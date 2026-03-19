@@ -7,7 +7,7 @@ import { useRealtimeRefresh } from '@/hooks/useRealtimeRefresh'
 import { useRouter, useParams } from 'next/navigation'
 import { createClient, isSupabaseConfigured } from '@/lib/supabase'
 import { APP_CONFIG } from '@/lib/config'
-import { LoadingPage, Header } from '@/components/ui'
+import { LoadingPage } from '@/components/ui'
 import { ReadOnlyFieldRenderer } from '@/components/fields/ReadOnlyFieldRenderer'
 import type { TemplateField, GPSValue } from '@/types/database'
 import {
@@ -388,17 +388,14 @@ export default function ChecklistViewPage() {
 
   if (error) {
     return (
-      <div className="min-h-screen bg-page">
-        <Header title="Checklist" backHref={APP_CONFIG.routes.dashboard} />
-        <main className="max-w-2xl mx-auto px-4 py-8">
-          <div className="card p-8 text-center">
-            <p className="text-red-400 mb-4">{error}</p>
-            <button onClick={() => router.back()} className="btn-primary px-6 py-2 rounded-xl">
-              Voltar
-            </button>
-          </div>
-        </main>
-      </div>
+      <main className="max-w-2xl mx-auto px-4 py-8">
+        <div className="card p-8 text-center">
+          <p className="text-red-400 mb-4">{error}</p>
+          <button onClick={() => router.back()} className="btn-primary px-6 py-2 rounded-xl">
+            Voltar
+          </button>
+        </div>
+      </main>
     )
   }
 
@@ -407,12 +404,6 @@ export default function ChecklistViewPage() {
   const status = statusLabel[checklist.status] || { text: checklist.status, color: 'bg-gray-500/20 text-gray-400' }
 
   return (
-    <div className="min-h-screen bg-page">
-      <Header
-        title={checklist.template?.name || 'Checklist'}
-        backHref={APP_CONFIG.routes.dashboard}
-      />
-
       <main className="max-w-2xl mx-auto px-4 py-6 space-y-6">
         {/* Metadata Card */}
         <div className="card p-5 space-y-3">
@@ -733,6 +724,5 @@ export default function ChecklistViewPage() {
           )}
         </div>
       </main>
-    </div>
   )
 }

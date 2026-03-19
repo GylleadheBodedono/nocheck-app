@@ -12,12 +12,11 @@ import {
   FiEyeOff,
   FiCopy,
   FiSearch,
-  FiClipboard,
   FiWifiOff,
   FiStar,
 } from 'react-icons/fi'
 import { APP_CONFIG } from '@/lib/config'
-import { LoadingPage, Header, PageContainer } from '@/components/ui'
+import { LoadingPage, PageContainer } from '@/components/ui'
 import type { ChecklistTemplate, TemplateField, TemplateVisibility, Store } from '@/types/database'
 import { getAuthCache, getUserCache, getTemplatesCache, getStoresCache } from '@/lib/offlineCache'
 import { useRealtimeRefresh } from '@/hooks/useRealtimeRefresh'
@@ -386,23 +385,16 @@ export default function TemplatesPage() {
   }
 
   return (
-    <div className="min-h-screen bg-page">
-      <Header
-        title="Modelos de Checklist"
-        icon={FiClipboard}
-        backHref={APP_CONFIG.routes.admin}
-        actions={isOffline ? [] : [
-          {
-            label: 'Novo Checklist',
-            href: APP_CONFIG.routes.adminTemplatesNew,
-            icon: FiPlus,
-            variant: 'primary',
-          },
-        ]}
-      />
-
-      {/* Main Content */}
       <PageContainer>
+        {/* Top actions */}
+        {!isOffline && (
+          <div className="flex items-center justify-end mb-6">
+            <Link href={APP_CONFIG.routes.adminTemplatesNew} className="btn-primary flex items-center gap-2">
+              <FiPlus className="w-4 h-4" />
+              Novo Checklist
+            </Link>
+          </div>
+        )}
         {/* Offline Warning */}
         {isOffline && (
           <div className="bg-warning/10 border border-warning/30 rounded-xl p-4 mb-6 flex items-center gap-3">
@@ -618,6 +610,5 @@ export default function TemplatesPage() {
           </p>
         </div>
       </PageContainer>
-    </div>
   )
 }
