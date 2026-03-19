@@ -66,9 +66,9 @@ const EMPTY_FORM: PresetForm = {
 
 const SEVERITY_OPTIONS: { value: Severity; label: string; color: string }[] = [
   { value: 'baixa', label: 'Baixa', color: 'text-success' },
-  { value: 'media', label: 'Media', color: 'text-warning' },
+  { value: 'media', label: 'Média', color: 'text-warning' },
   { value: 'alta', label: 'Alta', color: 'text-orange-500' },
-  { value: 'critica', label: 'Critica', color: 'text-error' },
+  { value: 'critica', label: 'Crítica', color: 'text-error' },
 ]
 
 const SEVERITY_BADGE: Record<string, string> = {
@@ -205,7 +205,7 @@ export default function ModelosPlanoDeAcaoPage() {
 
   const handleSave = async () => {
     if (!form.name.trim()) {
-      setError('Nome do modelo e obrigatorio')
+      setError('Nome do modelo é obrigatório')
       return
     }
 
@@ -271,7 +271,7 @@ export default function ModelosPlanoDeAcaoPage() {
   }
 
   const handleDelete = async (preset: Preset) => {
-    if (!confirm(`Excluir o modelo "${preset.name}"? Esta acao nao pode ser desfeita.`)) return
+    if (!confirm(`Excluir o modelo "${preset.name}"? Esta ação não pode ser desfeita.`)) return
 
     try {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -281,7 +281,7 @@ export default function ModelosPlanoDeAcaoPage() {
         .eq('id', preset.id)
       if (delErr) throw delErr
       await fetchData()
-      setSuccess('Modelo excluido')
+      setSuccess('Modelo excluído')
       setTimeout(() => setSuccess(null), 3000)
     } catch (err) {
       console.error('[Modelos] Erro ao excluir:', err)
@@ -301,7 +301,7 @@ export default function ModelosPlanoDeAcaoPage() {
   return (
     <div className="min-h-screen bg-page">
       <Header
-        title="Modelos de Plano de Acao"
+        title="Modelos de Plano de Ação"
         icon={FiLayers}
         backHref="/admin/planos-de-acao"
       />
@@ -353,7 +353,7 @@ export default function ModelosPlanoDeAcaoPage() {
                 value={form.name}
                 onChange={(e) => setForm(f => ({ ...f, name: e.target.value }))}
                 className="input"
-                placeholder="Ex: Camera com problema, Temperatura fora do padrao"
+                placeholder="Ex: Câmera com problema, Temperatura fora do padrão"
               />
             </div>
 
@@ -380,7 +380,7 @@ export default function ModelosPlanoDeAcaoPage() {
             </div>
 
             <div>
-              <label className="block text-xs font-medium text-secondary mb-1">Responsavel padrao</label>
+              <label className="block text-xs font-medium text-secondary mb-1">Responsável padrão</label>
               <Select
                 value={form.default_assignee_id}
                 onChange={(v) => setForm(f => ({ ...f, default_assignee_id: v }))}
@@ -388,36 +388,36 @@ export default function ModelosPlanoDeAcaoPage() {
                 options={users.map(u => ({ value: u.id, label: u.full_name }))}
               />
               <p className="text-xs text-muted mt-1">
-                Se nao selecionado, o plano sera atribuido a quem preencheu o checklist.
+                Se não selecionado, o plano será atribuído a quem preencheu o checklist.
               </p>
             </div>
 
             <div>
-              <label className="block text-xs font-medium text-secondary mb-1">Descricao do plano</label>
+              <label className="block text-xs font-medium text-secondary mb-1">Descrição do plano</label>
               <textarea
                 value={form.description_template}
                 onChange={(e) => setForm(f => ({ ...f, description_template: e.target.value }))}
                 className="input min-h-[80px]"
-                placeholder="Ex: Nao conformidade: {field_name} com valor {value} na {store_name}"
+                placeholder="Ex: Não conformidade: {field_name} com valor {value} na {store_name}"
                 rows={3}
               />
               <p className="text-xs text-muted mt-1">
-                Variaveis disponiveis: {'{field_name}'}, {'{value}'}, {'{store_name}'}
+                Variáveis disponíveis: {'{field_name}'}, {'{value}'}, {'{store_name}'}
               </p>
             </div>
 
             {/* Exigencias para conclusao */}
             <div className="border-t border-subtle pt-4 mt-2">
-              <label className="block text-xs font-medium text-secondary mb-3">Exigencias para Conclusao</label>
+              <label className="block text-xs font-medium text-secondary mb-3">Exigências para Conclusão</label>
               <div className="p-3 bg-primary/5 border border-primary/20 rounded-lg mb-3">
                 <div className="flex items-center gap-2 text-sm text-primary">
                   <FiCamera className="w-4 h-4" />
                   <FiFileText className="w-4 h-4" />
-                  <span>Foto e texto sao obrigatorios para concluir o plano de acao.</span>
+                  <span>Foto e texto são obrigatórios para concluir o plano de ação.</span>
                 </div>
               </div>
               <div>
-                <label className="block text-xs font-medium text-secondary mb-1">Maximo de caracteres</label>
+                <label className="block text-xs font-medium text-secondary mb-1">Máximo de caracteres</label>
                 <input
                   type="number"
                   min={50}
@@ -443,7 +443,7 @@ export default function ModelosPlanoDeAcaoPage() {
                 ) : (
                   <>
                     <FiSave className="w-4 h-4" />
-                    {editingId ? 'Salvar Alteracoes' : 'Criar Modelo'}
+                    {editingId ? 'Salvar Alterações' : 'Criar Modelo'}
                   </>
                 )}
               </button>
@@ -461,7 +461,7 @@ export default function ModelosPlanoDeAcaoPage() {
             <FiLayers className="w-12 h-12 text-muted mx-auto mb-4 opacity-50" />
             <p className="text-muted mb-2">Nenhum modelo criado ainda.</p>
             <p className="text-xs text-muted mb-4">
-              Crie modelos para agilizar a configuracao de condicoes de nao-conformidade nos templates de checklist.
+              Crie modelos para agilizar a configuração de condições de não-conformidade nos templates de checklist.
             </p>
             <button onClick={handleNew} className="btn-primary inline-flex items-center gap-2">
               <FiPlus className="w-4 h-4" />
@@ -483,9 +483,9 @@ export default function ModelosPlanoDeAcaoPage() {
                   <div className="flex items-center gap-4 text-xs text-muted">
                     <span>Prazo: {preset.deadline_days} dia(s)</span>
                     <span>
-                      Responsavel: {
+                      Responsável: {
                         preset.default_assignee_id
-                          ? users.find(u => u.id === preset.default_assignee_id)?.full_name || 'Usuario'
+                          ? users.find(u => u.id === preset.default_assignee_id)?.full_name || 'Usuário'
                           : 'Quem preencheu'
                       }
                     </span>

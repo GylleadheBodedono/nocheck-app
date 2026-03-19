@@ -915,7 +915,7 @@ export default function DashboardPage() {
     const badges: Record<string, { label: string; class: string }> = {
       rascunho: { label: 'Rascunho', class: 'bg-surface-hover text-muted' },
       em_andamento: { label: 'Em Andamento', class: 'bg-warning/20 text-warning' },
-      concluido: { label: 'Concluido', class: 'bg-success/20 text-success' },
+      concluido: { label: 'Concluído', class: 'bg-success/20 text-success' },
       validado: { label: 'Validado', class: 'bg-info/20 text-info' },
       incompleto: { label: 'Incompleto', class: 'bg-error/20 text-error' },
     }
@@ -966,7 +966,7 @@ export default function DashboardPage() {
               Acesso Pendente
             </h2>
             <p className="text-muted max-w-md mx-auto mb-6">
-              Sua conta ainda nao foi configurada com acesso a nenhuma loja.
+              Sua conta ainda não foi configurada com acesso a nenhuma loja.
               Entre em contato com o administrador para liberar seu acesso.
             </p>
             <div className="card p-6 max-w-sm mx-auto">
@@ -1006,7 +1006,7 @@ export default function DashboardPage() {
                   Receba avisos no celular
                 </p>
                 <p className="text-xs text-muted">
-                  Planos de acao, vencimentos e alertas como notificacao do sistema.
+                  Planos de ação, vencimentos e alertas como notificação do sistema.
                 </p>
               </div>
             </div>
@@ -1019,7 +1019,7 @@ export default function DashboardPage() {
               }}
               className="btn-primary text-sm shrink-0 self-start sm:self-center"
             >
-              Ativar notificacoes
+              Ativar notificações
             </button>
           </div>
         </div>
@@ -1038,10 +1038,10 @@ export default function DashboardPage() {
               </div>
               <div>
                 <p className="font-medium text-main">
-                  Voce tem {pendingActionPlans} plano{pendingActionPlans > 1 ? 's' : ''} de acao pendente{pendingActionPlans > 1 ? 's' : ''}
+                  Você tem {pendingActionPlans} plano{pendingActionPlans > 1 ? 's' : ''} de ação pendente{pendingActionPlans > 1 ? 's' : ''}
                 </p>
                 <p className="text-xs text-muted">
-                  Clique para ver seus planos de acao
+                  Clique para ver seus planos de ação
                 </p>
               </div>
             </div>
@@ -1055,7 +1055,7 @@ export default function DashboardPage() {
         {/* Stats */}
         <div className="flex items-center justify-between mb-3">
           <p className="text-sm font-medium text-muted">
-            {profile?.is_admin ? 'Dados do sistema' : isTechUser ? 'Meus planos de acao' : 'Seus dados'}
+            {profile?.is_admin ? 'Dados do sistema' : isTechUser ? 'Meus planos de ação' : 'Seus dados'}
           </p>
         </div>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
@@ -1096,7 +1096,7 @@ export default function DashboardPage() {
                     <p className="text-2xl font-bold text-main">
                       {myActionPlans.filter(p => p.status === 'concluido').length}
                     </p>
-                    <p className="text-xs text-muted">Concluidos</p>
+                    <p className="text-xs text-muted">Concluídos</p>
                   </div>
                 </div>
               </div>
@@ -1163,7 +1163,7 @@ export default function DashboardPage() {
                   </div>
                   <div>
                     <p className="text-2xl font-bold text-main">{stats.completedThisMonth}</p>
-                    <p className="text-xs text-muted">Este Mes</p>
+                    <p className="text-xs text-muted">Este Mês</p>
                   </div>
                 </div>
               </div>
@@ -1181,10 +1181,10 @@ export default function DashboardPage() {
                 </div>
                 <div>
                   <p className="font-medium text-main">
-                    {stats.pendingSync} checklist{stats.pendingSync > 1 ? 's' : ''} aguardando sincronizacao
+                    {stats.pendingSync} checklist{stats.pendingSync > 1 ? 's' : ''} aguardando sincronização
                   </p>
                   <p className="text-xs text-muted">
-                    {navigator.onLine ? 'Conectado - pronto para sincronizar' : 'Offline - sincronizara automaticamente quando conectar'}
+                    {navigator.onLine ? 'Conectado - pronto para sincronizar' : 'Offline - sincronizará automaticamente quando conectar'}
                   </p>
                 </div>
               </div>
@@ -1209,11 +1209,11 @@ export default function DashboardPage() {
             <div className="md:col-span-2 card p-5">
               <h2 className="text-lg font-semibold text-main mb-4 flex items-center gap-2">
                 <FiTool className="w-5 h-5 text-primary" />
-                Meus Planos de Acao
+                Meus Planos de Ação
               </h2>
               {myActionPlans.length === 0 ? (
                 <div className="p-4 text-center">
-                  <p className="text-sm text-muted">Nenhum plano de acao atribuido</p>
+                  <p className="text-sm text-muted">Nenhum plano de ação atribuído</p>
                 </div>
               ) : (
                 <>
@@ -1228,7 +1228,7 @@ export default function DashboardPage() {
                       const statusConfig: Record<string, { label: string; cls: string }> = {
                         aberto:       { label: 'Aberto',       cls: 'bg-error/20 text-error' },
                         em_andamento: { label: 'Em Andamento', cls: 'bg-warning/20 text-warning' },
-                        concluido:    { label: 'Concluido',    cls: 'bg-success/20 text-success' },
+                        concluido:    { label: 'Concluído',    cls: 'bg-success/20 text-success' },
                         vencido:      { label: 'Vencido',      cls: 'bg-error/20 text-error' },
                       }
                       const sev = sevConfig[plan.severity] || sevConfig.media
@@ -1251,7 +1251,7 @@ export default function DashboardPage() {
                             </span>
                             {plan.is_reincidencia && (
                               <span className="px-2 py-0.5 rounded text-xs font-bold bg-error/20 text-error">
-                                Reincidencia
+                                Reincidência
                               </span>
                             )}
                           </div>
@@ -1282,11 +1282,11 @@ export default function DashboardPage() {
             <div className="card p-5">
               <h2 className="text-lg font-semibold text-main mb-4 flex items-center gap-2">
                 <FiBell className="w-5 h-5 text-primary" />
-                Notificacoes
+                Notificações
               </h2>
               {myNotifications.length === 0 ? (
                 <div className="p-4 text-center">
-                  <p className="text-sm text-muted">Nenhuma notificacao recente</p>
+                  <p className="text-sm text-muted">Nenhuma notificação recente</p>
                 </div>
               ) : (
                 <div className="space-y-2">
@@ -1331,11 +1331,11 @@ export default function DashboardPage() {
             <div className="card p-5">
               <h2 className="text-lg font-semibold text-main mb-4 flex items-center gap-2">
                 <FiClock className="w-5 h-5 text-primary" />
-                Historico Recente
+                Histórico Recente
               </h2>
               {recentChecklists.length === 0 ? (
                 <div className="p-4 text-center">
-                  <p className="text-sm text-muted">Voce ainda nao preencheu nenhum checklist</p>
+                  <p className="text-sm text-muted">Você ainda não preencheu nenhum checklist</p>
                 </div>
               ) : (
                 <div className="space-y-2">
@@ -1473,7 +1473,7 @@ export default function DashboardPage() {
                             {item.store?.name} - {formatDate(item.created_at)}
                           </p>
                           {!withinTime && (
-                            <p className="text-xs text-warning font-medium mb-2">Fora do horario permitido</p>
+                            <p className="text-xs text-warning font-medium mb-2">Fora do horário permitido</p>
                           )}
                           {hasSections && pct !== null && (
                             <>
@@ -1483,7 +1483,7 @@ export default function DashboardPage() {
                                   style={{ width: `${pct}%` }}
                                 />
                               </div>
-                              <p className="text-xs text-muted mt-1">{pct}% concluido</p>
+                              <p className="text-xs text-muted mt-1">{pct}% concluído</p>
                             </>
                           )}
                         </>
@@ -1493,7 +1493,7 @@ export default function DashboardPage() {
                           <div
                             key={item.id}
                             className="p-5 border-l-4 border-warning rounded-xl border border-subtle bg-surface opacity-75 cursor-not-allowed"
-                            title="Fora do horario permitido para preenchimento"
+                            title="Fora do horário permitido para preenchimento"
                           >
                             {cardContent}
                           </div>
@@ -1552,7 +1552,7 @@ export default function DashboardPage() {
                                   style={{ width: `${pct}%` }}
                                 />
                               </div>
-                              <p className="text-xs text-muted mt-1">{pct}% concluido</p>
+                              <p className="text-xs text-muted mt-1">{pct}% concluído</p>
                             </>
                           )}
                         </Link>
@@ -1606,7 +1606,7 @@ export default function DashboardPage() {
                           </div>
                           <div className="flex items-center gap-2">
                             <span className="badge-secondary text-xs bg-success/20 text-success">
-                              Concluido hoje
+                              Concluído hoje
                             </span>
                           </div>
                         </div>
@@ -1677,7 +1677,7 @@ export default function DashboardPage() {
           <div>
             <h2 className="text-lg font-semibold text-main mb-4 flex items-center gap-2">
               <FiClock className="w-5 h-5 text-primary" />
-              Historico Recente
+              Histórico Recente
             </h2>
 
             {/* Pending Checklists (excluding drafts — those show in "Continuar Preenchimento") */}
@@ -1687,7 +1687,7 @@ export default function DashboardPage() {
                 <div className="mb-4">
                   <p className="text-xs font-medium text-warning mb-2 flex items-center gap-1">
                     <FiUploadCloud className="w-3 h-3" />
-                    Aguardando Sincronizacao
+                    Aguardando Sincronização
                   </p>
                   <div className="space-y-2">
                     {syncablePending.map(pending => {
@@ -1747,7 +1747,7 @@ export default function DashboardPage() {
               <div className="card p-6 text-center">
                 <FiClipboard className="w-10 h-10 text-muted mx-auto mb-3" />
                 <p className="text-muted text-sm">
-                  Voce ainda nao preencheu nenhum checklist
+                  Você ainda não preencheu nenhum checklist
                 </p>
               </div>
             ) : recentChecklists.length > 0 ? (

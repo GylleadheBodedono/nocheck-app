@@ -4,7 +4,9 @@ import { useState, useEffect } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { PlatformSidebar } from '@/components/platform/PlatformSidebar'
-import { FiMenu, FiSearch, FiBell, FiHelpCircle } from 'react-icons/fi'
+import { PlatformSearch } from '@/components/platform/PlatformSearch'
+import { ClientDetailModal } from '@/components/platform/ClientDetailModal'
+import { FiMenu, FiBell, FiHelpCircle } from 'react-icons/fi'
 import { LoadingPage } from '@/components/ui'
 
 // Breadcrumb baseado na rota
@@ -20,6 +22,7 @@ export default function PlatformLayout({ children }: { children: React.ReactNode
   const [loading, setLoading] = useState(true)
   const [userName, setUserName] = useState('')
   const [userInitial, setUserInitial] = useState('A')
+  const [searchOrgId, setSearchOrgId] = useState<string | null>(null)
   const router = useRouter()
   const pathname = usePathname()
 
@@ -74,10 +77,7 @@ export default function PlatformLayout({ children }: { children: React.ReactNode
             </div>
 
             {/* Search */}
-            <div className="hidden md:flex items-center gap-2 px-3 py-2 bg-surface-hover rounded-xl border border-subtle text-muted text-sm w-56">
-              <FiSearch className="w-3.5 h-3.5" />
-              <span>Buscar...</span>
-            </div>
+            <PlatformSearch onSelectOrg={setSearchOrgId} />
 
             {/* Actions */}
             <button className="p-2 text-muted hover:text-secondary rounded-lg hover:bg-surface-hover"><FiBell className="w-4 h-4" /></button>
@@ -93,6 +93,12 @@ export default function PlatformLayout({ children }: { children: React.ReactNode
           {children}
         </main>
       </div>
+
+      {/* Modal opened from global search */}
+      <ClientDetailModal
+        orgId={searchOrgId}
+        onClose={() => setSearchOrgId(null)}
+      />
     </div>
   )
 }

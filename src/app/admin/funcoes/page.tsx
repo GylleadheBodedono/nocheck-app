@@ -221,7 +221,7 @@ export default function FuncoesPage() {
       fetchData()
     } catch (error) {
       console.error('Error saving function:', error)
-      alert('Erro ao salvar funcao')
+      alert('Erro ao salvar função')
     }
 
     setSaving(false)
@@ -243,7 +243,7 @@ export default function FuncoesPage() {
   }
 
   const deleteFunction = async (fn: FunctionRow) => {
-    if (!confirm(`Tem certeza que deseja excluir a funcao "${fn.name}"?`)) return
+    if (!confirm(`Tem certeza que deseja excluir a função "${fn.name}"?`)) return
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { error } = await (supabase as any)
@@ -253,7 +253,7 @@ export default function FuncoesPage() {
 
     if (error) {
       console.error('Error deleting function:', error)
-      alert('Erro ao excluir funcao. Verifique se nao existem usuarios vinculados.')
+      alert('Erro ao excluir função. Verifique se não existem usuários vinculados.')
       return
     }
 
@@ -274,12 +274,12 @@ export default function FuncoesPage() {
   return (
     <div className="min-h-screen bg-page">
       <Header
-        title="Funcoes"
+        title="Funções"
         icon={FiBriefcase}
         backHref={APP_CONFIG.routes.admin}
         actions={isOffline ? [] : [
           {
-            label: 'Nova Funcao',
+            label: 'Nova Função',
             onClick: () => openModal(),
             icon: FiPlus,
             variant: 'primary',
@@ -293,7 +293,7 @@ export default function FuncoesPage() {
           <div className="bg-warning/10 border border-warning/30 rounded-xl p-4 mb-6 flex items-center gap-3">
             <FiWifiOff className="w-5 h-5 text-warning" />
             <p className="text-warning text-sm">
-              Voce esta offline. Os dados mostrados sao do cache local. Edicoes nao estao disponiveis.
+              Você está offline. Os dados mostrados são do cache local. Edições não estão disponíveis.
             </p>
           </div>
         )}
@@ -304,7 +304,7 @@ export default function FuncoesPage() {
             <FiSearch className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted" />
             <input
               type="text"
-              placeholder="Buscar funcao..."
+              placeholder="Buscar função..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="input pl-10"
@@ -316,7 +316,7 @@ export default function FuncoesPage() {
         <div className="card overflow-hidden">
           {filteredFunctions.length === 0 ? (
             <div className="p-12 text-center text-muted">
-              {searchTerm ? 'Nenhuma funcao encontrada' : 'Nenhuma funcao cadastrada'}
+              {searchTerm ? 'Nenhuma função encontrada' : 'Nenhuma função cadastrada'}
             </div>
           ) : (
             <div className="divide-y divide-subtle">
@@ -349,7 +349,7 @@ export default function FuncoesPage() {
                       {/* Stats */}
                       <div className="hidden sm:flex items-center gap-1 text-sm text-muted">
                         <FiUsers className="w-4 h-4" />
-                        <span>{fn.user_count} usuarios</span>
+                        <span>{fn.user_count} usuários</span>
                       </div>
 
                       {/* Actions */}
@@ -392,7 +392,7 @@ export default function FuncoesPage() {
 
         {/* Summary */}
         <div className="mt-6 flex items-center justify-between text-sm text-muted">
-          <p>Total: {functions.length} funcoes</p>
+          <p>Total: {functions.length} funções</p>
           <p>
             {functions.filter(f => f.is_active).length} ativas, {functions.filter(f => !f.is_active).length} inativas
           </p>
@@ -404,7 +404,7 @@ export default function FuncoesPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
           <div className="card w-full max-w-md mx-4 p-6">
             <h2 className="text-xl font-bold text-main mb-6">
-              {editingFunction ? 'Editar Funcao' : 'Nova Funcao'}
+              {editingFunction ? 'Editar Função' : 'Nova Função'}
             </h2>
 
             <form onSubmit={handleSubmit} className="space-y-4">
@@ -424,14 +424,14 @@ export default function FuncoesPage() {
 
               <div>
                 <label className="block text-sm font-medium text-secondary mb-1">
-                  Descricao
+                  Descrição
                 </label>
                 <input
                   type="text"
                   value={formData.description}
                   onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                   className="input"
-                  placeholder="Descricao opcional..."
+                  placeholder="Descrição opcional..."
                 />
               </div>
 
@@ -467,7 +467,7 @@ export default function FuncoesPage() {
                   className="input"
                   placeholder="https://....webhook.office.com/..."
                 />
-                <p className="text-xs text-muted mt-1">URL do webhook do canal Teams para alertas desta funcao</p>
+                <p className="text-xs text-muted mt-1">URL do webhook do canal Teams para alertas desta função</p>
               </div>
               <div>
                 <label className="flex items-center gap-2 cursor-pointer">
@@ -477,7 +477,7 @@ export default function FuncoesPage() {
                     onChange={(e) => setFormData({ ...formData, is_active: e.target.checked })}
                     className="w-5 h-5 rounded border-default bg-surface text-primary"
                   />
-                  <span className="text-sm text-secondary">Funcao ativa</span>
+                  <span className="text-sm text-secondary">Função ativa</span>
                 </label>
               </div>
 

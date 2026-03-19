@@ -824,9 +824,10 @@ export default function LandingPage() {
 
       {/* ═══════════════════ STATS ═══════════════════ */}
       <section className="py-24 px-6 relative">
-        <div className="absolute inset-0 bg-gradient-to-b from-transparent via-[#0D9488]/[0.02] to-transparent" />
+        <div className="absolute inset-0 bg-white/4 backdrop-blur-2xl  rounded-2xl shadow-lg
+  shadow-black/10 " />
 
-        <div className="max-w-5xl mx-auto relative">
+        <div className="max-w-5xl mx-auto  relative">
           <motion.div
             initial="hidden"
             whileInView="visible"
@@ -903,16 +904,17 @@ export default function LandingPage() {
       <FAQSection />
 
       {/* ═══════════════════ CTA FINAL ═══════════════════ */}
-      <section id="contato" className="py-28 px-6 relative scroll-mt-20">
-        <div className="absolute inset-0 overflow-hidden">
+      <section id="contato" className="py-28 px-6 flex w-full bg-white/4 backdrop-blur-2xl rounded-2xl shadow-lg
+  shadow-black/10  scroll-mt-20">
+        <div className=" inset-0 overflow-hidden">
           <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-[1000px] h-[500px] rounded-full opacity-[0.08]"
             style={{ background: 'radial-gradient(ellipse, #0D9488 0%, transparent 60%)' }}
           />
         </div>
 
-        <div className="max-w-3xl mx-auto text-center relative">
+        <div className=" flex flex-col w-full text-center relative">
           <div className="mb-6">
-            <div className="text-3xl sm:text-4xl lg:text-5xl font-bold tracking-tight">
+            <div className="text-3xl sm:text-4xl lg:text-5xl font-bold tracking-tight ">
               <TitleWord word="Experimente" delay={0.1} />
               <TitleWord word="o" delay={0.18} />
               <TitleWord word="OpereCheck" delay={0.26} gradient />

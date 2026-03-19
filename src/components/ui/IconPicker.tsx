@@ -113,7 +113,7 @@ export function IconPicker({ value, onChange, fallback }: IconPickerProps) {
             ? 'border-primary bg-primary/10 ring-2 ring-primary/30'
             : 'border-subtle bg-surface-hover hover:border-primary/50'
         }`}
-        title="Escolher icone"
+        title="Escolher ícone"
       >
         {SelectedIcon ? (
           <SelectedIcon className="w-4 h-4 text-primary" />
@@ -144,7 +144,7 @@ export function IconPicker({ value, onChange, fallback }: IconPickerProps) {
               type="button"
               onClick={handleRandom}
               className="p-1.5 text-muted hover:text-primary hover:bg-primary/10 rounded-lg transition-colors"
-              title="Aleatorio"
+              title="Aleatório"
             >
               <FiShuffle className="w-3.5 h-3.5" />
             </button>
@@ -153,7 +153,7 @@ export function IconPicker({ value, onChange, fallback }: IconPickerProps) {
                 type="button"
                 onClick={handleClear}
                 className="p-1.5 text-muted hover:text-error hover:bg-error/10 rounded-lg transition-colors"
-                title="Remover icone"
+                title="Remover ícone"
               >
                 <FiX className="w-3.5 h-3.5" />
               </button>
@@ -182,7 +182,7 @@ export function IconPicker({ value, onChange, fallback }: IconPickerProps) {
               )
             })}
             {filtered.length === 0 && (
-              <p className="col-span-7 text-center text-xs text-muted py-4">Nenhum icone encontrado</p>
+              <p className="col-span-7 text-center text-xs text-muted py-4">Nenhum ícone encontrado</p>
             )}
           </div>
         </div>

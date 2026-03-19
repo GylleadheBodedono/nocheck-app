@@ -117,7 +117,7 @@ export default function GaleriaPage() {
   const visibleFiles = filteredFiles.slice(0, visibleCount)
 
   const handleDelete = async (file: StorageFile) => {
-    if (!window.confirm(`Deletar "${file.name}"? Esta acao nao pode ser desfeita.`)) return
+    if (!window.confirm(`Deletar "${file.name}"? Esta ação não pode ser desfeita.`)) return
 
     setDeleting(file.path)
     try {

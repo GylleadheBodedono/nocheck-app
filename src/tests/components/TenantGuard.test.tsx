@@ -133,7 +133,7 @@ describe('TenantGuard', () => {
       )
 
       expect(screen.queryByTestId('export')).not.toBeInTheDocument()
-      expect(screen.getByText(/nao esta disponivel no seu plano/)).toBeInTheDocument()
+      expect(screen.getByText(/não está disponível no seu plano/)).toBeInTheDocument()
     })
 
     it('superadmin bypassa feature check', () => {

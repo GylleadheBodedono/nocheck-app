@@ -62,7 +62,7 @@ describe('FieldConditionEditor', () => {
           users={mockUsers}
         />
       )
-      expect(screen.getByText('Condicao de Nao Conformidade')).toBeInTheDocument()
+      expect(screen.getByText('Condição de Não Conformidade')).toBeInTheDocument()
     })
 
     it('retorna null para tipo de campo nao suportado', () => {
@@ -128,7 +128,7 @@ describe('FieldConditionEditor', () => {
           users={mockUsers}
         />
       )
-      fireEvent.click(screen.getByText('Condicao de Nao Conformidade'))
+      fireEvent.click(screen.getByText('Condição de Não Conformidade'))
       expect(onChange).toHaveBeenCalledWith(
         expect.objectContaining({
           enabled: true,
@@ -152,7 +152,7 @@ describe('FieldConditionEditor', () => {
           users={mockUsers}
         />
       )
-      fireEvent.click(screen.getByText('Condicao de Nao Conformidade'))
+      fireEvent.click(screen.getByText('Condição de Não Conformidade'))
       expect(onChange).toHaveBeenCalledWith(
         expect.objectContaining({
           conditionType: 'less_than',
@@ -172,7 +172,7 @@ describe('FieldConditionEditor', () => {
           users={mockUsers}
         />
       )
-      fireEvent.click(screen.getByText('Condicao de Nao Conformidade'))
+      fireEvent.click(screen.getByText('Condição de Não Conformidade'))
       expect(onChange).toHaveBeenCalledWith(
         expect.objectContaining({
           conditionType: 'less_than',
@@ -192,7 +192,7 @@ describe('FieldConditionEditor', () => {
           users={mockUsers}
         />
       )
-      fireEvent.click(screen.getByText('Condicao de Nao Conformidade'))
+      fireEvent.click(screen.getByText('Condição de Não Conformidade'))
       expect(onChange).toHaveBeenCalledWith(
         expect.objectContaining({
           conditionType: 'in_list',
@@ -212,7 +212,7 @@ describe('FieldConditionEditor', () => {
           users={mockUsers}
         />
       )
-      fireEvent.click(screen.getByText('Condicao de Nao Conformidade'))
+      fireEvent.click(screen.getByText('Condição de Não Conformidade'))
       expect(onChange).toHaveBeenCalledWith(
         expect.objectContaining({
           conditionType: 'in_list',
@@ -232,7 +232,7 @@ describe('FieldConditionEditor', () => {
           users={mockUsers}
         />
       )
-      fireEvent.click(screen.getByText('Condicao de Nao Conformidade'))
+      fireEvent.click(screen.getByText('Condição de Não Conformidade'))
       expect(onChange).toHaveBeenCalledWith(
         expect.objectContaining({
           conditionType: 'empty',
@@ -243,7 +243,7 @@ describe('FieldConditionEditor', () => {
   })
 
   // ============================================
-  // Modal — Remover condicao
+  // Modal — Remover condição
   // ============================================
 
   describe('remover condicao', () => {
@@ -259,9 +259,9 @@ describe('FieldConditionEditor', () => {
         />
       )
       // Open modal
-      fireEvent.click(screen.getByText('Condicao de Nao Conformidade'))
+      fireEvent.click(screen.getByText('Condição de Não Conformidade'))
       // Click remove
-      fireEvent.click(screen.getByText('Remover condicao'))
+      fireEvent.click(screen.getByText('Remover condição'))
       expect(onChange).toHaveBeenCalledWith(null)
     })
   })
@@ -284,7 +284,7 @@ describe('FieldConditionEditor', () => {
           onSaveAsPreset={vi.fn()}
         />
       )
-      fireEvent.click(screen.getByText('Condicao de Nao Conformidade'))
+      fireEvent.click(screen.getByText('Condição de Não Conformidade'))
       return onChange
     }
 
@@ -300,12 +300,12 @@ describe('FieldConditionEditor', () => {
 
     it('mostra campo de responsavel padrao', () => {
       renderWithModal()
-      expect(screen.getByText('Responsavel padrao')).toBeInTheDocument()
+      expect(screen.getByText('Responsável padrão')).toBeInTheDocument()
     })
 
     it('mostra campo de descricao do plano', () => {
       renderWithModal()
-      expect(screen.getByText('Descricao do plano')).toBeInTheDocument()
+      expect(screen.getByText('Descrição do plano')).toBeInTheDocument()
     })
 
     it('mostra variaveis disponiveis para descricao', () => {
@@ -318,7 +318,7 @@ describe('FieldConditionEditor', () => {
 
     it('mostra secao de exigencias para conclusao', () => {
       renderWithModal()
-      expect(screen.getByText('Exigencias para Conclusao')).toBeInTheDocument()
+      expect(screen.getByText('Exigências para Conclusão')).toBeInTheDocument()
     })
 
     it('mostra campo de max caracteres', () => {
@@ -370,8 +370,8 @@ describe('FieldConditionEditor', () => {
           users={mockUsers}
         />
       )
-      fireEvent.click(screen.getByText('Condicao de Nao Conformidade'))
-      expect(screen.getByText('Valor que indica nao conformidade')).toBeInTheDocument()
+      fireEvent.click(screen.getByText('Condição de Não Conformidade'))
+      expect(screen.getByText('Valor que indica não conformidade')).toBeInTheDocument()
     })
   })
 
@@ -396,8 +396,8 @@ describe('FieldConditionEditor', () => {
           users={mockUsers}
         />
       )
-      fireEvent.click(screen.getByText('Condicao de Nao Conformidade'))
-      expect(screen.getByText('Minimo')).toBeInTheDocument()
+      fireEvent.click(screen.getByText('Condição de Não Conformidade'))
+      expect(screen.getByText('Mínimo')).toBeInTheDocument()
     })
 
     it('mostra campo Maximo para greater_than', () => {
@@ -410,8 +410,8 @@ describe('FieldConditionEditor', () => {
           users={mockUsers}
         />
       )
-      fireEvent.click(screen.getByText('Condicao de Nao Conformidade'))
-      expect(screen.getByText('Maximo')).toBeInTheDocument()
+      fireEvent.click(screen.getByText('Condição de Não Conformidade'))
+      expect(screen.getByText('Máximo')).toBeInTheDocument()
     })
 
     it('mostra campos Min e Max para between', () => {
@@ -424,9 +424,9 @@ describe('FieldConditionEditor', () => {
           users={mockUsers}
         />
       )
-      fireEvent.click(screen.getByText('Condicao de Nao Conformidade'))
-      expect(screen.getByText('Minimo')).toBeInTheDocument()
-      expect(screen.getByText('Maximo')).toBeInTheDocument()
+      fireEvent.click(screen.getByText('Condição de Não Conformidade'))
+      expect(screen.getByText('Mínimo')).toBeInTheDocument()
+      expect(screen.getByText('Máximo')).toBeInTheDocument()
     })
 
     it('atualiza valor min', () => {
@@ -440,7 +440,7 @@ describe('FieldConditionEditor', () => {
           users={mockUsers}
         />
       )
-      fireEvent.click(screen.getByText('Condicao de Nao Conformidade'))
+      fireEvent.click(screen.getByText('Condição de Não Conformidade'))
       const minInput = screen.getByDisplayValue('5')
       fireEvent.change(minInput, { target: { value: '10' } })
       expect(onChange).toHaveBeenCalledWith(
@@ -472,7 +472,7 @@ describe('FieldConditionEditor', () => {
           users={mockUsers}
         />
       )
-      fireEvent.click(screen.getByText('Condicao de Nao Conformidade'))
+      fireEvent.click(screen.getByText('Condição de Não Conformidade'))
       // "menor que" appears in both the label and the description text
       expect(screen.getAllByText(/menor que/).length).toBeGreaterThanOrEqual(1)
       expect(screen.getByDisplayValue('3')).toBeInTheDocument()
@@ -489,7 +489,7 @@ describe('FieldConditionEditor', () => {
           users={mockUsers}
         />
       )
-      fireEvent.click(screen.getByText('Condicao de Nao Conformidade'))
+      fireEvent.click(screen.getByText('Condição de Não Conformidade'))
       const input = screen.getByDisplayValue('3')
       fireEvent.change(input, { target: { value: '4' } })
       expect(onChange).toHaveBeenCalledWith(
@@ -523,8 +523,8 @@ describe('FieldConditionEditor', () => {
           users={mockUsers}
         />
       )
-      fireEvent.click(screen.getByText('Condicao de Nao Conformidade'))
-      expect(screen.getByText('Valores que indicam nao conformidade')).toBeInTheDocument()
+      fireEvent.click(screen.getByText('Condição de Não Conformidade'))
+      expect(screen.getByText('Valores que indicam não conformidade')).toBeInTheDocument()
       expect(screen.getByText('Bom')).toBeInTheDocument()
       expect(screen.getByText('Regular')).toBeInTheDocument()
       expect(screen.getByText('Ruim')).toBeInTheDocument()
@@ -541,8 +541,8 @@ describe('FieldConditionEditor', () => {
           users={mockUsers}
         />
       )
-      fireEvent.click(screen.getByText('Condicao de Nao Conformidade'))
-      expect(screen.getByText(/Adicione opcoes ao dropdown primeiro/)).toBeInTheDocument()
+      fireEvent.click(screen.getByText('Condição de Não Conformidade'))
+      expect(screen.getByText(/Adicione opções ao dropdown primeiro/)).toBeInTheDocument()
     })
 
     it('adiciona valor nao conforme ao marcar checkbox', () => {
@@ -557,7 +557,7 @@ describe('FieldConditionEditor', () => {
           users={mockUsers}
         />
       )
-      fireEvent.click(screen.getByText('Condicao de Nao Conformidade'))
+      fireEvent.click(screen.getByText('Condição de Não Conformidade'))
       // Find the checkbox for "Ruim" inside the dropdown config
       const checkboxes = screen.getAllByRole('checkbox')
       const ruimCheckbox = checkboxes.find(cb => {
@@ -590,7 +590,7 @@ describe('FieldConditionEditor', () => {
           users={mockUsers}
         />
       )
-      fireEvent.click(screen.getByText('Condicao de Nao Conformidade'))
+      fireEvent.click(screen.getByText('Condição de Não Conformidade'))
       const checkboxes = screen.getAllByRole('checkbox')
       const ruimCheckbox = checkboxes.find(cb => {
         const label = cb.closest('label')
@@ -627,8 +627,8 @@ describe('FieldConditionEditor', () => {
           users={mockUsers}
         />
       )
-      fireEvent.click(screen.getByText('Condicao de Nao Conformidade'))
-      expect(screen.getByText(/Itens obrigatorios/)).toBeInTheDocument()
+      fireEvent.click(screen.getByText('Condição de Não Conformidade'))
+      expect(screen.getByText(/Itens obrigatórios/)).toBeInTheDocument()
       expect(screen.getByText(/Itens proibidos/)).toBeInTheDocument()
     })
 
@@ -643,8 +643,8 @@ describe('FieldConditionEditor', () => {
           users={mockUsers}
         />
       )
-      fireEvent.click(screen.getByText('Condicao de Nao Conformidade'))
-      expect(screen.getByText(/Adicione opcoes ao checkbox primeiro/)).toBeInTheDocument()
+      fireEvent.click(screen.getByText('Condição de Não Conformidade'))
+      expect(screen.getByText(/Adicione opções ao checkbox primeiro/)).toBeInTheDocument()
     })
 
     it('adiciona item obrigatorio ao marcar', () => {
@@ -659,7 +659,7 @@ describe('FieldConditionEditor', () => {
           users={mockUsers}
         />
       )
-      fireEvent.click(screen.getByText('Condicao de Nao Conformidade'))
+      fireEvent.click(screen.getByText('Condição de Não Conformidade'))
       // The first set of checkboxes are "required", second set are "forbidden"
       const checkboxes = screen.getAllByRole('checkbox')
       // First checkbox in the required section should be "EPI"
@@ -693,8 +693,8 @@ describe('FieldConditionEditor', () => {
           users={mockUsers}
         />
       )
-      fireEvent.click(screen.getByText('Condicao de Nao Conformidade'))
-      expect(screen.getByText('Tipo de condicao')).toBeInTheDocument()
+      fireEvent.click(screen.getByText('Condição de Não Conformidade'))
+      expect(screen.getByText('Tipo de condição')).toBeInTheDocument()
     })
 
     it('nao mostra campo de valor para condicao empty', () => {
@@ -707,8 +707,8 @@ describe('FieldConditionEditor', () => {
           users={mockUsers}
         />
       )
-      fireEvent.click(screen.getByText('Condicao de Nao Conformidade'))
-      expect(screen.queryByPlaceholderText('Valor para comparacao')).not.toBeInTheDocument()
+      fireEvent.click(screen.getByText('Condição de Não Conformidade'))
+      expect(screen.queryByPlaceholderText('Valor para comparação')).not.toBeInTheDocument()
     })
 
     it('mostra campo de valor para condicao equals', () => {
@@ -721,8 +721,8 @@ describe('FieldConditionEditor', () => {
           users={mockUsers}
         />
       )
-      fireEvent.click(screen.getByText('Condicao de Nao Conformidade'))
-      expect(screen.getByPlaceholderText('Valor para comparacao')).toBeInTheDocument()
+      fireEvent.click(screen.getByText('Condição de Não Conformidade'))
+      expect(screen.getByPlaceholderText('Valor para comparação')).toBeInTheDocument()
     })
 
     it('mostra campo de valor para condicao not_equals', () => {
@@ -735,8 +735,8 @@ describe('FieldConditionEditor', () => {
           users={mockUsers}
         />
       )
-      fireEvent.click(screen.getByText('Condicao de Nao Conformidade'))
-      expect(screen.getByPlaceholderText('Valor para comparacao')).toBeInTheDocument()
+      fireEvent.click(screen.getByText('Condição de Não Conformidade'))
+      expect(screen.getByPlaceholderText('Valor para comparação')).toBeInTheDocument()
     })
   })
 
@@ -756,7 +756,7 @@ describe('FieldConditionEditor', () => {
           presets={mockPresets}
         />
       )
-      fireEvent.click(screen.getByText('Condicao de Nao Conformidade'))
+      fireEvent.click(screen.getByText('Condição de Não Conformidade'))
       expect(screen.getByText('Usar modelo')).toBeInTheDocument()
     })
 
@@ -771,7 +771,7 @@ describe('FieldConditionEditor', () => {
           presets={[]}
         />
       )
-      fireEvent.click(screen.getByText('Condicao de Nao Conformidade'))
+      fireEvent.click(screen.getByText('Condição de Não Conformidade'))
       expect(screen.queryByText('Usar modelo')).not.toBeInTheDocument()
     })
 
@@ -786,8 +786,8 @@ describe('FieldConditionEditor', () => {
           onSaveAsPreset={vi.fn()}
         />
       )
-      fireEvent.click(screen.getByText('Condicao de Nao Conformidade'))
-      expect(screen.getByText('Salvar como modelo reutilizavel')).toBeInTheDocument()
+      fireEvent.click(screen.getByText('Condição de Não Conformidade'))
+      expect(screen.getByText('Salvar como modelo reutilizável')).toBeInTheDocument()
     })
 
     it('nao mostra botao salvar quando onSaveAsPreset nao fornecido', () => {
@@ -800,8 +800,8 @@ describe('FieldConditionEditor', () => {
           users={mockUsers}
         />
       )
-      fireEvent.click(screen.getByText('Condicao de Nao Conformidade'))
-      expect(screen.queryByText('Salvar como modelo reutilizavel')).not.toBeInTheDocument()
+      fireEvent.click(screen.getByText('Condição de Não Conformidade'))
+      expect(screen.queryByText('Salvar como modelo reutilizável')).not.toBeInTheDocument()
     })
 
     it('mostra input de nome ao clicar em salvar como modelo', () => {
@@ -815,8 +815,8 @@ describe('FieldConditionEditor', () => {
           onSaveAsPreset={vi.fn()}
         />
       )
-      fireEvent.click(screen.getByText('Condicao de Nao Conformidade'))
-      fireEvent.click(screen.getByText('Salvar como modelo reutilizavel'))
+      fireEvent.click(screen.getByText('Condição de Não Conformidade'))
+      fireEvent.click(screen.getByText('Salvar como modelo reutilizável'))
       expect(screen.getByPlaceholderText('Nome do modelo')).toBeInTheDocument()
     })
 
@@ -832,8 +832,8 @@ describe('FieldConditionEditor', () => {
           onSaveAsPreset={onSaveAsPreset}
         />
       )
-      fireEvent.click(screen.getByText('Condicao de Nao Conformidade'))
-      fireEvent.click(screen.getByText('Salvar como modelo reutilizavel'))
+      fireEvent.click(screen.getByText('Condição de Não Conformidade'))
+      fireEvent.click(screen.getByText('Salvar como modelo reutilizável'))
 
       const nameInput = screen.getByPlaceholderText('Nome do modelo')
       fireEvent.change(nameInput, { target: { value: 'Meu Modelo' } })
@@ -859,8 +859,8 @@ describe('FieldConditionEditor', () => {
           onSaveAsPreset={vi.fn()}
         />
       )
-      fireEvent.click(screen.getByText('Condicao de Nao Conformidade'))
-      fireEvent.click(screen.getByText('Salvar como modelo reutilizavel'))
+      fireEvent.click(screen.getByText('Condição de Não Conformidade'))
+      fireEvent.click(screen.getByText('Salvar como modelo reutilizável'))
 
       const saveBtn = screen.getByText('Salvar')
       expect(saveBtn).toBeDisabled()
@@ -877,13 +877,13 @@ describe('FieldConditionEditor', () => {
           onSaveAsPreset={vi.fn()}
         />
       )
-      fireEvent.click(screen.getByText('Condicao de Nao Conformidade'))
-      fireEvent.click(screen.getByText('Salvar como modelo reutilizavel'))
+      fireEvent.click(screen.getByText('Condição de Não Conformidade'))
+      fireEvent.click(screen.getByText('Salvar como modelo reutilizável'))
       expect(screen.getByPlaceholderText('Nome do modelo')).toBeInTheDocument()
 
       fireEvent.click(screen.getByText('Cancelar'))
       expect(screen.queryByPlaceholderText('Nome do modelo')).not.toBeInTheDocument()
-      expect(screen.getByText('Salvar como modelo reutilizavel')).toBeInTheDocument()
+      expect(screen.getByText('Salvar como modelo reutilizável')).toBeInTheDocument()
     })
   })
 })

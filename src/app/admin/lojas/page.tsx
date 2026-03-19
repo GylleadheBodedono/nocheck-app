@@ -264,7 +264,7 @@ export default function LojasPage() {
 
     if (error) {
       console.error('Error deleting store:', error)
-      alert('Erro ao excluir loja. Verifique se nao existem usuarios ou checklists vinculados.')
+      alert('Erro ao excluir loja. Verifique se não existem usuários ou checklists vinculados.')
       return
     }
 
@@ -275,8 +275,8 @@ export default function LojasPage() {
 
   const toggleAllGps = async (enable: boolean) => {
     if (!confirm(enable
-      ? 'Ativar verificacao GPS para TODAS as lojas?'
-      : 'Desativar verificacao GPS para TODAS as lojas?'
+      ? 'Ativar verificação GPS para TODAS as lojas?'
+      : 'Desativar verificação GPS para TODAS as lojas?'
     )) return
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -328,7 +328,7 @@ export default function LojasPage() {
           <div className="bg-warning/10 border border-warning/30 rounded-xl p-4 mb-6 flex items-center gap-3">
             <FiWifiOff className="w-5 h-5 text-warning" />
             <p className="text-warning text-sm">
-              Voce esta offline. Os dados mostrados sao do cache local. Edicoes nao estao disponiveis.
+              Você está offline. Os dados mostrados são do cache local. Edições não estão disponíveis.
             </p>
           </div>
         )}
@@ -340,10 +340,10 @@ export default function LojasPage() {
               <FiShield className={`w-5 h-5 ${allGpsEnabled ? 'text-success' : 'text-warning'}`} />
               <div>
                 <p className="text-sm font-medium text-main">
-                  Verificacao GPS: {allGpsEnabled ? 'Ativa em todas' : 'Desativada em algumas'}
+                  Verificação GPS: {allGpsEnabled ? 'Ativa em todas' : 'Desativada em algumas'}
                 </p>
                 <p className="text-xs text-muted">
-                  Controla se funcionarios precisam estar no local da loja para responder checklists
+                  Controla se funcionários precisam estar no local da loja para responder checklists
                 </p>
               </div>
             </div>
@@ -435,7 +435,7 @@ export default function LojasPage() {
                 <div className="flex items-center gap-4 mb-4 text-sm text-muted">
                   <div className="flex items-center gap-1">
                     <FiUsers className="w-4 h-4" />
-                    <span>{store.user_count} usuarios</span>
+                    <span>{store.user_count} usuários</span>
                   </div>
                   <div className="flex items-center gap-1">
                     <FiCheckCircle className="w-4 h-4" />
@@ -546,10 +546,10 @@ export default function LojasPage() {
                     onChange={(e) => setFormData({ ...formData, require_gps: e.target.checked })}
                     className="w-5 h-5 rounded border-default bg-surface text-primary"
                   />
-                  <span className="text-sm text-secondary">Exigir verificacao GPS</span>
+                  <span className="text-sm text-secondary">Exigir verificação GPS</span>
                 </label>
                 <p className="text-xs text-muted mt-1 ml-7">
-                  Desative para permitir checklists sem validar a localizacao do funcionario
+                  Desative para permitir checklists sem validar a localização do funcionário
                 </p>
               </div>
 

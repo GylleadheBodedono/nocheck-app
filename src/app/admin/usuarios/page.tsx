@@ -303,12 +303,12 @@ export default function UsuariosPage() {
   return (
     <div className="min-h-screen bg-page">
       <Header
-        title="Usuarios"
+        title="Usuários"
         icon={FiUsers}
         backHref={APP_CONFIG.routes.admin}
         actions={isOffline ? [] : [
           {
-            label: 'Novo Usuario',
+            label: 'Novo Usuário',
             href: APP_CONFIG.routes.adminUsersNew,
             icon: FiPlus,
             variant: 'primary',
@@ -323,7 +323,7 @@ export default function UsuariosPage() {
           <div className="bg-warning/10 border border-warning/30 rounded-xl p-4 mb-6 flex items-center gap-3">
             <FiWifiOff className="w-5 h-5 text-warning" />
             <p className="text-warning text-sm">
-              Voce esta offline. Os dados mostrados sao do cache local. Edicoes nao estao disponiveis.
+              Você está offline. Os dados mostrados são do cache local. Edições não estão disponíveis.
             </p>
           </div>
         )}
@@ -393,19 +393,19 @@ export default function UsuariosPage() {
             <table className="w-full">
               <thead>
                 <tr className="border-b border-subtle">
-                  <th className="px-6 py-4 text-left text-sm font-semibold text-secondary">Usuario</th>
+                  <th className="px-6 py-4 text-left text-sm font-semibold text-secondary">Usuário</th>
                   <th className="px-6 py-4 text-left text-sm font-semibold text-secondary">Loja</th>
-                  <th className="px-6 py-4 text-left text-sm font-semibold text-secondary">Funcao</th>
+                  <th className="px-6 py-4 text-left text-sm font-semibold text-secondary">Função</th>
                   <th className="px-6 py-4 text-left text-sm font-semibold text-secondary">Setor</th>
                   <th className="px-6 py-4 text-left text-sm font-semibold text-secondary">Tipo</th>
-                  <th className="px-6 py-4 text-right text-sm font-semibold text-secondary">Acoes</th>
+                  <th className="px-6 py-4 text-right text-sm font-semibold text-secondary">Ações</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-subtle">
                 {filteredUsers.length === 0 ? (
                   <tr>
                     <td colSpan={6} className="px-6 py-12 text-center text-muted">
-                      Nenhum usuario encontrado
+                      Nenhum usuário encontrado
                     </td>
                   </tr>
                 ) : (
@@ -495,13 +495,13 @@ export default function UsuariosPage() {
                             </span>
                           ) : (
                             <span className="px-2 py-1 text-xs bg-surface-hover text-muted rounded-lg">
-                              Funcionario
+                              Funcionário
                             </span>
                           )}
                           {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
                           {(user as any).is_tech && (
                             <span className="px-2 py-1 text-xs bg-cyan-500/20 text-cyan-400 rounded-lg">
-                              Tecnico
+                              Técnico
                             </span>
                           )}
                         </div>
@@ -554,7 +554,7 @@ export default function UsuariosPage() {
         {/* Stats */}
         <div className="mt-6 flex items-center justify-between text-sm text-muted">
           <p>
-            Mostrando {filteredUsers.length} de {users.length} usuarios
+            Mostrando {filteredUsers.length} de {users.length} usuários
           </p>
           <p>
             {users.filter(u => u.is_active).length} ativos, {users.filter(u => !u.is_active).length} inativos

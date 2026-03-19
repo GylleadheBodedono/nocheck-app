@@ -117,11 +117,11 @@ export default function ClienteDetailPage() {
       </div>
 
       <div className="card p-6 space-y-3 text-sm">
-        <h2 className="text-sm font-semibold text-main mb-4">Informacoes</h2>
+        <h2 className="text-sm font-semibold text-main mb-4">Informações</h2>
         <div className="grid grid-cols-2 gap-3 text-xs">
           <div><span className="text-muted">ID:</span> <span className="text-secondary font-mono text-[10px]">{org.id}</span></div>
           <div><span className="text-muted">Criada:</span> <span className="text-secondary">{new Date(org.created_at).toLocaleDateString('pt-BR')}</span></div>
-          <div><span className="text-muted">Trial ate:</span> <span className="text-secondary">{org.trial_ends_at ? new Date(org.trial_ends_at).toLocaleDateString('pt-BR') : 'N/A'}</span></div>
+          <div><span className="text-muted">Trial até:</span> <span className="text-secondary">{org.trial_ends_at ? new Date(org.trial_ends_at).toLocaleDateString('pt-BR') : 'N/A'}</span></div>
           <div><span className="text-muted">Limites:</span> <span className="text-secondary">{org.max_users} users / {org.max_stores} lojas</span></div>
         </div>
       </div>

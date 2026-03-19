@@ -82,10 +82,10 @@ describe('FieldRenderer', () => {
         field={createTemplateField()}
         value=""
         onChange={vi.fn()}
-        error="Campo obrigatorio"
+        error="Campo obrigatório"
       />
     )
-    expect(screen.getByText('Campo obrigatorio')).toBeInTheDocument()
+    expect(screen.getByText('Campo obrigatório')).toBeInTheDocument()
   })
 
   it('mostra mensagem para tipo de campo nao suportado', () => {
@@ -526,7 +526,7 @@ describe('YesNoField', () => {
       />
     )
     expect(screen.getByText('Sim')).toBeInTheDocument()
-    expect(screen.getByText('Nao')).toBeInTheDocument()
+    expect(screen.getByText('Não')).toBeInTheDocument()
   })
 
   it('chama onChange com "sim" ao clicar Sim', () => {
@@ -551,7 +551,7 @@ describe('YesNoField', () => {
         onChange={onChange}
       />
     )
-    fireEvent.click(screen.getByText('Nao'))
+    fireEvent.click(screen.getByText('Não'))
     expect(onChange).toHaveBeenCalledWith('nao')
   })
 
@@ -576,7 +576,7 @@ describe('YesNoField', () => {
         onChange={vi.fn()}
       />
     )
-    const naoButton = screen.getByText('Nao').closest('button')!
+    const naoButton = screen.getByText('Não').closest('button')!
     expect(naoButton.className).toContain('red')
   })
 
@@ -632,7 +632,7 @@ describe('YesNoField', () => {
         onChange={vi.fn()}
       />
     )
-    expect(screen.getByText('Plano de Acao')).toBeInTheDocument()
+    expect(screen.getByText('Plano de Ação')).toBeInTheDocument()
   })
 
   it('nao mostra plano de acao quando resposta e Sim', () => {
@@ -648,15 +648,15 @@ describe('YesNoField', () => {
         onChange={vi.fn()}
       />
     )
-    expect(screen.queryByText('Plano de Acao')).not.toBeInTheDocument()
+    expect(screen.queryByText('Plano de Ação')).not.toBeInTheDocument()
   })
 
-  it('mostra botao de foto quando allowPhoto=true', () => {
+  it('mostra foto quando sim e onYes configurado no template', () => {
     render(
       <FieldRenderer
         field={createTemplateField({
           field_type: 'yes_no',
-          options: { allowPhoto: true },
+          options: { onYes: { showPhotoField: true, photoFieldLabel: 'Foto de evidencia' } },
         })}
         value="sim"
         onChange={vi.fn()}
@@ -665,7 +665,21 @@ describe('YesNoField', () => {
     expect(screen.getByText(/Anexar Foto/)).toBeInTheDocument()
   })
 
-  it('nao mostra botao de foto quando allowPhoto nao configurado', () => {
+  it('mostra texto quando nao e onNo configurado no template', () => {
+    render(
+      <FieldRenderer
+        field={createTemplateField({
+          field_type: 'yes_no',
+          options: { onNo: { showTextField: true, textFieldLabel: 'Explique o motivo' } },
+        })}
+        value="nao"
+        onChange={vi.fn()}
+      />
+    )
+    expect(screen.getByText('Explique o motivo')).toBeInTheDocument()
+  })
+
+  it('nao mostra campos condicionais quando template nao tem config', () => {
     render(
       <FieldRenderer
         field={createTemplateField({ field_type: 'yes_no' })}
@@ -674,6 +688,7 @@ describe('YesNoField', () => {
       />
     )
     expect(screen.queryByText(/Anexar Foto/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/Explique/)).not.toBeInTheDocument()
   })
 
   it('limpa dados condicionais ao trocar resposta para uma sem config', () => {
@@ -709,7 +724,7 @@ describe('RatingField', () => {
         onChange={vi.fn()}
       />
     )
-    expect(screen.getByText('Pessimo')).toBeInTheDocument()
+    expect(screen.getByText('Péssimo')).toBeInTheDocument()
     expect(screen.getByText('Ruim')).toBeInTheDocument()
     expect(screen.getByText('Regular')).toBeInTheDocument()
     expect(screen.getByText('Bom')).toBeInTheDocument()

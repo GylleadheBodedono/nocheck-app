@@ -114,7 +114,7 @@ export default function ChecklistViewPage() {
       const isAdmin = cachedUser.is_admin === true
       const isCreator = cl.created_by === cachedAuth.userId
       if (!isAdmin && !isCreator) {
-        setError('Voce nao tem permissao para ver este checklist')
+        setError('Você não tem permissão para ver este checklist')
         setLoading(false)
         return true
       }
@@ -176,14 +176,14 @@ export default function ChecklistViewPage() {
     if (!navigator.onLine) {
       const loaded = await loadFromCache()
       if (!loaded) {
-        setError('Checklist nao disponivel offline')
+        setError('Checklist não disponível offline')
         setLoading(false)
       }
       return
     }
 
     if (!isSupabaseConfigured || !supabase) {
-      setError('Supabase nao configurado')
+      setError('Supabase não configurado')
       setLoading(false)
       return
     }
@@ -218,7 +218,7 @@ export default function ChecklistViewPage() {
         .single()
 
       if (checklistError || !checklistData) {
-        setError('Checklist nao encontrado')
+        setError('Checklist não encontrado')
         setLoading(false)
         return
       }
@@ -228,7 +228,7 @@ export default function ChecklistViewPage() {
       const isCreator = checklistData.created_by === user.id
 
       if (!isAdmin && !isCreator) {
-        setError('Voce nao tem permissao para ver este checklist')
+        setError('Você não tem permissão para ver este checklist')
         setLoading(false)
         return
       }
@@ -368,7 +368,7 @@ export default function ChecklistViewPage() {
   }, [fields, sections])
 
   const statusLabel: Record<string, { text: string; color: string }> = {
-    concluido: { text: 'Concluido', color: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' },
+    concluido: { text: 'Concluído', color: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' },
     incompleto: { text: 'Incompleto', color: 'bg-amber-500/20 text-amber-400 border-amber-500/30' },
     em_andamento: { text: 'Em andamento', color: 'bg-amber-500/20 text-amber-400 border-amber-500/30' },
     rascunho: { text: 'Rascunho', color: 'bg-gray-500/20 text-gray-400 border-gray-500/30' },
@@ -439,7 +439,7 @@ export default function ChecklistViewPage() {
             {checklist.completed_at && (
               <div className="flex items-center gap-2 text-secondary">
                 <FiCheckCircle className="w-4 h-4 text-emerald-400" />
-                <span>Concluido {formatDate(checklist.completed_at)}</span>
+                <span>Concluído {formatDate(checklist.completed_at)}</span>
               </div>
             )}
             {checklist.started_at && !checklist.completed_at && (
@@ -459,7 +459,7 @@ export default function ChecklistViewPage() {
               </div>
               <p className="text-xs text-secondary mt-1">
                 Lat: {(checklist.latitude as number).toFixed(6)}, Lng: {(checklist.longitude as number).toFixed(6)}
-                {checklist.accuracy && ` (precisao: ${(checklist.accuracy as number).toFixed(0)}m)`}
+                {checklist.accuracy && ` (precisão: ${(checklist.accuracy as number).toFixed(0)}m)`}
               </p>
             </div>
           )}
@@ -473,7 +473,7 @@ export default function ChecklistViewPage() {
               <span className="font-semibold text-warning text-sm">Checklist Incompleto</span>
             </div>
             <p className="text-xs text-secondary">
-              Este checklist foi finalizado com {Object.keys(justifications).length} campo{Object.keys(justifications).length !== 1 ? 's' : ''} obrigatorio{Object.keys(justifications).length !== 1 ? 's' : ''} nao preenchido{Object.keys(justifications).length !== 1 ? 's' : ''}, com justificativas.
+              Este checklist foi finalizado com {Object.keys(justifications).length} campo{Object.keys(justifications).length !== 1 ? 's' : ''} obrigatório{Object.keys(justifications).length !== 1 ? 's' : ''} não preenchido{Object.keys(justifications).length !== 1 ? 's' : ''}, com justificativas.
             </p>
           </div>
         )}
@@ -514,7 +514,7 @@ export default function ChecklistViewPage() {
                           <h4 className="font-semibold text-main text-sm">{section.name}</h4>
                           <p className="text-xs text-muted">
                             {sectionResponses.length}/{sectionFields.length} campos preenchidos
-                            {sectionStatus?.completed_at && ` - Concluido ${formatDate(sectionStatus.completed_at)}`}
+                            {sectionStatus?.completed_at && ` - Concluído ${formatDate(sectionStatus.completed_at)}`}
                           </p>
                         </div>
                       </div>
@@ -554,7 +554,7 @@ export default function ChecklistViewPage() {
                           )
                         })}
                         {sectionFields.length === 0 && (
-                          <p className="text-sm text-muted text-center py-2">Nenhum campo nesta secao</p>
+                          <p className="text-sm text-muted text-center py-2">Nenhum campo nesta seção</p>
                         )}
                       </div>
                     )}

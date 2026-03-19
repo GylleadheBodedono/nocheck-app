@@ -180,7 +180,7 @@ export function LocationPicker({ value, onChange }: LocationPickerProps) {
         onChange({ lat: result.lat, lng: result.lng })
       }
     } else {
-      setSearchError('Endereco nao encontrado')
+      setSearchError('Endereço não encontrado')
     }
 
     setSearching(false)
@@ -222,7 +222,7 @@ export function LocationPicker({ value, onChange }: LocationPickerProps) {
       },
       () => {
         setLocating(false)
-        alert('Nao foi possivel obter sua localizacao.')
+        alert('Não foi possível obter sua localização.')
       },
       { enableHighAccuracy: true, timeout: 10000 }
     )
@@ -240,7 +240,7 @@ export function LocationPicker({ value, onChange }: LocationPickerProps) {
     <div className="space-y-2">
       <div className="flex items-center justify-between">
         <label className="block text-sm font-medium text-secondary">
-          Localizacao no Mapa
+          Localização no Mapa
         </label>
         <div className="flex gap-2">
           <button
@@ -250,7 +250,7 @@ export function LocationPicker({ value, onChange }: LocationPickerProps) {
             className="btn-ghost text-xs flex items-center gap-1 px-2 py-1"
           >
             <FiCrosshair className="w-3 h-3" />
-            {locating ? 'Localizando...' : 'Minha localizacao'}
+            {locating ? 'Localizando...' : 'Minha localização'}
           </button>
           {value && (
             <button
@@ -274,7 +274,7 @@ export function LocationPicker({ value, onChange }: LocationPickerProps) {
             onChange={(e) => { setSearchQuery(e.target.value); setSearchError('') }}
             onKeyDown={handleSearchKeyDown}
             className="input pl-9 text-sm"
-            placeholder="Rua, numero, bairro, CEP..."
+            placeholder="Rua, número, bairro, CEP..."
           />
         </div>
         <button
@@ -303,7 +303,7 @@ export function LocationPicker({ value, onChange }: LocationPickerProps) {
         </div>
       ) : (
         <p className="text-xs text-muted">
-          Busque um endereco ou clique no mapa para marcar a localizacao da loja
+          Busque um endereço ou clique no mapa para marcar a localização da loja
         </p>
       )}
     </div>

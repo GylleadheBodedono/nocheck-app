@@ -358,7 +358,7 @@ export default function RelatoriosPage() {
           const fieldName = ap.field?.name || 'Campo desconhecido'
           const storeName = ap.store?.name || 'Loja desconhecida'
           const assignee = usersLookup.find((u: { id: string }) => u.id === ap.assigned_to)
-          const assigneeName = assignee?.full_name || 'Nao atribuido'
+          const assigneeName = assignee?.full_name || 'Não atribuído'
           const assigneeFunction = assignee?.function_ref?.name
           const responsible = assigneeFunction ? `${assigneeName} — ${assigneeFunction}` : assigneeName
 
@@ -609,7 +609,7 @@ export default function RelatoriosPage() {
   const getStatusBadge = (status: string) => {
     const badges: Record<string, { label: string; cls: string }> = {
       validado: { label: 'Validado', cls: 'bg-success/20 text-success' },
-      concluido: { label: 'Concluido', cls: 'bg-primary/20 text-primary' },
+      concluido: { label: 'Concluído', cls: 'bg-primary/20 text-primary' },
       em_andamento: { label: 'Em Andamento', cls: 'bg-warning/20 text-warning' },
       incompleto: { label: 'Incompleto', cls: 'bg-error/20 text-error' },
       rascunho: { label: 'Rascunho', cls: 'bg-surface-hover text-muted' },
@@ -708,7 +708,7 @@ export default function RelatoriosPage() {
   return (
     <div className="min-h-screen bg-page">
       <Header
-        title="Relatorios"
+        title="Relatórios"
         icon={FiBarChart2}
         backHref={APP_CONFIG.routes.admin}
       />
@@ -720,7 +720,7 @@ export default function RelatoriosPage() {
           <div className="bg-warning/10 border border-warning/30 rounded-xl p-4 mb-6 flex items-center gap-3">
             <FiWifiOff className="w-5 h-5 text-warning" />
             <p className="text-warning text-sm">
-              Voce esta offline. Os dados de relatorios nao estao disponiveis no cache local.
+              Você está offline. Os dados de relatórios não estão disponíveis no cache local.
             </p>
           </div>
         )}
@@ -803,7 +803,7 @@ export default function RelatoriosPage() {
                 <Select
                   value={responseFilterUser}
                   onChange={(v) => { setResponseFilterUser(v); setResponsePage(1) }}
-                  placeholder="Todos os usuarios"
+                  placeholder="Todos os usuários"
                   options={allUsers.map(u => ({ value: u.id, label: u.name }))}
                 />
                 <Select
@@ -897,7 +897,7 @@ export default function RelatoriosPage() {
               {responseTotalPages > 1 && (
                 <div className="flex items-center justify-between px-4 py-3 border-t border-subtle">
                   <p className="text-sm text-muted">
-                    Pagina {responsePage} de {responseTotalPages}
+                    Página {responsePage} de {responseTotalPages}
                   </p>
                   <div className="flex gap-2">
                     <button
@@ -979,15 +979,15 @@ export default function RelatoriosPage() {
             <div className="card p-4 border-l-4 border-l-[var(--border-subtle)]">
               <p className="text-xs text-muted mb-1">Rascunhos</p>
               <p className="text-3xl font-bold text-muted">{overallMetrics.statusBreakdown.rascunho}</p>
-              <p className="text-[10px] text-muted mt-1">Nao iniciados</p>
+              <p className="text-[10px] text-muted mt-1">Não iniciados</p>
             </div>
             <div className="card p-4 border-l-4 border-l-primary">
-              <p className="text-xs text-muted mb-1">Tempo Medio</p>
+              <p className="text-xs text-muted mb-1">Tempo Médio</p>
               <p className="text-3xl font-bold text-primary">{formatMinutes(avgCompletionTime)}</p>
-              <p className="text-[10px] text-muted mt-1">Inicio ate conclusao</p>
+              <p className="text-[10px] text-muted mt-1">Início até conclusão</p>
             </div>
             <div className={`card p-4 border-l-4 ${coverageGaps.length > 0 ? 'border-l-error' : 'border-l-success'}`}>
-              <p className="text-xs text-muted mb-1">Nao Preenchidos</p>
+              <p className="text-xs text-muted mb-1">Não Preenchidos</p>
               <p className={`text-3xl font-bold ${coverageGaps.length > 0 ? 'text-error' : 'text-success'}`}>{coverageGaps.length}</p>
               <p className="text-[10px] text-muted mt-1">Checklists pendentes de preenchimento</p>
             </div>
@@ -1000,14 +1000,14 @@ export default function RelatoriosPage() {
           const t = sb.total
           const segments = [
             { key: 'validado', label: 'Validado', count: sb.validado, color: 'bg-success', textColor: 'text-success' },
-            { key: 'concluido', label: 'Concluido', count: sb.concluido, color: 'bg-primary', textColor: 'text-primary' },
+            { key: 'concluido', label: 'Concluído', count: sb.concluido, color: 'bg-primary', textColor: 'text-primary' },
             { key: 'em_andamento', label: 'Em Andamento', count: sb.em_andamento, color: 'bg-warning', textColor: 'text-warning' },
             { key: 'incompleto', label: 'Incompleto', count: sb.incompleto, color: 'bg-error', textColor: 'text-error' },
             { key: 'rascunho', label: 'Rascunho', count: sb.rascunho, color: 'bg-surface-hover', textColor: 'text-muted' },
           ].filter(s => s.count > 0)
           return (
             <div className="card p-5 mb-6">
-              <h3 className="text-sm font-semibold text-main mb-3">Distribuicao de Status</h3>
+              <h3 className="text-sm font-semibold text-main mb-3">Distribuição de Status</h3>
               <div className="h-6 rounded-full overflow-hidden flex">
                 {segments.map(s => (
                   <div
@@ -1083,7 +1083,7 @@ export default function RelatoriosPage() {
           <div className="flex flex-wrap gap-3 mb-4">
             {[
               { label: 'Validado', color: 'bg-success' },
-              { label: 'Concluido', color: 'bg-primary' },
+              { label: 'Concluído', color: 'bg-primary' },
               { label: 'Em Andamento', color: 'bg-warning' },
               { label: 'Incompleto', color: 'bg-error' },
               { label: 'Rascunho', color: 'bg-surface-hover' },
@@ -1318,9 +1318,9 @@ export default function RelatoriosPage() {
             <div className="px-6 py-4 border-b border-subtle">
               <h3 className="font-semibold text-main flex items-center gap-2">
                 <FiAlertTriangle className="w-4 h-4 text-error" />
-                Checklists Nao Preenchidos
+                Checklists Não Preenchidos
               </h3>
-              <p className="text-xs text-muted mt-1">Combinacoes de template + loja que deveriam ter sido preenchidas no periodo mas nao foram</p>
+              <p className="text-xs text-muted mt-1">Combinações de template + loja que deveriam ter sido preenchidas no período mas não foram</p>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
@@ -1376,7 +1376,7 @@ export default function RelatoriosPage() {
             <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-8">
               <div className="card p-4">
                 <p className="text-2xl font-bold text-main">{complianceSummary.totalNonConformities}</p>
-                <p className="text-xs text-muted">Nao Conformidades</p>
+                <p className="text-xs text-muted">Não Conformidades</p>
               </div>
               <div className="card p-4">
                 <p className="text-2xl font-bold text-success">{complianceSummary.complianceRate}%</p>
@@ -1399,7 +1399,7 @@ export default function RelatoriosPage() {
             {/* By field table */}
             <div className="card overflow-hidden mb-6">
               <div className="px-6 py-4 border-b border-subtle">
-                <h3 className="font-semibold text-main">Nao Conformidades por Campo</h3>
+                <h3 className="font-semibold text-main">Não Conformidades por Campo</h3>
               </div>
               <div className="overflow-x-auto">
                 <table className="w-full">
@@ -1449,7 +1449,7 @@ export default function RelatoriosPage() {
                     <div key={store.storeId} className="px-6 py-4 flex items-center justify-between hover:bg-surface-hover transition-colors">
                       <div>
                         <p className="font-medium text-main">{store.storeName}</p>
-                        <p className="text-xs text-muted">{store.totalPlans} nao conformidades, {store.overduePlans} vencidos</p>
+                        <p className="text-xs text-muted">{store.totalPlans} não conformidades, {store.overduePlans} vencidos</p>
                       </div>
                       <span className={`px-2 py-1 rounded-lg text-xs font-bold ${
                         store.rate >= 80 ? 'bg-success/20 text-success' :
@@ -1584,17 +1584,17 @@ export default function RelatoriosPage() {
             {/* Assignee stats */}
             <div className="card overflow-hidden">
               <div className="px-6 py-4 border-b border-subtle">
-                <h3 className="font-semibold text-main">Desempenho por Responsavel</h3>
+                <h3 className="font-semibold text-main">Desempenho por Responsável</h3>
               </div>
               <div className="overflow-x-auto">
                 <table className="w-full">
                   <thead className="bg-surface-hover">
                     <tr>
-                      <th className="px-4 py-3 text-left text-sm font-medium text-muted">Responsavel</th>
+                      <th className="px-4 py-3 text-left text-sm font-medium text-muted">Responsável</th>
                       <th className="px-4 py-3 text-right text-sm font-medium text-muted">Planos</th>
-                      <th className="px-4 py-3 text-right text-sm font-medium text-muted">Concluidos</th>
+                      <th className="px-4 py-3 text-right text-sm font-medium text-muted">Concluídos</th>
                       <th className="px-4 py-3 text-right text-sm font-medium text-muted">Vencidos</th>
-                      <th className="px-4 py-3 text-right text-sm font-medium text-muted">Tempo Medio</th>
+                      <th className="px-4 py-3 text-right text-sm font-medium text-muted">Tempo Médio</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-subtle">

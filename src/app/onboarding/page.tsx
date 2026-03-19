@@ -17,7 +17,7 @@ type PendingInvite = {
 // ── Constants ──
 
 const STEPS = [
-  { number: 1, title: 'Organizacao' },
+  { number: 1, title: 'Organização' },
   { number: 2, title: 'Loja' },
   { number: 3, title: 'Equipe' },
 ]
@@ -82,7 +82,7 @@ export default function OnboardingPage() {
           .single()
 
         if (memberError || !membership) {
-          setError('Nao foi possivel encontrar sua organizacao. Entre em contato com o suporte.')
+          setError('Não foi possível encontrar sua organização. Entre em contato com o suporte.')
           setLoading(false)
           return
         }
@@ -96,7 +96,7 @@ export default function OnboardingPage() {
         }
       } catch (err) {
         console.error('[Onboarding] Erro ao inicializar:', err)
-        setError('Erro ao carregar dados. Tente recarregar a pagina.')
+        setError('Erro ao carregar dados. Tente recarregar a página.')
       } finally {
         setLoading(false)
       }
@@ -126,7 +126,7 @@ export default function OnboardingPage() {
       goToStep(2)
     } catch (err) {
       console.error('[Onboarding] Erro ao salvar organizacao:', err)
-      setError('Erro ao salvar o nome da organizacao. Tente novamente.')
+      setError('Erro ao salvar o nome da organização. Tente novamente.')
     } finally {
       setSavingOrg(false)
     }
@@ -170,13 +170,13 @@ export default function OnboardingPage() {
 
     // Basic email validation
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedEmail)) {
-      setError('Email invalido. Verifique e tente novamente.')
+      setError('Email inválido. Verifique e tente novamente.')
       return
     }
 
     // Check duplicates
     if (pendingInvites.some((inv) => inv.email === trimmedEmail)) {
-      setError('Este email ja foi adicionado.')
+      setError('Este email já foi adicionado.')
       return
     }
 
@@ -300,10 +300,10 @@ export default function OnboardingPage() {
           {currentStep === 1 && (
             <div>
               <h2 className="text-xl font-semibold text-main mb-2">
-                Nome da Organizacao
+                Nome da Organização
               </h2>
               <p className="text-muted text-sm mb-6">
-                Como sua empresa ou operacao se chama? Voce pode alterar depois.
+                Como sua empresa ou operação se chama? Você pode alterar depois.
               </p>
 
               <div className="space-y-4">
@@ -312,7 +312,7 @@ export default function OnboardingPage() {
                     htmlFor="orgName"
                     className="block text-sm font-medium text-secondary mb-2"
                   >
-                    Nome da organizacao
+                    Nome da organização
                   </label>
                   <input
                     id="orgName"
@@ -359,7 +359,7 @@ export default function OnboardingPage() {
                 Criar Primeira Loja
               </h2>
               <p className="text-muted text-sm mb-6">
-                Cadastre sua primeira unidade. Voce pode adicionar mais depois.
+                Cadastre sua primeira unidade. Você pode adicionar mais depois.
               </p>
 
               <div className="space-y-4">
@@ -386,7 +386,7 @@ export default function OnboardingPage() {
                     htmlFor="storeAddress"
                     className="block text-sm font-medium text-secondary mb-2"
                   >
-                    Endereco <span className="text-muted font-normal">(opcional)</span>
+                    Endereço <span className="text-muted font-normal">(opcional)</span>
                   </label>
                   <input
                     id="storeAddress"
@@ -440,7 +440,7 @@ export default function OnboardingPage() {
                 Convidar Membros
               </h2>
               <p className="text-muted text-sm mb-6">
-                Adicione sua equipe. Eles receberao um convite por email.
+                Adicione sua equipe. Eles receberão um convite por email.
               </p>
 
               <div className="space-y-4">
@@ -542,14 +542,14 @@ export default function OnboardingPage() {
                       <FiCheck className="w-4 h-4" />
                       {pendingInvites.length > 0
                         ? `Finalizar e enviar ${pendingInvites.length} convite${pendingInvites.length > 1 ? 's' : ''}`
-                        : 'Finalizar configuracao'}
+                        : 'Finalizar configuração'}
                     </>
                   )}
                 </button>
 
                 {pendingInvites.length === 0 && (
                   <p className="text-xs text-muted text-center">
-                    Voce pode convidar membros depois em Configuracoes.
+                    Você pode convidar membros depois em Configurações.
                   </p>
                 )}
               </div>

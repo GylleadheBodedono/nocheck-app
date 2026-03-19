@@ -123,10 +123,10 @@ export default function ConfiguracoesPage() {
       ])
 
       if (!tplRes.ok || !subjRes.ok) {
-        throw new Error('Erro ao salvar configuracoes')
+        throw new Error('Erro ao salvar configurações')
       }
 
-      setSuccess('Configuracoes salvas com sucesso!')
+      setSuccess('Configurações salvas com sucesso!')
       setTimeout(() => setSuccess(null), 3000)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Erro ao salvar')
@@ -136,16 +136,16 @@ export default function ConfiguracoesPage() {
   }, [supabase, emailTemplate, emailSubject])
 
   const handleRestore = useCallback(() => {
-    if (!confirm('Restaurar template padrao? Suas alteracoes serao perdidas.')) return
+    if (!confirm('Restaurar template padrão? Suas alterações serão perdidas.')) return
     setEmailSubject(DEFAULT_ACTION_PLAN_EMAIL_SUBJECT)
     setEmailTemplate(DEFAULT_ACTION_PLAN_EMAIL_HTML)
-    setSuccess('Template restaurado para o padrao. Clique em "Salvar" para aplicar.')
+    setSuccess('Template restaurado para o padrão. Clique em "Salvar" para aplicar.')
     setTimeout(() => setSuccess(null), 4000)
   }, [])
 
   const handleSendTest = useCallback(async () => {
     if (!userEmail) {
-      setError('Email do usuario nao encontrado')
+      setError('Email do usuário não encontrado')
       return
     }
     setSendingTest(true)
@@ -193,7 +193,7 @@ export default function ConfiguracoesPage() {
   return (
     <div className="min-h-screen bg-page">
       <Header
-        title="Configuracoes"
+        title="Configurações"
         icon={FiSettings}
         backHref="/admin"
       />
@@ -207,9 +207,9 @@ export default function ConfiguracoesPage() {
             className="w-full flex items-center justify-between p-5 hover:bg-surface-hover transition-colors"
           >
             <div className="text-left">
-              <h2 className="text-base font-semibold text-main">Variaveis Disponiveis</h2>
+              <h2 className="text-base font-semibold text-main">Variáveis Disponíveis</h2>
               <p className="text-sm text-muted mt-0.5">
-                Clique para ver as variaveis que podem ser usadas no template
+                Clique para ver as variáveis que podem ser usadas no template
               </p>
             </div>
             {showVariables ? <FiChevronUp className="w-5 h-5 text-muted" /> : <FiChevronDown className="w-5 h-5 text-muted" />}
@@ -234,7 +234,7 @@ export default function ConfiguracoesPage() {
                     <button
                       onClick={() => handleCopyVariable(v.key)}
                       className="p-1.5 rounded-lg text-muted hover:text-primary hover:bg-surface-hover transition-colors shrink-0"
-                      title="Copiar variavel"
+                      title="Copiar variável"
                     >
                       {copiedVar === v.key ? (
                         <FiCheck className="w-3.5 h-3.5 text-success" />
@@ -253,14 +253,14 @@ export default function ConfiguracoesPage() {
         <div className="card p-5">
           <h2 className="text-base font-semibold text-main mb-1">Assunto do Email</h2>
           <p className="text-sm text-muted mb-4">
-            Template para o assunto do email. Use variaveis como {`{{field_name}}`}.
+            Template para o assunto do email. Use variáveis como {`{{field_name}}`}.
           </p>
           <input
             type="text"
             value={emailSubject}
             onChange={(e) => setEmailSubject(e.target.value)}
             className="input font-mono text-sm"
-            placeholder="[OpereCheck] Plano de Acao: {{field_name}}"
+            placeholder="[OpereCheck] Plano de Ação: {{field_name}}"
           />
         </div>
 
@@ -277,7 +277,7 @@ export default function ConfiguracoesPage() {
             </button>
           </div>
           <p className="text-sm text-muted mb-4">
-            HTML completo do email. Use as variaveis {`{{variavel}}`} para inserir dados dinamicos.
+            HTML completo do email. Use as variáveis {`{{variavel}}`} para inserir dados dinâmicos.
           </p>
 
           <textarea
@@ -334,7 +334,7 @@ export default function ConfiguracoesPage() {
             ) : (
               <>
                 <FiSave className="w-4 h-4" />
-                Salvar Configuracoes
+                Salvar Configurações
               </>
             )}
           </button>
@@ -362,14 +362,14 @@ export default function ConfiguracoesPage() {
             className="btn-ghost flex items-center justify-center gap-2 text-muted hover:text-warning"
           >
             <FiRotateCcw className="w-4 h-4" />
-            Restaurar Padrao
+            Restaurar Padrão
           </button>
         </div>
 
         {/* Info */}
         {userEmail && (
           <p className="text-xs text-muted">
-            O email de teste sera enviado para: <span className="font-medium text-secondary">{userEmail}</span>
+            O email de teste será enviado para: <span className="font-medium text-secondary">{userEmail}</span>
           </p>
         )}
       </PageContainer>

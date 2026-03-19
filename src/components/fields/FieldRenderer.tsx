@@ -95,7 +95,7 @@ function TextField({ field, value, onChange }: { field: TemplateField; value: st
 type NumberSubtype = 'monetario' | 'quantidade' | 'decimal' | 'porcentagem'
 
 const NUMBER_SUBTYPES: Record<NumberSubtype, { label: string; prefix: string; suffix: string; placeholder: string; inputMode: 'numeric' | 'decimal' }> = {
-  monetario: { label: 'Monetario (R$)', prefix: 'R$ ', suffix: '', placeholder: '0,00', inputMode: 'decimal' },
+  monetario: { label: 'Monetário (R$)', prefix: 'R$ ', suffix: '', placeholder: '0,00', inputMode: 'decimal' },
   quantidade: { label: 'Quantidade', prefix: '', suffix: ' un', placeholder: '0', inputMode: 'numeric' },
   decimal: { label: 'Decimal', prefix: '', suffix: '', placeholder: '0,00', inputMode: 'decimal' },
   porcentagem: { label: 'Porcentagem (%)', prefix: '', suffix: '%', placeholder: '0', inputMode: 'decimal' },
@@ -660,14 +660,12 @@ function YesNoField({ field, value, onChange }: { field: TemplateField; value: u
     if (selectedSeverity) base.selectedSeverity = selectedSeverity
     if (selectedPresetId) base.selectedPresetId = selectedPresetId
     const merged = { ...base, ...updates }
-    // If switching answer and the new answer has no conditional config, clear conditional data
+    // If switching answer, clear conditional data that doesn't apply to the new answer
     if (updates.answer) {
       const newAnswer = updates.answer as string
       const newConfig = newAnswer === 'nao' ? onNoConfig : newAnswer === 'sim' ? onYesConfig : undefined
-      if (!newConfig || (!newConfig.showTextField && !newConfig.showPhotoField)) {
-        delete merged.conditionalText
-        delete merged.conditionalPhotos
-      }
+      if (!newConfig?.showTextField) delete merged.conditionalText
+      if (!newConfig?.showPhotoField) delete merged.conditionalPhotos
       if (newAnswer !== 'nao' || !onNoConfig?.allowUserActionPlan) {
         delete merged.selectedAssigneeId
         delete merged.selectedSeverity
@@ -738,7 +736,7 @@ function YesNoField({ field, value, onChange }: { field: TemplateField; value: u
               : 'bg-surface border-subtle text-muted hover:border-red-500/50 hover:text-red-400'
           }`}
         >
-          Nao
+          Não
         </button>
       </div>
 
@@ -817,7 +815,7 @@ function YesNoField({ field, value, onChange }: { field: TemplateField; value: u
           {activeConditionalConfig.showPhotoField && (
             <div>
               <label className="block text-sm font-medium text-secondary mb-1">
-                {activeConditionalConfig.photoFieldLabel || 'Foto de evidencia'}
+                {activeConditionalConfig.photoFieldLabel || 'Foto de evidência'}
                 {activeConditionalConfig.photoFieldRequired && <span className="text-red-400 ml-1">*</span>}
               </label>
               {conditionalPhotos.length > 0 && (
@@ -840,31 +838,29 @@ function YesNoField({ field, value, onChange }: { field: TemplateField; value: u
                   ))}
                 </div>
               )}
-              {conditionalPhotos.length < 3 && (
-                <button
-                  type="button"
-                  onClick={() => conditionalInputRef.current?.click()}
-                  disabled={compressingConditionalPhoto}
-                  className="w-full py-3 border-2 border-dashed border-default hover:border-primary rounded-xl text-secondary hover:text-primary transition-colors flex items-center justify-center gap-2 disabled:opacity-50 text-sm"
-                >
-                  {compressingConditionalPhoto ? (
-                    <>
-                      <div className="w-4 h-4 border-2 border-secondary border-t-transparent rounded-full animate-spin" />
-                      <span>Processando...</span>
-                    </>
-                  ) : (
-                    <>
-                      <FiCamera className="w-4 h-4" />
-                      <span>Anexar Foto ({conditionalPhotos.length}/3)</span>
-                    </>
-                  )}
-                </button>
-              )}
+              <button
+                type="button"
+                onClick={() => conditionalInputRef.current?.click()}
+                disabled={compressingConditionalPhoto}
+                className="w-full py-3 border-2 border-dashed border-default hover:border-primary rounded-xl text-secondary hover:text-primary transition-colors flex items-center justify-center gap-2 disabled:opacity-50 text-sm"
+              >
+                {compressingConditionalPhoto ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-secondary border-t-transparent rounded-full animate-spin" />
+                    <span>Processando...</span>
+                  </>
+                ) : (
+                  <>
+                    <FiCamera className="w-4 h-4" />
+                    <span>Anexar Foto{conditionalPhotos.length > 0 ? ` (${conditionalPhotos.length})` : ''}</span>
+                  </>
+                )}
+              </button>
               <input
                 ref={conditionalInputRef}
                 type="file"
                 accept="image/*"
-                capture="environment"
+                multiple
                 onChange={async (e) => {
                   const files = e.target.files
                   if (!files) return
@@ -892,13 +888,13 @@ function YesNoField({ field, value, onChange }: { field: TemplateField; value: u
       {/* User action plan selection */}
       {showUserActionPlan && (
         <div className="p-3 rounded-xl border-2 border-orange-500/20 bg-orange-500/5 space-y-3">
-          <p className="text-sm font-medium text-orange-400">Plano de Acao</p>
+          <p className="text-sm font-medium text-orange-400">Plano de Ação</p>
           <div>
             <label className="block text-sm font-medium text-secondary mb-1">Modelo</label>
             {presetsLoading ? (
               <p className="text-sm text-muted">Carregando modelos...</p>
             ) : presets.length === 0 ? (
-              <p className="text-sm text-muted italic">Nao existem modelos criados</p>
+              <p className="text-sm text-muted italic">Não existem modelos criados</p>
             ) : (
               <Select
                 value={selectedPresetId ? String(selectedPresetId) : ''}
@@ -917,16 +913,16 @@ function YesNoField({ field, value, onChange }: { field: TemplateField; value: u
           {usersLoading ? (
             <div className="flex items-center gap-2 text-sm text-muted">
               <div className="w-4 h-4 border-2 border-secondary border-t-transparent rounded-full animate-spin" />
-              Carregando responsaveis...
+              Carregando responsáveis...
             </div>
           ) : (
             <>
               <div>
-                <label className="block text-sm font-medium text-secondary mb-1">Responsavel</label>
+                <label className="block text-sm font-medium text-secondary mb-1">Responsável</label>
                 <Select
                   value={selectedAssigneeId || ''}
                   onChange={(v) => onChange(buildValue({ selectedAssigneeId: v || null }))}
-                  placeholder="Selecione o responsavel..."
+                  placeholder="Selecione o responsável..."
                   options={assignableUsers.map(u => ({ value: u.id, label: u.full_name }))}
                 />
               </div>
@@ -938,9 +934,9 @@ function YesNoField({ field, value, onChange }: { field: TemplateField; value: u
                   placeholder="Selecione a severidade..."
                   options={[
                     { value: 'baixa', label: 'Baixa' },
-                    { value: 'media', label: 'Media' },
+                    { value: 'media', label: 'Média' },
                     { value: 'alta', label: 'Alta' },
-                    { value: 'critica', label: 'Critica' },
+                    { value: 'critica', label: 'Crítica' },
                   ]}
                 />
               </div>
@@ -954,7 +950,7 @@ function YesNoField({ field, value, onChange }: { field: TemplateField; value: u
 
 // Rating Field (intensity/satisfaction with face emojis)
 const RATING_OPTIONS = [
-  { value: 'pessimo', label: 'Pessimo', face: '😡', color: 'rgb(239, 68, 68)', bgColor: 'rgba(239, 68, 68, 0.15)', borderColor: 'rgb(239, 68, 68)' },
+  { value: 'pessimo', label: 'Péssimo', face: '😡', color: 'rgb(239, 68, 68)', bgColor: 'rgba(239, 68, 68, 0.15)', borderColor: 'rgb(239, 68, 68)' },
   { value: 'ruim', label: 'Ruim', face: '😟', color: 'rgb(249, 115, 22)', bgColor: 'rgba(249, 115, 22, 0.15)', borderColor: 'rgb(249, 115, 22)' },
   { value: 'regular', label: 'Regular', face: '😐', color: 'rgb(234, 179, 8)', bgColor: 'rgba(234, 179, 8, 0.15)', borderColor: 'rgb(234, 179, 8)' },
   { value: 'bom', label: 'Bom', face: '😊', color: 'rgb(34, 197, 94)', bgColor: 'rgba(34, 197, 94, 0.15)', borderColor: 'rgb(34, 197, 94)' },

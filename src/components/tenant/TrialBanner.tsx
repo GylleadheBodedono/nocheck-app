@@ -45,7 +45,7 @@ export function TrialBanner() {
             </p>
             <p className="text-xs text-muted">
               {isUrgent
-                ? 'Faca upgrade agora para nao perder acesso.'
+                ? 'Faça upgrade agora para não perder acesso.'
                 : 'Aproveite para conhecer todas as funcionalidades.'}
             </p>
           </div>

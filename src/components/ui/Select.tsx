@@ -200,7 +200,7 @@ export function Select({
             })}
 
             {options.length === 0 && !placeholder && (
-              <p className="px-3 py-2 text-sm text-muted">Nenhuma opcao disponivel</p>
+              <p className="px-3 py-2 text-sm text-muted">Nenhuma opção disponível</p>
             )}
           </div>
         </div>

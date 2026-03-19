@@ -39,7 +39,7 @@ const routes = APP_CONFIG.routes
 const SIDEBAR_ITEMS: SidebarItem[] = [
   { label: 'Painel Admin', href: routes.admin, icon: FiGrid },
   {
-    label: 'Usuarios',
+    label: 'Usuários',
     href: routes.adminUsers,
     icon: FiUsers,
   },
@@ -54,10 +54,10 @@ const SIDEBAR_ITEMS: SidebarItem[] = [
   },
   { label: 'Lojas', href: routes.adminStores, icon: FiHome },
   { label: 'Setores', href: routes.adminSectors, icon: FiBookmark },
-  { label: 'Funcoes', href: routes.adminFunctions, icon: FiSliders },
-  { label: 'Validacoes', href: routes.adminValidations, icon: FiCheckCircle },
+  { label: 'Funções', href: routes.adminFunctions, icon: FiSliders },
+  { label: 'Validações', href: routes.adminValidations, icon: FiCheckCircle },
   {
-    label: 'Planos de Acao',
+    label: 'Planos de Ação',
     href: routes.adminActionPlans,
     icon: FiFileText,
     children: [
@@ -66,18 +66,18 @@ const SIDEBAR_ITEMS: SidebarItem[] = [
     ],
   },
   {
-    label: 'Relatorios',
+    label: 'Relatórios',
     href: routes.adminReports,
     icon: FiBarChart2,
     children: [
-      { label: 'Visao Geral', href: routes.adminReports },
+      { label: 'Visão Geral', href: routes.adminReports },
       { label: 'Fotos NC', href: routes.adminNCPhotoReport },
-      { label: 'Planos de Acao', href: routes.adminActionPlanReport },
+      { label: 'Planos de Ação', href: routes.adminActionPlanReport },
     ],
   },
   { label: 'Galeria', href: routes.adminGallery, icon: FiImage },
   {
-    label: 'Configuracoes',
+    label: 'Configurações',
     href: routes.adminSettings,
     icon: FiSettings,
     children: [
@@ -164,7 +164,7 @@ export function AdminSidebar({ isOpen, onClose }: AdminSidebarProps) {
             </div>
             <div>
               <p className="text-sm font-bold text-main leading-tight">{APP_CONFIG.name}</p>
-              <p className="text-[10px] text-muted leading-tight">Administracao</p>
+              <p className="text-[10px] text-muted leading-tight">Administração</p>
             </div>
           </Link>
           <button

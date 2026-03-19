@@ -396,7 +396,7 @@ export default function ValidacoesPage() {
   return (
     <div className="min-h-screen bg-page">
       <Header
-        title="Validacoes Cruzadas"
+        title="Validações Cruzadas"
         icon={FiCheckCircle}
         backHref={APP_CONFIG.routes.admin}
       />
@@ -407,7 +407,7 @@ export default function ValidacoesPage() {
           <div className="bg-warning/10 border border-warning/30 rounded-xl p-4 mb-6 flex items-center gap-3">
             <FiWifiOff className="w-5 h-5 text-warning" />
             <p className="text-warning text-sm">
-              Voce esta offline. Os dados de validacoes nao estao disponiveis no cache local.
+              Você está offline. Os dados de validações não estão disponíveis no cache local.
             </p>
           </div>
         )}
@@ -457,7 +457,7 @@ export default function ValidacoesPage() {
               </div>
               <div>
                 <p className="text-2xl font-bold text-main">{stats.falhou}</p>
-                <p className="text-xs text-muted">Divergencias</p>
+                <p className="text-xs text-muted">Divergências</p>
               </div>
             </div>
           </div>
@@ -522,7 +522,7 @@ export default function ValidacoesPage() {
               onChange={(v) => handleExpirationChange(Number(v))}
               disabled={savingExpiration}
               className="text-sm"
-              title="Tempo para expirar validacoes pendentes"
+              title="Tempo para expirar validações pendentes"
               options={[
                 { value: '5',    label: 'Expira em 5 min' },
                 { value: '15',   label: 'Expira em 15 min' },
@@ -566,10 +566,10 @@ export default function ValidacoesPage() {
           <div className="flex items-start gap-3">
             <FiAlertTriangle className="w-5 h-5 text-info mt-0.5" />
             <div>
-              <p className="font-medium text-main">Como funciona a validacao cruzada</p>
+              <p className="font-medium text-main">Como funciona a validação cruzada</p>
               <p className="text-sm text-muted mt-1">
                 O sistema compara automaticamente os checklists preenchidos pelo
-                <strong className="text-main"> funcionario</strong> e pelo <strong className="text-main">aprendiz</strong> do mesmo setor.
+                <strong className="text-main"> funcionário</strong> e pelo <strong className="text-main">aprendiz</strong> do mesmo setor.
                 Quando os valores ou notas divergem, o sistema tenta vincular notas &quot;irmãs&quot; baseado em:
                 mesma loja, mesmo setor, horário próximo (até 30 min) e prefixo similar.
                 Notas sem par após <strong className="text-purple-500">{formatExpirationLabel(expirationMinutes)}</strong> são marcadas como <strong className="text-purple-500">expiradas</strong>.
@@ -584,8 +584,8 @@ export default function ValidacoesPage() {
             <FiCheckCircle className="w-12 h-12 text-muted mx-auto mb-4" />
             <p className="text-muted">
               {validations.length === 0
-                ? 'Nenhuma validacao registrada ainda'
-                : 'Nenhuma validacao encontrada com os filtros selecionados'
+                ? 'Nenhuma validação registrada ainda'
+                : 'Nenhuma validação encontrada com os filtros selecionados'
               }
             </p>
           </div>
@@ -665,7 +665,7 @@ export default function ValidacoesPage() {
 
                         <div className="flex items-center gap-6">
                           <div className="text-center">
-                            <p className="text-xs text-muted mb-1">Funcionario</p>
+                            <p className="text-xs text-muted mb-1">Funcionário</p>
                             <p className="text-lg font-bold text-main">
                               {formatCurrency(primary.valor_estoquista ?? (linked?.valor_estoquista ?? null))}
                             </p>
@@ -680,7 +680,7 @@ export default function ValidacoesPage() {
 
                           {primary.diferenca !== null && (
                             <div className="text-center">
-                              <p className="text-xs text-muted mb-1">Diferenca</p>
+                              <p className="text-xs text-muted mb-1">Diferença</p>
                               <p className={`text-lg font-bold ${
                                 primary.diferenca === 0
                                   ? 'text-success'
@@ -702,7 +702,7 @@ export default function ValidacoesPage() {
 
         {/* Footer Stats */}
         <div className="mt-6 text-sm text-muted text-center">
-          Mostrando {groupedValidations.length} validacoes
+          Mostrando {groupedValidations.length} validações
         </div>
       </PageContainer>
     </div>

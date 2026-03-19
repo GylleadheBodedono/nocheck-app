@@ -3,18 +3,18 @@
 import { useEffect, useState, useMemo, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient, isSupabaseConfigured } from '@/lib/supabase'
-import { FiImage, FiSave, FiUpload, FiX, FiCheck } from 'react-icons/fi'
+import { FiImage, FiSave, FiUpload, FiX, FiCheck, FiLock } from 'react-icons/fi'
 import { APP_CONFIG } from '@/lib/config'
 import { LoadingPage, Header, PageContainer } from '@/components/ui'
 import { getAuthCache, getUserCache } from '@/lib/offlineCache'
 import { useTenant } from '@/hooks/useTenant'
-import { TenantGuard } from '@/components/tenant/TenantGuard'
 
 function BrandingContent() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [success, setSuccess] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [blocked, setBlocked] = useState(false)
   const router = useRouter()
   const supabase = useMemo(() => createClient(), [])
   const { organization } = useTenant()
@@ -71,6 +71,30 @@ function BrandingContent() {
       if (!currentUserId) { router.push(APP_CONFIG.routes.login); return }
       if (!isAdmin) { router.push(APP_CONFIG.routes.dashboard); return }
 
+      // Check if org has white_label feature
+      if (currentUserId) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const { data: memberData } = await (supabase as any)
+          .from('organization_members')
+          .select('organization_id')
+          .eq('user_id', currentUserId)
+          .limit(1)
+          .single()
+        if (memberData?.organization_id) {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const { data: orgData } = await (supabase as any)
+            .from('organizations')
+            .select('features')
+            .eq('id', memberData.organization_id)
+            .single()
+          if (orgData && !orgData.features?.includes('white_label')) {
+            setBlocked(true)
+            setLoading(false)
+            return
+          }
+        }
+      }
+
       // Populate form from org settings
       if (organization?.settings?.theme) {
         const theme = organization.settings.theme
@@ -108,11 +132,11 @@ function BrandingContent() {
     const allowedTypes = ['image/png', 'image/jpeg', 'image/svg+xml', 'image/webp']
 
     if (!allowedTypes.includes(file.type)) {
-      setError('Formato invalido. Use PNG, JPG, SVG ou WebP.')
+      setError('Formato inválido. Use PNG, JPG, SVG ou WebP.')
       return
     }
     if (file.size > maxSize) {
-      setError('Arquivo muito grande. Maximo 2MB.')
+      setError('Arquivo muito grande. Máximo 2MB.')
       return
     }
 
@@ -122,7 +146,7 @@ function BrandingContent() {
 
     try {
       const { data: { session } } = await supabase.auth.getSession()
-      if (!session?.access_token) throw new Error('Sessao expirada')
+      if (!session?.access_token) throw new Error('Sessão expirada')
 
       const formData = new FormData()
       formData.append('file', file)
@@ -166,7 +190,7 @@ function BrandingContent() {
 
     try {
       const { data: { session } } = await supabase.auth.getSession()
-      if (!session?.access_token) throw new Error('Sessao expirada')
+      if (!session?.access_token) throw new Error('Sessão expirada')
 
       const newSettings = {
         ...organization.settings,
@@ -187,7 +211,7 @@ function BrandingContent() {
 
       if (updateError) throw new Error(updateError.message)
 
-      setSuccess('Branding salvo com sucesso! Recarregue a pagina para ver as alteracoes.')
+      setSuccess('Branding salvo com sucesso! Recarregue a página para ver as alterações.')
       setTimeout(() => setSuccess(null), 5000)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Erro ao salvar')
@@ -198,11 +222,37 @@ function BrandingContent() {
 
   if (loading) return <LoadingPage />
 
+  if (blocked) {
+    return (
+      <div className="min-h-screen bg-page">
+        <Header
+          title="Branding"
+          subtitle="Personalize a aparência do sistema"
+          icon={FiImage}
+          backHref="/admin/configuracoes"
+        />
+        <PageContainer size="md">
+          <div className="card p-8 text-center space-y-4 mt-8">
+            <FiLock className="w-12 h-12 text-muted mx-auto" />
+            <h2 className="text-lg font-semibold text-main">Recurso indisponível no seu plano</h2>
+            <p className="text-sm text-muted max-w-md mx-auto">
+              A personalização de marca (White Label) está disponível apenas no plano <span className="font-semibold text-accent">Enterprise</span>.
+              Faça upgrade para desbloquear este recurso.
+            </p>
+            <button onClick={() => router.push('/admin/configuracoes')} className="btn-primary mt-2">
+              Voltar para Configurações
+            </button>
+          </div>
+        </PageContainer>
+      </div>
+    )
+  }
+
   return (
     <div className="min-h-screen bg-page">
       <Header
         title="Branding"
-        subtitle="Personalize a aparencia do sistema"
+        subtitle="Personalize a aparência do sistema"
         icon={FiImage}
         backHref="/admin/configuracoes"
       />
@@ -212,7 +262,7 @@ function BrandingContent() {
         <div className="card p-5">
           <h2 className="text-base font-semibold text-main mb-1">Nome do Aplicativo</h2>
           <p className="text-sm text-muted mb-4">
-            Exibido no header, titulo da aba e emails do sistema.
+            Exibido no header, título da aba e emails do sistema.
           </p>
           <input
             type="text"
@@ -225,9 +275,9 @@ function BrandingContent() {
 
         {/* Cor Primaria */}
         <div className="card p-5">
-          <h2 className="text-base font-semibold text-main mb-1">Cor Primaria</h2>
+          <h2 className="text-base font-semibold text-main mb-1">Cor Primária</h2>
           <p className="text-sm text-muted mb-4">
-            Usada em botoes, links e destaques. A mudanca e visualizada em tempo real.
+            Usada em botões, links e destaques. A mudança é visualizada em tempo real.
           </p>
           <div className="flex items-center gap-4">
             <input
@@ -251,15 +301,15 @@ function BrandingContent() {
               <div
                 className="w-10 h-10 rounded-lg border border-subtle"
                 style={{ backgroundColor: primaryColor }}
-                title="Cor primaria"
+                title="Cor primária"
               />
               <span className="text-xs text-muted">Preview</span>
             </div>
           </div>
           {/* Live preview of button */}
           <div className="mt-4 flex items-center gap-3">
-            <button className="btn-primary text-sm">Botao Primario</button>
-            <span className="text-primary text-sm font-medium">Texto primario</span>
+            <button className="btn-primary text-sm">Botão Primário</button>
+            <span className="text-primary text-sm font-medium">Texto primário</span>
           </div>
         </div>
 
@@ -316,7 +366,7 @@ function BrandingContent() {
         <div className="card p-5">
           <h2 className="text-base font-semibold text-main mb-1">Favicon</h2>
           <p className="text-sm text-muted mb-4">
-            Icone da aba do navegador. Recomendado: PNG 32x32 ou 64x64.
+            Ícone da aba do navegador. Recomendado: PNG 32x32 ou 64x64.
           </p>
 
           {faviconUrl && (
@@ -396,7 +446,7 @@ function BrandingContent() {
         </div>
 
         <p className="text-xs text-muted">
-          Organizacao: <span className="font-medium text-secondary">{organization?.name || '-'}</span>
+          Organização: <span className="font-medium text-secondary">{organization?.name || '-'}</span>
           {' '}&middot;{' '}
           Plano: <span className="font-medium text-secondary">{organization?.plan || '-'}</span>
         </p>
@@ -406,9 +456,5 @@ function BrandingContent() {
 }
 
 export default function BrandingPage() {
-  return (
-    <TenantGuard requiredRole="admin" requiredFeature="white_label">
-      <BrandingContent />
-    </TenantGuard>
-  )
+  return <BrandingContent />
 }

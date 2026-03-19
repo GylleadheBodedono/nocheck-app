@@ -131,7 +131,7 @@ export default function NovoPlanoDeAcaoPage() {
     }
 
     if (!assigneeId) {
-      setError('Selecione um responsavel')
+      setError('Selecione um responsável')
       setSaving(false)
       return
     }
@@ -174,11 +174,11 @@ export default function NovoPlanoDeAcaoPage() {
         const assigneeName = users.find(u => u.id === assigneeId)?.full_name || ''
         await createNotification(supabase, assigneeId, {
           type: 'action_plan_assigned',
-          title: 'Novo Plano de Acao atribuido a voce',
+          title: 'Novo Plano de Ação atribuído a você',
           message: `${title} | Severidade: ${severity} | Prazo: ${deadlineDate}`,
           link: `/admin/planos-de-acao/${plan.id}`,
           metadata: { plan_id: plan.id, severity, deadline: deadlineDate, assignee_name: assigneeName },
-        }).catch(err => console.warn('[PlanoDeAcao] Erro ao criar notificacao:', err))
+        }).catch(err => console.warn('[PlanoDeAcao] Erro ao criar notificação:', err))
 
         // Enviar email ao responsavel
         try {
@@ -213,7 +213,7 @@ export default function NovoPlanoDeAcaoPage() {
               description: description || '',
               plan_url: `${window.location.origin}/admin/planos-de-acao/${plan.id}`,
               plan_id: String(plan.id),
-              is_reincidencia: 'Nao',
+              is_reincidencia: 'Não',
               reincidencia_count: '0',
               reincidencia_prefix: '',
               app_name: 'OpereCheck',
@@ -238,7 +238,7 @@ export default function NovoPlanoDeAcaoPage() {
     } catch (err) {
       console.error('Error creating action plan:', err)
       const supaErr = err as { message?: string; details?: string }
-      setError(supaErr?.message || supaErr?.details || 'Erro ao criar plano de acao')
+      setError(supaErr?.message || supaErr?.details || 'Erro ao criar plano de ação')
       setSaving(false)
     }
   }
@@ -250,7 +250,7 @@ export default function NovoPlanoDeAcaoPage() {
   return (
     <div className="min-h-screen bg-page">
       <Header
-        title="Novo Plano de Acao"
+        title="Novo Plano de Ação"
         icon={FiFileText}
         backHref="/admin/planos-de-acao"
       />
@@ -258,13 +258,13 @@ export default function NovoPlanoDeAcaoPage() {
       <PageContainer size="sm">
         <form onSubmit={handleSubmit} className="space-y-6">
           <div className="card p-6">
-            <h2 className="text-lg font-semibold text-main mb-4">Informacoes do Plano</h2>
+            <h2 className="text-lg font-semibold text-main mb-4">Informações do Plano</h2>
 
             <div className="space-y-4">
-              {/* Titulo */}
+              {/* Título */}
               <div>
                 <label className="block text-sm font-medium text-main mb-1">
-                  Titulo *
+                  Título *
                 </label>
                 <input
                   type="text"
@@ -276,17 +276,17 @@ export default function NovoPlanoDeAcaoPage() {
                 />
               </div>
 
-              {/* Descricao */}
+              {/* Descrição */}
               <div>
                 <label className="block text-sm font-medium text-main mb-1">
-                  Descricao
+                  Descrição
                 </label>
                 <textarea
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
                   rows={3}
                   className="input resize-none"
-                  placeholder="Descreva o problema e as acoes necessarias..."
+                  placeholder="Descreva o problema e as ações necessárias..."
                 />
               </div>
 
@@ -332,22 +332,22 @@ export default function NovoPlanoDeAcaoPage() {
                   onChange={setSeverity}
                   options={[
                     { value: 'baixa',  label: 'Baixa' },
-                    { value: 'media',  label: 'Media' },
+                    { value: 'media',  label: 'Média' },
                     { value: 'alta',   label: 'Alta' },
-                    { value: 'critica', label: 'Critica' },
+                    { value: 'critica', label: 'Crítica' },
                   ]}
                 />
               </div>
 
-              {/* Responsavel */}
+              {/* Responsável */}
               <div>
                 <label className="block text-sm font-medium text-main mb-1">
-                  Responsavel *
+                  Responsável *
                 </label>
                 <Select
                   value={assigneeId}
                   onChange={setAssigneeId}
-                  placeholder="Selecione o responsavel"
+                  placeholder="Selecione o responsável"
                   options={users.map(user => ({ value: user.id, label: user.full_name }))}
                 />
               </div>
@@ -396,7 +396,7 @@ export default function NovoPlanoDeAcaoPage() {
               ) : (
                 <>
                   <FiSave className="w-4 h-4" />
-                  Criar Plano de Acao
+                  Criar Plano de Ação
                 </>
               )}
             </button>

@@ -17,22 +17,22 @@ export default function PlatformConfigPage() {
   return (
     <div className="max-w-3xl mx-auto space-y-6">
       <div>
-        <h1 className="text-xl font-bold text-main">Configuracoes da Plataforma</h1>
-        <p className="text-sm text-muted mt-1">Ajuste parametros globais que afetam todas as organizacoes</p>
+        <h1 className="text-xl font-bold text-main">Configurações da Plataforma</h1>
+        <p className="text-sm text-muted mt-1">Ajuste parâmetros globais que afetam todas as organizações</p>
       </div>
 
       {/* Trial */}
-      <Section icon={FiClock} title="Trial" desc="Configuracoes do periodo de teste gratuito">
+      <Section icon={FiClock} title="Trial" desc="Configurações do período de teste gratuito">
         <div>
           <label className="text-xs font-medium text-secondary mb-1.5 block">Dias de trial</label>
           <input type="number" value={trialDays} onChange={e => setTrialDays(Number(e.target.value))}
             className="input" />
-          <p className="text-[11px] text-muted mt-1">Novos clientes terao {trialDays} dias gratis no plano Professional</p>
+          <p className="text-[11px] text-muted mt-1">Novos clientes terão {trialDays} dias grátis no plano Professional</p>
         </div>
       </Section>
 
       {/* Plataforma */}
-      <Section icon={FiGlobe} title="Plataforma" desc="Informacoes basicas da plataforma">
+      <Section icon={FiGlobe} title="Plataforma" desc="Informações básicas da plataforma">
         <div className="space-y-4">
           <div>
             <label className="text-xs font-medium text-secondary mb-1.5 block">Nome da plataforma</label>
@@ -48,7 +48,7 @@ export default function PlatformConfigPage() {
       </Section>
 
       {/* Email */}
-      <Section icon={FiMail} title="Email" desc="Templates de email para notificacoes da plataforma">
+      <Section icon={FiMail} title="Email" desc="Templates de email para notificações da plataforma">
         <div className="space-y-3 text-sm text-muted">
           <div className="flex items-center justify-between py-2 border-b border-subtle">
             <div>
@@ -67,7 +67,7 @@ export default function PlatformConfigPage() {
           <div className="flex items-center justify-between py-2">
             <div>
               <p className="font-medium text-secondary">Pagamento falhou</p>
-              <p className="text-[11px] text-muted">Quando uma cobranca e recusada</p>
+              <p className="text-[11px] text-muted">Quando uma cobrança é recusada</p>
             </div>
             <span className="px-2 py-0.5 bg-emerald-50 text-emerald-600 text-[10px] font-semibold rounded-full">Ativo</span>
           </div>
@@ -75,33 +75,33 @@ export default function PlatformConfigPage() {
       </Section>
 
       {/* Planos */}
-      <Section icon={FiZap} title="Planos" desc="Precos e limites de cada plano">
+      <Section icon={FiZap} title="Planos" desc="Preços e limites de cada plano">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="text-[11px] text-muted uppercase tracking-wider border-b border-subtle">
                 <th className="text-left py-2 font-medium">Plano</th>
-                <th className="text-left py-2 font-medium">Preco</th>
-                <th className="text-left py-2 font-medium">Usuarios</th>
+                <th className="text-left py-2 font-medium">Preço</th>
+                <th className="text-left py-2 font-medium">Usuários</th>
                 <th className="text-left py-2 font-medium">Lojas</th>
               </tr>
             </thead>
             <tbody className="text-secondary">
               <tr className="border-b border-subtle">
                 <td className="py-2.5"><span className="px-2 py-0.5 bg-amber-50 text-amber-600 text-[10px] font-bold rounded-full uppercase">Trial</span></td>
-                <td className="py-2.5">Gratis</td><td className="py-2.5">3</td><td className="py-2.5">1</td>
+                <td className="py-2.5">Grátis</td><td className="py-2.5">3</td><td className="py-2.5">1</td>
               </tr>
               <tr className="border-b border-subtle">
                 <td className="py-2.5"><span className="px-2 py-0.5 bg-blue-50 text-blue-600 text-[10px] font-bold rounded-full uppercase">Starter</span></td>
-                <td className="py-2.5">R$ 297/mes</td><td className="py-2.5">5</td><td className="py-2.5">3</td>
+                <td className="py-2.5">R$ 297/mês</td><td className="py-2.5">5</td><td className="py-2.5">3</td>
               </tr>
               <tr className="border-b border-subtle">
                 <td className="py-2.5"><span className="px-2 py-0.5 bg-teal-50 text-teal-600 text-[10px] font-bold rounded-full uppercase">Professional</span></td>
-                <td className="py-2.5">R$ 597/mes</td><td className="py-2.5">15</td><td className="py-2.5">10</td>
+                <td className="py-2.5">R$ 597/mês</td><td className="py-2.5">15</td><td className="py-2.5">10</td>
               </tr>
               <tr>
                 <td className="py-2.5"><span className="px-2 py-0.5 bg-emerald-50 text-emerald-600 text-[10px] font-bold rounded-full uppercase">Enterprise</span></td>
-                <td className="py-2.5">R$ 997/mes</td><td className="py-2.5">Ilimitado</td><td className="py-2.5">Ilimitado</td>
+                <td className="py-2.5">R$ 997/mês</td><td className="py-2.5">Ilimitado</td><td className="py-2.5">Ilimitado</td>
               </tr>
             </tbody>
           </table>
@@ -116,7 +116,7 @@ export default function PlatformConfigPage() {
               ? 'bg-emerald-500 text-white'
               : 'btn-primary'
           }`}>
-          {saved ? <><FiCheck className="w-4 h-4" /> Salvo!</> : <><FiSave className="w-4 h-4" /> Salvar Configuracoes</>}
+          {saved ? <><FiCheck className="w-4 h-4" /> Salvo!</> : <><FiSave className="w-4 h-4" /> Salvar Configurações</>}
         </button>
       </div>
     </div>

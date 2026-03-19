@@ -130,7 +130,7 @@ export default function EquipePage() {
             const profile = profileMap.get(m.user_id)
             return {
               ...m,
-              full_name: profile?.full_name || m.invited_email || 'Usuario',
+              full_name: profile?.full_name || m.invited_email || 'Usuário',
               email: profile?.email || m.invited_email || '',
             }
           })
@@ -188,7 +188,7 @@ export default function EquipePage() {
         }
 
         if (!organizationId) {
-          showToast('error', 'Organizacao nao encontrada')
+          showToast('error', 'Organização não encontrada')
           setLoading(false)
           return
         }
@@ -223,7 +223,7 @@ export default function EquipePage() {
         await loadData(organizationId)
       } catch (err) {
         console.error('[Equipe] Init error:', err)
-        showToast('error', 'Erro ao inicializar pagina')
+        showToast('error', 'Erro ao inicializar página')
       }
 
       setLoading(false)
@@ -292,7 +292,7 @@ export default function EquipePage() {
         console.error('[Equipe] Erro ao enviar convite:', err)
         const message =
           err instanceof Error && err.message.includes('duplicate')
-            ? 'Ja existe um convite pendente para este email'
+            ? 'Já existe um convite pendente para este email'
             : 'Erro ao enviar convite'
         showToast('error', message)
       } finally {
@@ -368,7 +368,7 @@ export default function EquipePage() {
           <div className="px-5 py-4 border-b border-subtle">
             <h2 className="text-base font-semibold text-main">Membros</h2>
             <p className="text-sm text-muted mt-0.5">
-              Gerencie os membros da sua organizacao
+              Gerencie os membros da sua organização
             </p>
           </div>
 
@@ -404,7 +404,7 @@ export default function EquipePage() {
                             </p>
                             {isSelf && (
                               <span className="text-[10px] font-medium text-primary bg-primary/10 px-1.5 py-0.5 rounded-full">
-                                voce
+                                você
                               </span>
                             )}
                           </div>

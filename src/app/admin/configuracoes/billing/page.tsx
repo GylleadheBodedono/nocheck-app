@@ -1,9 +1,6 @@
 // ============================================
 // Billing — Pagina de assinatura e upgrade
 // ============================================
-// Permite ao admin (dono do restaurante) ver seu plano atual,
-// fazer upgrade, abrir portal Stripe para gerenciar cartao.
-// ============================================
 
 'use client'
 
@@ -14,8 +11,9 @@ import { FiCheck, FiArrowLeft, FiCreditCard, FiStar, FiZap, FiShield } from 'rea
 import Link from 'next/link'
 import { APP_CONFIG } from '@/lib/config'
 import { PLAN_CONFIGS, type Plan } from '@/types/tenant'
-import { createCheckoutSession, createPortalSession, getTrialDaysRemaining } from '@/services/billing.service'
+import { createPortalSession, getTrialDaysRemaining } from '@/services/billing.service'
 import { LoadingPage } from '@/components/ui'
+import { PaymentModal } from '@/components/billing/PaymentModal'
 
 type OrgBilling = {
   id: string; name: string; plan: Plan; stripe_customer_id: string | null
@@ -32,63 +30,42 @@ export default function BillingPage() {
   const [org, setOrg] = useState<OrgBilling | null>(null)
   const [usage, setUsage] = useState<UsageStats>({ currentUsers: 0, currentStores: 0 })
   const [loading, setLoading] = useState(true)
-  const [upgrading, setUpgrading] = useState<string | null>(null)
+  const [selectedPlan, setSelectedPlan] = useState<Plan | null>(null)
   const router = useRouter()
   const searchParams = useSearchParams()
   const supabase = useMemo(() => createClient(), [])
 
   const billingStatus = searchParams.get('billing')
 
-  useEffect(() => {
-    const load = async () => {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) { router.push('/login'); return }
+  const loadData = async () => {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) { router.push('/login'); return }
 
-      const orgId = user.app_metadata?.org_id
-      if (!orgId) { setLoading(false); return }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const sb = supabase as any
+    // Usar RPC com SECURITY DEFINER para garantir acesso ao tenant_id real
+    const tenantRes = await sb.rpc('get_my_tenant_id')
+    console.log('[Billing] get_my_tenant_id result:', tenantRes)
+    const orgId = tenantRes.data || user.app_metadata?.org_id
+    console.log('[Billing] orgId resolved:', orgId, '| app_metadata:', user.app_metadata)
+    if (!orgId) { setLoading(false); return }
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const sb = supabase as any
+    const [orgRes, usersRes, storesRes] = await Promise.all([
+      sb.rpc('get_org_billing', { p_org_id: orgId }),
+      sb.from('organization_members').select('id', { count: 'exact', head: true }).eq('organization_id', orgId),
+      sb.from('stores').select('id', { count: 'exact', head: true }).eq('tenant_id', orgId),
+    ])
 
-      // Fetch org + usage stats in parallel
-      const [orgRes, usersRes, storesRes] = await Promise.all([
-        sb.from('organizations')
-          .select('id, name, plan, stripe_customer_id, stripe_subscription_id, trial_ends_at, features, max_users, max_stores')
-          .eq('id', orgId)
-          .single(),
-        sb.from('users').select('id', { count: 'exact', head: true }),
-        sb.from('stores').select('id', { count: 'exact', head: true }),
-      ])
-
-      if (orgRes.data) setOrg(orgRes.data as OrgBilling)
-      setUsage({
-        currentUsers: usersRes.count || 0,
-        currentStores: storesRes.count || 0,
-      })
-      setLoading(false)
-    }
-    load()
-  }, [supabase, router])
-
-  const handleUpgrade = async (plan: Plan) => {
-    if (!org) return
-    const config = PLAN_CONFIGS[plan]
-    if (!config.stripePriceId) return
-
-    setUpgrading(plan)
-    try {
-      const { url } = await createCheckoutSession({
-        orgId: org.id,
-        priceId: config.stripePriceId,
-      })
-      if (url) window.location.href = url
-    } catch (err) {
-      console.error('[Billing] Erro checkout:', err)
-      alert('Erro ao iniciar checkout. Tente novamente.')
-    } finally {
-      setUpgrading(null)
-    }
+    console.log('[Billing] get_org_billing result:', orgRes)
+    if (orgRes.data && orgRes.data.length > 0) setOrg(orgRes.data[0] as OrgBilling)
+    setUsage({
+      currentUsers: usersRes.count || 0,
+      currentStores: storesRes.count || 0,
+    })
+    setLoading(false)
   }
+
+  useEffect(() => { loadData() }, [supabase, router]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const handlePortal = async () => {
     if (!org) return
@@ -101,10 +78,33 @@ export default function BillingPage() {
     }
   }
 
+  const handlePaymentSuccess = () => {
+    // Reload data to show updated plan
+    setLoading(true)
+    loadData()
+  }
+
   if (loading) return <LoadingPage />
 
   const trialDays = org?.trial_ends_at ? getTrialDaysRemaining(org.trial_ends_at) : 0
-  const currentPlan = org?.plan || 'trial'
+  const currentPlan = (org?.plan || 'trial') as Plan
+
+  const featureLabels: Record<string, string> = {
+    basic_orders: 'Checklists ilimitados',
+    basic_reports: 'Relatorios basicos',
+    cancellations: 'Gestao de nao-conformidades',
+    kpi_dashboard: 'Painel de indicadores (KPI)',
+    bi_dashboard: 'Dashboard avancado de BI',
+    export_excel: 'Exportar para Excel',
+    export_pdf: 'Exportar para PDF',
+    integrations_ifood: 'Integracao com iFood',
+    integrations_teknisa: 'Integracao com Teknisa',
+    white_label: 'Sua marca personalizada',
+    api_access: 'Acesso a API',
+    custom_domain: 'Dominio personalizado',
+    audit_logs: 'Registro de auditoria',
+    advanced_analytics: 'Analises avancadas',
+  }
 
   const planIcons: Record<string, React.ReactNode> = {
     trial: <FiZap className="w-5 h-5" />,
@@ -112,6 +112,8 @@ export default function BillingPage() {
     professional: <FiZap className="w-5 h-5" />,
     enterprise: <FiShield className="w-5 h-5" />,
   }
+
+  const planOrder = ['trial', 'starter', 'professional', 'enterprise']
 
   return (
     <div className="min-h-screen bg-page">
@@ -198,7 +200,7 @@ export default function BillingPage() {
           {(['starter', 'professional', 'enterprise'] as Plan[]).map(plan => {
             const config = PLAN_CONFIGS[plan]
             const isCurrent = currentPlan === plan
-            const isDowngrade = ['enterprise', 'professional', 'starter'].indexOf(currentPlan) > ['enterprise', 'professional', 'starter'].indexOf(plan)
+            const isDowngrade = planOrder.indexOf(currentPlan) > planOrder.indexOf(plan)
 
             return (
               <div key={plan} className={`card p-6 relative ${isCurrent ? 'border-accent border-2' : ''}`}>
@@ -227,7 +229,7 @@ export default function BillingPage() {
                   {config.features.map(f => (
                     <li key={f} className="flex items-center gap-2 text-xs text-secondary">
                       <FiCheck className="w-3.5 h-3.5 text-success shrink-0" />
-                      <span className="capitalize">{f.replace(/_/g, ' ')}</span>
+                      <span>{featureLabels[f] || f.replace(/_/g, ' ')}</span>
                     </li>
                   ))}
                 </ul>
@@ -241,9 +243,9 @@ export default function BillingPage() {
                     Fazer Downgrade
                   </button>
                 ) : (
-                  <button onClick={() => handleUpgrade(plan)} disabled={!!upgrading}
-                    className="w-full py-2.5 btn-primary rounded-xl text-sm disabled:opacity-50">
-                    {upgrading === plan ? 'Redirecionando...' : 'Fazer Upgrade'}
+                  <button onClick={() => setSelectedPlan(plan)}
+                    className="w-full py-2.5 btn-primary rounded-xl text-sm">
+                    Fazer Upgrade
                   </button>
                 )}
               </div>
@@ -257,6 +259,18 @@ export default function BillingPage() {
           <p>Use o cartao <code className="bg-surface-hover px-1 rounded">4242 4242 4242 4242</code> com qualquer data futura e CVC para testar pagamentos.</p>
         </div>
       </div>
+
+      {/* Payment Modal */}
+      {selectedPlan && org && (
+        <PaymentModal
+          isOpen={!!selectedPlan}
+          onClose={() => setSelectedPlan(null)}
+          plan={selectedPlan}
+          orgId={org.id}
+          currentPlan={currentPlan}
+          onSuccess={handlePaymentSuccess}
+        />
+      )}
     </div>
   )
 }

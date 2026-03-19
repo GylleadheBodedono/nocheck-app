@@ -210,14 +210,14 @@ export default function EditarUsuarioPage() {
       const data = await res.json()
 
       if (!res.ok) {
-        throw new Error(data.error || 'Erro ao atualizar usuario')
+        throw new Error(data.error || 'Erro ao atualizar usuário')
       }
 
-      setSuccess('Usuario atualizado com sucesso!')
+      setSuccess('Usuário atualizado com sucesso!')
       fetchData()
     } catch (err) {
       console.error('Error updating user:', err)
-      setError(err instanceof Error ? err.message : 'Erro ao atualizar usuario')
+      setError(err instanceof Error ? err.message : 'Erro ao atualizar usuário')
     }
 
     setSaving(false)
@@ -234,7 +234,7 @@ export default function EditarUsuarioPage() {
   return (
     <div className="min-h-screen bg-page">
       <Header
-        title="Editar Usuario"
+        title="Editar Usuário"
         icon={FiUserCheck}
         backHref={APP_CONFIG.routes.adminUsers}
       />
@@ -257,7 +257,7 @@ export default function EditarUsuarioPage() {
 
           {/* Basic Info */}
           <div className="card p-6">
-            <h2 className="text-lg font-semibold text-main mb-4">Informacoes Basicas</h2>
+            <h2 className="text-lg font-semibold text-main mb-4">Informações Básicas</h2>
 
             <div className="space-y-4">
               <div>
@@ -270,7 +270,7 @@ export default function EditarUsuarioPage() {
                   onChange={(e) => setFullName(e.target.value)}
                   required
                   className="input"
-                  placeholder="Nome completo do usuario"
+                  placeholder="Nome completo do usuário"
                 />
               </div>
 
@@ -284,7 +284,7 @@ export default function EditarUsuarioPage() {
                   disabled
                   className="input opacity-60 cursor-not-allowed"
                 />
-                <p className="text-xs text-muted mt-1">O email nao pode ser alterado</p>
+                <p className="text-xs text-muted mt-1">O email não pode ser alterado</p>
               </div>
 
               <div>
@@ -308,7 +308,7 @@ export default function EditarUsuarioPage() {
                     onChange={(e) => setIsActive(e.target.checked)}
                     className="w-5 h-5 rounded border-default bg-surface text-primary"
                   />
-                  <span className="text-sm text-secondary">Usuario ativo</span>
+                  <span className="text-sm text-secondary">Usuário ativo</span>
                 </label>
 
                 <label className="flex items-center gap-2 cursor-pointer">
@@ -328,7 +328,7 @@ export default function EditarUsuarioPage() {
                     onChange={(e) => setIsTech(e.target.checked)}
                     className="w-5 h-5 rounded border-default bg-surface text-primary"
                   />
-                  <span className="text-sm text-cyan-400">Tecnico</span>
+                  <span className="text-sm text-cyan-400">Técnico</span>
                 </label>
               </div>
             </div>
@@ -337,9 +337,9 @@ export default function EditarUsuarioPage() {
           {/* Assignment - Lojas, Setor, Funcao */}
           {!isAdmin && (
             <div className="card p-6">
-              <h2 className="text-lg font-semibold text-main mb-4">Atribuicao</h2>
+              <h2 className="text-lg font-semibold text-main mb-4">Atribuição</h2>
               <p className="text-sm text-muted mb-4">
-                Selecione as lojas, setores e funcao do usuario.
+                Selecione as lojas, setores e função do usuário.
               </p>
 
               <div className="space-y-4">
@@ -409,12 +409,12 @@ export default function EditarUsuarioPage() {
                 {/* Function */}
                 <div>
                   <label className="block text-sm font-medium text-secondary mb-2">
-                    Funcao
+                    Função
                   </label>
                   <Select
                     value={String(functionId ?? '')}
                     onChange={(v) => setFunctionId(v ? Number(v) : null)}
-                    placeholder="Selecione a funcao"
+                    placeholder="Selecione a função"
                     options={functions.map(fn => ({ value: String(fn.id), label: fn.name }))}
                   />
                 </div>
@@ -440,7 +440,7 @@ export default function EditarUsuarioPage() {
               ) : (
                 <>
                   <FiSave className="w-4 h-4" />
-                  Salvar Alteracoes
+                  Salvar Alterações
                 </>
               )}
             </button>

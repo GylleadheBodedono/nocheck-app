@@ -4,10 +4,10 @@
 
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { createClient } from '@/lib/supabase'
 import { FiSearch } from 'react-icons/fi'
-import Link from 'next/link'
+import { ClientDetailModal } from '@/components/platform/ClientDetailModal'
 
 type OrgRow = { id: string; name: string; slug: string; plan: string; is_active: boolean; max_users: number; max_stores: number; created_at: string }
 
@@ -16,6 +16,7 @@ export default function ClientesPage() {
   const [search, setSearch] = useState('')
   const [filterPlan, setFilterPlan] = useState('all')
   const [loading, setLoading] = useState(true)
+  const [selectedOrgId, setSelectedOrgId] = useState<string | null>(null)
 
   useEffect(() => {
     const load = async () => {
@@ -32,6 +33,10 @@ export default function ClientesPage() {
     const p = filterPlan === 'all' || o.plan === filterPlan
     return s && p
   })
+
+  const handleOrgUpdate = useCallback((updated: { id: string; plan: string; is_active: boolean; max_users: number; max_stores: number }) => {
+    setOrgs(prev => prev.map(o => o.id === updated.id ? { ...o, ...updated } : o))
+  }, [])
 
   const planBadge: Record<string, string> = {
     trial: 'bg-warning/20 text-warning', starter: 'bg-info/20 text-info',
@@ -82,9 +87,9 @@ export default function ClientesPage() {
               </thead>
               <tbody className="divide-y divide-subtle">
                 {filtered.map(org => (
-                  <tr key={org.id} className="hover:bg-surface-hover transition-colors">
+                  <tr key={org.id} className="hover:bg-surface-hover transition-colors cursor-pointer" onClick={() => setSelectedOrgId(org.id)}>
                     <td className="px-6 py-3">
-                      <Link href={`/platform/clientes/${org.id}`} className="text-main hover:text-accent font-medium">{org.name}</Link>
+                      <span className="text-main hover:text-accent font-medium">{org.name}</span>
                       <p className="text-[10px] text-muted">{org.slug}</p>
                     </td>
                     <td className="px-6 py-3">
@@ -94,7 +99,7 @@ export default function ClientesPage() {
                       <span className={`w-2 h-2 rounded-full inline-block mr-2 ${org.is_active ? 'bg-success' : 'bg-error'}`} />
                       <span className="text-muted text-xs">{org.is_active ? 'Ativo' : 'Inativo'}</span>
                     </td>
-                    <td className="px-6 py-3 text-muted text-xs">{org.max_users} users / {org.max_stores} lojas</td>
+                    <td className="px-6 py-3 text-muted text-xs">{org.max_users} usuarios / {org.max_stores} lojas</td>
                     <td className="px-6 py-3 text-muted text-xs">{new Date(org.created_at).toLocaleDateString('pt-BR')}</td>
                   </tr>
                 ))}
@@ -103,6 +108,12 @@ export default function ClientesPage() {
           </div>
         )}
       </div>
+
+      <ClientDetailModal
+        orgId={selectedOrgId}
+        onClose={() => setSelectedOrgId(null)}
+        onOrgUpdate={handleOrgUpdate}
+      />
     </div>
   )
 }

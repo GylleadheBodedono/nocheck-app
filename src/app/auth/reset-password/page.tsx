@@ -33,12 +33,12 @@ export default function ResetPasswordPage() {
     setError(null)
 
     if (password.length < 6) {
-      setError('A senha deve ter no minimo 6 caracteres.')
+      setError('A senha deve ter no mínimo 6 caracteres.')
       return
     }
 
     if (password !== confirmPassword) {
-      setError('As senhas nao coincidem.')
+      setError('As senhas não coincidem.')
       return
     }
 
@@ -82,7 +82,7 @@ export default function ResetPasswordPage() {
             Link expirado
           </h1>
           <p className="text-muted mb-8">
-            Este link de recuperacao expirou ou ja foi utilizado. Solicite um novo link.
+            Este link de recuperação expirou ou já foi utilizado. Solicite um novo link.
           </p>
           <Link
             href={APP_CONFIG.routes.esqueciSenha}
@@ -111,7 +111,7 @@ export default function ResetPasswordPage() {
               Senha alterada!
             </h1>
             <p className="text-muted mb-8">
-              Sua senha foi redefinida com sucesso. Faca login com a nova senha.
+              Sua senha foi redefinida com sucesso. Faça login com a nova senha.
             </p>
             <Link
               href={APP_CONFIG.routes.login}
@@ -148,7 +148,7 @@ export default function ResetPasswordPage() {
                     autoComplete="new-password"
                     className="input"
                     style={{ paddingLeft: '2.75rem', paddingRight: '2.75rem' }}
-                    placeholder="Minimo 6 caracteres"
+                    placeholder="Mínimo 6 caracteres"
                   />
                   <button
                     type="button"

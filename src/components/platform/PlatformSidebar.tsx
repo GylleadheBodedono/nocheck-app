@@ -11,7 +11,7 @@ const MAIN_MENU = [
 ]
 
 const GENERAL_MENU = [
-  { href: '/platform/configuracoes', label: 'Configuracoes', icon: FiSettings },
+  { href: '/platform/configuracoes', label: 'Configurações', icon: FiSettings },
   { href: '/platform', label: 'Suporte', icon: FiHelpCircle },
 ]
 
@@ -116,7 +116,7 @@ export function PlatformSidebar({ isOpen, collapsed, onClose }: Props) {
             </div>
             <p className="text-[13px] font-bold text-main leading-tight">Controle total.</p>
             <p className="text-[13px] font-bold text-main leading-tight">Mais insights.</p>
-            <p className="text-[11px] text-muted mt-1.5 leading-relaxed">Gerencie clientes, planos e metricas.</p>
+            <p className="text-[11px] text-muted mt-1.5 leading-relaxed">Gerencie clientes, planos e métricas.</p>
           </div>
         )}
 

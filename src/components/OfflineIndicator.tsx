@@ -64,7 +64,7 @@ export function OfflineIndicator() {
       <div className="flex items-center justify-center gap-2 relative mx-auto">
         {!isOnline && <FiWifiOff className="w-4 h-4" />}
         <span>
-          {isOnline ? 'Conexao restaurada!' : 'Voce esta offline - dados serao sincronizados quando voltar'}
+          {isOnline ? 'Conexão restaurada!' : 'Você está offline - dados serão sincronizados quando voltar'}
         </span>
         {!isOnline && (
           <button

@@ -58,7 +58,7 @@ function LoginForm() {
         return
       }
 
-      setStatus('Verificando sessao...')
+      setStatus('Verificando sessão...')
       const { data: session } = await supabase.auth.getSession()
 
       if (session?.session) {
@@ -69,7 +69,7 @@ function LoginForm() {
           console.error('[Login] Erro ao cachear dados:', err)
         }
 
-        setStatus('Preparando aplicacao offline...')
+        setStatus('Preparando aplicação offline...')
         try {
           await triggerPrecache()
         } catch (err) {
@@ -137,14 +137,14 @@ function LoginForm() {
             {/* Center */}
             <div className="max-w-md">
               <h1 className="text-5xl xl:text-6xl font-bold text-white leading-[1.1] tracking-tight mb-6">
-                Gestao
+                Gestão
                 <br />
                 Operacional
                 <br />
                 <span className="text-white/50">e Checklists</span>
               </h1>
               <p className="text-white/60 text-lg leading-relaxed max-w-sm">
-                Controle completo das operacoes da sua empresa com checklists digitais, validacoes e planos de acao.
+                Controle completo das operações da sua empresa com checklists digitais, validações e planos de ação.
               </p>
             </div>
 
@@ -284,7 +284,7 @@ function LoginForm() {
 
               {/* Link para cadastro */}
               <p className="text-center text-sm text-muted mt-6">
-                Nao tem conta?{' '}
+                Não tem conta?{' '}
                 <Link href={APP_CONFIG.routes.cadastro} className="text-primary font-medium hover:underline">
                   Criar conta
                 </Link>

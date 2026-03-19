@@ -117,7 +117,7 @@ export default function NovoUsuarioPage() {
       const data = await res.json()
 
       if (!res.ok) {
-        throw new Error(data.error || 'Erro ao criar usuario')
+        throw new Error(data.error || 'Erro ao criar usuário')
       }
 
       setCreatedEmail(email)
@@ -126,7 +126,7 @@ export default function NovoUsuarioPage() {
       setLoading(false)
     } catch (err) {
       console.error('Error creating user:', err)
-      setError(err instanceof Error ? err.message : 'Erro ao criar usuario')
+      setError(err instanceof Error ? err.message : 'Erro ao criar usuário')
       setLoading(false)
     }
   }
@@ -147,7 +147,7 @@ export default function NovoUsuarioPage() {
   return (
     <div className="min-h-screen bg-page">
       <Header
-        title="Novo Usuario"
+        title="Novo Usuário"
         icon={FiUserPlus}
         backHref={APP_CONFIG.routes.adminUsers}
       />
@@ -159,18 +159,18 @@ export default function NovoUsuarioPage() {
             <div className="w-16 h-16 rounded-full bg-success/20 flex items-center justify-center mx-auto mb-4">
               <FiCheckCircle className="w-8 h-8 text-success" />
             </div>
-            <h2 className="text-xl font-bold text-main mb-2">Usuario criado com sucesso!</h2>
+            <h2 className="text-xl font-bold text-main mb-2">Usuário criado com sucesso!</h2>
             <p className="text-muted mb-4">{createdEmail}</p>
 
             {needsConfirmation && (
               <div className="p-4 bg-warning/10 border border-warning/30 rounded-xl mb-6">
                 <div className="flex items-center justify-center gap-2 text-warning mb-2">
                   <FiMail className="w-5 h-5" />
-                  <span className="font-medium">Confirmacao de email necessaria</span>
+                  <span className="font-medium">Confirmação de email necessária</span>
                 </div>
                 <p className="text-sm text-muted">
-                  Um email de confirmacao foi enviado para <strong className="text-main">{createdEmail}</strong>.
-                  O usuario precisa clicar no link do email para ativar a conta antes de fazer login.
+                  Um email de confirmação foi enviado para <strong className="text-main">{createdEmail}</strong>.
+                  O usuário precisa clicar no link do email para ativar a conta antes de fazer login.
                 </p>
               </div>
             )}
@@ -190,7 +190,7 @@ export default function NovoUsuarioPage() {
           <form onSubmit={handleSubmit} className="space-y-6">
             {/* Basic Info */}
             <div className="card p-6">
-              <h2 className="text-lg font-semibold text-main mb-4">Informacoes Basicas</h2>
+              <h2 className="text-lg font-semibold text-main mb-4">Informações Básicas</h2>
 
               <div className="space-y-4">
                 <div>
@@ -203,7 +203,7 @@ export default function NovoUsuarioPage() {
                     onChange={(e) => setFullName(e.target.value)}
                     required
                     className="input"
-                    placeholder="Joao da Silva"
+                    placeholder="João da Silva"
                   />
                 </div>
 
@@ -234,7 +234,7 @@ export default function NovoUsuarioPage() {
                       minLength={6}
                       className="input"
                       style={{ paddingRight: '2.75rem' }}
-                      placeholder="Minimo 6 caracteres"
+                      placeholder="Mínimo 6 caracteres"
                     />
                     <button
                       type="button"
@@ -284,7 +284,7 @@ export default function NovoUsuarioPage() {
                       className="w-5 h-5 rounded border-subtle bg-page text-primary focus:ring-primary"
                     />
                     <label htmlFor="isTech" className="text-secondary">
-                      <span className="text-cyan-400 font-medium">Tecnico</span>
+                      <span className="text-cyan-400 font-medium">Técnico</span>
                     </label>
                   </div>
                 </div>
@@ -298,7 +298,7 @@ export default function NovoUsuarioPage() {
                     className="w-5 h-5 rounded border-subtle bg-page text-primary focus:ring-primary"
                   />
                   <label htmlFor="autoConfirm" className="text-secondary">
-                    Confirmar email automaticamente <span className="text-xs text-muted">(para emails ficticios)</span>
+                    Confirmar email automaticamente <span className="text-xs text-muted">(para emails fictícios)</span>
                   </label>
                 </div>
               </div>
@@ -307,9 +307,9 @@ export default function NovoUsuarioPage() {
             {/* Assignment */}
             {!isAdmin && (
               <div className="card p-6">
-                <h2 className="text-lg font-semibold text-main mb-4">Atribuicao</h2>
+                <h2 className="text-lg font-semibold text-main mb-4">Atribuição</h2>
                 <p className="text-sm text-muted mb-4">
-                  Selecione as lojas, setores e funcao do usuario.
+                  Selecione as lojas, setores e função do usuário.
                 </p>
 
                 <div className="space-y-4">
@@ -379,12 +379,12 @@ export default function NovoUsuarioPage() {
                   {/* Function */}
                   <div>
                     <label className="block text-sm font-medium text-secondary mb-2">
-                      Funcao
+                      Função
                     </label>
                     <Select
                       value={String(functionId ?? '')}
                       onChange={(v) => setFunctionId(v ? Number(v) : null)}
-                      placeholder="Selecione a funcao"
+                      placeholder="Selecione a função"
                       options={functions.map(fn => ({ value: String(fn.id), label: fn.name }))}
                     />
                   </div>
@@ -420,7 +420,7 @@ export default function NovoUsuarioPage() {
                 ) : (
                   <>
                     <FiSave className="w-4 h-4" />
-                    Criar Usuario
+                    Criar Usuário
                   </>
                 )}
               </button>

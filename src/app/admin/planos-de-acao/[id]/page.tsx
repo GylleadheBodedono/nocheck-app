@@ -92,16 +92,16 @@ type PlanUpdate = {
 const STATUS_CONFIG: Record<ActionPlanStatus, { label: string; color: string; bgColor: string }> = {
   aberto: { label: 'Aberto', color: 'text-blue-400', bgColor: 'bg-blue-500/20 text-blue-400' },
   em_andamento: { label: 'Em Andamento', color: 'text-warning', bgColor: 'bg-warning/20 text-warning' },
-  concluido: { label: 'Concluido', color: 'text-success', bgColor: 'bg-success/20 text-success' },
+  concluido: { label: 'Concluído', color: 'text-success', bgColor: 'bg-success/20 text-success' },
   vencido: { label: 'Vencido', color: 'text-error', bgColor: 'bg-error/20 text-error' },
   cancelado: { label: 'Cancelado', color: 'text-muted', bgColor: 'bg-surface-hover text-muted' },
 }
 
 const SEVERITY_CONFIG: Record<Severity, { label: string; bgColor: string }> = {
   baixa: { label: 'Baixa', bgColor: 'bg-blue-500/20 text-blue-400' },
-  media: { label: 'Media', bgColor: 'bg-warning/20 text-warning' },
+  media: { label: 'Média', bgColor: 'bg-warning/20 text-warning' },
   alta: { label: 'Alta', bgColor: 'bg-orange-500/20 text-orange-400' },
-  critica: { label: 'Critica', bgColor: 'bg-error/20 text-error' },
+  critica: { label: 'Crítica', bgColor: 'bg-error/20 text-error' },
 }
 
 function formatDate(dateString: string) {
@@ -202,7 +202,7 @@ export default function ActionPlanDetailPage() {
     if (fetchError) {
       console.error('[ActionPlan] Erro ao buscar plano:', fetchError.message, fetchError.code, fetchError.details)
       setError(fetchError.code === 'PGRST116'
-        ? 'Plano de acao nao encontrado.'
+        ? 'Plano de ação não encontrado.'
         : `Erro ao carregar plano: ${fetchError.message}`)
       return null
     }
@@ -252,7 +252,7 @@ export default function ActionPlanDetailPage() {
 
   const loadData = useCallback(async () => {
     if (!isSupabaseConfigured) {
-      setError('Supabase nao configurado.')
+      setError('Supabase não configurado.')
       setLoading(false)
       return
     }
@@ -324,8 +324,8 @@ export default function ActionPlanDetailPage() {
     }
 
     const confirmMsg = newStatus === 'cancelado'
-      ? 'Tem certeza que deseja cancelar este plano de acao?'
-      : 'Deseja iniciar este plano de acao?'
+      ? 'Tem certeza que deseja cancelar este plano de ação?'
+      : 'Deseja iniciar este plano de ação?'
 
     if (!confirm(confirmMsg)) return
 
@@ -368,7 +368,7 @@ export default function ActionPlanDetailPage() {
       if (plan.assigned_to && plan.assigned_to !== currentUserId) {
         await createNotification(supabase, plan.assigned_to, {
           type: 'action_plan_assigned',
-          title: `Plano de Acao: ${getStatusLabel(newStatus)}`,
+          title: `Plano de Ação: ${getStatusLabel(newStatus)}`,
           message: `"${plan.title}" mudou de ${getStatusLabel(oldStatus)} para ${getStatusLabel(newStatus)}`,
           link: `/admin/planos-de-acao/${plan.id}`,
           metadata: { plan_id: plan.id, old_status: oldStatus, new_status: newStatus },
@@ -405,11 +405,11 @@ export default function ActionPlanDetailPage() {
 
     // Validacoes (foto e texto sempre obrigatorios)
     if (!completionPhoto) {
-      setCompletionError('Foto obrigatoria para concluir o plano.')
+      setCompletionError('Foto obrigatória para concluir o plano.')
       return
     }
     if (!completionText.trim()) {
-      setCompletionError('Texto obrigatorio para concluir o plano.')
+      setCompletionError('Texto obrigatório para concluir o plano.')
       return
     }
     if (completionText.length > (plan.completion_max_chars || 800)) {
@@ -485,7 +485,7 @@ export default function ActionPlanDetailPage() {
             action_plan_id: plan.id,
             user_id: currentUserId,
             update_type: 'evidence',
-            content: `Foto de conclusao: ${completionPhoto.name}`,
+            content: `Foto de conclusão: ${completionPhoto.name}`,
           })
           .select('id')
           .single()
@@ -514,7 +514,7 @@ export default function ActionPlanDetailPage() {
             action_plan_id: plan.id,
             user_id: currentUserId,
             update_type: 'comment',
-            content: `[Texto de conclusao] ${completionText.trim()}`,
+            content: `[Texto de conclusão] ${completionText.trim()}`,
           })
       }
 
@@ -522,8 +522,8 @@ export default function ActionPlanDetailPage() {
       if (plan.assigned_to && plan.assigned_to !== currentUserId) {
         await createNotification(supabase, plan.assigned_to, {
           type: 'action_plan_completed',
-          title: 'Plano de Acao: Concluido',
-          message: `"${plan.title}" foi concluido`,
+          title: 'Plano de Ação: Concluído',
+          message: `"${plan.title}" foi concluído`,
           link: `/admin/planos-de-acao/${plan.id}`,
           metadata: { plan_id: plan.id, old_status: oldStatus, new_status: 'concluido' },
         }).catch(err => console.warn('[ActionPlan] Erro ao notificar conclusao:', err))
@@ -573,7 +573,7 @@ export default function ActionPlanDetailPage() {
       if (plan.assigned_to && plan.assigned_to !== currentUserId) {
         await createNotification(supabase, plan.assigned_to, {
           type: 'action_plan_comment',
-          title: 'Novo comentario no Plano de Acao',
+          title: 'Novo comentário no Plano de Ação',
           message: `"${plan.title}": ${comment.trim().substring(0, 100)}`,
           link: `/admin/planos-de-acao/${plan.id}`,
           metadata: { plan_id: plan.id },
@@ -585,7 +585,7 @@ export default function ActionPlanDetailPage() {
       if (updatesData) setUpdates(updatesData)
     } catch (err) {
       console.error('[ActionPlan] Erro ao adicionar comentario:', err)
-      setError('Erro ao adicionar comentario.')
+      setError('Erro ao adicionar comentário.')
     } finally {
       setSubmittingComment(false)
     }
@@ -640,7 +640,7 @@ export default function ActionPlanDetailPage() {
           action_plan_id: plan.id,
           user_id: currentUserId,
           update_type: 'evidence',
-          content: `Evidencia anexada: ${file.name}`,
+          content: `Evidência anexada: ${file.name}`,
         })
         .select('id')
         .single()
@@ -669,7 +669,7 @@ export default function ActionPlanDetailPage() {
       if (updatesData) setUpdates(updatesData)
     } catch (err) {
       console.error('[ActionPlan] Erro ao enviar evidencia:', err)
-      setError('Erro ao enviar evidencia.')
+      setError('Erro ao enviar evidência.')
     } finally {
       setUploadingEvidence(false)
       // Reset file input
@@ -684,7 +684,7 @@ export default function ActionPlanDetailPage() {
   // ============================================
 
   const handleDelete = async () => {
-    if (!plan || !confirm('Tem certeza que deseja EXCLUIR este plano? Esta acao e irreversivel.')) return
+    if (!plan || !confirm('Tem certeza que deseja EXCLUIR este plano? Esta ação é irreversível.')) return
 
     setError(null)
     try {
@@ -692,13 +692,13 @@ export default function ActionPlanDetailPage() {
       const sb = supabase as any
 
       const { error: updErr } = await sb.from('action_plan_updates').delete().eq('action_plan_id', plan.id)
-      if (updErr) throw new Error(`Erro ao excluir atualizacoes: ${updErr.message}`)
+      if (updErr) throw new Error(`Erro ao excluir atualizações: ${updErr.message}`)
 
       const { error: storeErr } = await sb.from('action_plan_stores').delete().eq('action_plan_id', plan.id)
       if (storeErr) throw new Error(`Erro ao excluir lojas vinculadas: ${storeErr.message}`)
 
       const { error: evErr } = await sb.from('action_plan_evidence').delete().eq('action_plan_id', plan.id)
-      if (evErr) throw new Error(`Erro ao excluir evidencias: ${evErr.message}`)
+      if (evErr) throw new Error(`Erro ao excluir evidências: ${evErr.message}`)
 
       const { error: deleteError } = await sb.from('action_plans').delete().eq('id', plan.id)
       if (deleteError) throw new Error(`Erro ao excluir plano: ${deleteError.message}`)
@@ -721,7 +721,7 @@ export default function ActionPlanDetailPage() {
   if (error && !plan) {
     return (
       <div className="min-h-screen bg-page">
-        <Header title="Plano de Acao" backHref="/admin/planos-de-acao" />
+        <Header title="Plano de Ação" backHref="/admin/planos-de-acao" />
         <PageContainer size="md">
           <div className="card p-8 text-center">
             <FiAlertCircle className="w-12 h-12 text-error mx-auto mb-4" />
@@ -730,7 +730,7 @@ export default function ActionPlanDetailPage() {
               href="/admin/planos-de-acao"
               className="btn-primary mt-4 inline-block"
             >
-              Voltar para Planos de Acao
+              Voltar para Planos de Ação
             </Link>
           </div>
         </PageContainer>
@@ -746,7 +746,7 @@ export default function ActionPlanDetailPage() {
 
   return (
     <div className="min-h-screen bg-page">
-      <Header title="Plano de Acao" backHref="/admin/planos-de-acao" />
+      <Header title="Plano de Ação" backHref="/admin/planos-de-acao" />
 
       <PageContainer size="md" className="space-y-6">
         {/* Error alert */}
@@ -801,7 +801,7 @@ export default function ActionPlanDetailPage() {
           <div className="card p-6">
             <h3 className="text-sm font-semibold text-muted uppercase tracking-wider mb-4 flex items-center gap-2">
               <FiLink className="w-4 h-4" />
-              Origem (Nao Conformidade)
+              Origem (Não Conformidade)
             </h3>
             <div className="space-y-3 text-sm">
               {plan.template?.name && (
@@ -843,7 +843,7 @@ export default function ActionPlanDetailPage() {
             <div className="flex items-center gap-3 mb-3">
               <FiAlertTriangle className="w-5 h-5 text-orange-400" />
               <span className="inline-flex items-center gap-1 px-3 py-1 rounded-lg text-xs font-semibold bg-orange-500/20 text-orange-400">
-                Reincidencia #{plan.reincidencia_count}
+                Reincidência #{plan.reincidencia_count}
               </span>
             </div>
             {plan.parent_action_plan_id && (
@@ -852,7 +852,7 @@ export default function ActionPlanDetailPage() {
                 className="inline-flex items-center gap-2 text-orange-400 hover:underline text-sm font-medium"
               >
                 <FiExternalLink className="w-4 h-4" />
-                Ver Plano de Acao Anterior
+                Ver Plano de Ação Anterior
               </Link>
             )}
           </div>
@@ -864,13 +864,13 @@ export default function ActionPlanDetailPage() {
         <div className="card p-6">
           <h3 className="text-sm font-semibold text-muted uppercase tracking-wider mb-4 flex items-center gap-2">
             <FiUser className="w-4 h-4" />
-            Atribuicao
+            Atribuição
           </h3>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
             <div>
-              <span className="text-muted block mb-1">Responsavel</span>
+              <span className="text-muted block mb-1">Responsável</span>
               <p className="text-main font-medium">
-                {plan.assigned_user?.full_name || plan.assigned_user?.email || 'Nao atribuido'}
+                {plan.assigned_user?.full_name || plan.assigned_user?.email || 'Não atribuído'}
               </p>
             </div>
             {plan.assigned_by_user && (
@@ -1000,7 +1000,7 @@ export default function ActionPlanDetailPage() {
                   className="btn-secondary flex items-center gap-2 px-5 py-2.5 disabled:opacity-50"
                 >
                   <FiUpload className="w-4 h-4" />
-                  {uploadingEvidence ? 'Enviando...' : 'Anexar Evidencia'}
+                  {uploadingEvidence ? 'Enviando...' : 'Anexar Evidência'}
                 </button>
               </div>
             </form>
@@ -1013,13 +1013,13 @@ export default function ActionPlanDetailPage() {
         <div className="card p-6">
           <h3 className="text-sm font-semibold text-muted uppercase tracking-wider mb-4 flex items-center gap-2">
             <FiFileText className="w-4 h-4" />
-            Historico de Atualizacoes
+            Histórico de Atualizações
           </h3>
 
           {updates.length === 0 ? (
             <div className="text-center py-8">
               <FiClock className="w-8 h-8 text-muted mx-auto mb-2 opacity-50" />
-              <p className="text-muted text-sm">Nenhuma atualizacao ainda.</p>
+              <p className="text-muted text-sm">Nenhuma atualização ainda.</p>
             </div>
           ) : (
             <div className="space-y-4">
@@ -1046,7 +1046,7 @@ export default function ActionPlanDetailPage() {
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-1">
                         <span className="text-sm font-medium text-main">
-                          {update.user?.full_name || 'Usuario'}
+                          {update.user?.full_name || 'Usuário'}
                         </span>
                         <span className="text-xs text-muted">
                           {formatDate(update.created_at)}
@@ -1092,7 +1092,7 @@ export default function ActionPlanDetailPage() {
           <div className="bg-card rounded-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto shadow-xl border border-subtle">
             <div className="p-6 space-y-5">
               <div>
-                <h3 className="text-lg font-bold text-main">Concluir Plano de Acao</h3>
+                <h3 className="text-lg font-bold text-main">Concluir Plano de Ação</h3>
                 <p className="text-sm text-muted mt-1">&quot;{plan.title}&quot;</p>
               </div>
 
@@ -1105,7 +1105,7 @@ export default function ActionPlanDetailPage() {
               {/* Foto (sempre obrigatoria) */}
               <div>
                 <label className="block text-sm font-medium text-secondary mb-2">
-                  Foto de conclusao <span className="text-error">*</span>
+                  Foto de conclusão <span className="text-error">*</span>
                 </label>
                 <input
                   ref={completionFileInputRef}
@@ -1149,13 +1149,13 @@ export default function ActionPlanDetailPage() {
               {/* Texto (sempre obrigatorio) */}
               <div>
                 <label className="block text-sm font-medium text-secondary mb-2">
-                  Descricao da conclusao <span className="text-error">*</span>
+                  Descrição da conclusão <span className="text-error">*</span>
                 </label>
                 <textarea
                   value={completionText}
                   onChange={(e) => setCompletionText(e.target.value)}
                   maxLength={plan.completion_max_chars || 800}
-                  placeholder="Descreva o que foi feito para resolver o plano de acao..."
+                  placeholder="Descreva o que foi feito para resolver o plano de ação..."
                   rows={4}
                   className="input w-full resize-none"
                 />

@@ -19,7 +19,7 @@ export function FluxChat() {
   const hiddenPaths = ['/', '/login', '/cadastro', '/esqueci-senha', '/offline']
   const shouldHide = hiddenPaths.includes(pathname) || pathname.startsWith('/platform') || pathname.startsWith('/auth')
 
-  const welcomeMessage = `Opa! Eu sou o Flux, seu assistente do ${tenantAppName}! Pode me perguntar qualquer coisa sobre o sistema — como preencher checklists, interpretar relatorios, gerenciar planos de acao... Estou aqui pra ajudar! 😄`
+  const welcomeMessage = `Opa! Eu sou o Flux, seu assistente do ${tenantAppName}! Pode me perguntar qualquer coisa sobre o sistema — como preencher checklists, interpretar relatórios, gerenciar planos de ação... Estou aqui pra ajudar! 😄`
 
   const [isOpen, setIsOpen] = useState(false)
   const [messages, setMessages] = useState<Message[]>([

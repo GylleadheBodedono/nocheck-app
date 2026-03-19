@@ -50,9 +50,9 @@ type Props = {
 
 const SEVERITY_OPTIONS: { value: Severity; label: string; color: string }[] = [
   { value: 'baixa', label: 'Baixa', color: 'text-success' },
-  { value: 'media', label: 'Media', color: 'text-warning' },
+  { value: 'media', label: 'Média', color: 'text-warning' },
   { value: 'alta', label: 'Alta', color: 'text-orange-500' },
-  { value: 'critica', label: 'Critica', color: 'text-error' },
+  { value: 'critica', label: 'Crítica', color: 'text-error' },
 ]
 
 const DEFAULT_CONDITION: ConditionConfig = {
@@ -114,7 +114,7 @@ export function FieldConditionEditor({
           defaults.conditionValue = {}
           break
       }
-      defaults.descriptionTemplate = `Nao conformidade: ${fieldName} - {store_name}`
+      defaults.descriptionTemplate = `Não conformidade: ${fieldName} - {store_name}`
       onChange(defaults)
     }
     setIsModalOpen(true)
@@ -172,7 +172,7 @@ export function FieldConditionEditor({
       >
         <FiAlertTriangle className={`w-4 h-4 ${condition ? 'text-warning' : 'text-muted'}`} />
         <span className={condition ? 'text-warning' : 'text-muted'}>
-          Condicao de Nao Conformidade
+          Condição de Não Conformidade
         </span>
         {condition && (
           <span className="text-xs text-success bg-success/10 px-2 py-0.5 rounded-full">
@@ -193,13 +193,13 @@ export function FieldConditionEditor({
           {fieldType === 'yes_no' && (
             <div>
               <label className="block text-xs font-medium text-secondary mb-1">
-                Valor que indica nao conformidade
+                Valor que indica não conformidade
               </label>
               <Select
                 value={(condition.conditionValue.value as string) || 'Nao'}
                 onChange={(v) => update({ conditionType: 'equals', conditionValue: { value: v } })}
                 options={[
-                  { value: 'Nao', label: 'Quando resposta for "Nao"' },
+                  { value: 'Nao', label: 'Quando resposta for "Não"' },
                   { value: 'Sim', label: 'Quando resposta for "Sim"' },
                 ]}
               />
@@ -209,7 +209,7 @@ export function FieldConditionEditor({
           {fieldType === 'number' && (
             <div>
               <label className="block text-xs font-medium text-secondary mb-1">
-                Tipo de condicao
+                Tipo de condição
               </label>
               <Select
                 value={condition.conditionType}
@@ -222,15 +222,15 @@ export function FieldConditionEditor({
                 }}
                 className="mb-2"
                 options={[
-                  { value: 'less_than', label: 'Menor que (valor minimo)' },
-                  { value: 'greater_than', label: 'Maior que (valor maximo)' },
+                  { value: 'less_than', label: 'Menor que (valor mínimo)' },
+                  { value: 'greater_than', label: 'Maior que (valor máximo)' },
                   { value: 'between', label: 'Fora da faixa (min-max)' },
                 ]}
               />
               <div className="grid grid-cols-2 gap-2">
                 {(condition.conditionType === 'less_than' || condition.conditionType === 'between') && (
                   <div>
-                    <label className="block text-xs text-muted mb-1">Minimo</label>
+                    <label className="block text-xs text-muted mb-1">Mínimo</label>
                     <input
                       type="number"
                       value={(condition.conditionValue.min as number) ?? 0}
@@ -243,7 +243,7 @@ export function FieldConditionEditor({
                 )}
                 {(condition.conditionType === 'greater_than' || condition.conditionType === 'between') && (
                   <div>
-                    <label className="block text-xs text-muted mb-1">Maximo</label>
+                    <label className="block text-xs text-muted mb-1">Máximo</label>
                     <input
                       type="number"
                       value={(condition.conditionValue.max as number) ?? 100}
@@ -261,7 +261,7 @@ export function FieldConditionEditor({
           {fieldType === 'rating' && (
             <div>
               <label className="block text-xs font-medium text-secondary mb-1">
-                Nao conforme quando menor que (estrelas)
+                Não conforme quando menor que (estrelas)
               </label>
               <input
                 type="number"
@@ -275,7 +275,7 @@ export function FieldConditionEditor({
                 className="input w-24"
               />
               <p className="text-xs text-muted mt-1">
-                Se a nota for menor que {(condition.conditionValue.threshold as number) ?? 3} estrelas, sera considerado nao conforme.
+                Se a nota for menor que {(condition.conditionValue.threshold as number) ?? 3} estrelas, será considerado não conforme.
               </p>
             </div>
           )}
@@ -283,10 +283,10 @@ export function FieldConditionEditor({
           {fieldType === 'dropdown' && (
             <div>
               <label className="block text-xs font-medium text-secondary mb-1">
-                Valores que indicam nao conformidade
+                Valores que indicam não conformidade
               </label>
               {dropdownOptions.length === 0 ? (
-                <p className="text-xs text-muted italic">Adicione opcoes ao dropdown primeiro.</p>
+                <p className="text-xs text-muted italic">Adicione opções ao dropdown primeiro.</p>
               ) : (
                 <div className="space-y-1.5">
                   {dropdownOptions.map((opt) => {
@@ -321,10 +321,10 @@ export function FieldConditionEditor({
             <div className="space-y-3">
               <div>
                 <label className="block text-xs font-medium text-secondary mb-1">
-                  Itens obrigatorios (nao conforme se NAO marcado)
+                  Itens obrigatórios (não conforme se NAO marcado)
                 </label>
                 {checkboxOptions.length === 0 ? (
-                  <p className="text-xs text-muted italic">Adicione opcoes ao checkbox primeiro.</p>
+                  <p className="text-xs text-muted italic">Adicione opções ao checkbox primeiro.</p>
                 ) : (
                   <div className="space-y-1.5">
                     {checkboxOptions.map((opt) => {
@@ -354,7 +354,7 @@ export function FieldConditionEditor({
               </div>
               <div>
                 <label className="block text-xs font-medium text-secondary mb-1">
-                  Itens proibidos (nao conforme se marcado)
+                  Itens proibidos (não conforme se marcado)
                 </label>
                 {checkboxOptions.map((opt) => {
                   const selected = ((condition.conditionValue.forbidden as string[]) || []).includes(opt)
@@ -385,7 +385,7 @@ export function FieldConditionEditor({
           {fieldType === 'text' && (
             <div>
               <label className="block text-xs font-medium text-secondary mb-1">
-                Tipo de condicao
+                Tipo de condição
               </label>
               <Select
                 value={condition.conditionType}
@@ -395,8 +395,8 @@ export function FieldConditionEditor({
                 }}
                 options={[
                   { value: 'empty', label: 'Campo vazio' },
-                  { value: 'equals', label: 'Igual a valor especifico' },
-                  { value: 'not_equals', label: 'Diferente de valor especifico' },
+                  { value: 'equals', label: 'Igual a valor específico' },
+                  { value: 'not_equals', label: 'Diferente de valor específico' },
                 ]}
               />
               {(condition.conditionType === 'equals' || condition.conditionType === 'not_equals') && (
@@ -405,7 +405,7 @@ export function FieldConditionEditor({
                   value={(condition.conditionValue.value as string) || ''}
                   onChange={(e) => update({ conditionValue: { value: e.target.value } })}
                   className="input mt-2"
-                  placeholder="Valor para comparacao"
+                  placeholder="Valor para comparação"
                 />
               )}
             </div>
@@ -435,7 +435,7 @@ export function FieldConditionEditor({
                   }))}
                 />
                 <p className="text-xs text-muted mt-1">
-                  Selecionar um modelo preenche severidade, prazo, responsavel e descricao automaticamente.
+                  Selecionar um modelo preenche severidade, prazo, responsável e descrição automaticamente.
                 </p>
               </div>
             )}
@@ -463,7 +463,7 @@ export function FieldConditionEditor({
             </div>
 
             <div>
-              <label className="block text-xs font-medium text-secondary mb-1">Responsavel padrao</label>
+              <label className="block text-xs font-medium text-secondary mb-1">Responsável padrão</label>
               <Select
                 value={condition.defaultAssigneeId || ''}
                 onChange={(v) => update({ defaultAssigneeId: v || null })}
@@ -471,17 +471,17 @@ export function FieldConditionEditor({
                 options={users.map(u => ({ value: u.id, label: u.name }))}
               />
               <p className="text-xs text-muted mt-1">
-                Se nao selecionado, o plano sera atribuido ao usuario que preencheu o checklist.
+                Se não selecionado, o plano será atribuído ao usuário que preencheu o checklist.
               </p>
             </div>
 
             <div>
-              <label className="block text-xs font-medium text-secondary mb-1">Descricao do plano</label>
+              <label className="block text-xs font-medium text-secondary mb-1">Descrição do plano</label>
               <textarea
                 value={condition.descriptionTemplate}
                 onChange={(e) => update({ descriptionTemplate: e.target.value })}
                 className="input min-h-[60px]"
-                placeholder="Ex: Nao conformidade: {field_name} com valor {value} na {store_name}"
+                placeholder="Ex: Não conformidade: {field_name} com valor {value} na {store_name}"
                 rows={2}
               />
               <p className="text-xs text-muted mt-1">
@@ -491,12 +491,12 @@ export function FieldConditionEditor({
 
             {/* Exigencias para conclusao */}
             <div className="border-t border-subtle pt-3 mt-1">
-              <label className="block text-xs font-medium text-secondary mb-2">Exigencias para Conclusao</label>
+              <label className="block text-xs font-medium text-secondary mb-2">Exigências para Conclusão</label>
               <div className="p-3 bg-primary/5 border border-primary/20 rounded-lg mb-3">
                 <div className="flex items-center gap-2 text-xs text-primary">
                   <FiCamera className="w-3.5 h-3.5" />
                   <FiFileText className="w-3.5 h-3.5" />
-                  <span>Foto e texto sao obrigatorios para concluir o plano de acao.</span>
+                  <span>Foto e texto são obrigatórios para concluir o plano de ação.</span>
                 </div>
               </div>
               <div>
@@ -548,7 +548,7 @@ export function FieldConditionEditor({
                     className="flex items-center gap-1.5 text-xs text-primary hover:text-primary/80 transition-colors"
                   >
                     <FiLayers className="w-3.5 h-3.5" />
-                    Salvar como modelo reutilizavel
+                    Salvar como modelo reutilizável
                   </button>
                 )}
               </div>
@@ -562,7 +562,7 @@ export function FieldConditionEditor({
             className="flex items-center gap-2 text-sm text-error hover:text-error/80 transition-colors"
           >
             <FiTrash2 className="w-3.5 h-3.5" />
-            Remover condicao
+            Remover condição
           </button>
         </div>
         )}

@@ -62,7 +62,7 @@ export default function CadastroPage() {
   const handleVerifyOtp = async () => {
     const code = otpCode.join('')
     if (code.length !== 6) {
-      setError('Digite o codigo completo de 6 digitos.')
+      setError('Digite o código completo de 6 dígitos.')
       return
     }
 
@@ -78,14 +78,14 @@ export default function CadastroPage() {
       })
 
       if (verifyError) {
-        setError('Codigo invalido ou expirado. Tente novamente.')
+        setError('Código inválido ou expirado. Tente novamente.')
         setVerifying(false)
         return
       }
 
       setVerified(true)
     } catch {
-      setError('Erro ao verificar codigo. Tente novamente.')
+      setError('Erro ao verificar código. Tente novamente.')
     } finally {
       setVerifying(false)
     }
@@ -108,7 +108,7 @@ export default function CadastroPage() {
         otpRefs.current[0]?.focus()
       }
     } catch {
-      setError('Erro ao reenviar codigo.')
+      setError('Erro ao reenviar código.')
     } finally {
       setResending(false)
     }
@@ -126,12 +126,12 @@ export default function CadastroPage() {
     setError(null)
 
     if (password.length < 6) {
-      setError('A senha deve ter no minimo 6 caracteres.')
+      setError('A senha deve ter no mínimo 6 caracteres.')
       return
     }
 
     if (password !== confirmPassword) {
-      setError('As senhas nao coincidem.')
+      setError('As senhas não coincidem.')
       return
     }
 
@@ -153,7 +153,7 @@ export default function CadastroPage() {
 
       if (error) {
         if (error.message.includes('already registered')) {
-          setError('Este email ja esta cadastrado. Tente fazer login.')
+          setError('Este email já está cadastrado. Tente fazer login.')
         } else {
           setError(error.message)
         }
@@ -181,7 +181,7 @@ export default function CadastroPage() {
             Email confirmado!
           </h1>
           <p className="text-muted mb-8">
-            Sua conta foi verificada com sucesso. Agora voce pode acessar o sistema.
+            Sua conta foi verificada com sucesso. Agora você pode acessar o sistema.
           </p>
           <button
             onClick={() => router.push('/dashboard')}
@@ -206,7 +206,7 @@ export default function CadastroPage() {
             Verifique seu email
           </h1>
           <p className="text-muted mb-2">
-            Enviamos um codigo de 6 digitos para
+            Enviamos um código de 6 dígitos para
           </p>
           <p className="text-main font-semibold mb-8">{email}</p>
 
@@ -247,13 +247,13 @@ export default function CadastroPage() {
                 Verificando...
               </>
             ) : (
-              'Confirmar codigo'
+              'Confirmar código'
             )}
           </button>
 
           {/* Resend */}
           <p className="text-sm text-muted">
-            Nao recebeu o codigo?{' '}
+            Não recebeu o código?{' '}
             <button
               onClick={handleResendCode}
               disabled={resending}
@@ -440,7 +440,7 @@ export default function CadastroPage() {
                       autoComplete="new-password"
                       className="input"
                       style={{ paddingLeft: '2.75rem', paddingRight: '2.75rem' }}
-                      placeholder="Minimo 6 caracteres"
+                      placeholder="Mínimo 6 caracteres"
                     />
                     <button
                       type="button"
@@ -511,7 +511,7 @@ export default function CadastroPage() {
 
               {/* Link para login */}
               <p className="text-center text-sm text-muted mt-6">
-                Ja tem conta?{' '}
+                Já tem conta?{' '}
                 <Link href={APP_CONFIG.routes.login} className="text-primary font-medium hover:underline">
                   Entrar
                 </Link>

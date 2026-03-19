@@ -63,17 +63,17 @@ export function TenantGuard({
 
   // Verificar role minimo
   if (requiredRole && !isPlatformAdmin && !hasMinRole(requiredRole)) {
-    return fallback ?? <AccessDenied message={`Voce precisa ser pelo menos ${requiredRole} para acessar esta pagina.`} />
+    return fallback ?? <AccessDenied message={`Você precisa ser pelo menos ${requiredRole} para acessar esta página.`} />
   }
 
   // Verificar permissao especifica
   if (requiredPermission && !hasPermission(requiredPermission)) {
-    return fallback ?? <AccessDenied message="Voce nao tem permissao para acessar esta pagina." />
+    return fallback ?? <AccessDenied message="Você não tem permissão para acessar esta página." />
   }
 
   // Verificar feature flag
   if (requiredFeature && !hasFeature(requiredFeature)) {
-    return fallback ?? <AccessDenied message="Esta funcionalidade nao esta disponivel no seu plano atual." />
+    return fallback ?? <AccessDenied message="Esta funcionalidade não está disponível no seu plano atual." />
   }
 
   return <>{children}</>

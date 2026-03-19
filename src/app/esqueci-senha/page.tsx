@@ -71,7 +71,7 @@ export default function EsqueciSenhaPage() {
       const { exists } = await checkRes.json()
 
       if (!exists) {
-        setError('Este email nao existe no nosso banco de dados. Primeiro crie sua conta.')
+        setError('Este email não existe no nosso banco de dados. Primeiro crie sua conta.')
         setLoading(false)
         return
       }
@@ -83,7 +83,7 @@ export default function EsqueciSenhaPage() {
 
       if (error) {
         if (error.message.includes('rate') || error.message.includes('limit')) {
-          setError('Aguarde alguns minutos antes de solicitar outro codigo.')
+          setError('Aguarde alguns minutos antes de solicitar outro código.')
         } else {
           setError(error.message)
         }
@@ -103,7 +103,7 @@ export default function EsqueciSenhaPage() {
   const handleVerifyOtp = async () => {
     const code = otpCode.join('')
     if (code.length !== 6) {
-      setError('Digite o codigo completo de 6 digitos.')
+      setError('Digite o código completo de 6 dígitos.')
       return
     }
 
@@ -119,14 +119,14 @@ export default function EsqueciSenhaPage() {
       })
 
       if (verifyError) {
-        setError('Codigo invalido ou expirado. Tente novamente.')
+        setError('Código inválido ou expirado. Tente novamente.')
         setLoading(false)
         return
       }
 
       setStep('password')
     } catch {
-      setError('Erro ao verificar codigo. Tente novamente.')
+      setError('Erro ao verificar código. Tente novamente.')
     } finally {
       setLoading(false)
     }
@@ -138,12 +138,12 @@ export default function EsqueciSenhaPage() {
     setError(null)
 
     if (password.length < 6) {
-      setError('A senha deve ter no minimo 6 caracteres.')
+      setError('A senha deve ter no mínimo 6 caracteres.')
       return
     }
 
     if (password !== confirmPassword) {
-      setError('As senhas nao coincidem.')
+      setError('As senhas não coincidem.')
       return
     }
 
@@ -184,7 +184,7 @@ export default function EsqueciSenhaPage() {
         otpRefs.current[0]?.focus()
       }
     } catch {
-      setError('Erro ao reenviar codigo.')
+      setError('Erro ao reenviar código.')
     } finally {
       setResending(false)
     }
@@ -208,7 +208,7 @@ export default function EsqueciSenhaPage() {
               Senha alterada!
             </h1>
             <p className="text-muted mb-8">
-              Sua senha foi redefinida com sucesso. Faca login com a nova senha.
+              Sua senha foi redefinida com sucesso. Faça login com a nova senha.
             </p>
             <Link
               href={APP_CONFIG.routes.login}
@@ -227,7 +227,7 @@ export default function EsqueciSenhaPage() {
                 Esqueci minha senha
               </h1>
               <p className="text-muted text-[15px]">
-                Informe seu email e enviaremos um codigo para redefinir sua senha.
+                Informe seu email e enviaremos um código para redefinir sua senha.
               </p>
             </div>
 
@@ -269,7 +269,7 @@ export default function EsqueciSenhaPage() {
                     Enviando...
                   </>
                 ) : (
-                  'Enviar codigo de recuperacao'
+                  'Enviar código de recuperação'
                 )}
               </button>
             </form>
@@ -293,7 +293,7 @@ export default function EsqueciSenhaPage() {
               Verifique seu email
             </h1>
             <p className="text-muted mb-2">
-              Enviamos um codigo de 6 digitos para
+              Enviamos um código de 6 dígitos para
             </p>
             <p className="text-main font-semibold mb-8">{email}</p>
 
@@ -334,13 +334,13 @@ export default function EsqueciSenhaPage() {
                   Verificando...
                 </>
               ) : (
-                'Confirmar codigo'
+                'Confirmar código'
               )}
             </button>
 
             {/* Resend */}
             <p className="text-sm text-muted">
-              Nao recebeu o codigo?{' '}
+              Não recebeu o código?{' '}
               <button
                 onClick={handleResendCode}
                 disabled={resending}
@@ -393,7 +393,7 @@ export default function EsqueciSenhaPage() {
                     autoComplete="new-password"
                     className="input"
                     style={{ paddingLeft: '2.75rem', paddingRight: '2.75rem' }}
-                    placeholder="Minimo 6 caracteres"
+                    placeholder="Mínimo 6 caracteres"
                   />
                   <button
                     type="button"
