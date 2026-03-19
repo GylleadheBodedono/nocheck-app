@@ -1155,15 +1155,38 @@ function ChecklistForm() {
     }
   }, [buildSingleResponseRow, template])
 
-  // Flush auto-save on page unload
+  // Flush auto-save on ANY exit scenario (mobile + desktop)
   useEffect(() => {
+    // Desktop: beforeunload (fecha aba, reload)
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
       autoSaveField.flush()
       e.preventDefault()
     }
+    // Mobile: visibilitychange (tela bloqueou, trocou app, fechou browser)
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'hidden') {
+        autoSaveField.flush()
+      }
+    }
+    // iOS Safari: pagehide (mais confiavel que beforeunload)
+    const handlePageHide = () => {
+      autoSaveField.flush()
+    }
+    // Android: blur no window (trocou de app sem pagehide)
+    const handleWindowBlur = () => {
+      autoSaveField.flush()
+    }
+
     window.addEventListener('beforeunload', handleBeforeUnload)
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+    window.addEventListener('pagehide', handlePageHide)
+    window.addEventListener('blur', handleWindowBlur)
+
     return () => {
       window.removeEventListener('beforeunload', handleBeforeUnload)
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+      window.removeEventListener('pagehide', handlePageHide)
+      window.removeEventListener('blur', handleWindowBlur)
       autoSaveField.flush()
     }
   }, [autoSaveField])
@@ -1173,12 +1196,19 @@ function ChecklistForm() {
     if (errors[fieldId]) {
       setErrors(prev => { const n = { ...prev }; delete n[fieldId]; return n })
     }
-    // Offline: save immediately to IndexedDB (near-instant)
-    if (!navigator.onLine && offlineChecklistIdRef.current) {
+    // Sempre salvar no IndexedDB como backup (rapido, local)
+    if (offlineChecklistIdRef.current) {
       saveFieldOfflineImmediate(fieldId, value)
-    } else {
-      // Online: debounced save to Supabase
+    }
+    // Online: tambem salvar no Supabase
+    if (navigator.onLine) {
       autoSaveField(fieldId, value)
+      // Para respostas de selecao (yes_no, dropdown, rating, checkbox), flush imediato
+      // Texto usa debounce normal (usuario ainda esta digitando)
+      const field = template?.fields.find(f => f.id === fieldId)
+      if (field && ['yes_no', 'dropdown', 'checkbox_multiple', 'rating', 'signature'].includes(field.field_type)) {
+        autoSaveField.flush()
+      }
     }
   }
 
