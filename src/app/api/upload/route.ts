@@ -29,15 +29,33 @@ export async function POST(request: NextRequest) {
       folder?: string // pasta no bucket (default: 'uploads')
     }
 
-    if (!image) {
+    if (!image || typeof image !== 'string') {
       return NextResponse.json(
         { success: false, error: 'Imagem não fornecida' },
         { status: 400 }
       )
     }
 
+    // Validar que é uma imagem (verificar header base64 ou data URL)
+    const allowedMimeTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif']
+    const dataUrlMatch = image.match(/^data:(image\/\w+);base64,/)
+    if (dataUrlMatch && !allowedMimeTypes.includes(dataUrlMatch[1])) {
+      return NextResponse.json(
+        { success: false, error: 'Tipo de arquivo não permitido. Use JPEG, PNG, WebP ou GIF.' },
+        { status: 400 }
+      )
+    }
+
     // Remove data URL prefix if present
     const base64Data = image.replace(/^data:image\/\w+;base64,/, '')
+
+    // Validar que é base64 válido
+    if (!/^[A-Za-z0-9+/]+=*$/.test(base64Data.slice(0, 100))) {
+      return NextResponse.json(
+        { success: false, error: 'Dados de imagem inválidos' },
+        { status: 400 }
+      )
+    }
 
     // Check file size (base64 is ~33% larger than binary)
     const estimatedSize = (base64Data.length * 3) / 4

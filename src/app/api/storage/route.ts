@@ -65,8 +65,14 @@ export async function GET(request: NextRequest) {
   try {
     const folder = request.nextUrl.searchParams.get('folder') || 'uploads'
 
-    if (!folder.startsWith('uploads') && !folder.startsWith('anexos')) {
+    if ((!folder.startsWith('uploads/') && folder !== 'uploads') &&
+        (!folder.startsWith('anexos/') && folder !== 'anexos')) {
       return NextResponse.json({ success: false, error: 'Pasta invalida' }, { status: 400 })
+    }
+
+    // Prevenir path traversal
+    if (folder.includes('..') || folder.includes('//')) {
+      return NextResponse.json({ success: false, error: 'Caminho invalido' }, { status: 400 })
     }
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey)
@@ -99,9 +105,12 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ success: false, error: 'Nenhum arquivo especificado' }, { status: 400 })
     }
 
-    // Validate paths are in allowed folders
+    // Validate paths are in allowed folders and prevent path traversal
     for (const p of paths) {
       if (!p.startsWith('uploads/') && !p.startsWith('anexos/')) {
+        return NextResponse.json({ success: false, error: 'Caminho invalido' }, { status: 400 })
+      }
+      if (p.includes('..') || p.includes('//')) {
         return NextResponse.json({ success: false, error: 'Caminho invalido' }, { status: 400 })
       }
     }

@@ -356,7 +356,19 @@ export async function POST(request: NextRequest) {
 // EMAIL HTML BUILDER
 // ============================================
 
+function escapeHtml(str: string): string {
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;')
+}
+
 function buildConfirmationEmailHtml(userName: string, confirmUrl: string, appName = 'OpereCheck', primaryColor = '#0D9488'): string {
+  const safeName = escapeHtml(userName)
+  const safeAppName = escapeHtml(appName)
+  const safeUrl = encodeURI(confirmUrl)
   return `
 <!DOCTYPE html>
 <html>
@@ -365,14 +377,14 @@ function buildConfirmationEmailHtml(userName: string, confirmUrl: string, appNam
   <div style="max-width: 600px; margin: 0 auto; background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
     <div style="background: ${primaryColor}; padding: 24px; color: white; text-align: center;">
       <h1 style="margin: 0; font-size: 22px;">Confirme seu Email</h1>
-      <p style="margin: 8px 0 0; opacity: 0.9; font-size: 14px;">${appName} - Sistema de Checklists</p>
+      <p style="margin: 8px 0 0; opacity: 0.9; font-size: 14px;">${safeAppName} - Sistema de Checklists</p>
     </div>
     <div style="padding: 32px 24px; text-align: center;">
-      <p style="color: #1e293b; font-size: 16px; margin: 0 0 8px;">Ola, <strong>${userName}</strong>!</p>
+      <p style="color: #1e293b; font-size: 16px; margin: 0 0 8px;">Ola, <strong>${safeName}</strong>!</p>
       <p style="color: #475569; font-size: 14px; line-height: 1.6; margin: 0 0 24px;">
-        Sua conta foi criada no ${appName}. Clique no botao abaixo para confirmar seu email e ativar sua conta.
+        Sua conta foi criada no ${safeAppName}. Clique no botao abaixo para confirmar seu email e ativar sua conta.
       </p>
-      <a href="${confirmUrl}" style="display: inline-block; background: ${primaryColor}; color: white; padding: 14px 32px; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 15px;">
+      <a href="${safeUrl}" style="display: inline-block; background: ${primaryColor}; color: white; padding: 14px 32px; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 15px;">
         Confirmar Email
       </a>
       <p style="color: #94a3b8; font-size: 12px; margin: 24px 0 0; line-height: 1.5;">
@@ -380,7 +392,7 @@ function buildConfirmationEmailHtml(userName: string, confirmUrl: string, appNam
       </p>
     </div>
     <div style="padding: 16px 24px; background: #f8fafc; border-top: 1px solid #e2e8f0; text-align: center;">
-      <p style="margin: 0; color: #94a3b8; font-size: 12px;">${appName} - Sistema de Checklists</p>
+      <p style="margin: 0; color: #94a3b8; font-size: 12px;">${safeAppName} - Sistema de Checklists</p>
     </div>
   </div>
 </body>

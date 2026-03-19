@@ -2,12 +2,23 @@ export const runtime = 'edge'
 
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { verifyApiAuth } from '@/lib/api-auth'
 
 export async function POST(request: NextRequest) {
+  // Requer autenticação para prevenir email enumeration
+  const auth = await verifyApiAuth(request)
+  if (auth.error) return auth.error
+
   try {
     const { email } = await request.json()
 
-    if (!email) {
+    if (!email || typeof email !== 'string') {
+      return NextResponse.json({ exists: false })
+    }
+
+    // Validar formato de email
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+    if (!emailRegex.test(email)) {
       return NextResponse.json({ exists: false })
     }
 
