@@ -1344,9 +1344,58 @@ function ChecklistForm() {
 
     const emptyFields = getEmptyRequiredFields()
     if (emptyFields.length > 0) {
-      // Check justification deadline before showing modal
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const rawTpl = template as any
+
+      // Se template tem skip_justifications, auto-preencher e finalizar direto
+      if (rawTpl?.skip_justifications === true) {
+        setSubmitting(true)
+        try {
+          let userId: string | null = null
+          try {
+            const { data: { user } } = await supabase.auth.getUser()
+            userId = user?.id || null
+          } catch { /* offline */ }
+          if (!userId || !checklistId) { setSubmitting(false); return }
+
+          // Inserir justificativas automaticas no banco
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          await (supabase as any).from('checklist_justifications').upsert(
+            emptyFields.map(f => ({
+              checklist_id: checklistId,
+              field_id: f.id,
+              justification_text: 'Campo finalizado vazio',
+              justified_by: userId,
+            })),
+            { onConflict: 'checklist_id,field_id' }
+          )
+          // Marcar como incompleto e finalizar
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          await (supabase as any).from('checklists')
+            .update({ status: 'incompleto', completed_at: new Date().toISOString() })
+            .eq('id', checklistId)
+
+          // Processar nao conformidades
+          if (template) {
+            const allFieldIds = template.fields.map(f => f.id)
+            const allResponseData = await buildResponseRows(allFieldIds, false)
+            const allResponseMapped = allResponseData.map(r => ({
+              field_id: r.fieldId, value_text: r.valueText, value_number: r.valueNumber, value_json: r.valueJson,
+            }))
+            await processarNaoConformidades(
+              supabase, checklistId, Number(templateId), Number(storeId), null, userId,
+              allResponseMapped, template.fields.map(f => ({ id: f.id, name: f.name, field_type: f.field_type, options: f.options }))
+            )
+          }
+          window.location.href = `${APP_CONFIG.routes.dashboard}?finished=true`
+        } catch (err) {
+          console.error('[Checklist] Erro ao finalizar sem justificativas:', err)
+          setSubmitting(false)
+        }
+        return
+      }
+
+      // Check justification deadline before showing modal
       if (rawTpl?.justification_deadline_hours != null && checklistId) {
         try {
           // eslint-disable-next-line @typescript-eslint/no-explicit-any

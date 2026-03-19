@@ -100,6 +100,7 @@ export default function EditTemplatePage() {
   const [description, setDescription] = useState('')
   const [category, setCategory] = useState<TemplateCategory>('recebimento')
   const [isActive, setIsActive] = useState(true)
+  const [skipJustifications, setSkipJustifications] = useState(false)
   const [adminOnly, setAdminOnly] = useState(false)
 
   // Time settings
@@ -229,6 +230,7 @@ export default function EditTemplatePage() {
       setDescription(templateData.description || '')
       setCategory(templateData.category || 'outros')
       setIsActive(templateData.is_active)
+      setSkipJustifications(templateData.skip_justifications || false)
       setAdminOnly(templateData.admin_only || false)
       setAllowedStartTime(templateData.allowed_start_time ? templateData.allowed_start_time.substring(0, 5) : '')
       setAllowedEndTime(templateData.allowed_end_time ? templateData.allowed_end_time.substring(0, 5) : '')
@@ -661,6 +663,7 @@ export default function EditTemplatePage() {
           description: description || null,
           category,
           is_active: isActive,
+          skip_justifications: skipJustifications,
           admin_only: adminOnly,
           allowed_start_time: allowedStartTime || null,
           allowed_end_time: allowedEndTime || null,
@@ -1128,21 +1131,39 @@ export default function EditTemplatePage() {
                 />
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-secondary mb-2">
-                  Status
-                </label>
-                <label className="flex items-center gap-3 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={isActive}
-                    onChange={(e) => setIsActive(e.target.checked)}
-                    className="w-5 h-5 rounded border-default bg-surface text-primary focus:ring-primary"
-                  />
-                  <span className={isActive ? 'text-success' : 'text-muted'}>
-                    {isActive ? 'Ativo' : 'Inativo'}
-                  </span>
-                </label>
+              <div className="flex gap-8">
+                <div>
+                  <label className="block text-sm font-medium text-secondary mb-2">
+                    Status
+                  </label>
+                  <label className="flex items-center gap-3 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={isActive}
+                      onChange={(e) => setIsActive(e.target.checked)}
+                      className="w-5 h-5 rounded border-default bg-surface text-primary focus:ring-primary"
+                    />
+                    <span className={isActive ? 'text-success' : 'text-muted'}>
+                      {isActive ? 'Ativo' : 'Inativo'}
+                    </span>
+                  </label>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-secondary mb-2">
+                    Justificativas
+                  </label>
+                  <label className="flex items-center gap-3 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={skipJustifications}
+                      onChange={(e) => setSkipJustifications(e.target.checked)}
+                      className="w-5 h-5 rounded border-default bg-surface text-primary focus:ring-primary"
+                    />
+                    <span className={skipJustifications ? 'text-warning' : 'text-muted'}>
+                      {skipJustifications ? 'Sem justificativas' : 'Exigir justificativas'}
+                    </span>
+                  </label>
+                </div>
               </div>
             </div>
 

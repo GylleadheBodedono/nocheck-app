@@ -90,6 +90,7 @@ export default function NovoTemplatePage() {
   const [description, setDescription] = useState('')
   const [category, setCategory] = useState<TemplateCategory>('recebimento')
   const [adminOnly, setAdminOnly] = useState(false)
+  const [skipJustifications, setSkipJustifications] = useState(false)
 
   // Time settings
   const [allowedStartTime, setAllowedStartTime] = useState('')
@@ -494,6 +495,7 @@ export default function NovoTemplatePage() {
           description: description || null,
           category,
           admin_only: adminOnly,
+          skip_justifications: skipJustifications,
           allowed_start_time: allowedStartTime || null,
           allowed_end_time: allowedEndTime || null,
           justification_deadline_hours: justificationDeadlineHours ? Number(justificationDeadlineHours) : null,
@@ -829,6 +831,22 @@ export default function NovoTemplatePage() {
                     { value: 'outros',      label: 'Outros' },
                   ]}
                 />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-secondary mb-2">
+                  Justificativas
+                </label>
+                <label className="flex items-center gap-3 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={skipJustifications}
+                    onChange={(e) => setSkipJustifications(e.target.checked)}
+                    className="w-5 h-5 rounded border-default bg-surface text-primary focus:ring-primary"
+                  />
+                  <span className={skipJustifications ? 'text-warning' : 'text-muted'}>
+                    {skipJustifications ? 'Sem justificativas' : 'Exigir justificativas'}
+                  </span>
+                </label>
               </div>
             </div>
 
