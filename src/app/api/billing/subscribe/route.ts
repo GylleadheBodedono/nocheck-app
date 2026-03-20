@@ -45,10 +45,14 @@ export async function POST(req: NextRequest) {
       })
       customerId = customer.id
 
-      await supabase
+      const { error: custUpdateErr } = await supabase
         .from('organizations')
         .update({ stripe_customer_id: customerId })
         .eq('id', orgId)
+
+      if (custUpdateErr) {
+        return NextResponse.json({ error: 'Failed to update organization' }, { status: 500 })
+      }
     }
 
     // Attach payment method ao customer

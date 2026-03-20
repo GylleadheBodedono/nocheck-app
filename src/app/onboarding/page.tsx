@@ -196,12 +196,25 @@ export default function OnboardingPage() {
     setError(null)
 
     try {
-      // Send all pending invites
+      // Send all pending invites, collecting individual errors
+      const inviteErrors: string[] = []
       for (const invite of pendingInvites) {
-        await createInvite(orgId, invite.email, invite.role, userId)
+        try {
+          await createInvite(orgId, invite.email, invite.role, userId)
+        } catch (err) {
+          inviteErrors.push(`${invite.email}: ${err instanceof Error ? err.message : 'Erro'}`)
+        }
       }
 
-      window.location.href = '/dashboard'
+      if (inviteErrors.length > 0) {
+        setError(`Alguns convites falharam: ${inviteErrors.join(', ')}`)
+        // Still redirect after showing error briefly
+        setTimeout(() => {
+          window.location.href = '/dashboard'
+        }, 3000)
+      } else {
+        window.location.href = '/dashboard'
+      }
     } catch (err) {
       console.error('[Onboarding] Erro ao enviar convites:', err)
       setError('Erro ao enviar convites. Tente novamente.')

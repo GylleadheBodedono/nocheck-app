@@ -264,18 +264,33 @@ export async function processarNaoConformidades(
     let emailSubjectTemplate: string | null = null
 
     try {
-      const [storeResult, templateResult, sectorResult, respondentResult, checklistResult, emailTemplateResult, emailSubjectResult] =
-        await Promise.all([
-          sb.from('stores').select('name').eq('id', storeId).single(),
-          sb.from('checklist_templates').select('name').eq('id', templateId).single(),
-          sectorId
-            ? sb.from('sectors').select('name').eq('id', sectorId).single()
-            : Promise.resolve({ data: null }),
-          sb.from('users').select('full_name, email').eq('id', userId).single(),
-          sb.from('checklists').select('completed_at, created_at').eq('id', checklistId).single(),
-          sb.from('app_settings').select('value').eq('key', 'action_plan_email_template').maybeSingle(),
-          sb.from('app_settings').select('value').eq('key', 'action_plan_email_subject').maybeSingle(),
-        ])
+      const results = await Promise.allSettled([
+        sb.from('stores').select('name').eq('id', storeId).single(),
+        sb.from('checklist_templates').select('name').eq('id', templateId).single(),
+        sectorId
+          ? sb.from('sectors').select('name').eq('id', sectorId).single()
+          : Promise.resolve({ data: null }),
+        sb.from('users').select('full_name, email').eq('id', userId).single(),
+        sb.from('checklists').select('completed_at, created_at').eq('id', checklistId).single(),
+        sb.from('app_settings').select('value').eq('key', 'action_plan_email_template').maybeSingle(),
+        sb.from('app_settings').select('value').eq('key', 'action_plan_email_subject').maybeSingle(),
+      ])
+
+      // Extract values with fallbacks for rejected promises
+      const storeResult = results[0].status === 'fulfilled' ? results[0].value : { data: null }
+      const templateResult = results[1].status === 'fulfilled' ? results[1].value : { data: null }
+      const sectorResult = results[2].status === 'fulfilled' ? results[2].value : { data: null }
+      const respondentResult = results[3].status === 'fulfilled' ? results[3].value : { data: null }
+      const checklistResult = results[4].status === 'fulfilled' ? results[4].value : { data: null }
+      const emailTemplateResult = results[5].status === 'fulfilled' ? results[5].value : { data: null }
+      const emailSubjectResult = results[6].status === 'fulfilled' ? results[6].value : { data: null }
+
+      // Log any rejected promises
+      results.forEach((r, i) => {
+        if (r.status === 'rejected') {
+          console.warn(`[ActionPlan] Context query #${i} rejected:`, r.reason)
+        }
+      })
 
       if (storeResult.data?.name) storeName = storeResult.data.name
       if (templateResult.data?.name) templateName = templateResult.data.name
@@ -410,7 +425,7 @@ export async function processarNaoConformidades(
       plansCreated++
 
       // 7. Criar notificacao in-app para o responsavel
-      await createNotification(supabase, assigneeId, {
+      const notifResult = await createNotification(supabase, assigneeId, {
         type: reincidencia.isReincidencia ? 'reincidencia_detected' : 'action_plan_assigned',
         title: reincidencia.isReincidencia
           ? `Reincidencia #${reincidencia.count + 1}: ${field.name}`
@@ -424,10 +439,12 @@ export async function processarNaoConformidades(
           is_reincidencia: reincidencia.isReincidencia,
         },
       })
+      if (!notifResult.success) console.error('[ActionPlan] Notification failed:', notifResult.error)
+
       // 7b. Notificar quem respondeu o checklist (se nao for o mesmo que o responsavel)
       if (userId !== assigneeId) {
         // Nao buscar assignee name via client (RLS bloqueia) — usar fallback
-        await createNotification(supabase, userId, {
+        const respondentNotif = await createNotification(supabase, userId, {
           type: 'action_plan_created',
           title: `Plano de acao gerado: ${field.name}`,
           message: `Voce respondeu "${templateName}" e o campo "${field.name}" foi marcado como "${nonConformityValue}". O responsavel ja foi notificado.`,
@@ -439,6 +456,7 @@ export async function processarNaoConformidades(
             non_conformity_value: nonConformityValue,
           },
         })
+        if (!respondentNotif.success) console.error('[ActionPlan] Respondent notification failed:', respondentNotif.error)
       }
 
       // 8. Enviar email + Teams (busca do email do assignee e feita server-side para contornar RLS)
@@ -525,7 +543,7 @@ export async function processarNaoConformidades(
 
           for (const admin of admins || []) {
             if (admin.id === assigneeId) continue
-            await createNotification(supabase, admin.id, {
+            const adminReincNotif = await createNotification(supabase, admin.id, {
               type: 'reincidencia_detected',
               title: `Reincidencia #${reincidencia.count + 1}: ${field.name}`,
               message: `${storeName} - ${nonConformityValue} - Ocorrencia ${reincidencia.count + 1}x nos ultimos 90 dias`,
@@ -537,6 +555,7 @@ export async function processarNaoConformidades(
                 reincidencia_count: reincidencia.count + 1,
               },
             })
+            if (!adminReincNotif.success) console.error('[ActionPlan] Admin reincidencia notification failed:', adminReincNotif.error)
           }
         } catch (adminErr) {
           console.error('[ActionPlan] Erro ao notificar admins:', adminErr)
@@ -589,23 +608,25 @@ export async function checkOverduePlans(
     const adminIds = (admins || []).map((a: { id: string }) => a.id)
 
     for (const plan of overduePlans) {
-      await createNotification(supabase, plan.assigned_to, {
+      const overdueNotif = await createNotification(supabase, plan.assigned_to, {
         type: 'action_plan_overdue',
         title: 'Plano de acao vencido',
         message: `O plano "${plan.title}" venceu em ${new Date(plan.deadline).toLocaleDateString('pt-BR')}`,
         link: `/admin/planos-de-acao/${plan.id}`,
         metadata: { action_plan_id: plan.id },
       })
+      if (!overdueNotif.success) console.error('[ActionPlan] Overdue notification failed:', overdueNotif.error)
 
       for (const adminId of adminIds) {
         if (adminId === plan.assigned_to) continue
-        await createNotification(supabase, adminId, {
+        const adminNotif = await createNotification(supabase, adminId, {
           type: 'action_plan_overdue',
           title: 'Plano de acao vencido',
           message: `O plano "${plan.title}" venceu em ${new Date(plan.deadline).toLocaleDateString('pt-BR')}`,
           link: `/admin/planos-de-acao/${plan.id}`,
           metadata: { action_plan_id: plan.id },
         })
+        if (!adminNotif.success) console.error('[ActionPlan] Admin overdue notification failed:', adminNotif.error)
       }
 
       // Enviar email de vencimento ao responsavel

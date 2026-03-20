@@ -57,9 +57,9 @@ export function TenantProvider({ children, orgSlug }: TenantProviderProps) {
   })
 
   // Extrair claims do JWT (injetados pelo custom_access_token_hook)
-  const appMeta = session?.user?.app_metadata ?? {}
+  const appMeta = session?.user?.app_metadata || {}
   const isPlatformAdmin = appMeta.is_platform_admin === true
-  const jwtRole = appMeta.role as OrgRole | undefined
+  const jwtRole = typeof appMeta.role === 'string' ? (appMeta.role as OrgRole) : undefined
 
   // Buscar organizacao pelo slug (valida que existe)
   const { data: organization, isLoading: orgLoading } = useQuery({
@@ -131,7 +131,7 @@ export function TenantProvider({ children, orgSlug }: TenantProviderProps) {
   // Montar contexto final
   const context: TenantContext = useMemo(() => {
     const role = jwtRole ?? null
-    const features = (appMeta.features ?? []) as Feature[]
+    const features = Array.isArray(appMeta.features) ? (appMeta.features as Feature[]) : []
     const isOwner = role === 'owner'
     const isOrgAdmin = role === 'owner' || role === 'admin'
     const isManager = role === 'owner' || role === 'admin' || role === 'manager'

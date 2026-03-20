@@ -186,10 +186,12 @@ export async function acceptInvite(token: string, userId: string): Promise<void>
 
   // Marcar convite como aceito
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  await (supabase as any)
+  const { error: inviteErr } = await (supabase as any)
     .from('invites')
     .update({ accepted_at: new Date().toISOString() })
     .eq('id', invite.id)
+
+  if (inviteErr) console.error('[Tenant] Failed to mark invite as accepted:', inviteErr)
 }
 
 /** Lista convites pendentes da organizacao */

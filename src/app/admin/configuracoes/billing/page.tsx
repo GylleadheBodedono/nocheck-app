@@ -52,7 +52,7 @@ export default function BillingPage() {
 
     const [orgRes, usersRes, storesRes] = await Promise.all([
       sb.rpc('get_org_billing', { p_org_id: orgId }),
-      sb.from('organization_members').select('id', { count: 'exact', head: true }).eq('organization_id', orgId),
+      sb.from('users').select('id', { count: 'exact', head: true }).eq('tenant_id', orgId).eq('is_active', true),
       sb.from('stores').select('id', { count: 'exact', head: true }).eq('tenant_id', orgId),
     ])
 

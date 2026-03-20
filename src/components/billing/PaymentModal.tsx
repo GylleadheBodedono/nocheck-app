@@ -150,6 +150,16 @@ function PaymentForm({ plan, orgId, onSuccess, onClose }: Omit<Props, 'isOpen' |
   const config = PLAN_CONFIGS[plan]
   const BrandIcon = BRAND_ICONS[cardBrand] || BRAND_ICONS.unknown
 
+  // If stripe is not loaded (missing key), show fallback message
+  if (!stripe) {
+    return (
+      <div className="text-center py-8">
+        <p className="text-muted">Processador de pagamento nao disponivel.</p>
+        <p className="text-xs text-muted mt-2">Verifique a configuracao do Stripe.</p>
+      </div>
+    )
+  }
+
   const elementStyle = {
     style: {
       base: {

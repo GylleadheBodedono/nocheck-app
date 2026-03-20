@@ -111,19 +111,28 @@ function BrandingContent() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [organization])
 
-  // Apply preview in real-time
+  // Apply preview in real-time (only if user has white_label feature)
+  const originalPrimaryRef = useRef<string | null>(null)
   useEffect(() => {
-    if (primaryColor) {
-      document.documentElement.style.setProperty('--primary', primaryColor)
-      // Darken for hover
-      const h = primaryColor.replace('#', '')
-      const r = Math.max(0, Math.round(parseInt(h.substring(0, 2), 16) * 0.85))
-      const g = Math.max(0, Math.round(parseInt(h.substring(2, 4), 16) * 0.85))
-      const b = Math.max(0, Math.round(parseInt(h.substring(4, 6), 16) * 0.85))
-      const hover = `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`
-      document.documentElement.style.setProperty('--primary-hover', hover)
+    if (blocked || !primaryColor) return
+    // Save original color on first apply
+    if (!originalPrimaryRef.current) {
+      originalPrimaryRef.current = getComputedStyle(document.documentElement).getPropertyValue('--primary').trim()
     }
-  }, [primaryColor])
+    document.documentElement.style.setProperty('--primary', primaryColor)
+    const h = primaryColor.replace('#', '')
+    const r = Math.max(0, Math.round(parseInt(h.substring(0, 2), 16) * 0.85))
+    const g = Math.max(0, Math.round(parseInt(h.substring(2, 4), 16) * 0.85))
+    const b = Math.max(0, Math.round(parseInt(h.substring(4, 6), 16) * 0.85))
+    const hover = `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`
+    document.documentElement.style.setProperty('--primary-hover', hover)
+    // Cleanup: restore original colors when leaving page
+    return () => {
+      if (originalPrimaryRef.current) {
+        document.documentElement.style.setProperty('--primary', originalPrimaryRef.current)
+      }
+    }
+  }, [primaryColor, blocked])
 
   const handleUpload = useCallback(async (file: File, type: 'logo' | 'favicon') => {
     if (!organization?.id) return

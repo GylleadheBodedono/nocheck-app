@@ -91,11 +91,16 @@ export async function updateOrgPlan(
   const features = getFeaturesForPlan(plan)
   const config = PLAN_CONFIGS[plan as Plan]
 
-  await supabase.from('organizations').update({
+  const { error } = await supabase.from('organizations').update({
     plan,
     features,
     max_users: config?.maxUsers || 5,
     max_stores: config?.maxStores || 3,
     ...extraFields,
   }).eq('id', orgId)
+
+  if (error) {
+    console.error('[Stripe] updateOrgPlan failed:', error)
+    throw new Error(`Failed to update org plan: ${error.message}`)
+  }
 }

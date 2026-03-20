@@ -43,6 +43,8 @@ export async function POST(req: NextRequest) {
 
   console.log('[Stripe Webhook] Evento:', event.type)
 
+  let hasErrors = false
+
   try {
     switch (event.type) {
       // Checkout concluido → ativar plano
@@ -62,11 +64,16 @@ export async function POST(req: NextRequest) {
           if (priceId) plan = getPlanFromPriceId(priceId) || 'starter'
         }
 
-        await updateOrgPlan(orgId, plan, {
-          stripe_customer_id: customerId,
-          stripe_subscription_id: subscriptionId,
-          trial_ends_at: null, // Nao e mais trial
-        })
+        try {
+          await updateOrgPlan(orgId, plan, {
+            stripe_customer_id: customerId,
+            stripe_subscription_id: subscriptionId,
+            trial_ends_at: null, // Nao e mais trial
+          })
+        } catch (updateErr) {
+          console.error('[Stripe Webhook] DB update failed (checkout.session.completed):', updateErr)
+          hasErrors = true
+        }
 
         console.log(`[Stripe] Org ${orgId} → plano ${plan}`)
         break
@@ -81,7 +88,12 @@ export async function POST(req: NextRequest) {
         const priceId = sub.items.data[0]?.price?.id
         const plan = priceId ? getPlanFromPriceId(priceId) || 'starter' : 'starter'
 
-        await updateOrgPlan(orgId, plan)
+        try {
+          await updateOrgPlan(orgId, plan)
+        } catch (updateErr) {
+          console.error('[Stripe Webhook] DB update failed (customer.subscription.updated):', updateErr)
+          hasErrors = true
+        }
 
         console.log(`[Stripe] Subscription updated: org ${orgId} → ${plan}`)
         break
@@ -93,10 +105,15 @@ export async function POST(req: NextRequest) {
         const orgId = sub.metadata?.org_id
         if (!orgId) break
 
-        await updateOrgPlan(orgId, 'trial', {
-          stripe_subscription_id: null,
-          trial_ends_at: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString(), // 14 dias trial
-        })
+        try {
+          await updateOrgPlan(orgId, 'trial', {
+            stripe_subscription_id: null,
+            trial_ends_at: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString(), // 14 dias trial
+          })
+        } catch (updateErr) {
+          console.error('[Stripe Webhook] DB update failed (customer.subscription.deleted):', updateErr)
+          hasErrors = true
+        }
 
         console.log(`[Stripe] Subscription deleted: org ${orgId} → trial`)
         break
@@ -133,8 +150,13 @@ export async function POST(req: NextRequest) {
                 link: '/admin/configuracoes/billing',
               }))
 
-              await supabase.from('notifications').insert(notifications)
-              console.log(`[Stripe] Notificou ${admins.length} admin(s) da org ${failedOrg.id}`)
+              const { error: notifErr } = await supabase.from('notifications').insert(notifications)
+              if (notifErr) {
+                console.error('[Stripe Webhook] DB insert notifications failed:', notifErr)
+                hasErrors = true
+              } else {
+                console.log(`[Stripe] Notificou ${admins.length} admin(s) da org ${failedOrg.id}`)
+              }
             }
           }
         }
@@ -145,9 +167,15 @@ export async function POST(req: NextRequest) {
         console.log(`[Stripe Webhook] Evento nao processado: ${event.type}`)
     }
 
+    if (hasErrors) {
+      console.error('[Stripe Webhook] Evento processado com erros:', event.type)
+    }
+
+    // Always return 200 — Stripe expects it even if we had DB errors
     return NextResponse.json({ received: true })
   } catch (err) {
     console.error('[Stripe Webhook] Erro ao processar:', err)
-    return NextResponse.json({ error: 'Erro interno' }, { status: 500 })
+    // Still return 200 to prevent Stripe retries for unrecoverable errors
+    return NextResponse.json({ received: true })
   }
 }
