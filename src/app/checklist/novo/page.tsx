@@ -43,9 +43,17 @@ type SectionProgress = {
 
 // Upload photo helper
 async function uploadPhoto(base64Image: string, fileName: string, folder?: string): Promise<string | null> {
-  const isBase64 = base64Image.startsWith('data:')
+  // PROTECAO: se ja e URL, retornar direto — NUNCA enviar URL ao upload API
+  if (base64Image.startsWith('http')) {
+    console.log(`[Upload] SKIP (ja e URL): ${fileName} → ${base64Image.substring(0, 80)}...`)
+    return base64Image
+  }
+  if (!base64Image.startsWith('data:')) {
+    console.error(`[Upload] SKIP (formato invalido): ${fileName} (${base64Image.substring(0, 30)}...)`)
+    return null
+  }
   const sizeKB = Math.round(base64Image.length / 1024)
-  console.log(`[Upload] Iniciando: ${fileName} (${isBase64 ? 'base64' : 'url'}, ${sizeKB}KB)`)
+  console.log(`[Upload] Iniciando: ${fileName} (base64, ${sizeKB}KB)`)
   try {
     const response = await fetch('/api/upload', {
       method: 'POST',
