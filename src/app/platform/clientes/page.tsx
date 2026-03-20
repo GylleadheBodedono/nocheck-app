@@ -25,7 +25,9 @@ export default function ClientesPage() {
       const { data } = await (sb as any).from('organizations').select('*').order('created_at', { ascending: false })
       // Esconder a org do superadmin
       const { data: { user } } = await sb.auth.getUser()
-      const adminOrgId = user?.app_metadata?.org_id || user?.user_metadata?.org_id
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data: profile } = await (sb as any).from('users').select('tenant_id').eq('id', user?.id).single()
+      const adminOrgId = profile?.tenant_id
       setOrgs((data || []).filter((o: OrgRow) => o.id !== adminOrgId))
       setLoading(false)
     }
