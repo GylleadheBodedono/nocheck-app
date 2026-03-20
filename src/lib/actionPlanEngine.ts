@@ -352,8 +352,11 @@ export async function processarNaoConformidades(
 
       // Determinar funcao responsavel: prioridade para a selecionada pelo preenchedor, depois preset, depois condition
       const assignedFunctionId = userSelectedFunctionId || presetData?.default_function_id || condition.default_function_id || null
-      // Fallback: se nenhuma funcao, usa assigned_to legado (usuario direto)
-      const assigneeId = legacyAssigneeId || presetData?.default_assignee_id || condition.default_assignee_id || userId
+      // Se funcao atribuida, assigned_to = quem preencheu (funcao inteira recebe notificacoes)
+      // Senao, fallback legado: usuario direto
+      const assigneeId = assignedFunctionId
+        ? userId
+        : (legacyAssigneeId || presetData?.default_assignee_id || condition.default_assignee_id || userId)
       console.log(`[ActionPlan] Campo "${field.name}": assignedFunctionId=${assignedFunctionId}, assigneeId=${assigneeId}, userSelected=${userSelectedFunctionId}, conditionDefault=${condition.default_function_id}`)
 
       // Calcular deadline (preset pode sobrescrever)
@@ -447,10 +450,32 @@ export async function processarNaoConformidades(
             functionWebhookUrl = membersData.teamsWebhookUrl || null
             console.log(`[ActionPlan] Funcao "${functionName}" (ID ${assignedFunctionId}): ${responsibleUsers.length} usuarios`, responsibleUsers.map((u: {full_name: string}) => u.full_name))
           } else {
-            console.error(`[ActionPlan] Erro ao buscar membros da funcao ${assignedFunctionId}: HTTP ${membersRes.status}`)
+            const errorText = await membersRes.text().catch(() => '(sem body)')
+            console.error(`[ActionPlan] Erro ao buscar membros da funcao ${assignedFunctionId}: HTTP ${membersRes.status} - ${errorText}`)
           }
         } catch (fetchErr) {
           console.error('[ActionPlan] Erro fetch membros da funcao:', fetchErr)
+        }
+
+        // Fallback: se API falhou, buscar direto do banco
+        if (responsibleUsers.length === 0) {
+          console.warn(`[ActionPlan] API retornou 0 membros para funcao ${assignedFunctionId}, tentando query direta...`)
+          try {
+            const [usersResult, fnResult] = await Promise.all([
+              sb.from('users').select('id, email, full_name').eq('function_id', assignedFunctionId).eq('is_active', true),
+              sb.from('functions').select('name, teams_webhook_url').eq('id', assignedFunctionId).single(),
+            ])
+            if (usersResult.data && usersResult.data.length > 0) {
+              responsibleUsers = usersResult.data
+              functionName = fnResult.data?.name || ''
+              functionWebhookUrl = fnResult.data?.teams_webhook_url || null
+              console.log(`[ActionPlan] Fallback DB: funcao "${functionName}" — ${responsibleUsers.length} usuarios`)
+            } else {
+              console.error(`[ActionPlan] Nenhum usuario ativo na funcao ${assignedFunctionId}`)
+            }
+          } catch (dbErr) {
+            console.error('[ActionPlan] Erro fallback DB membros:', dbErr)
+          }
         }
       } else {
         // Fallback legado: usuario unico
