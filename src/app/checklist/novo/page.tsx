@@ -1815,9 +1815,6 @@ function ChecklistForm() {
     try {
       // === ONLINE ===
       if (checklistId) {
-        // Upload pending photos (base64 → cloud)
-        await uploadPendingPhotos(checklistId)
-
         // Finalize checklist status
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         await (supabase as any)
@@ -1828,7 +1825,23 @@ function ChecklistForm() {
         // Process cross validation + non-conformity
         if (template) {
           const allFieldIds = template.fields.map(f => f.id)
-          const allResponseData = await buildResponseRows(allFieldIds, false)
+          // attemptUpload: true — uploads base64 photos from React state to Storage
+          const allResponseData = await buildResponseRows(allFieldIds, true)
+
+          // Atualizar DB com URLs uploadadas (auto-save filtrou base64, agora temos URLs)
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const sb = supabase as any
+          for (const row of allResponseData) {
+            await sb.from('checklist_responses')
+              .update({
+                value_text: row.valueText,
+                value_number: row.valueNumber,
+                value_json: row.valueJson,
+              })
+              .eq('checklist_id', checklistId)
+              .eq('field_id', row.fieldId)
+          }
+
           const allResponseMapped = allResponseData.map(r => ({
             field_id: r.fieldId,
             value_text: r.valueText,
@@ -1905,8 +1918,6 @@ function ChecklistForm() {
     }
 
     try {
-      await uploadPendingPhotos(checklistId)
-
       // Insert justifications
       const justificationRows = emptyRequiredFields.map(field => ({
         checklist_id: checklistId,
@@ -1927,7 +1938,23 @@ function ChecklistForm() {
       // Process cross-validation + non-conformities
       if (template) {
         const allFieldIds = template.fields.map(f => f.id)
-        const allResponseData = await buildResponseRows(allFieldIds, false)
+        // attemptUpload: true — uploads base64 photos from React state to Storage
+        const allResponseData = await buildResponseRows(allFieldIds, true)
+
+        // Atualizar DB com URLs uploadadas
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const sb = supabase as any
+        for (const row of allResponseData) {
+          await sb.from('checklist_responses')
+            .update({
+              value_text: row.valueText,
+              value_number: row.valueNumber,
+              value_json: row.valueJson,
+            })
+            .eq('checklist_id', checklistId)
+            .eq('field_id', row.fieldId)
+        }
+
         const allResponseMapped = allResponseData.map(r => ({
           field_id: r.fieldId,
           value_text: r.valueText,
