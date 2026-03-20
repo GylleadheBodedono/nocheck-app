@@ -193,6 +193,12 @@ export default function LojasPage() {
     e.preventDefault()
     if (!formData.name.trim()) return
 
+    // Bloquear criação se atingiu limite do plano
+    if (!editingStore && stores.length >= maxStores) {
+      alert(`Limite de ${maxStores} loja${maxStores > 1 ? 's' : ''} atingido. Faça upgrade para criar mais.`)
+      return
+    }
+
     setSaving(true)
 
     try {
@@ -318,11 +324,20 @@ export default function LojasPage() {
       <PageContainer>
         {/* Top actions */}
         {!isOffline && (
-          <div className="flex items-center justify-end mb-6">
-            <button onClick={() => openModal()} className="btn-primary flex items-center gap-2">
-              <FiPlus className="w-4 h-4" />
-              Nova Loja
-            </button>
+          <div className="flex items-center justify-between mb-6">
+            {stores.length >= maxStores && (
+              <p className="text-xs text-warning">Limite de {maxStores} loja{maxStores > 1 ? 's' : ''} atingido. Faça upgrade para criar mais.</p>
+            )}
+            <div className="ml-auto">
+              <button
+                onClick={() => openModal()}
+                disabled={stores.length >= maxStores}
+                className={`btn-primary flex items-center gap-2 ${stores.length >= maxStores ? 'opacity-50 cursor-not-allowed' : ''}`}
+              >
+                <FiPlus className="w-4 h-4" />
+                Nova Loja
+              </button>
+            </div>
           </div>
         )}
 
