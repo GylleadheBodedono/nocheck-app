@@ -43,6 +43,9 @@ type SectionProgress = {
 
 // Upload photo helper
 async function uploadPhoto(base64Image: string, fileName: string, folder?: string): Promise<string | null> {
+  const isBase64 = base64Image.startsWith('data:')
+  const sizeKB = Math.round(base64Image.length / 1024)
+  console.log(`[Upload] Iniciando: ${fileName} (${isBase64 ? 'base64' : 'url'}, ${sizeKB}KB)`)
   try {
     const response = await fetch('/api/upload', {
       method: 'POST',
@@ -50,10 +53,18 @@ async function uploadPhoto(base64Image: string, fileName: string, folder?: strin
       body: JSON.stringify({ image: base64Image, fileName, folder }),
     })
     const result = await response.json()
-    if (!response.ok) return null
-    if (result.success && result.url) return result.url
+    if (!response.ok) {
+      console.error(`[Upload] FALHA HTTP ${response.status}: ${fileName}`, result)
+      return null
+    }
+    if (result.success && result.url) {
+      console.log(`[Upload] OK: ${fileName} → ${result.url.substring(0, 80)}...`)
+      return result.url
+    }
+    console.error(`[Upload] FALHA (sem URL): ${fileName}`, result)
     return null
-  } catch {
+  } catch (err) {
+    console.error(`[Upload] ERRO: ${fileName}`, err)
     return null
   }
 }
@@ -1346,8 +1357,7 @@ function ChecklistForm() {
               const url = await uploadPhoto(yesNoObj.conditionalPhotos[i], `checklist_${Date.now()}_yesno_cond_foto_${i + 1}.jpg`, 'anexos')
               uploadedUrls.push(url || yesNoObj.conditionalPhotos[i])
             }
-            // Filtrar base64 residuais (upload falhou)
-            jsonParts.conditionalPhotos = uploadedUrls.filter((u: string) => u.startsWith('http'))
+            jsonParts.conditionalPhotos = uploadedUrls
           } else if (yesNoObj.conditionalPhotos && yesNoObj.conditionalPhotos.length > 0) {
             jsonParts.conditionalPhotos = yesNoObj.conditionalPhotos
           }
