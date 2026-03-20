@@ -1327,8 +1327,14 @@ function ChecklistForm() {
         if (photos && photos.length > 0 && attemptUpload) {
           const uploadedUrls: string[] = []
           for (let i = 0; i < photos.length; i++) {
-            const url = await uploadPhoto(photos[i], `checklist_${Date.now()}_foto_${i + 1}.jpg`)
-            uploadedUrls.push(url || photos[i])
+            if (photos[i].startsWith('http')) {
+              console.log(`[buildResponseRows] photo field_${fieldId}[${i}]: ja e URL, mantendo`)
+              uploadedUrls.push(photos[i])
+            } else {
+              const url = await uploadPhoto(photos[i], `checklist_${Date.now()}_foto_${i + 1}.jpg`)
+              console.log(`[buildResponseRows] photo field_${fieldId}[${i}]: upload ${url ? 'OK' : 'FALHA'}`)
+              uploadedUrls.push(url || photos[i])
+            }
           }
           valueJson = { photos: uploadedUrls, uploadedToDrive: uploadedUrls.some(u => u.startsWith('http')) }
         } else {
@@ -1343,8 +1349,14 @@ function ChecklistForm() {
           if (yesNoObj.photos && yesNoObj.photos.length > 0 && attemptUpload) {
             const uploadedUrls: string[] = []
             for (let i = 0; i < yesNoObj.photos.length; i++) {
-              const url = await uploadPhoto(yesNoObj.photos[i], `checklist_${Date.now()}_yesno_foto_${i + 1}.jpg`, 'anexos')
-              uploadedUrls.push(url || yesNoObj.photos[i])
+              if (yesNoObj.photos[i].startsWith('http')) {
+                console.log(`[buildResponseRows] yes_no.photos field_${fieldId}[${i}]: ja e URL, mantendo`)
+                uploadedUrls.push(yesNoObj.photos[i])
+              } else {
+                const url = await uploadPhoto(yesNoObj.photos[i], `checklist_${Date.now()}_yesno_foto_${i + 1}.jpg`, 'anexos')
+                console.log(`[buildResponseRows] yes_no.photos field_${fieldId}[${i}]: upload ${url ? 'OK' : 'FALHA'}`)
+                uploadedUrls.push(url || yesNoObj.photos[i])
+              }
             }
             jsonParts.photos = uploadedUrls
           } else if (yesNoObj.photos && yesNoObj.photos.length > 0) {
@@ -1354,8 +1366,14 @@ function ChecklistForm() {
           if (yesNoObj.conditionalPhotos && yesNoObj.conditionalPhotos.length > 0 && attemptUpload) {
             const uploadedUrls: string[] = []
             for (let i = 0; i < yesNoObj.conditionalPhotos.length; i++) {
-              const url = await uploadPhoto(yesNoObj.conditionalPhotos[i], `checklist_${Date.now()}_yesno_cond_foto_${i + 1}.jpg`, 'anexos')
-              uploadedUrls.push(url || yesNoObj.conditionalPhotos[i])
+              if (yesNoObj.conditionalPhotos[i].startsWith('http')) {
+                console.log(`[buildResponseRows] yes_no.condPhotos field_${fieldId}[${i}]: ja e URL, mantendo`)
+                uploadedUrls.push(yesNoObj.conditionalPhotos[i])
+              } else {
+                const url = await uploadPhoto(yesNoObj.conditionalPhotos[i], `checklist_${Date.now()}_yesno_cond_foto_${i + 1}.jpg`, 'anexos')
+                console.log(`[buildResponseRows] yes_no.condPhotos field_${fieldId}[${i}]: upload ${url ? 'OK' : 'FALHA'}`)
+                uploadedUrls.push(url || yesNoObj.conditionalPhotos[i])
+              }
             }
             jsonParts.conditionalPhotos = uploadedUrls
           } else if (yesNoObj.conditionalPhotos && yesNoObj.conditionalPhotos.length > 0) {
