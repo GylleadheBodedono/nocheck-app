@@ -162,38 +162,43 @@ export default function BillingPage() {
         </div>
 
         {/* Uso atual */}
-        {org && (
+        {org && (() => {
+          const planConfig = PLAN_CONFIGS[org.plan as Plan]
+          const maxUsers = planConfig?.maxUsers || org.max_users
+          const maxStores = planConfig?.maxStores || org.max_stores
+          return (
           <div className="grid grid-cols-2 gap-4 mb-8">
             <div className="card p-4">
               <p className="text-xs text-muted uppercase tracking-wider mb-1">Usuarios</p>
               <p className="text-2xl font-bold text-main">
-                {usage.currentUsers} <span className="text-base font-normal text-muted">/ {org.max_users}</span>
+                {usage.currentUsers} <span className="text-base font-normal text-muted">/ {maxUsers}</span>
               </p>
               <div className="mt-2 h-2 rounded-full bg-surface-hover overflow-hidden">
                 <div
                   className={`h-full rounded-full transition-all ${
-                    usage.currentUsers >= org.max_users ? 'bg-error' : usage.currentUsers >= org.max_users * 0.8 ? 'bg-warning' : 'bg-primary'
+                    usage.currentUsers >= maxUsers ? 'bg-error' : usage.currentUsers >= maxUsers * 0.8 ? 'bg-warning' : 'bg-primary'
                   }`}
-                  style={{ width: `${Math.min(100, (usage.currentUsers / org.max_users) * 100)}%` }}
+                  style={{ width: `${Math.min(100, (usage.currentUsers / maxUsers) * 100)}%` }}
                 />
               </div>
             </div>
             <div className="card p-4">
               <p className="text-xs text-muted uppercase tracking-wider mb-1">Lojas</p>
               <p className="text-2xl font-bold text-main">
-                {usage.currentStores} <span className="text-base font-normal text-muted">/ {org.max_stores}</span>
+                {usage.currentStores} <span className="text-base font-normal text-muted">/ {maxStores}</span>
               </p>
               <div className="mt-2 h-2 rounded-full bg-surface-hover overflow-hidden">
                 <div
                   className={`h-full rounded-full transition-all ${
-                    usage.currentStores >= org.max_stores ? 'bg-error' : usage.currentStores >= org.max_stores * 0.8 ? 'bg-warning' : 'bg-primary'
+                    usage.currentStores >= maxStores ? 'bg-error' : usage.currentStores >= maxStores * 0.8 ? 'bg-warning' : 'bg-primary'
                   }`}
-                  style={{ width: `${Math.min(100, (usage.currentStores / org.max_stores) * 100)}%` }}
+                  style={{ width: `${Math.min(100, (usage.currentStores / maxStores) * 100)}%` }}
                 />
               </div>
             </div>
           </div>
-        )}
+          )
+        })()}
 
         {/* Cards de planos */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -239,9 +244,15 @@ export default function BillingPage() {
                     Plano Atual
                   </button>
                 ) : isDowngrade ? (
-                  <button onClick={handlePortal} className="w-full py-2.5 btn-secondary rounded-xl text-sm">
-                    Fazer Downgrade
-                  </button>
+                  org?.stripe_customer_id ? (
+                    <button onClick={handlePortal} className="w-full py-2.5 btn-secondary rounded-xl text-sm">
+                      Fazer Downgrade
+                    </button>
+                  ) : (
+                    <button disabled className="w-full py-2.5 btn-secondary rounded-xl text-sm opacity-50" title="Plano configurado manualmente">
+                      Downgrade indisponivel
+                    </button>
+                  )
                 ) : (
                   <button onClick={() => setSelectedPlan(plan)}
                     className="w-full py-2.5 btn-primary rounded-xl text-sm">

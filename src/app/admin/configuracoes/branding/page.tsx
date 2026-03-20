@@ -84,10 +84,11 @@ function BrandingContent() {
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           const { data: orgData } = await (supabase as any)
             .from('organizations')
-            .select('features')
+            .select('features, plan')
             .eq('id', memberData.organization_id)
             .single()
-          if (orgData && !orgData.features?.includes('white_label')) {
+          const hasWhiteLabel = orgData?.features?.includes('white_label') || orgData?.plan === 'enterprise'
+          if (orgData && !hasWhiteLabel) {
             setBlocked(true)
             setLoading(false)
             return

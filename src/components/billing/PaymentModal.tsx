@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { loadStripe } from '@stripe/stripe-js'
 import {
   Elements,
@@ -150,12 +150,27 @@ function PaymentForm({ plan, orgId, onSuccess, onClose }: Omit<Props, 'isOpen' |
   const config = PLAN_CONFIGS[plan]
   const BrandIcon = BRAND_ICONS[cardBrand] || BRAND_ICONS.unknown
 
-  // If stripe is not loaded (missing key), show fallback message
-  if (!stripe) {
+  // Stripe Elements loading state
+  const [stripeTimeout, setStripeTimeout] = useState(false)
+  useEffect(() => {
+    if (stripe) return // already loaded
+    const timer = setTimeout(() => setStripeTimeout(true), 3000)
+    return () => clearTimeout(timer)
+  }, [stripe])
+
+  if (!stripe && !stripeTimeout) {
+    return (
+      <div className="flex flex-col items-center justify-center py-8 gap-3">
+        <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+        <p className="text-sm text-muted">Carregando processador de pagamento...</p>
+      </div>
+    )
+  }
+  if (!stripe && stripeTimeout) {
     return (
       <div className="text-center py-8">
         <p className="text-muted">Processador de pagamento nao disponivel.</p>
-        <p className="text-xs text-muted mt-2">Verifique a configuracao do Stripe.</p>
+        <p className="text-xs text-muted mt-2">Verifique a configuracao do Stripe (NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY).</p>
       </div>
     )
   }

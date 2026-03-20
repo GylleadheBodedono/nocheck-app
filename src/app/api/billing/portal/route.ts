@@ -27,7 +27,7 @@ export async function POST(req: NextRequest) {
       .single()
 
     if (!org?.stripe_customer_id) {
-      return NextResponse.json({ error: 'Organizacao nao tem assinatura ativa' }, { status: 400 })
+      return NextResponse.json({ error: 'Plano configurado manualmente. Para gerenciar pagamentos, faca um upgrade via Stripe.' }, { status: 400 })
     }
 
     const stripe = getStripe()
