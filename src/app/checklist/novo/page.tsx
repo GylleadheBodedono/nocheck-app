@@ -1778,68 +1778,6 @@ function ChecklistForm() {
     return () => window.removeEventListener('popstate', handler)
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // === UPLOAD PENDING PHOTOS (base64 → cloud) ===
-  const uploadPendingPhotos = async (clId: number) => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: respData } = await (supabase as any)
-      .from('checklist_responses')
-      .select('id, field_id, value_json')
-      .eq('checklist_id', clId)
-
-    if (!respData) return
-
-    for (const r of respData) {
-      const json = r.value_json as Record<string, unknown> | null
-      if (!json) continue
-
-      const photos = json.photos as string[] | undefined
-      const condPhotos = json.conditionalPhotos as string[] | undefined
-      const hasBase64Photos = photos?.some((p: string) => p.startsWith('data:')) || false
-      const hasBase64CondPhotos = condPhotos?.some((p: string) => p.startsWith('data:')) || false
-      if (!hasBase64Photos && !hasBase64CondPhotos) continue
-
-      const updatedJson: Record<string, unknown> = { ...json }
-
-      const sanitizeName = (s: string) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-zA-Z0-9_-]/g, '_').substring(0, 40)
-      const tName = template?.name ? sanitizeName(template.name) : `t${templateId}`
-      const sName = store?.name ? sanitizeName(store.name) : `s${storeId}`
-      const folder = templateId ? `uploads/${tName}/${sName}_cl${clId}` : undefined
-
-      if (photos && hasBase64Photos) {
-        const uploadedUrls: string[] = []
-        for (let i = 0; i < photos.length; i++) {
-          if (photos[i].startsWith('data:')) {
-            const url = await uploadPhoto(photos[i], `field_${r.field_id}_foto_${i + 1}.jpg`, folder)
-            uploadedUrls.push(url || photos[i])
-          } else {
-            uploadedUrls.push(photos[i])
-          }
-        }
-        updatedJson.photos = uploadedUrls
-        updatedJson.uploadedToDrive = true
-      }
-
-      if (condPhotos && hasBase64CondPhotos) {
-        const uploadedUrls: string[] = []
-        for (let i = 0; i < condPhotos.length; i++) {
-          if (condPhotos[i].startsWith('data:')) {
-            const url = await uploadPhoto(condPhotos[i], `field_${r.field_id}_cond_foto_${i + 1}.jpg`, folder)
-            uploadedUrls.push(url || condPhotos[i])
-          } else {
-            uploadedUrls.push(condPhotos[i])
-          }
-        }
-        updatedJson.conditionalPhotos = uploadedUrls
-      }
-
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      await (supabase as any)
-        .from('checklist_responses')
-        .update({ value_json: updatedJson })
-        .eq('id', r.id)
-    }
-  }
-
   // === FINALIZE CHECKLIST (both sectioned and non-sectioned) ===
   const handleFinalizeChecklist = async () => {
     // Finalizar exige internet — show modal if offline
