@@ -4,28 +4,31 @@ import { PLAN_CONFIGS, type Plan } from '@/types/tenant'
 
 /**
  * POST /api/billing/change-plan
- * Muda o plano via Stripe API — sem redirecionar para portal externo.
  *
- * Upgrade: aplica imediatamente com proration.
- * Downgrade: agenda para fim do periodo (cliente mantem plano atual ate la).
- * Cancelar (→ trial): cancela subscription no fim do periodo.
+ * Fluxo REAL de mudança de plano via Stripe:
+ *
+ * - Trial → qualquer pago: REQUER PaymentModal (criar subscription). Nao usa esta API.
+ * - Pago → pago superior (upgrade): aplica imediatamente com proration.
+ * - Pago → pago inferior (downgrade): agenda para fim do período.
+ * - Pago → trial (cancelar): cancela subscription no fim do período.
+ *
+ * TODA org com plano pago TEM stripe_subscription_id. Se nao tem, e trial.
  */
 export async function POST(req: NextRequest) {
   try {
     const { orgId, newPlan } = await req.json()
     if (!orgId || !newPlan) {
-      return NextResponse.json({ error: 'orgId e newPlan obrigatorios' }, { status: 400 })
+      return NextResponse.json({ error: 'orgId e newPlan são obrigatórios' }, { status: 400 })
     }
 
-    const config = PLAN_CONFIGS[newPlan as Plan]
-    if (!config) {
-      return NextResponse.json({ error: `Plano '${newPlan}' invalido` }, { status: 400 })
+    const targetConfig = PLAN_CONFIGS[newPlan as Plan]
+    if (!targetConfig) {
+      return NextResponse.json({ error: `Plano '${newPlan}' inválido` }, { status: 400 })
     }
 
     const supabase = getSupabaseAdmin()
     const stripe = getStripe()
 
-    // Buscar org
     const { data: org, error: orgErr } = await supabase
       .from('organizations')
       .select('plan, stripe_customer_id, stripe_subscription_id')
@@ -33,101 +36,102 @@ export async function POST(req: NextRequest) {
       .single()
 
     if (orgErr || !org) {
-      return NextResponse.json({ error: 'Organizacao nao encontrada' }, { status: 404 })
+      return NextResponse.json({ error: 'Organização não encontrada' }, { status: 404 })
     }
 
-    const currentPlan = org.plan as Plan
-    const planOrder: Plan[] = ['trial', 'starter', 'professional', 'enterprise']
-    const isUpgrade = planOrder.indexOf(newPlan as Plan) > planOrder.indexOf(currentPlan)
-    const isDowngradeToTrial = newPlan === 'trial'
-
-    // Se nao tem subscription (trial puro) e quer upgrade → precisa do PaymentModal (nao esta API)
-    if (!org.stripe_subscription_id && !isDowngradeToTrial) {
+    // Sem subscription = trial. Trial so faz upgrade via PaymentModal.
+    if (!org.stripe_subscription_id) {
       return NextResponse.json({
-        error: 'Sem assinatura ativa. Use o modal de pagamento para fazer upgrade.',
+        error: 'Você está no plano Trial. Use o botão "Fazer Upgrade" para escolher um plano pago.',
         requiresPayment: true,
       }, { status: 400 })
     }
 
-    // Se nao tem subscription e ja e trial → nada a fazer
-    if (!org.stripe_subscription_id && isDowngradeToTrial) {
-      return NextResponse.json({ success: true, message: 'Ja esta no plano trial' })
-    }
+    const currentPlan = org.plan as Plan
+    const planOrder: Plan[] = ['trial', 'starter', 'professional', 'enterprise']
+    const currentIdx = planOrder.indexOf(currentPlan)
+    const targetIdx = planOrder.indexOf(newPlan as Plan)
+    const isUpgrade = targetIdx > currentIdx
+    const isCancelToTrial = newPlan === 'trial'
 
-    const subscription = await stripe.subscriptions.retrieve(org.stripe_subscription_id!) as unknown as { current_period_end: number; items: { data: Array<{ id: string }> } }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const subscription = await stripe.subscriptions.retrieve(org.stripe_subscription_id) as any
 
-    if (isDowngradeToTrial) {
-      // Cancelar subscription no fim do periodo → webhook aplicara trial
-      await stripe.subscriptions.update(org.stripe_subscription_id!, {
+    // === CANCELAR → TRIAL ===
+    if (isCancelToTrial) {
+      await stripe.subscriptions.update(org.stripe_subscription_id, {
         cancel_at_period_end: true,
       })
 
-      // Salvar pending state
+      const periodEnd = new Date(subscription.current_period_end * 1000).toISOString()
       await supabase.from('organizations').update({
         pending_plan: 'trial',
-        current_period_end: new Date((subscription.current_period_end) * 1000).toISOString(),
+        current_period_end: periodEnd,
         cancel_at_period_end: true,
       }).eq('id', orgId)
 
       return NextResponse.json({
         success: true,
         pendingPlan: 'trial',
-        effectiveDate: new Date((subscription.current_period_end) * 1000).toISOString(),
+        effectiveDate: periodEnd,
+        message: `Sua assinatura será cancelada em ${new Date(periodEnd).toLocaleDateString('pt-BR')}. Até lá, você mantém o plano ${currentPlan}.`,
       })
     }
 
-    // Upgrade ou downgrade entre planos pagos
-    const newPriceId = config.stripePriceId
+    // Buscar price e item da subscription atual
+    const newPriceId = targetConfig.stripePriceId
     if (!newPriceId) {
-      return NextResponse.json({ error: `Plano '${newPlan}' nao tem priceId configurado` }, { status: 400 })
+      return NextResponse.json({ error: `Plano '${newPlan}' não tem preço configurado no Stripe` }, { status: 400 })
     }
 
-    const currentItemId = subscription.items.data[0]?.id
+    const currentItemId = subscription.items?.data?.[0]?.id
     if (!currentItemId) {
-      return NextResponse.json({ error: 'Subscription sem items' }, { status: 500 })
+      return NextResponse.json({ error: 'Subscription sem itens — contate o suporte' }, { status: 500 })
     }
 
+    // === UPGRADE (imediato com proration) ===
     if (isUpgrade) {
-      // Upgrade imediato com proration
-      const updated = await stripe.subscriptions.update(org.stripe_subscription_id!, {
+      const updated = await stripe.subscriptions.update(org.stripe_subscription_id, {
         items: [{ id: currentItemId, price: newPriceId }],
         proration_behavior: 'create_prorations',
       })
 
-      // Aplicar plano imediatamente
-      await updateOrgPlan(orgId, newPlan, {
+      await updateOrgPlan(orgId, newPlan as string, {
         stripe_subscription_id: updated.id,
         trial_ends_at: null,
         pending_plan: null,
         cancel_at_period_end: false,
       })
 
-      return NextResponse.json({ success: true, applied: true })
-    } else {
-      // Downgrade: agendar para fim do periodo
-      // Stripe aplica a mudanca no proximo ciclo de billing
-      await stripe.subscriptions.update(org.stripe_subscription_id!, {
-        items: [{ id: currentItemId, price: newPriceId }],
-        proration_behavior: 'none', // sem proration — cobra o novo preco so no proximo ciclo
-      })
-
-      // Salvar pending state (o plano ja foi trocado no Stripe, mas mostramos aviso)
-      const periodEnd = new Date((subscription.current_period_end) * 1000).toISOString()
-      await supabase.from('organizations').update({
-        pending_plan: newPlan,
-        current_period_end: periodEnd,
-      }).eq('id', orgId)
-
       return NextResponse.json({
         success: true,
-        pendingPlan: newPlan,
-        effectiveDate: periodEnd,
+        applied: true,
+        message: `Plano atualizado para ${targetConfig.name}! As novas features já estão disponíveis.`,
       })
     }
+
+    // === DOWNGRADE (agenda para fim do período) ===
+    await stripe.subscriptions.update(org.stripe_subscription_id, {
+      items: [{ id: currentItemId, price: newPriceId }],
+      proration_behavior: 'none',
+    })
+
+    const periodEnd = new Date(subscription.current_period_end * 1000).toISOString()
+    await supabase.from('organizations').update({
+      pending_plan: newPlan,
+      current_period_end: periodEnd,
+    }).eq('id', orgId)
+
+    return NextResponse.json({
+      success: true,
+      pendingPlan: newPlan,
+      effectiveDate: periodEnd,
+      message: `Downgrade agendado para ${new Date(periodEnd).toLocaleDateString('pt-BR')}. Você mantém o plano ${currentPlan} até lá.`,
+    })
   } catch (err) {
     console.error('[ChangePlan] Erro:', err)
     return NextResponse.json({
-      error: err instanceof Error ? err.message : 'Erro interno',
+      error: err instanceof Error ? err.message : 'Erro interno ao processar mudança de plano',
     }, { status: 500 })
   }
 }

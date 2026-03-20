@@ -295,6 +295,22 @@ export default function BillingPage() {
           })}
         </div>
 
+        {/* Cancelar assinatura (voltar para trial) */}
+        {currentPlan !== 'trial' && org?.stripe_subscription_id && !org?.cancel_at_period_end && (
+          <div className="mt-8 p-4 bg-surface border border-subtle rounded-xl flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-secondary">Cancelar assinatura</p>
+              <p className="text-xs text-muted mt-0.5">Voltar para o plano Trial gratuito no fim do período atual.</p>
+            </div>
+            <button
+              onClick={() => setDowngradePlan('trial' as Plan)}
+              className="px-4 py-2 text-sm text-error border border-error/30 rounded-xl hover:bg-error/10 transition-colors"
+            >
+              Cancelar assinatura
+            </button>
+          </div>
+        )}
+
         {/* Info de teste */}
         <div className="mt-8 p-4 bg-surface border border-subtle rounded-xl text-xs text-muted">
           <p className="font-semibold mb-1">Modo de Teste (Sandbox)</p>
