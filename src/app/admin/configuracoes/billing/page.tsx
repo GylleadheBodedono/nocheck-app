@@ -58,12 +58,21 @@ export default function BillingPage() {
     if (!orgId) { setLoading(false); return }
 
     const [orgRes, usersRes, storesRes] = await Promise.all([
-      sb.from('organizations').select('id, name, plan, stripe_customer_id, stripe_subscription_id, trial_ends_at, features, max_users, max_stores, pending_plan, current_period_end, cancel_at_period_end').eq('id', orgId).single(),
+      sb.rpc('get_org_billing', { p_org_id: orgId }),
       sb.from('users').select('id', { count: 'exact', head: true }).eq('tenant_id', orgId).eq('is_active', true),
       sb.from('stores').select('id', { count: 'exact', head: true }).eq('tenant_id', orgId),
     ])
 
-    if (orgRes.data) setOrg(orgRes.data as OrgBilling)
+    if (orgRes.data && orgRes.data.length > 0) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const raw = orgRes.data[0] as any
+      setOrg({
+        ...raw,
+        pending_plan: raw.pending_plan ?? null,
+        current_period_end: raw.current_period_end ?? null,
+        cancel_at_period_end: raw.cancel_at_period_end ?? false,
+      } as OrgBilling)
+    }
     setUsage({
       currentUsers: usersRes.count || 0,
       currentStores: storesRes.count || 0,
@@ -95,6 +104,7 @@ export default function BillingPage() {
 
   const trialDays = org?.trial_ends_at ? getTrialDaysRemaining(org.trial_ends_at) : 0
   const currentPlan = (org?.plan || 'trial') as Plan
+  console.log('[Billing] currentPlan:', currentPlan, 'org:', org?.plan, 'selectedPlan:', selectedPlan)
 
   const featureLabels: Record<string, string> = {
     basic_orders: 'Checklists ilimitados',
@@ -275,7 +285,7 @@ export default function BillingPage() {
                     Fazer Downgrade
                   </button>
                 ) : (
-                  <button onClick={() => setSelectedPlan(plan)}
+                  <button onClick={() => { console.log('[Billing] Upgrade clicked:', plan); setSelectedPlan(plan) }}
                     className="w-full py-2.5 btn-primary rounded-xl text-sm">
                     Fazer Upgrade
                   </button>
