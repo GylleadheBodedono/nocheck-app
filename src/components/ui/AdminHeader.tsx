@@ -19,19 +19,19 @@ const TITLES: Record<string, string> = {
   '/admin': 'Painel Admin',
   '/admin/checklists': 'Checklists',
   '/admin/lojas': 'Lojas',
-  '/admin/usuarios': 'Usuarios',
-  '/admin/usuarios/novo': 'Novo Usuario',
+  '/admin/usuarios': 'Usuários',
+  '/admin/usuarios/novo': 'Novo Usuário',
   '/admin/templates': 'Templates',
   '/admin/templates/novo': 'Novo Template',
   '/admin/setores': 'Setores',
-  '/admin/funcoes': 'Funcoes',
-  '/admin/validacoes': 'Validacoes',
+  '/admin/funcoes': 'Funções',
+  '/admin/validacoes': 'Validações',
   '/admin/galeria': 'Galeria',
-  '/admin/configuracoes': 'Configuracoes',
-  '/admin/relatorios': 'Relatorios',
+  '/admin/configuracoes': 'Configurações',
+  '/admin/relatorios': 'Relatórios',
   '/admin/relatorios/fotos-nc': 'Fotos NC',
-  '/admin/relatorios/planos-de-acao': 'Relatorio Planos',
-  '/admin/planos-de-acao': 'Planos de Acao',
+  '/admin/relatorios/planos-de-acao': 'Relatório Planos',
+  '/admin/planos-de-acao': 'Planos de Ação',
   '/admin/planos-de-acao/novo': 'Novo Plano',
   '/admin/planos-de-acao/modelos': 'Modelos',
 }
@@ -152,7 +152,7 @@ export function AdminHeader({ children }: Props) {
 
       {/* Center: GlobalSearch (desktop only) */}
       <div className="flex-1 max-w-xl hidden md:block">
-        <GlobalSearch placeholder="Buscar modulos, relatorios, usuarios..." />
+        <GlobalSearch placeholder="Buscar módulos, relatórios, usuários..." />
       </div>
 
       {/* Right: actions */}
@@ -162,7 +162,7 @@ export function AdminHeader({ children }: Props) {
           <button
             onClick={() => setNotifOpen(!notifOpen)}
             className="p-2 text-muted hover:text-main hover:bg-surface-hover rounded-xl transition-colors relative"
-            title="Notificacoes"
+            title="Notificações"
           >
             <FiBell className="w-5 h-5" />
             {unreadCount > 0 && (
@@ -175,7 +175,7 @@ export function AdminHeader({ children }: Props) {
           {notifOpen && (
             <div className="fixed sm:absolute left-4 right-4 sm:left-auto sm:right-0 top-16 sm:top-full sm:mt-2 sm:w-96 rounded-xl border border-subtle shadow-theme-lg bg-surface z-50 overflow-hidden">
               <div className="flex items-center justify-between px-4 py-3 border-b border-subtle">
-                <h3 className="text-sm font-semibold text-main">Notificacoes</h3>
+                <h3 className="text-sm font-semibold text-main">Notificações</h3>
                 <div className="flex items-center gap-2">
                   {unreadCount > 0 && (
                     <button
@@ -201,7 +201,7 @@ export function AdminHeader({ children }: Props) {
                 {notifications.length === 0 ? (
                   <div className="px-4 py-8 text-center">
                     <FiBell className="w-8 h-8 text-muted mx-auto mb-2" />
-                    <p className="text-sm text-muted">Nenhuma notificacao</p>
+                    <p className="text-sm text-muted">Nenhuma notificação</p>
                   </div>
                 ) : (
                   notifications.map((notif: AppNotification) => {
@@ -252,7 +252,7 @@ export function AdminHeader({ children }: Props) {
                           }}
                           onKeyDown={(e) => { if (e.key === 'Enter') { e.stopPropagation(); deleteNotification(notif.id) } }}
                           className="shrink-0 p-1 text-muted hover:text-error rounded transition-colors opacity-0 group-hover:opacity-100 sm:opacity-100"
-                          title="Excluir notificacao"
+                          title="Excluir notificação"
                         >
                           <FiX className="w-3.5 h-3.5" />
                         </span>

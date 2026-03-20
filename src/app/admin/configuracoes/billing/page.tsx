@@ -1,5 +1,5 @@
 // ============================================
-// Billing — Pagina de assinatura e upgrade
+// Billing — Página de assinatura e upgrade
 // ============================================
 
 'use client'
@@ -29,7 +29,7 @@ type UsageStats = {
 }
 
 const PLAN_LABELS: Record<string, string> = {
-  trial: 'Trial (Gratis)', starter: 'Starter', professional: 'Professional', enterprise: 'Enterprise',
+  trial: 'Trial (Grátis)', starter: 'Starter', professional: 'Professional', enterprise: 'Enterprise',
 }
 
 export default function BillingPage() {
@@ -80,7 +80,8 @@ export default function BillingPage() {
       if (url) window.location.href = url
     } catch (err) {
       console.error('[Billing] Erro portal:', err)
-      alert('Erro ao abrir portal. Voce precisa ter uma assinatura ativa.')
+      const msg = err instanceof Error ? err.message : 'Erro desconhecido'
+      alert(`Não foi possível abrir o gerenciamento de assinatura: ${msg}`)
     }
   }
 
@@ -97,19 +98,19 @@ export default function BillingPage() {
 
   const featureLabels: Record<string, string> = {
     basic_orders: 'Checklists ilimitados',
-    basic_reports: 'Relatorios basicos',
-    cancellations: 'Gestao de nao-conformidades',
+    basic_reports: 'Relatórios básicos',
+    cancellations: 'Gestão de não-conformidades',
     kpi_dashboard: 'Painel de indicadores (KPI)',
-    bi_dashboard: 'Dashboard avancado de BI',
+    bi_dashboard: 'Dashboard avançado de BI',
     export_excel: 'Exportar para Excel',
     export_pdf: 'Exportar para PDF',
-    integrations_ifood: 'Integracao com iFood',
-    integrations_teknisa: 'Integracao com Teknisa',
+    integrations_ifood: 'Integração com iFood',
+    integrations_teknisa: 'Integração com Teknisa',
     white_label: 'Sua marca personalizada',
     api_access: 'Acesso a API',
-    custom_domain: 'Dominio personalizado',
+    custom_domain: 'Domínio personalizado',
     audit_logs: 'Registro de auditoria',
-    advanced_analytics: 'Analises avancadas',
+    advanced_analytics: 'Análises avançadas',
   }
 
   const planIcons: Record<string, React.ReactNode> = {
@@ -143,7 +144,7 @@ export default function BillingPage() {
         )}
         {billingStatus === 'cancelled' && (
           <div className="p-4 bg-warning/10 border border-warning/30 rounded-xl mb-6 text-warning text-sm">
-            Checkout cancelado. Nenhuma cobranca foi feita.
+            Checkout cancelado. Nenhuma cobrança foi feita.
           </div>
         )}
 
@@ -175,7 +176,7 @@ export default function BillingPage() {
           return (
           <div className="grid grid-cols-2 gap-4 mb-8">
             <div className="card p-4">
-              <p className="text-xs text-muted uppercase tracking-wider mb-1">Usuarios</p>
+              <p className="text-xs text-muted uppercase tracking-wider mb-1">Usuários</p>
               <p className="text-2xl font-bold text-main">
                 {usage.currentUsers} <span className="text-base font-normal text-muted">/ {maxUsers}</span>
               </p>
@@ -206,18 +207,18 @@ export default function BillingPage() {
           )
         })()}
 
-        {/* Banner de mudanca pendente */}
+        {/* Banner de mudança pendente */}
         {org?.pending_plan && (
           <div className="mb-6 p-4 bg-warning/10 border border-warning/20 rounded-xl flex items-start gap-3">
             <FiStar className="w-5 h-5 text-warning shrink-0 mt-0.5" />
             <div className="flex-1">
               <p className="text-sm font-medium text-warning">
-                Mudanca de plano agendada
+                Mudança de plano agendada
               </p>
               <p className="text-sm text-secondary mt-1">
-                Seu plano mudara de <strong>{PLAN_LABELS[currentPlan] || currentPlan}</strong> para <strong>{PLAN_LABELS[org.pending_plan] || org.pending_plan}</strong>
+                Seu plano mudará de <strong>{PLAN_LABELS[currentPlan] || currentPlan}</strong> para <strong>{PLAN_LABELS[org.pending_plan] || org.pending_plan}</strong>
                 {org.current_period_end && ` em ${new Date(org.current_period_end).toLocaleDateString('pt-BR')}`}.
-                Ate la, voce mantera todas as features do plano atual.
+                Até lá, você manterá todas as features do plano atual.
               </p>
             </div>
           </div>
@@ -245,12 +246,12 @@ export default function BillingPage() {
 
                 <div className="mb-4">
                   <span className="text-3xl font-bold text-main">R$ {config.price}</span>
-                  <span className="text-sm text-muted">/mes</span>
+                  <span className="text-sm text-muted">/mês</span>
                 </div>
 
                 <div className="mb-6 text-xs text-muted">
-                  <p>Ate {config.maxUsers} usuarios</p>
-                  <p>Ate {config.maxStores} lojas</p>
+                  <p>Até {config.maxUsers} usuários</p>
+                  <p>Até {config.maxStores} lojas</p>
                 </div>
 
                 <ul className="space-y-2 mb-6">
@@ -287,7 +288,7 @@ export default function BillingPage() {
         {/* Info de teste */}
         <div className="mt-8 p-4 bg-surface border border-subtle rounded-xl text-xs text-muted">
           <p className="font-semibold mb-1">Modo de Teste (Sandbox)</p>
-          <p>Use o cartao <code className="bg-surface-hover px-1 rounded">4242 4242 4242 4242</code> com qualquer data futura e CVC para testar pagamentos.</p>
+          <p>Use o cartão <code className="bg-surface-hover px-1 rounded">4242 4242 4242 4242</code> com qualquer data futura e CVC para testar pagamentos.</p>
         </div>
       </div>
 

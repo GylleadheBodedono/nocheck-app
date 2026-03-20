@@ -113,19 +113,19 @@ const BRAND_ICONS: Record<string, React.FC<{ className?: string }>> = {
 
 const FEATURE_LABELS: Record<string, string> = {
   basic_orders: 'Checklists ilimitados',
-  basic_reports: 'Relatorios basicos',
-  cancellations: 'Gestao de nao-conformidades',
+  basic_reports: 'Relatórios básicos',
+  cancellations: 'Gestão de não-conformidades',
   kpi_dashboard: 'Painel de indicadores (KPI)',
-  bi_dashboard: 'Dashboard avancado de BI',
+  bi_dashboard: 'Dashboard avançado de BI',
   export_excel: 'Exportar para Excel',
   export_pdf: 'Exportar para PDF',
-  integrations_ifood: 'Integracao com iFood',
-  integrations_teknisa: 'Integracao com Teknisa',
+  integrations_ifood: 'Integração com iFood',
+  integrations_teknisa: 'Integração com Teknisa',
   white_label: 'Sua marca personalizada',
   api_access: 'Acesso a API',
-  custom_domain: 'Dominio personalizado',
+  custom_domain: 'Domínio personalizado',
   audit_logs: 'Registro de auditoria',
-  advanced_analytics: 'Analises avancadas',
+  advanced_analytics: 'Análises avançadas',
 }
 
 type Props = {
@@ -169,8 +169,8 @@ function PaymentForm({ plan, orgId, onSuccess, onClose }: Omit<Props, 'isOpen' |
   if (!stripe && stripeTimeout) {
     return (
       <div className="text-center py-8">
-        <p className="text-muted">Processador de pagamento nao disponivel.</p>
-        <p className="text-xs text-muted mt-2">Verifique a configuracao do Stripe (NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY).</p>
+        <p className="text-muted">Processador de pagamento não disponível.</p>
+        <p className="text-xs text-muted mt-2">Verifique a configuração do Stripe (NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY).</p>
       </div>
     )
   }
@@ -196,7 +196,7 @@ function PaymentForm({ plan, orgId, onSuccess, onClose }: Omit<Props, 'isOpen' |
 
     const cardNumber = elements.getElement(CardNumberElement)
     if (!cardNumber) {
-      setError('Erro ao carregar formulario')
+      setError('Erro ao carregar formulário')
       setProcessing(false)
       return
     }
@@ -209,7 +209,7 @@ function PaymentForm({ plan, orgId, onSuccess, onClose }: Omit<Props, 'isOpen' |
     })
 
     if (pmError) {
-      setError(pmError.message || 'Erro ao processar cartao')
+      setError(pmError.message || 'Erro ao processar cartão')
       setProcessing(false)
       return
     }
@@ -232,7 +232,7 @@ function PaymentForm({ plan, orgId, onSuccess, onClose }: Omit<Props, 'isOpen' |
         // Handle 3D Secure
         const { error: confirmError } = await stripe.confirmCardPayment(data.client_secret)
         if (confirmError) {
-          setError(confirmError.message || 'Erro na autenticacao 3D Secure')
+          setError(confirmError.message || 'Erro na autenticação 3D Secure')
           setProcessing(false)
           return
         }
@@ -250,7 +250,7 @@ function PaymentForm({ plan, orgId, onSuccess, onClose }: Omit<Props, 'isOpen' |
         onClose()
       }, 2000)
     } catch {
-      setError('Erro de conexao. Tente novamente.')
+      setError('Erro de conexão. Tente novamente.')
     }
 
     setProcessing(false)
@@ -274,11 +274,11 @@ function PaymentForm({ plan, orgId, onSuccess, onClose }: Omit<Props, 'isOpen' |
       <div className="p-4 bg-surface-hover rounded-xl flex items-center justify-between">
         <div>
           <p className="text-sm font-semibold text-main capitalize">{config.name}</p>
-          <p className="text-xs text-muted">Ate {config.maxUsers} usuarios · {config.maxStores} lojas</p>
+          <p className="text-xs text-muted">Até {config.maxUsers} usuários · {config.maxStores} lojas</p>
         </div>
         <div className="text-right">
           <p className="text-2xl font-bold text-main">R$ {config.price}</p>
-          <p className="text-xs text-muted">/mes</p>
+          <p className="text-xs text-muted">/mês</p>
         </div>
       </div>
 
@@ -292,7 +292,7 @@ function PaymentForm({ plan, orgId, onSuccess, onClose }: Omit<Props, 'isOpen' |
                 ? 'bg-accent text-white'
                 : 'bg-surface border border-subtle text-muted hover:text-main'
             }`}>
-            Credito
+            Crédito
           </button>
           <button type="button" onClick={() => setPaymentType('debit')}
             className={`flex-1 py-2.5 rounded-xl text-sm font-medium transition-all ${
@@ -300,26 +300,26 @@ function PaymentForm({ plan, orgId, onSuccess, onClose }: Omit<Props, 'isOpen' |
                 ? 'bg-accent text-white'
                 : 'bg-surface border border-subtle text-muted hover:text-main'
             }`}>
-            Debito
+            Débito
           </button>
         </div>
       </div>
 
       {/* Card holder name */}
       <div>
-        <label className="text-xs text-muted font-medium block mb-2">Nome no cartao</label>
+        <label className="text-xs text-muted font-medium block mb-2">Nome no cartão</label>
         <input
           type="text"
           value={holderName}
           onChange={e => setHolderName(e.target.value)}
-          placeholder="Como esta impresso no cartao"
+          placeholder="Como está impresso no cartão"
           className="w-full px-4 py-3 bg-surface border border-subtle rounded-xl text-sm text-main placeholder-muted focus:outline-none focus:ring-2 focus:ring-accent"
         />
       </div>
 
       {/* Card number with brand detection */}
       <div>
-        <label className="text-xs text-muted font-medium block mb-2">Numero do cartao</label>
+        <label className="text-xs text-muted font-medium block mb-2">Número do cartão</label>
         <div className="relative">
           <div className="w-full px-4 py-3 bg-surface border border-subtle rounded-xl focus-within:ring-2 focus-within:ring-accent">
             <CardNumberElement
@@ -375,7 +375,7 @@ function PaymentForm({ plan, orgId, onSuccess, onClose }: Omit<Props, 'isOpen' |
         ) : (
           <>
             <FiLock className="w-4 h-4" />
-            Pagar R$ {config.price}/mes
+            Pagar R$ {config.price}/mês
           </>
         )}
       </button>
@@ -383,7 +383,7 @@ function PaymentForm({ plan, orgId, onSuccess, onClose }: Omit<Props, 'isOpen' |
       {/* Security info */}
       <div className="flex items-center justify-center gap-2 text-[10px] text-muted">
         <FiLock className="w-3 h-3" />
-        <span>Pagamento seguro processado pelo Stripe. Seus dados estao protegidos.</span>
+        <span>Pagamento seguro processado pelo Stripe. Seus dados estão protegidos.</span>
       </div>
     </form>
   )
@@ -402,7 +402,7 @@ export function PaymentModal({ isOpen, onClose, plan, orgId, currentPlan, onSucc
         {/* Left: what you get */}
         <div className="md:col-span-2 space-y-4">
           <div>
-            <h3 className="text-sm font-semibold text-main mb-3">O que voce ganha</h3>
+            <h3 className="text-sm font-semibold text-main mb-3">O que você ganha</h3>
             <ul className="space-y-2">
               {newFeatures.map(f => (
                 <li key={f} className="flex items-center gap-2 text-xs text-secondary">
@@ -413,13 +413,13 @@ export function PaymentModal({ isOpen, onClose, plan, orgId, currentPlan, onSucc
               {config.maxUsers > currentConfig.maxUsers && (
                 <li className="flex items-center gap-2 text-xs text-secondary">
                   <FiCheck className="w-3.5 h-3.5 text-success shrink-0" />
-                  <span>Ate {config.maxUsers} usuarios (era {currentConfig.maxUsers})</span>
+                  <span>Até {config.maxUsers} usuários (era {currentConfig.maxUsers})</span>
                 </li>
               )}
               {config.maxStores > currentConfig.maxStores && (
                 <li className="flex items-center gap-2 text-xs text-secondary">
                   <FiCheck className="w-3.5 h-3.5 text-success shrink-0" />
-                  <span>Ate {config.maxStores} lojas (era {currentConfig.maxStores})</span>
+                  <span>Até {config.maxStores} lojas (era {currentConfig.maxStores})</span>
                 </li>
               )}
             </ul>

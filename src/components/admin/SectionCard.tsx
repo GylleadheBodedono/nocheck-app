@@ -201,7 +201,7 @@ export function SectionCard({
         {sections.length === 0 && looseFields.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-8 px-4 text-center">
             <p className="text-sm text-muted">
-              Nenhuma etapa ou campo. Adicione uma etapa ou campo para comecar.
+              Nenhuma etapa ou campo. Adicione uma etapa ou campo para começar.
             </p>
           </div>
         ) : (

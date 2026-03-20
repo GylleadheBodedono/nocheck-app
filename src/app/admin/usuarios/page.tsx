@@ -322,7 +322,7 @@ export default function UsuariosPage() {
           <div className="bg-warning/10 border border-warning/30 rounded-xl p-4 mb-6 flex items-center gap-3">
             <FiWifiOff className="w-5 h-5 text-warning" />
             <p className="text-warning text-sm">
-              Voce esta offline. Os dados mostrados sao do cache local. Edicoes nao estao disponiveis.
+              Você está offline. Os dados mostrados são do cache local. Edições não estão disponíveis.
             </p>
           </div>
         )}
@@ -394,7 +394,7 @@ export default function UsuariosPage() {
                 <tr className="border-b border-subtle">
                   <th className="px-6 py-4 text-left text-sm font-semibold text-secondary">Usuario</th>
                   <th className="px-6 py-4 text-left text-sm font-semibold text-secondary">Loja</th>
-                  <th className="px-6 py-4 text-left text-sm font-semibold text-secondary">Funcao</th>
+                  <th className="px-6 py-4 text-left text-sm font-semibold text-secondary">Função</th>
                   <th className="px-6 py-4 text-left text-sm font-semibold text-secondary">Setor</th>
                   <th className="px-6 py-4 text-left text-sm font-semibold text-secondary">Tipo</th>
                   <th className="px-6 py-4 text-right text-sm font-semibold text-secondary">Acoes</th>

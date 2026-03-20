@@ -1316,7 +1316,7 @@ function ChecklistForm() {
         if (value === undefined || value === null || value === '' || (Array.isArray(value) && value.length === 0)) {
           return true
         }
-        // Texto obrigatorio: minimo 3 caracteres reais
+        // Texto obrigatório: minimo 3 caracteres reais
         if (field.field_type === 'text' && typeof value === 'string' && value.trim().length < 3) {
           return true
         }
@@ -1530,7 +1530,7 @@ function ChecklistForm() {
         // Campo is_required sem valor
         if (field.is_required) {
           if (v === undefined || v === null || v === '' || (Array.isArray(v) && v.length === 0)) return false
-          // Texto obrigatorio: minimo 3 caracteres reais
+          // Texto obrigatório: minimo 3 caracteres reais
           if (field.field_type === 'text' && typeof v === 'string' && v.trim().length < 3) return false
         }
 
@@ -2183,7 +2183,7 @@ function ChecklistForm() {
                     rows={3}
                   />
                   {!justifications[field.id]?.trim() && (
-                    <p className="text-xs text-error mt-1">Justificativa obrigatoria</p>
+                    <p className="text-xs text-error mt-1">Justificativa obrigatória</p>
                   )}
                 </div>
               )
@@ -2668,7 +2668,7 @@ function ChecklistForm() {
                   }}
                   className="w-full px-3 py-2 bg-surface border border-subtle rounded-xl text-main text-sm focus:outline-none focus:ring-2 focus:ring-primary"
                 >
-                  <option value="yes_no">Sim / Nao / N/A</option>
+                  <option value="yes_no">Sim / Não / N/A</option>
                   <option value="text">Texto</option>
                   <option value="number">Numero</option>
                   <option value="photo">Foto</option>
@@ -2679,11 +2679,11 @@ function ChecklistForm() {
                 </select>
               </div>
 
-              {/* Campo obrigatorio */}
+              {/* Campo obrigatório */}
               <label className="flex items-center gap-2 text-sm text-secondary cursor-pointer">
                 <input type="checkbox" checked={newFieldRequired} onChange={e => setNewFieldRequired(e.target.checked)}
                   className="w-4 h-4 rounded border-subtle text-primary focus:ring-primary" />
-                Campo obrigatorio
+                Campo obrigatório
               </label>
 
               {/* Condicoes para yes_no */}
@@ -2706,7 +2706,7 @@ function ChecklistForm() {
                       <label className="flex items-center gap-2 text-sm text-secondary cursor-pointer ml-6">
                         <input type="checkbox" checked={newFieldOnNo.textFieldRequired} onChange={e => setNewFieldOnNo(prev => ({ ...prev, textFieldRequired: e.target.checked }))}
                           className="w-4 h-4 rounded border-subtle text-primary focus:ring-primary" />
-                        Texto obrigatorio
+                        Texto obrigatório
                       </label>
                     )}
                     <label className="flex items-center gap-2 text-sm text-secondary cursor-pointer">
@@ -2724,7 +2724,7 @@ function ChecklistForm() {
                     <label className="flex items-center gap-2 text-sm text-secondary cursor-pointer">
                       <input type="checkbox" checked={newFieldOnNo.allowUserActionPlan} onChange={e => setNewFieldOnNo(prev => ({ ...prev, allowUserActionPlan: e.target.checked }))}
                         className="w-4 h-4 rounded border-subtle text-primary focus:ring-primary" />
-                      Permitir preenchedor escolher responsavel
+                      Permitir preenchedor escolher responsável
                     </label>
                   </div>
                 </div>
@@ -2991,7 +2991,7 @@ function ChecklistForm() {
                 }}
                 className="w-full px-3 py-2 bg-surface border border-subtle rounded-xl text-main text-sm focus:outline-none focus:ring-2 focus:ring-primary"
               >
-                <option value="yes_no">Sim / Nao / N/A</option>
+                <option value="yes_no">Sim / Não / N/A</option>
                 <option value="text">Texto</option>
                 <option value="number">Numero</option>
                 <option value="photo">Foto</option>
@@ -3002,11 +3002,11 @@ function ChecklistForm() {
               </select>
             </div>
 
-            {/* Campo obrigatorio */}
+            {/* Campo obrigatório */}
             <label className="flex items-center gap-2 text-sm text-secondary cursor-pointer">
               <input type="checkbox" checked={newFieldRequired} onChange={e => setNewFieldRequired(e.target.checked)}
                 className="w-4 h-4 rounded border-subtle text-primary focus:ring-primary" />
-              Campo obrigatorio
+              Campo obrigatório
             </label>
 
             {/* Condicoes para yes_no */}
@@ -3029,7 +3029,7 @@ function ChecklistForm() {
                     <label className="flex items-center gap-2 text-sm text-secondary cursor-pointer ml-6">
                       <input type="checkbox" checked={newFieldOnNo.textFieldRequired} onChange={e => setNewFieldOnNo(prev => ({ ...prev, textFieldRequired: e.target.checked }))}
                         className="w-4 h-4 rounded border-subtle text-primary focus:ring-primary" />
-                      Texto obrigatorio
+                      Texto obrigatório
                     </label>
                   )}
                   <label className="flex items-center gap-2 text-sm text-secondary cursor-pointer">
@@ -3047,7 +3047,7 @@ function ChecklistForm() {
                   <label className="flex items-center gap-2 text-sm text-secondary cursor-pointer">
                     <input type="checkbox" checked={newFieldOnNo.allowUserActionPlan} onChange={e => setNewFieldOnNo(prev => ({ ...prev, allowUserActionPlan: e.target.checked }))}
                       className="w-4 h-4 rounded border-subtle text-primary focus:ring-primary" />
-                    Permitir preenchedor escolher responsavel
+                    Permitir preenchedor escolher responsável
                   </label>
                 </div>
               </div>

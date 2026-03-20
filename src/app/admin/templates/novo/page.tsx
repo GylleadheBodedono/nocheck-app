@@ -840,7 +840,7 @@ export default function NovoTemplatePage() {
           {/* RIGHT COLUMN: Funcoes + Config */}
           <div className="flex flex-col gap-4">
             <NodeCard
-              title="Funcoes"
+              title="Funções"
               icon={<FiBriefcase />}
               items={functions.map(f => ({
                 id: f.id,
@@ -855,7 +855,7 @@ export default function NovoTemplatePage() {
               onHeaderClick={() => setShowFunctionModal(true)}
             />
             <NodeCard
-              title="Configuracoes"
+              title="Configurações"
               icon={<FiSettings />}
               items={[
                 { id: 'desc', label: description || 'Sem descricao' },
@@ -904,7 +904,7 @@ export default function NovoTemplatePage() {
       {/* ─── Existing Modals (Sector/Function) ──────────────────────────── */}
       <Modal isOpen={showSectorModal} onClose={() => setShowSectorModal(false)} title="Visibilidade por Setor" size="lg">
         <p className="text-sm text-muted mb-4">
-          Selecione em quais setores este checklist estara disponivel.
+          Selecione em quais setores este checklist estará disponível.
           Apenas usuarios dos setores selecionados poderao preencher.
         </p>
 
@@ -995,7 +995,7 @@ export default function NovoTemplatePage() {
 
       <Modal isOpen={showFunctionModal} onClose={() => setShowFunctionModal(false)} title="Restringir por Funcao" size="md">
         <p className="text-sm text-muted mb-4">
-          Se nenhuma funcao for selecionada, o checklist estara disponivel para todas as funcoes.
+          Se nenhuma função for selecionada, o checklist estará disponível para todas as funções.
         </p>
 
         <div className="flex flex-wrap gap-2">
@@ -1060,12 +1060,12 @@ export default function NovoTemplatePage() {
       </Modal>
 
       {/* Config Modal */}
-      <Modal isOpen={showConfigModal} onClose={() => setShowConfigModal(false)} title="Configuracoes do Template" size="md">
+      <Modal isOpen={showConfigModal} onClose={() => setShowConfigModal(false)} title="Configurações do Template" size="md">
         <div className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-secondary mb-1">Descricao</label>
+            <label className="block text-sm font-medium text-secondary mb-1">Descrição</label>
             <textarea value={description} onChange={e => setDescription(e.target.value)}
-              className="input min-h-[60px]" placeholder="Descricao do template (opcional)" rows={2} />
+              className="input min-h-[60px]" placeholder="Descrição do template (opcional)" rows={2} />
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>

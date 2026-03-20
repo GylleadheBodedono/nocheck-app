@@ -58,7 +58,7 @@ export default function PlanoDeAcaoPage() {
   const [stores, setStores] = useState<FilterStore[]>([])
   const [users, setUsers] = useState<FilterUser[]>([])
 
-  // Pagination
+  // Págination
   const [page, setPage] = useState(1)
   const perPage = 20
 
@@ -260,7 +260,7 @@ export default function PlanoDeAcaoPage() {
     })
   }, [actionPlans, filterStatus, filterSeverity, filterStore, filterAssignee])
 
-  // Pagination
+  // Págination
   const totalPages = Math.ceil(filteredPlans.length / perPage)
   const paginatedPlans = filteredPlans.slice((page - 1) * perPage, page * perPage)
 
@@ -290,7 +290,7 @@ export default function PlanoDeAcaoPage() {
 
   const handleBulkDelete = async () => {
     if (selectedIds.size === 0) return
-    if (!confirm(`Tem certeza que deseja EXCLUIR ${selectedIds.size} plano(s) de acao? Esta acao e irreversivel.`)) return
+    if (!confirm(`Tem certeza que deseja EXCLUIR ${selectedIds.size} plano(s) de acao? Esta ação é irreversível.`)) return
 
     setDeleting(true)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -326,8 +326,8 @@ export default function PlanoDeAcaoPage() {
 
   const handleDeleteAll = async () => {
     if (actionPlans.length === 0) return
-    if (!confirm(`Tem certeza que deseja EXCLUIR TODOS os ${actionPlans.length} plano(s) de acao? Esta acao e irreversivel.`)) return
-    if (!confirm('Confirme novamente: TODOS os planos de acao e seus dados relacionados serao excluidos permanentemente.')) return
+    if (!confirm(`Tem certeza que deseja EXCLUIR TODOS os ${actionPlans.length} plano(s) de acao? Esta ação é irreversível.`)) return
+    if (!confirm('Confirme novamente: TODOS os planos de ação e seus dados relacionados serão excluídos permanentemente.')) return
 
     setDeleting(true)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -352,7 +352,7 @@ export default function PlanoDeAcaoPage() {
     const badges: Record<string, { label: string; cls: string }> = {
       aberto: { label: 'Aberto', cls: 'bg-warning/20 text-warning' },
       em_andamento: { label: 'Em Andamento', cls: 'bg-info/20 text-info' },
-      concluido: { label: 'Concluido', cls: 'bg-success/20 text-success' },
+      concluido: { label: 'Concluído', cls: 'bg-success/20 text-success' },
       vencido: { label: 'Vencido', cls: 'bg-error/20 text-error' },
       cancelado: { label: 'Cancelado', cls: 'bg-surface-hover text-muted' },
     }
@@ -362,9 +362,9 @@ export default function PlanoDeAcaoPage() {
   const getSeverityBadge = (severity: string) => {
     const badges: Record<string, { label: string; cls: string }> = {
       baixa: { label: 'Baixa', cls: 'bg-success/20 text-success' },
-      media: { label: 'Media', cls: 'bg-warning/20 text-warning' },
+      media: { label: 'Média', cls: 'bg-warning/20 text-warning' },
       alta: { label: 'Alta', cls: 'bg-orange-500/20 text-orange-500' },
-      critica: { label: 'Critica', cls: 'bg-error/20 text-error' },
+      critica: { label: 'Crítica', cls: 'bg-error/20 text-error' },
     }
     return badges[severity] || { label: severity, cls: 'bg-surface-hover text-muted' }
   }
@@ -395,7 +395,7 @@ export default function PlanoDeAcaoPage() {
           <div className="bg-warning/10 border border-warning/30 rounded-xl p-4 mb-6 flex items-center gap-3">
             <FiWifiOff className="w-5 h-5 text-warning" />
             <p className="text-warning text-sm">
-              Voce esta offline. Exibindo dados salvos localmente (somente leitura).
+              Você está offline. Exibindo dados salvos localmente (somente leitura).
             </p>
           </div>
         )}
@@ -403,7 +403,7 @@ export default function PlanoDeAcaoPage() {
         {/* Header with New Plan button */}
         <div className="flex items-center justify-between mb-6">
           <h2 className="text-lg font-semibold text-main">
-            {isAdmin ? 'Planos de Acao' : 'Meus Planos de Acao'}
+            {isAdmin ? 'Planos de Ação' : 'Meus Planos de Ação'}
           </h2>
           {isAdmin && (
             <>
@@ -470,7 +470,7 @@ export default function PlanoDeAcaoPage() {
               </div>
               <div>
                 <p className="text-2xl font-bold text-main">{summary.concluidos}</p>
-                <p className="text-xs text-muted">Concluidos</p>
+                <p className="text-xs text-muted">Concluídos</p>
               </div>
             </div>
           </div>
@@ -490,7 +490,7 @@ export default function PlanoDeAcaoPage() {
               options={[
                 { value: 'aberto',       label: 'Aberto' },
                 { value: 'em_andamento', label: 'Em Andamento' },
-                { value: 'concluido',    label: 'Concluido' },
+                { value: 'concluido',    label: 'Concluído' },
                 { value: 'vencido',      label: 'Vencido' },
                 { value: 'cancelado',    label: 'Cancelado' },
               ]}
@@ -502,9 +502,9 @@ export default function PlanoDeAcaoPage() {
               placeholder="Todas as severidades"
               options={[
                 { value: 'baixa',  label: 'Baixa' },
-                { value: 'media',  label: 'Media' },
+                { value: 'media',  label: 'Média' },
                 { value: 'alta',   label: 'Alta' },
-                { value: 'critica', label: 'Critica' },
+                { value: 'critica', label: 'Crítica' },
               ]}
             />
 
@@ -518,7 +518,7 @@ export default function PlanoDeAcaoPage() {
             <Select
               value={filterAssignee}
               onChange={(v) => { setFilterAssignee(v); setPage(1) }}
-              placeholder="Todos os responsaveis"
+              placeholder="Todos os responsáveis"
               options={users.map(u => ({ value: u.full_name, label: u.full_name }))}
             />
           </div>
@@ -577,21 +577,21 @@ export default function PlanoDeAcaoPage() {
                       />
                     </th>
                   )}
-                  <th className="px-4 py-3 text-left text-sm font-medium text-muted">Titulo</th>
+                  <th className="px-4 py-3 text-left text-sm font-medium text-muted">Título</th>
                   <th className="px-4 py-3 text-left text-sm font-medium text-muted">Loja</th>
                   <th className="px-4 py-3 text-left text-sm font-medium text-muted">Severidade</th>
                   <th className="px-4 py-3 text-left text-sm font-medium text-muted">Status</th>
-                  <th className="px-4 py-3 text-left text-sm font-medium text-muted">Responsavel</th>
+                  <th className="px-4 py-3 text-left text-sm font-medium text-muted">Responsável</th>
                   <th className="px-4 py-3 text-left text-sm font-medium text-muted">Prazo</th>
-                  <th className="px-4 py-3 text-left text-sm font-medium text-muted">Reincidencia</th>
-                  <th className="px-4 py-3 text-right text-sm font-medium text-muted">Acoes</th>
+                  <th className="px-4 py-3 text-left text-sm font-medium text-muted">Reincidência</th>
+                  <th className="px-4 py-3 text-right text-sm font-medium text-muted">Ações</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-subtle">
                 {paginatedPlans.length === 0 ? (
                   <tr>
                     <td colSpan={isAdmin ? 9 : 8} className="px-4 py-12 text-center text-muted">
-                      Nenhum plano de acao encontrado
+                      Nenhum plano de ação encontrado
                     </td>
                   </tr>
                 ) : (
@@ -677,11 +677,11 @@ export default function PlanoDeAcaoPage() {
             </table>
           </div>
 
-          {/* Pagination */}
+          {/* Págination */}
           {totalPages > 1 && (
             <div className="flex items-center justify-between px-4 py-3 border-t border-subtle">
               <p className="text-sm text-muted">
-                Pagina {page} de {totalPages}
+                Página {page} de {totalPages}
               </p>
               <div className="flex gap-2">
                 <button

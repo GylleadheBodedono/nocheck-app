@@ -371,7 +371,7 @@ export async function processarNaoConformidades(
               .replace('{field_name}', field.name)
               .replace('{value}', nonConformityValue)
               .replace('{store_name}', storeName)
-          : `Nao conformidade: ${field.name} - ${storeName}`
+          : `Não conformidade: ${field.name} - ${storeName}`
 
       // Severidade: prioridade para a selecionada pelo usuario, depois preset, depois condition
       let severity = (userSelectedSeverity || presetData?.severity || condition.severity) as string
@@ -471,8 +471,8 @@ export async function processarNaoConformidades(
 
       // 7a. Criar notificacao in-app para CADA usuario responsavel
       const notifTitle = reincidencia.isReincidencia
-        ? `Reincidencia #${reincidencia.count + 1}: ${field.name}`
-        : `Novo plano de acao: ${field.name}`
+        ? `Reincidência #${reincidencia.count + 1}: ${field.name}`
+        : `Novo plano de ação: ${field.name}`
 
       console.log(`[ActionPlan] Notificando ${responsibleUsers.length} responsaveis:`, responsibleUsers.map(u => `${u.full_name} (${u.id})`))
       for (const responsible of responsibleUsers) {
@@ -494,11 +494,11 @@ export async function processarNaoConformidades(
       // 7b. Notificar quem respondeu o checklist
       const isFillerAlsoResponsible = responsibleUsers.some(u => u.id === userId)
       if (!isFillerAlsoResponsible) {
-        const assigneeLabel = functionName || responsibleUsers.map(u => u.full_name).join(', ') || 'Nao atribuido'
+        const assigneeLabel = functionName || responsibleUsers.map(u => u.full_name).join(', ') || 'Não atribuído'
         await createNotification(supabase, userId, {
           type: 'action_plan_created',
-          title: `Plano de acao gerado: ${field.name}`,
-          message: `Voce respondeu "${templateName}" e o campo "${field.name}" foi marcado como "${nonConformityValue}". Responsavel: ${assigneeLabel}.`,
+          title: `Plano de ação gerado: ${field.name}`,
+          message: `Você respondeu "${templateName}" e o campo "${field.name}" foi marcado como "${nonConformityValue}". Responsável: ${assigneeLabel}.`,
           link: `/admin/planos-de-acao/${plan.id}`,
           metadata: {
             action_plan_id: plan.id,
@@ -511,7 +511,7 @@ export async function processarNaoConformidades(
 
       // 8. Enviar email para CADA usuario responsavel + Teams
       try {
-        const assigneeLabel = functionName || responsibleUsers.map(u => u.full_name).join(', ') || 'Nao atribuido'
+        const assigneeLabel = functionName || responsibleUsers.map(u => u.full_name).join(', ') || 'Não atribuído'
         const emailVars: EmailTemplateVariables = {
           plan_title: planTitle,
           field_name: field.name,
@@ -585,8 +585,8 @@ export async function processarNaoConformidades(
             if (admin.id === assigneeId) continue
             await createNotification(supabase, admin.id, {
               type: 'reincidencia_detected',
-              title: `Reincidencia #${reincidencia.count + 1}: ${field.name}`,
-              message: `${storeName} - ${nonConformityValue} - Ocorrencia ${reincidencia.count + 1}x nos ultimos 90 dias`,
+              title: `Reincidência #${reincidencia.count + 1}: ${field.name}`,
+              message: `${storeName} - ${nonConformityValue} - Ocorrência ${reincidencia.count + 1}x nos últimos 90 dias`,
               link: `/admin/planos-de-acao/${plan.id}`,
               metadata: {
                 action_plan_id: plan.id,
@@ -649,7 +649,7 @@ export async function checkOverduePlans(
     for (const plan of overduePlans) {
       await createNotification(supabase, plan.assigned_to, {
         type: 'action_plan_overdue',
-        title: 'Plano de acao vencido',
+        title: 'Plano de ação vencido',
         message: `O plano "${plan.title}" venceu em ${new Date(plan.deadline).toLocaleDateString('pt-BR')}`,
         link: `/admin/planos-de-acao/${plan.id}`,
         metadata: { action_plan_id: plan.id },
@@ -659,7 +659,7 @@ export async function checkOverduePlans(
         if (adminId === plan.assigned_to) continue
         await createNotification(supabase, adminId, {
           type: 'action_plan_overdue',
-          title: 'Plano de acao vencido',
+          title: 'Plano de ação vencido',
           message: `O plano "${plan.title}" venceu em ${new Date(plan.deadline).toLocaleDateString('pt-BR')}`,
           link: `/admin/planos-de-acao/${plan.id}`,
           metadata: { action_plan_id: plan.id },
@@ -678,24 +678,24 @@ export async function checkOverduePlans(
           const htmlBody = `
             <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
               <div style="background: #dc2626; color: white; padding: 20px; border-radius: 12px 12px 0 0;">
-                <h2 style="margin: 0;">Plano de Acao Vencido</h2>
+                <h2 style="margin: 0;">Plano de Ação Vencido</h2>
               </div>
               <div style="padding: 24px; background: #1a1a2e; color: #e0e0e0; border-radius: 0 0 12px 12px;">
                 <p style="font-size: 16px; margin-bottom: 16px;">
-                  O plano de acao <strong>"${plan.title}"</strong> venceu em <strong style="color: #ef4444;">${deadlineFormatted}</strong>.
+                  O plano de ação <strong>"${plan.title}"</strong> venceu em <strong style="color: #ef4444;">${deadlineFormatted}</strong>.
                 </p>
                 <p style="font-size: 14px; color: #a0a0a0; margin-bottom: 24px;">
-                  Por favor, acesse o sistema para tomar as providencias necessarias.
+                  Por favor, acesse o sistema para tomar as providências necessárias.
                 </p>
                 <a href="${planUrl}" style="display: inline-block; background: #6366f1; color: white; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: 600;">
-                  Ver Plano de Acao
+                  Ver Plano de Ação
                 </a>
               </div>
             </div>
           `
           await sendActionPlanEmail(
             plan.assigned_to,
-            `Plano de Acao Vencido: "${plan.title}"`,
+            `Plano de Ação Vencido: "${plan.title}"`,
             htmlBody,
             accessToken
           )

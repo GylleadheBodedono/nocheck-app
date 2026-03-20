@@ -1,10 +1,10 @@
 // ============================================
-// CONFIGURACAO CENTRALIZADA DO APP
+// CONFIGURAÇÃO CENTRALIZADA DO APP
 // Altere aqui para mudar em todo o projeto
 // ============================================
 
 export const APP_CONFIG = {
-  // Informacoes do App
+  // Informações do App
   name: 'NoCheck',
   fullName: 'NoCheck - Sistema de Checklists',
   description: 'Sistema de checklists do Grupo Do No',
@@ -45,25 +45,25 @@ export const APP_CONFIG = {
     resetPassword: '/auth/reset-password',
   },
 
-  // Mensagens padrao
+  // Mensagens padrão
   messages: {
     loading: 'Carregando...',
     error: 'Ocorreu um erro. Tente novamente.',
-    noStores: 'Nenhuma loja atribuida',
+    noStores: 'Nenhuma loja atribuída',
     noStoresHint: 'Entre em contato com o administrador para ter acesso a uma loja.',
-    noChecklists: 'Nenhum checklist disponivel para seu cargo nesta loja.',
-    loginRequired: 'Voce precisa estar logado',
+    noChecklists: 'Nenhum checklist disponível para seu cargo nesta loja.',
+    loginRequired: 'Você precisa estar logado',
     checklistSent: 'Checklist Enviado!',
     redirecting: 'Redirecionando...',
     loginError: 'Email ou senha incorretos',
     loginErrorGeneric: 'Erro ao fazer login. Tente novamente.',
     signupSuccess: 'Conta criada! Verifique seu email para confirmar.',
-    passwordResetSent: 'Se existe uma conta com esse email, voce recebera um link para redefinir sua senha.',
-    passwordResetSuccess: 'Senha alterada com sucesso! Faca login com a nova senha.',
+    passwordResetSent: 'Se existe uma conta com esse email, você receberá um link para redefinir sua senha.',
+    passwordResetSuccess: 'Senha alterada com sucesso! Faça login com a nova senha.',
     passwordResetError: 'Erro ao redefinir senha. Tente novamente.',
   },
 
-  // Configuracoes de storage
+  // Configurações de storage
   storage: {
     themeKey: 'nocheck-theme',
   },
@@ -77,7 +77,7 @@ export const APP_CONFIG = {
     { value: 'outros', label: 'Outros' },
   ],
 
-  // Roles de usuarios
+  // Roles de usuários
   userRoles: [
     { value: 'estoquista', label: 'Estoquista' },
     { value: 'aprendiz', label: 'Aprendiz' },

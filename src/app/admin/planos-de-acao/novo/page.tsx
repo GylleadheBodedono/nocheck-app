@@ -139,7 +139,7 @@ export default function NovoPlanoDeAcaoPage() {
     }
 
     if (!assigneeId) {
-      setError('Selecione um responsavel')
+      setError('Selecione um responsável')
       setSaving(false)
       return
     }
@@ -182,7 +182,7 @@ export default function NovoPlanoDeAcaoPage() {
         const assigneeName = users.find(u => u.id === assigneeId)?.full_name || ''
         await createNotification(supabase, assigneeId, {
           type: 'action_plan_assigned',
-          title: 'Novo Plano de Acao atribuido a voce',
+          title: 'Novo Plano de Ação atribuído a você',
           message: `${title} | Severidade: ${severity} | Prazo: ${deadlineDate}`,
           link: `/admin/planos-de-acao/${plan.id}`,
           metadata: { plan_id: plan.id, severity, deadline: deadlineDate, assignee_name: assigneeName },
@@ -348,7 +348,7 @@ export default function NovoPlanoDeAcaoPage() {
                 <Select
                   value={assigneeId}
                   onChange={setAssigneeId}
-                  placeholder="Selecione o responsavel"
+                  placeholder="Selecione o responsável"
                   options={users.map(user => ({ value: user.id, label: user.full_name }))}
                 />
               </div>
@@ -397,7 +397,7 @@ export default function NovoPlanoDeAcaoPage() {
               ) : (
                 <>
                   <FiSave className="w-4 h-4" />
-                  Criar Plano de Acao
+                  Criar Plano de Ação
                 </>
               )}
             </button>

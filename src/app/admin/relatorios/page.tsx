@@ -369,7 +369,7 @@ export default function RelatoriosPage() {
           const fieldName = ap.field?.name || 'Campo desconhecido'
           const storeName = ap.store?.name || 'Loja desconhecida'
           const assignee = usersLookup.find((u: { id: string }) => u.id === ap.assigned_to)
-          const assigneeName = assignee?.full_name || 'Nao atribuido'
+          const assigneeName = assignee?.full_name || 'Não atribuído'
           const assigneeFunction = assignee?.function_ref?.name
           const responsible = assigneeFunction ? `${assigneeName} — ${assigneeFunction}` : assigneeName
 
@@ -620,7 +620,7 @@ export default function RelatoriosPage() {
   const getStatusBadge = (status: string) => {
     const badges: Record<string, { label: string; cls: string }> = {
       validado: { label: 'Validado', cls: 'bg-success/20 text-success' },
-      concluido: { label: 'Concluido', cls: 'bg-primary/20 text-primary' },
+      concluido: { label: 'Concluído', cls: 'bg-primary/20 text-primary' },
       em_andamento: { label: 'Em Andamento', cls: 'bg-warning/20 text-warning' },
       incompleto: { label: 'Incompleto', cls: 'bg-error/20 text-error' },
       rascunho: { label: 'Rascunho', cls: 'bg-surface-hover text-muted' },
@@ -815,7 +815,7 @@ export default function RelatoriosPage() {
           >
             <span className="flex items-center gap-2">
               <FiRepeat className="w-4 h-4" />
-              Reincidencias
+              Reincidências
             </span>
           </button>
 
@@ -1026,7 +1026,7 @@ export default function RelatoriosPage() {
             <div className="card p-4 border-l-4 border-l-[var(--border-subtle)]">
               <p className="text-xs text-muted mb-1">Rascunhos</p>
               <p className="text-3xl font-bold text-muted">{overallMetrics.statusBreakdown.rascunho}</p>
-              <p className="text-[10px] text-muted mt-1">Nao iniciados</p>
+              <p className="text-[10px] text-muted mt-1">Não iniciados</p>
             </div>
             <div className="card p-4 border-l-4 border-l-primary">
               <p className="text-xs text-muted mb-1">Tempo Medio</p>
@@ -1047,7 +1047,7 @@ export default function RelatoriosPage() {
           const t = sb.total
           const segments = [
             { key: 'validado', label: 'Validado', count: sb.validado, color: 'bg-success', textColor: 'text-success' },
-            { key: 'concluido', label: 'Concluido', count: sb.concluido, color: 'bg-primary', textColor: 'text-primary' },
+            { key: 'concluido', label: 'Concluído', count: sb.concluido, color: 'bg-primary', textColor: 'text-primary' },
             { key: 'em_andamento', label: 'Em Andamento', count: sb.em_andamento, color: 'bg-warning', textColor: 'text-warning' },
             { key: 'incompleto', label: 'Incompleto', count: sb.incompleto, color: 'bg-error', textColor: 'text-error' },
             { key: 'rascunho', label: 'Rascunho', count: sb.rascunho, color: 'bg-surface-hover', textColor: 'text-muted' },
@@ -1130,7 +1130,7 @@ export default function RelatoriosPage() {
           <div className="flex flex-wrap gap-3 mb-4">
             {[
               { label: 'Validado', color: 'bg-success' },
-              { label: 'Concluido', color: 'bg-primary' },
+              { label: 'Concluído', color: 'bg-primary' },
               { label: 'Em Andamento', color: 'bg-warning' },
               { label: 'Incompleto', color: 'bg-error' },
               { label: 'Rascunho', color: 'bg-surface-hover' },
@@ -1570,7 +1570,7 @@ export default function RelatoriosPage() {
           <div>
             {/* Period filter */}
             <div className="flex items-center justify-between mb-6">
-              <h2 className="text-lg font-semibold text-main">Reincidencias</h2>
+              <h2 className="text-lg font-semibold text-main">Reincidências</h2>
               <div className="flex items-center gap-2">
                 {(['7d', '30d', '90d'] as const).map((p) => (
                   <button key={p} onClick={() => setPeriod(p)} className={`px-4 py-2 rounded-xl font-medium transition-colors ${period === p ? 'btn-primary' : 'btn-secondary'}`}>
@@ -1585,7 +1585,7 @@ export default function RelatoriosPage() {
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
               <div className="card p-4">
                 <p className="text-2xl font-bold text-error">{reincSummary.totalReincidencias}</p>
-                <p className="text-xs text-muted">Total Reincidencias</p>
+                <p className="text-xs text-muted">Total Reincidências</p>
               </div>
               <div className="card p-4">
                 <p className="text-2xl font-bold text-warning">{reincSummary.avgReincidenciaRate}</p>
@@ -1604,7 +1604,7 @@ export default function RelatoriosPage() {
             {/* Reincidencia table */}
             <div className="card overflow-hidden mb-6">
               <div className="px-6 py-4 border-b border-subtle">
-                <h3 className="font-semibold text-main">Campos com Reincidencia</h3>
+                <h3 className="font-semibold text-main">Campos com Reincidência</h3>
               </div>
               <div className="overflow-x-auto">
                 <table className="w-full">
@@ -1639,7 +1639,7 @@ export default function RelatoriosPage() {
             {/* Assignee stats */}
             <div className="card overflow-hidden">
               <div className="px-6 py-4 border-b border-subtle">
-                <h3 className="font-semibold text-main">Desempenho por Responsavel</h3>
+                <h3 className="font-semibold text-main">Desempenho por Responsável</h3>
               </div>
               <div className="overflow-x-auto">
                 <table className="w-full">
