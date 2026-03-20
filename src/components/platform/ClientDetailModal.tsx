@@ -7,8 +7,10 @@ import {
   FiToggleLeft, FiToggleRight, FiEye, FiTrash2,
   FiChevronLeft, FiChevronRight,
 } from 'react-icons/fi'
-import { PLAN_CONFIGS, type Plan, type Feature } from '@/types/tenant'
+import { type Plan, type Feature } from '@/types/tenant'
 import { Modal } from '@/components/ui'
+import { PaymentModal } from '@/components/billing/PaymentModal'
+import { DowngradeModal } from '@/components/billing/DowngradeModal'
 
 type OrgDetail = {
   id: string; name: string; slug: string; plan: string; is_active: boolean
@@ -188,18 +190,34 @@ export function ClientDetailModal({ orgId, onClose, onOrgUpdate }: Props) {
     setSaving(false)
   }
 
-  const changePlan = async (newPlan: Plan) => {
+  const [upgradePlan, setUpgradePlan] = useState<Plan | null>(null)
+  const [downgradePlan, setDowngradePlan] = useState<Plan | null>(null)
+
+  const handlePlanAction = (targetPlan: Plan) => {
     if (!modalOrg) return
-    setSaving(true)
-    const planConfig = PLAN_CONFIGS[newPlan]
-    await sb().from('organizations').update({
-      plan: newPlan, features: planConfig.features,
-      max_users: planConfig.maxUsers, max_stores: planConfig.maxStores,
-    }).eq('id', modalOrg.id)
-    const updated = { ...modalOrg, plan: newPlan, features: planConfig.features as string[], max_users: planConfig.maxUsers, max_stores: planConfig.maxStores }
-    setModalOrg(updated)
-    onOrgUpdate?.({ id: updated.id, plan: updated.plan, is_active: updated.is_active, max_users: updated.max_users, max_stores: updated.max_stores })
-    setSaving(false)
+    const planOrder: Plan[] = ['trial', 'starter', 'professional', 'enterprise']
+    const currentIdx = planOrder.indexOf(modalOrg.plan as Plan)
+    const targetIdx = planOrder.indexOf(targetPlan)
+    if (targetIdx > currentIdx) {
+      setUpgradePlan(targetPlan) // PaymentModal
+    } else {
+      setDowngradePlan(targetPlan) // DowngradeModal
+    }
+  }
+
+  const handlePlanChanged = () => {
+    setUpgradePlan(null)
+    setDowngradePlan(null)
+    // Recarregar dados da org
+    if (modalOrg) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      sb().from('organizations').select('*').eq('id', modalOrg.id).single().then(({ data }: { data: any }) => {
+        if (data) {
+          setModalOrg(data as OrgDetail)
+          onOrgUpdate?.({ id: data.id, plan: data.plan, is_active: data.is_active, max_users: data.max_users, max_stores: data.max_stores })
+        }
+      })
+    }
   }
 
   const extendTrial = async (days: number) => {
@@ -277,6 +295,7 @@ export function ClientDetailModal({ orgId, onClose, onOrgUpdate }: Props) {
   ]
 
   return (
+    <>
     <Modal isOpen={!!orgId} onClose={onClose} title={modalOrg?.name || 'Detalhes do Cliente'} size="xl">
       {modalLoading ? (
         <div className="flex items-center justify-center h-32">
@@ -330,15 +349,21 @@ export function ClientDetailModal({ orgId, onClose, onOrgUpdate }: Props) {
               {/* Change Plan */}
               <div className="p-4 bg-surface-hover rounded-xl">
                 <h3 className="text-xs font-semibold text-main mb-2 flex items-center gap-2"><FiDollarSign className="w-3.5 h-3.5" /> Mudar Plano</h3>
+                <p className="text-[10px] text-muted mb-2">Mudanças de plano passam pelo Stripe (dados de pagamento obrigatórios).</p>
                 <div className="flex gap-2 flex-wrap">
-                  {(['trial', 'starter', 'professional', 'enterprise'] as Plan[]).map(p => (
-                    <button key={p} onClick={() => changePlan(p)} disabled={saving || modalOrg.plan === p}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors capitalize ${
-                        modalOrg.plan === p ? 'bg-accent text-white' : 'bg-surface border border-subtle text-muted hover:text-main hover:border-accent'
-                      }`}>
-                      {p}
-                    </button>
-                  ))}
+                  {(['trial', 'starter', 'professional', 'enterprise'] as Plan[]).map(p => {
+                    const isCurrent = modalOrg.plan === p
+                    const planOrder: Plan[] = ['trial', 'starter', 'professional', 'enterprise']
+                    const isDown = planOrder.indexOf(p) < planOrder.indexOf(modalOrg.plan as Plan)
+                    return (
+                      <button key={p} onClick={() => handlePlanAction(p)} disabled={saving || isCurrent}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors capitalize ${
+                          isCurrent ? 'bg-accent text-white' : isDown ? 'bg-surface border border-warning/30 text-warning hover:bg-warning/10' : 'bg-surface border border-subtle text-muted hover:text-main hover:border-accent'
+                        }`}>
+                        {isCurrent ? `${p} (atual)` : isDown ? `↓ ${p}` : `↑ ${p}`}
+                      </button>
+                    )
+                  })}
                 </div>
               </div>
 
@@ -545,5 +570,32 @@ export function ClientDetailModal({ orgId, onClose, onOrgUpdate }: Props) {
         </div>
       ) : null}
     </Modal>
+
+      {/* Upgrade Modal (Stripe payment) */}
+      {upgradePlan && modalOrg && (
+        <PaymentModal
+          isOpen={!!upgradePlan}
+          onClose={() => setUpgradePlan(null)}
+          plan={upgradePlan}
+          orgId={modalOrg.id}
+          currentPlan={modalOrg.plan as Plan}
+          onSuccess={handlePlanChanged}
+        />
+      )}
+
+      {/* Downgrade Modal */}
+      {downgradePlan && modalOrg && (
+        <DowngradeModal
+          isOpen={!!downgradePlan}
+          onClose={() => setDowngradePlan(null)}
+          currentPlan={modalOrg.plan as Plan}
+          targetPlan={downgradePlan}
+          orgId={modalOrg.id}
+          currentStoreCount={modalOrg.max_stores}
+          currentUserCount={modalOrg.max_users}
+          onSuccess={handlePlanChanged}
+        />
+      )}
+    </>
   )
 }
