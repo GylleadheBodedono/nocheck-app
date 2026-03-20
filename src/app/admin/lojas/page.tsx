@@ -3,6 +3,7 @@
 import { useEffect, useState, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient, isSupabaseConfigured } from '@/lib/supabase'
+import { PLAN_CONFIGS, type Plan } from '@/types/tenant'
 import {
   FiMapPin,
   FiEdit2,
@@ -13,6 +14,7 @@ import {
   FiPlus,
   FiUsers,
   FiWifiOff,
+  FiLock,
   FiShield,
 } from 'react-icons/fi'
 import type { Store } from '@/types/database'
@@ -36,6 +38,7 @@ export default function LojasPage() {
   const [showModal, setShowModal] = useState(false)
   const [formData, setFormData] = useState({ name: '', is_active: true, require_gps: true, latitude: null as number | null, longitude: null as number | null })
   const [saving, setSaving] = useState(false)
+  const [orgPlan, setOrgPlan] = useState<string>('enterprise')
   const [isOffline, setIsOffline] = useState(false)
   const router = useRouter()
   const supabase = useMemo(() => createClient(), [])
@@ -136,6 +139,17 @@ export default function LojasPage() {
 
       setStores(storesWithStats)
       setIsOffline(false)
+
+      // Buscar plano da org para determinar lojas bloqueadas
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const { data: tenantId } = await (supabase as any).rpc('get_my_tenant_id')
+        if (tenantId) {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const { data: orgData } = await (supabase as any).from('organizations').select('plan').eq('id', tenantId).single()
+          if (orgData?.plan) setOrgPlan(orgData.plan)
+        }
+      } catch { /* nao critico */ }
     } catch (err) {
       console.error('[Lojas] Erro ao buscar online:', err)
 
@@ -280,6 +294,13 @@ export default function LojasPage() {
     fetchStores()
   }
 
+  // Determinar lojas bloqueadas pelo plano
+  const planConfig = PLAN_CONFIGS[orgPlan as Plan]
+  const maxStores = planConfig?.maxStores || 999
+  const sortedByDate = [...stores].sort((a, b) => new Date(a.created_at || 0).getTime() - new Date(b.created_at || 0).getTime())
+  const allowedStoreIds = new Set(sortedByDate.slice(0, maxStores).map(s => s.id))
+  const isStoreBlocked = (storeId: number) => stores.length > maxStores && !allowedStoreIds.has(storeId)
+
   const filteredStores = stores.filter(store => {
     const matchesSearch = store.name.toLowerCase().includes(searchTerm.toLowerCase())
     const matchesFilter = filterActive === null || store.is_active === filterActive
@@ -391,7 +412,16 @@ export default function LojasPage() {
             </div>
           ) : (
             filteredStores.map((store) => (
-              <div key={store.id} className="card p-6 hover:shadow-theme-md transition-shadow">
+              <div key={store.id} className="card p-6 hover:shadow-theme-md transition-shadow relative">
+                {isStoreBlocked(store.id) && (
+                  <div className="absolute inset-0 bg-[rgba(var(--bg-surface-rgb),0.85)] backdrop-blur-sm rounded-2xl flex items-center justify-center z-10">
+                    <div className="text-center p-4">
+                      <FiLock className="w-8 h-8 text-warning mx-auto mb-2" />
+                      <p className="text-sm font-medium text-warning">Loja bloqueada</p>
+                      <p className="text-xs text-muted mt-1">Seu plano permite {maxStores} loja{maxStores > 1 ? 's' : ''}. Faca upgrade para desbloquear.</p>
+                    </div>
+                  </div>
+                )}
                 <div className="flex items-start justify-between mb-4">
                   <div className="flex items-center gap-3">
                     <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${

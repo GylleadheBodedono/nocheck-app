@@ -244,15 +244,12 @@ export default function BillingPage() {
                     Plano Atual
                   </button>
                 ) : isDowngrade ? (
-                  org?.stripe_customer_id ? (
-                    <button onClick={handlePortal} className="w-full py-2.5 btn-secondary rounded-xl text-sm">
-                      Fazer Downgrade
-                    </button>
-                  ) : (
-                    <button disabled className="w-full py-2.5 btn-secondary rounded-xl text-sm opacity-50" title="Plano configurado manualmente">
-                      Downgrade indisponivel
-                    </button>
-                  )
+                  <button
+                    onClick={handlePortal}
+                    className="w-full py-2.5 btn-secondary rounded-xl text-sm"
+                  >
+                    Fazer Downgrade
+                  </button>
                 ) : (
                   <button onClick={() => setSelectedPlan(plan)}
                     className="w-full py-2.5 btn-primary rounded-xl text-sm">
