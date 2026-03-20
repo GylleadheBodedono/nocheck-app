@@ -1821,24 +1821,24 @@ function ChecklistForm() {
         // Process cross validation + non-conformity
         if (template) {
           const allFieldIds = template.fields.map(f => f.id)
+          console.log(`[Checklist] Finalizando: ${allFieldIds.length} campos, template=${template.name}`)
           // attemptUpload: true — uploads base64 photos from React state to Storage
           const allResponseData = await buildResponseRows(allFieldIds, true)
 
-          // Limpar base64 residual (uploads que falharam) e salvar no DB
+          // Log detalhado de cada response antes de salvar
+          for (const row of allResponseData) {
+            const vj = row.valueJson as Record<string, unknown> | null
+            const field = template.fields.find(f => f.id === row.fieldId)
+            const hasPhotos = vj && Array.isArray(vj.photos) ? (vj.photos as string[]).length : 0
+            const hasCondPhotos = vj && Array.isArray(vj.conditionalPhotos) ? (vj.conditionalPhotos as string[]).length : 0
+            const selFunc = vj?.selectedFunctionId || null
+            console.log(`[Checklist] Response field_${row.fieldId} "${field?.name}": text="${row.valueText}", photos=${hasPhotos}, condPhotos=${hasCondPhotos}, selectedFunctionId=${selFunc}`)
+          }
+
+          // Salvar respostas com URLs uploadadas no DB (base64 mantido como fallback se upload falhou)
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           const sb = supabase as any
           for (const row of allResponseData) {
-            if (row.valueJson && typeof row.valueJson === 'object') {
-              const json = row.valueJson as Record<string, unknown>
-              if (Array.isArray(json.photos)) {
-                json.photos = (json.photos as string[]).filter((p: string) => p.startsWith('http'))
-                if ((json.photos as string[]).length === 0) delete json.photos
-              }
-              if (Array.isArray(json.conditionalPhotos)) {
-                json.conditionalPhotos = (json.conditionalPhotos as string[]).filter((p: string) => p.startsWith('http'))
-                if ((json.conditionalPhotos as string[]).length === 0) delete json.conditionalPhotos
-              }
-            }
             await sb.from('checklist_responses')
               .update({
                 value_text: row.valueText,
@@ -1948,21 +1948,10 @@ function ChecklistForm() {
         // attemptUpload: true — uploads base64 photos from React state to Storage
         const allResponseData = await buildResponseRows(allFieldIds, true)
 
-        // Limpar base64 residual (uploads que falharam) e salvar no DB
+        // Salvar respostas com URLs uploadadas no DB (base64 mantido como fallback se upload falhou)
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const sb = supabase as any
         for (const row of allResponseData) {
-          if (row.valueJson && typeof row.valueJson === 'object') {
-            const json = row.valueJson as Record<string, unknown>
-            if (Array.isArray(json.photos)) {
-              json.photos = (json.photos as string[]).filter((p: string) => p.startsWith('http'))
-              if ((json.photos as string[]).length === 0) delete json.photos
-            }
-            if (Array.isArray(json.conditionalPhotos)) {
-              json.conditionalPhotos = (json.conditionalPhotos as string[]).filter((p: string) => p.startsWith('http'))
-              if ((json.conditionalPhotos as string[]).length === 0) delete json.conditionalPhotos
-            }
-          }
           await sb.from('checklist_responses')
             .update({
               value_text: row.valueText,

@@ -244,7 +244,27 @@ export async function processarNaoConformidades(
       return { success: false, plansCreated: 0, error: condError.message }
     }
 
-    if (!conditions || conditions.length === 0) {
+    console.log(`[ActionPlan] ========== INICIO ==========`)
+    console.log(`[ActionPlan] Template: ${templateId}, Store: ${storeId}, User: ${userId}`)
+    console.log(`[ActionPlan] Fields: ${fields.map(f => `${f.name}(${f.id})`).join(', ')}`)
+    console.log(`[ActionPlan] Responses: ${responses.map(r => `field_${r.field_id}=${r.value_text || '(json)'}`).join(', ')}`)
+    console.log(`[ActionPlan] Conditions encontradas: ${conditions?.length || 0}`)
+
+    // Logar value_json de cada response para debug
+    for (const r of responses) {
+      const vj = r.value_json as Record<string, unknown> | null
+      if (vj) {
+        console.log(`[ActionPlan] Response field_${r.field_id} value_json keys: [${Object.keys(vj).join(', ')}] selectedFunctionId=${vj.selectedFunctionId || 'N/A'} selectedSeverity=${vj.selectedSeverity || 'N/A'}`)
+      }
+    }
+
+    // Se nao ha conditions E nao ha responses com selectedFunctionId, nao ha nada a fazer
+    const hasUserSelectedFunctions = responses.some(r => {
+      const vj = r.value_json as Record<string, unknown> | null
+      return vj?.selectedFunctionId
+    })
+    if ((!conditions || conditions.length === 0) && !hasUserSelectedFunctions) {
+      console.log(`[ActionPlan] Nenhuma condition e nenhum selectedFunctionId — retornando`)
       return { success: true, plansCreated: 0 }
     }
 
@@ -310,10 +330,12 @@ export async function processarNaoConformidades(
     let plansCreated = 0
     const createdFieldIds = new Set<number>()
 
-    for (const condition of conditions as FieldCondition[]) {
+    console.log(`[ActionPlan] === PRIMEIRO PASSO: ${(conditions || []).length} conditions ===`)
+    for (const condition of (conditions || []) as FieldCondition[]) {
+      console.log(`[ActionPlan] Condition ${condition.id}: field_id=${condition.field_id}, type=${condition.condition_type}`)
       const field = fields.find(f => f.id === condition.field_id)
       if (!field) {
-        console.warn(`[ActionPlan][DEBUG] Campo ID ${condition.field_id} NAO encontrado nos fields recebidos. Fields IDs: [${fields.map(f => f.id).join(', ')}]`)
+        console.warn(`[ActionPlan] Campo ID ${condition.field_id} NAO encontrado nos fields. Fields IDs: [${fields.map(f => f.id).join(', ')}]`)
         continue
       }
 
@@ -324,9 +346,12 @@ export async function processarNaoConformidades(
       }
 
       const isNonConforming = evaluateCondition(field, response, condition)
+      console.log(`[ActionPlan] Campo "${field.name}" (${field.id}): value_text="${response.value_text}", isNonConforming=${isNonConforming}`)
       if (!isNonConforming) {
+        console.log(`[ActionPlan] Campo "${field.name}" nao e nao-conforme, pulando`)
         continue
       }
+      console.log(`[ActionPlan] >>> NAO-CONFORMIDADE detectada: "${field.name}" — criando plano...`)
 
       // 4. Nao-conformidade detectada! Verificar reincidencia
       const reincidencia = await checkReincidencia(supabase, field.id, storeId, templateId)
@@ -635,17 +660,24 @@ export async function processarNaoConformidades(
 
     // 10. Segundo passo: campos onde usuario selecionou funcao/severidade
     //     mas NAO tinham field_condition configurado no banco
+    console.log(`[ActionPlan] === SEGUNDO PASSO: ${responses.length} responses, createdFieldIds=[${[...createdFieldIds].join(',')}] ===`)
     for (const response of responses) {
-      if (createdFieldIds.has(response.field_id)) continue
-
       const vJson = response.value_json as Record<string, unknown> | null
       const userFunctionId = vJson?.selectedFunctionId as number | null
-      if (!userFunctionId) continue
+
+      if (createdFieldIds.has(response.field_id)) {
+        console.log(`[ActionPlan] 2P: field_${response.field_id} ja processado no primeiro passo, pulando`)
+        continue
+      }
+      if (!userFunctionId) {
+        console.log(`[ActionPlan] 2P: field_${response.field_id} sem selectedFunctionId (value_json keys: [${vJson ? Object.keys(vJson).join(',') : 'null'}]), pulando`)
+        continue
+      }
 
       const field = fields.find(f => f.id === response.field_id)
       if (!field) continue
 
-      console.log(`[ActionPlan] Segundo passo: campo "${field.name}" (ID ${field.id}) tem selectedFunctionId=${userFunctionId} sem field_condition`)
+      console.log(`[ActionPlan] 2P: >>> campo "${field.name}" (${field.id}) tem selectedFunctionId=${userFunctionId} — criando plano...`)
 
       try {
         const userSeverity = (vJson?.selectedSeverity as string) || 'media'
@@ -816,9 +848,10 @@ export async function processarNaoConformidades(
       }
     }
 
+    console.log(`[ActionPlan] ========== FIM: ${plansCreated} plano(s) criado(s), fields processados: [${[...createdFieldIds].join(',')}] ==========`)
     return { success: true, plansCreated }
   } catch (err) {
-    console.error('[ActionPlan] Erro no processamento:', err)
+    console.error('[ActionPlan] ERRO FATAL no processamento:', err)
     return { success: false, plansCreated: 0, error: err instanceof Error ? err.message : 'Erro desconhecido' }
   }
 }

@@ -672,6 +672,7 @@ function YesNoField({ field, value, onChange }: { field: TemplateField; value: u
         delete merged.conditionalPhotos
       }
       if (newAnswer !== 'nao' || !onNoConfig?.allowUserActionPlan) {
+        delete merged.selectedFunctionId
         delete merged.selectedAssigneeId
         delete merged.selectedSeverity
         delete merged.selectedPresetId
