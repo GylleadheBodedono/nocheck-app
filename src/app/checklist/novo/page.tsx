@@ -1019,9 +1019,16 @@ function ChecklistForm() {
         const yesNoObj = value as Record<string, unknown>
         valueText = yesNoObj.answer as string
         const jsonParts: Record<string, unknown> = {}
-        if (yesNoObj.photos && (yesNoObj.photos as string[]).length > 0) jsonParts.photos = yesNoObj.photos
+        // Salvar apenas URLs de fotos (nunca base64 — base64 fica no state ate upload ao Storage)
+        if (yesNoObj.photos && (yesNoObj.photos as string[]).length > 0) {
+          const urls = (yesNoObj.photos as string[]).filter(p => typeof p === 'string' && p.startsWith('http'))
+          if (urls.length > 0) jsonParts.photos = urls
+        }
         if (yesNoObj.conditionalText) jsonParts.conditionalText = yesNoObj.conditionalText
-        if (yesNoObj.conditionalPhotos && (yesNoObj.conditionalPhotos as string[]).length > 0) jsonParts.conditionalPhotos = yesNoObj.conditionalPhotos
+        if (yesNoObj.conditionalPhotos && (yesNoObj.conditionalPhotos as string[]).length > 0) {
+          const urls = (yesNoObj.conditionalPhotos as string[]).filter(p => typeof p === 'string' && p.startsWith('http'))
+          if (urls.length > 0) jsonParts.conditionalPhotos = urls
+        }
         // Plano de acao: funcao responsavel, severidade e modelo
         if (yesNoObj.selectedFunctionId) jsonParts.selectedFunctionId = yesNoObj.selectedFunctionId
         if (yesNoObj.selectedSeverity) jsonParts.selectedSeverity = yesNoObj.selectedSeverity
@@ -1269,7 +1276,9 @@ function ChecklistForm() {
             }
             jsonParts.photos = uploadedUrls
           } else if (yesNoObj.photos && yesNoObj.photos.length > 0) {
-            jsonParts.photos = yesNoObj.photos
+            // Sem upload: salvar apenas URLs (nunca base64)
+            const urls = yesNoObj.photos.filter((p: string) => p.startsWith('http'))
+            if (urls.length > 0) jsonParts.photos = urls
           }
           if (yesNoObj.conditionalText) jsonParts.conditionalText = yesNoObj.conditionalText
           if (yesNoObj.conditionalPhotos && yesNoObj.conditionalPhotos.length > 0 && attemptUpload) {
@@ -1278,9 +1287,11 @@ function ChecklistForm() {
               const url = await uploadPhoto(yesNoObj.conditionalPhotos[i], `checklist_${Date.now()}_yesno_cond_foto_${i + 1}.jpg`, 'anexos')
               uploadedUrls.push(url || yesNoObj.conditionalPhotos[i])
             }
-            jsonParts.conditionalPhotos = uploadedUrls
+            // Filtrar base64 residuais (upload falhou)
+            jsonParts.conditionalPhotos = uploadedUrls.filter((u: string) => u.startsWith('http'))
           } else if (yesNoObj.conditionalPhotos && yesNoObj.conditionalPhotos.length > 0) {
-            jsonParts.conditionalPhotos = yesNoObj.conditionalPhotos
+            const urls = yesNoObj.conditionalPhotos.filter((p: string) => p.startsWith('http'))
+            if (urls.length > 0) jsonParts.conditionalPhotos = urls
           }
           // Preservar dados do plano de acao para processarNaoConformidades
           const fullObj = value as Record<string, unknown>
