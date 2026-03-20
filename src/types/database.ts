@@ -606,6 +606,7 @@ export type Database = {
           name: string
           description: string | null
           sort_order: number
+          parent_id: number | null
         }
         Insert: {
           id?: number
@@ -613,6 +614,7 @@ export type Database = {
           name: string
           description?: string | null
           sort_order?: number
+          parent_id?: number | null
         }
         Update: {
           id?: number
@@ -620,6 +622,7 @@ export type Database = {
           name?: string
           description?: string | null
           sort_order?: number
+          parent_id?: number | null
         }
       }
       checklist_sections: {
@@ -685,6 +688,7 @@ export type Database = {
           condition_value: Json
           severity: Severity
           default_assignee_id: string | null
+          default_function_id: number | null
           deadline_days: number
           description_template: string | null
           is_active: boolean
@@ -700,6 +704,7 @@ export type Database = {
           condition_value: Json
           severity?: Severity
           default_assignee_id?: string | null
+          default_function_id?: number | null
           deadline_days?: number
           description_template?: string | null
           is_active?: boolean
@@ -715,6 +720,7 @@ export type Database = {
           condition_value?: Json
           severity?: Severity
           default_assignee_id?: string | null
+          default_function_id?: number | null
           deadline_days?: number
           description_template?: string | null
           is_active?: boolean
@@ -761,7 +767,8 @@ export type Database = {
           description: string | null
           severity: Severity
           status: ActionPlanStatus
-          assigned_to: string
+          assigned_to: string | null
+          assigned_function_id: number | null
           assigned_by: string | null
           deadline: string
           started_at: string | null
@@ -791,7 +798,8 @@ export type Database = {
           description?: string | null
           severity?: Severity
           status?: ActionPlanStatus
-          assigned_to: string
+          assigned_to?: string | null
+          assigned_function_id?: number | null
           assigned_by?: string | null
           deadline: string
           started_at?: string | null
@@ -821,7 +829,8 @@ export type Database = {
           description?: string | null
           severity?: Severity
           status?: ActionPlanStatus
-          assigned_to?: string
+          assigned_to?: string | null
+          assigned_function_id?: number | null
           assigned_by?: string | null
           deadline?: string
           started_at?: string | null

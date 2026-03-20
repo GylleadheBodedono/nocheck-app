@@ -3,10 +3,10 @@
 import { useEffect, useState, useMemo } from 'react'
 import { createClient } from '@/lib/supabase'
 import Link from 'next/link'
-import { FiSave, FiUserPlus, FiCheckCircle, FiMail, FiEye, FiEyeOff } from 'react-icons/fi'
+import { FiSave, FiCheckCircle, FiMail } from 'react-icons/fi'
 import type { Store, Sector, FunctionRow } from '@/types/database'
 import { APP_CONFIG } from '@/lib/config'
-import { Header, Select, PageContainer } from '@/components/ui'
+import { Select, PageContainer } from '@/components/ui'
 
 export default function NovoUsuarioPage() {
   const [stores, setStores] = useState<Store[]>([])
@@ -22,7 +22,6 @@ export default function NovoUsuarioPage() {
   // Form state
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  const [showPassword, setShowPassword] = useState(false)
   const [fullName, setFullName] = useState('')
   const [phone, setPhone] = useState('')
   const [isAdmin, setIsAdmin] = useState(false)
@@ -117,7 +116,7 @@ export default function NovoUsuarioPage() {
       const data = await res.json()
 
       if (!res.ok) {
-        throw new Error(data.error || 'Erro ao criar usuário')
+        throw new Error(data.error || 'Erro ao criar usuario')
       }
 
       setCreatedEmail(email)
@@ -126,7 +125,7 @@ export default function NovoUsuarioPage() {
       setLoading(false)
     } catch (err) {
       console.error('Error creating user:', err)
-      setError(err instanceof Error ? err.message : 'Erro ao criar usuário')
+      setError(err instanceof Error ? err.message : 'Erro ao criar usuario')
       setLoading(false)
     }
   }
@@ -145,13 +144,6 @@ export default function NovoUsuarioPage() {
   }
 
   return (
-    <div className="min-h-screen bg-page">
-      <Header
-        title="Novo Usuário"
-        icon={FiUserPlus}
-        backHref={APP_CONFIG.routes.adminUsers}
-      />
-
       <PageContainer size="sm">
         {/* Success screen */}
         {success && (
@@ -159,18 +151,18 @@ export default function NovoUsuarioPage() {
             <div className="w-16 h-16 rounded-full bg-success/20 flex items-center justify-center mx-auto mb-4">
               <FiCheckCircle className="w-8 h-8 text-success" />
             </div>
-            <h2 className="text-xl font-bold text-main mb-2">Usuário criado com sucesso!</h2>
+            <h2 className="text-xl font-bold text-main mb-2">Usuario criado com sucesso!</h2>
             <p className="text-muted mb-4">{createdEmail}</p>
 
             {needsConfirmation && (
               <div className="p-4 bg-warning/10 border border-warning/30 rounded-xl mb-6">
                 <div className="flex items-center justify-center gap-2 text-warning mb-2">
                   <FiMail className="w-5 h-5" />
-                  <span className="font-medium">Confirmação de email necessária</span>
+                  <span className="font-medium">Confirmacao de email necessaria</span>
                 </div>
                 <p className="text-sm text-muted">
-                  Um email de confirmação foi enviado para <strong className="text-main">{createdEmail}</strong>.
-                  O usuário precisa clicar no link do email para ativar a conta antes de fazer login.
+                  Um email de confirmacao foi enviado para <strong className="text-main">{createdEmail}</strong>.
+                  O usuario precisa clicar no link do email para ativar a conta antes de fazer login.
                 </p>
               </div>
             )}
@@ -190,7 +182,7 @@ export default function NovoUsuarioPage() {
           <form onSubmit={handleSubmit} className="space-y-6">
             {/* Basic Info */}
             <div className="card p-6">
-              <h2 className="text-lg font-semibold text-main mb-4">Informações Básicas</h2>
+              <h2 className="text-lg font-semibold text-main mb-4">Informacoes Basicas</h2>
 
               <div className="space-y-4">
                 <div>
@@ -203,7 +195,7 @@ export default function NovoUsuarioPage() {
                     onChange={(e) => setFullName(e.target.value)}
                     required
                     className="input"
-                    placeholder="João da Silva"
+                    placeholder="Joao da Silva"
                   />
                 </div>
 
@@ -225,27 +217,15 @@ export default function NovoUsuarioPage() {
                   <label className="block text-sm font-medium text-secondary mb-2">
                     Senha *
                   </label>
-                  <div className="relative">
-                    <input
-                      type={showPassword ? 'text' : 'password'}
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      required
-                      minLength={6}
-                      className="input"
-                      style={{ paddingRight: '2.75rem' }}
-                      placeholder="Mínimo 6 caracteres"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowPassword(prev => !prev)}
-                      className="absolute right-4 top-1/2 -translate-y-1/2 text-muted hover:text-main transition-colors"
-                      tabIndex={-1}
-                      aria-label={showPassword ? 'Ocultar senha' : 'Mostrar senha'}
-                    >
-                      {showPassword ? <FiEyeOff className="w-[18px] h-[18px]" /> : <FiEye className="w-[18px] h-[18px]" />}
-                    </button>
-                  </div>
+                  <input
+                    type="password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    required
+                    minLength={6}
+                    className="input"
+                    placeholder="Minimo 6 caracteres"
+                  />
                 </div>
 
                 <div>
@@ -284,7 +264,7 @@ export default function NovoUsuarioPage() {
                       className="w-5 h-5 rounded border-subtle bg-page text-primary focus:ring-primary"
                     />
                     <label htmlFor="isTech" className="text-secondary">
-                      <span className="text-cyan-400 font-medium">Técnico</span>
+                      <span className="text-cyan-400 font-medium">Tecnico</span>
                     </label>
                   </div>
                 </div>
@@ -298,7 +278,7 @@ export default function NovoUsuarioPage() {
                     className="w-5 h-5 rounded border-subtle bg-page text-primary focus:ring-primary"
                   />
                   <label htmlFor="autoConfirm" className="text-secondary">
-                    Confirmar email automaticamente <span className="text-xs text-muted">(para emails fictícios)</span>
+                    Confirmar email automaticamente <span className="text-xs text-muted">(para emails ficticios)</span>
                   </label>
                 </div>
               </div>
@@ -307,9 +287,9 @@ export default function NovoUsuarioPage() {
             {/* Assignment */}
             {!isAdmin && (
               <div className="card p-6">
-                <h2 className="text-lg font-semibold text-main mb-4">Atribuição</h2>
+                <h2 className="text-lg font-semibold text-main mb-4">Atribuicao</h2>
                 <p className="text-sm text-muted mb-4">
-                  Selecione as lojas, setores e função do usuário.
+                  Selecione as lojas, setores e funcao do usuario.
                 </p>
 
                 <div className="space-y-4">
@@ -379,12 +359,12 @@ export default function NovoUsuarioPage() {
                   {/* Function */}
                   <div>
                     <label className="block text-sm font-medium text-secondary mb-2">
-                      Função
+                      Funcao
                     </label>
                     <Select
                       value={String(functionId ?? '')}
                       onChange={(v) => setFunctionId(v ? Number(v) : null)}
-                      placeholder="Selecione a função"
+                      placeholder="Selecione a funcao"
                       options={functions.map(fn => ({ value: String(fn.id), label: fn.name }))}
                     />
                   </div>
@@ -420,7 +400,7 @@ export default function NovoUsuarioPage() {
                 ) : (
                   <>
                     <FiSave className="w-4 h-4" />
-                    Criar Usuário
+                    Criar Usuario
                   </>
                 )}
               </button>
@@ -428,6 +408,5 @@ export default function NovoUsuarioPage() {
           </form>
         )}
       </PageContainer>
-    </div>
   )
 }

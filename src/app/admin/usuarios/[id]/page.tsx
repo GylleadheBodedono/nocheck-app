@@ -3,13 +3,14 @@
 export const runtime = 'edge'
 
 import { useEffect, useState, useMemo } from 'react'
+import { useRealtimeRefresh } from '@/hooks/useRealtimeRefresh'
 import { useRouter, useParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import Link from 'next/link'
-import { FiSave, FiUserCheck } from 'react-icons/fi'
+import { FiSave } from 'react-icons/fi'
 import type { User, Store, Sector, FunctionRow, UserStoreWithDetails } from '@/types/database'
 import { APP_CONFIG } from '@/lib/config'
-import { LoadingPage, Header, Select, PageContainer } from '@/components/ui'
+import { LoadingPage, Select, PageContainer } from '@/components/ui'
 
 type UserWithAssignment = User & {
   store: Store | null
@@ -38,6 +39,7 @@ export default function EditarUsuarioPage() {
   const [success, setSuccess] = useState<string | null>(null)
   const router = useRouter()
   const supabase = useMemo(() => createClient(), [])
+  const { refreshKey } = useRealtimeRefresh(['users'])
 
   // Form state
   const [fullName, setFullName] = useState('')
@@ -53,6 +55,11 @@ export default function EditarUsuarioPage() {
     fetchData()
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userId])
+
+  useEffect(() => {
+    if (refreshKey > 0 && navigator.onLine) fetchData()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [refreshKey])
 
   const fetchData = async () => {
     if (!userId) return
@@ -210,14 +217,14 @@ export default function EditarUsuarioPage() {
       const data = await res.json()
 
       if (!res.ok) {
-        throw new Error(data.error || 'Erro ao atualizar usuário')
+        throw new Error(data.error || 'Erro ao atualizar usuario')
       }
 
-      setSuccess('Usuário atualizado com sucesso!')
+      setSuccess('Usuario atualizado com sucesso!')
       fetchData()
     } catch (err) {
       console.error('Error updating user:', err)
-      setError(err instanceof Error ? err.message : 'Erro ao atualizar usuário')
+      setError(err instanceof Error ? err.message : 'Erro ao atualizar usuario')
     }
 
     setSaving(false)
@@ -232,13 +239,6 @@ export default function EditarUsuarioPage() {
   }
 
   return (
-    <div className="min-h-screen bg-page">
-      <Header
-        title="Editar Usuário"
-        icon={FiUserCheck}
-        backHref={APP_CONFIG.routes.adminUsers}
-      />
-
       <PageContainer size="sm">
         <form onSubmit={handleSubmit} className="space-y-6">
           {/* Success Message */}
@@ -257,7 +257,7 @@ export default function EditarUsuarioPage() {
 
           {/* Basic Info */}
           <div className="card p-6">
-            <h2 className="text-lg font-semibold text-main mb-4">Informações Básicas</h2>
+            <h2 className="text-lg font-semibold text-main mb-4">Informacoes Basicas</h2>
 
             <div className="space-y-4">
               <div>
@@ -270,7 +270,7 @@ export default function EditarUsuarioPage() {
                   onChange={(e) => setFullName(e.target.value)}
                   required
                   className="input"
-                  placeholder="Nome completo do usuário"
+                  placeholder="Nome completo do usuario"
                 />
               </div>
 
@@ -284,7 +284,7 @@ export default function EditarUsuarioPage() {
                   disabled
                   className="input opacity-60 cursor-not-allowed"
                 />
-                <p className="text-xs text-muted mt-1">O email não pode ser alterado</p>
+                <p className="text-xs text-muted mt-1">O email nao pode ser alterado</p>
               </div>
 
               <div>
@@ -308,7 +308,7 @@ export default function EditarUsuarioPage() {
                     onChange={(e) => setIsActive(e.target.checked)}
                     className="w-5 h-5 rounded border-default bg-surface text-primary"
                   />
-                  <span className="text-sm text-secondary">Usuário ativo</span>
+                  <span className="text-sm text-secondary">Usuario ativo</span>
                 </label>
 
                 <label className="flex items-center gap-2 cursor-pointer">
@@ -328,7 +328,7 @@ export default function EditarUsuarioPage() {
                     onChange={(e) => setIsTech(e.target.checked)}
                     className="w-5 h-5 rounded border-default bg-surface text-primary"
                   />
-                  <span className="text-sm text-cyan-400">Técnico</span>
+                  <span className="text-sm text-cyan-400">Tecnico</span>
                 </label>
               </div>
             </div>
@@ -337,9 +337,9 @@ export default function EditarUsuarioPage() {
           {/* Assignment - Lojas, Setor, Funcao */}
           {!isAdmin && (
             <div className="card p-6">
-              <h2 className="text-lg font-semibold text-main mb-4">Atribuição</h2>
+              <h2 className="text-lg font-semibold text-main mb-4">Atribuicao</h2>
               <p className="text-sm text-muted mb-4">
-                Selecione as lojas, setores e função do usuário.
+                Selecione as lojas, setores e funcao do usuario.
               </p>
 
               <div className="space-y-4">
@@ -409,12 +409,12 @@ export default function EditarUsuarioPage() {
                 {/* Function */}
                 <div>
                   <label className="block text-sm font-medium text-secondary mb-2">
-                    Função
+                    Funcao
                   </label>
                   <Select
                     value={String(functionId ?? '')}
                     onChange={(v) => setFunctionId(v ? Number(v) : null)}
-                    placeholder="Selecione a função"
+                    placeholder="Selecione a funcao"
                     options={functions.map(fn => ({ value: String(fn.id), label: fn.name }))}
                   />
                 </div>
@@ -440,13 +440,12 @@ export default function EditarUsuarioPage() {
               ) : (
                 <>
                   <FiSave className="w-4 h-4" />
-                  Salvar Alterações
+                  Salvar Alteracoes
                 </>
               )}
             </button>
           </div>
         </form>
       </PageContainer>
-    </div>
   )
 }

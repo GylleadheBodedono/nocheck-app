@@ -11,14 +11,14 @@ import {
   FiUserCheck,
   FiUserX,
   FiSearch,
-  FiUsers,
   FiWifiOff,
   FiStar,
 } from 'react-icons/fi'
 import type { User, Store, Sector, FunctionRow, UserStoreWithDetails } from '@/types/database'
 import { APP_CONFIG } from '@/lib/config'
-import { LoadingPage, Header, PageContainer } from '@/components/ui'
+import { LoadingPage, PageContainer } from '@/components/ui'
 import { getAuthCache, getUserCache, getAllUsersCache } from '@/lib/offlineCache'
+import { useRealtimeRefresh } from '@/hooks/useRealtimeRefresh'
 
 type UserWithAssignment = User & {
   store: Store | null
@@ -38,11 +38,17 @@ export default function UsuariosPage() {
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
   const router = useRouter()
   const supabase = useMemo(() => createClient(), [])
+  const { refreshKey } = useRealtimeRefresh(['users'])
 
   useEffect(() => {
     fetchUsers()
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  useEffect(() => {
+    if (refreshKey > 0 && navigator.onLine) fetchUsers()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [refreshKey])
 
   const fetchUsers = async () => {
     let userId: string | null = null
@@ -301,29 +307,22 @@ export default function UsuariosPage() {
   }
 
   return (
-    <div className="min-h-screen bg-page">
-      <Header
-        title="Usuários"
-        icon={FiUsers}
-        backHref={APP_CONFIG.routes.admin}
-        actions={isOffline ? [] : [
-          {
-            label: 'Novo Usuário',
-            href: APP_CONFIG.routes.adminUsersNew,
-            icon: FiPlus,
-            variant: 'primary',
-          },
-        ]}
-      />
-
-      {/* Main Content */}
       <PageContainer>
+        {/* Top actions */}
+        {!isOffline && (
+          <div className="flex items-center justify-end mb-6">
+            <Link href={APP_CONFIG.routes.adminUsersNew} className="btn-primary flex items-center gap-2">
+              <FiPlus className="w-4 h-4" />
+              Novo Usuario
+            </Link>
+          </div>
+        )}
         {/* Offline Warning */}
         {isOffline && (
           <div className="bg-warning/10 border border-warning/30 rounded-xl p-4 mb-6 flex items-center gap-3">
             <FiWifiOff className="w-5 h-5 text-warning" />
             <p className="text-warning text-sm">
-              Você está offline. Os dados mostrados são do cache local. Edições não estão disponíveis.
+              Voce esta offline. Os dados mostrados sao do cache local. Edicoes nao estao disponiveis.
             </p>
           </div>
         )}
@@ -393,19 +392,19 @@ export default function UsuariosPage() {
             <table className="w-full">
               <thead>
                 <tr className="border-b border-subtle">
-                  <th className="px-6 py-4 text-left text-sm font-semibold text-secondary">Usuário</th>
+                  <th className="px-6 py-4 text-left text-sm font-semibold text-secondary">Usuario</th>
                   <th className="px-6 py-4 text-left text-sm font-semibold text-secondary">Loja</th>
-                  <th className="px-6 py-4 text-left text-sm font-semibold text-secondary">Função</th>
+                  <th className="px-6 py-4 text-left text-sm font-semibold text-secondary">Funcao</th>
                   <th className="px-6 py-4 text-left text-sm font-semibold text-secondary">Setor</th>
                   <th className="px-6 py-4 text-left text-sm font-semibold text-secondary">Tipo</th>
-                  <th className="px-6 py-4 text-right text-sm font-semibold text-secondary">Ações</th>
+                  <th className="px-6 py-4 text-right text-sm font-semibold text-secondary">Acoes</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-subtle">
                 {filteredUsers.length === 0 ? (
                   <tr>
                     <td colSpan={6} className="px-6 py-12 text-center text-muted">
-                      Nenhum usuário encontrado
+                      Nenhum usuario encontrado
                     </td>
                   </tr>
                 ) : (
@@ -495,13 +494,13 @@ export default function UsuariosPage() {
                             </span>
                           ) : (
                             <span className="px-2 py-1 text-xs bg-surface-hover text-muted rounded-lg">
-                              Funcionário
+                              Funcionario
                             </span>
                           )}
                           {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
                           {(user as any).is_tech && (
                             <span className="px-2 py-1 text-xs bg-cyan-500/20 text-cyan-400 rounded-lg">
-                              Técnico
+                              Tecnico
                             </span>
                           )}
                         </div>
@@ -554,13 +553,12 @@ export default function UsuariosPage() {
         {/* Stats */}
         <div className="mt-6 flex items-center justify-between text-sm text-muted">
           <p>
-            Mostrando {filteredUsers.length} de {users.length} usuários
+            Mostrando {filteredUsers.length} de {users.length} usuarios
           </p>
           <p>
             {users.filter(u => u.is_active).length} ativos, {users.filter(u => !u.is_active).length} inativos
           </p>
         </div>
       </PageContainer>
-    </div>
   )
 }

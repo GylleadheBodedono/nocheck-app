@@ -22,8 +22,9 @@ import {
 } from 'react-icons/fi'
 import Link from 'next/link'
 import { APP_CONFIG } from '@/lib/config'
-import { LoadingPage, Header, Select, PageContainer } from '@/components/ui'
+import { LoadingPage, Select, PageContainer } from '@/components/ui'
 import { getAuthCache, getUserCache } from '@/lib/offlineCache'
+import { useRealtimeRefresh } from '@/hooks/useRealtimeRefresh'
 import { fetchComplianceData, fetchReincidenciaData, fetchStoreHeatmap, type ComplianceSummary, type FieldComplianceRow, type StoreComplianceRow, type ReincidenciaSummary, type ReincidenciaRow, type AssigneeStats, type HeatmapCell } from '@/lib/analyticsQueries'
 import {
   computeOverallAdherence, computeTemplateAdherence, computeStoreAdherence,
@@ -35,6 +36,9 @@ import {
   exportResponsesToCSV, exportResponsesToTXT, exportResponsesToExcel, exportResponsesToPDF,
   exportComplianceToCSV, exportComplianceToTXT, exportComplianceToExcel, exportComplianceToPDF,
   exportReincidenciasToCSV, exportReincidenciasToTXT, exportReincidenciasToExcel, exportReincidenciasToPDF,
+  exportTemplateAdherenceToCSV, exportTemplateAdherenceToTXT, exportTemplateAdherenceToExcel, exportTemplateAdherenceToPDF,
+  exportStoreAdherenceToCSV, exportStoreAdherenceToTXT, exportStoreAdherenceToExcel, exportStoreAdherenceToPDF,
+  exportUserAdherenceToCSV, exportUserAdherenceToTXT, exportUserAdherenceToExcel, exportUserAdherenceToPDF,
 } from '@/lib/exportUtils'
 
 type StoreStats = {
@@ -139,14 +143,21 @@ export default function RelatoriosPage() {
   const [storeSort, setStoreSort] = useState<'best' | 'worst' | 'name'>('worst')
   const [templateSort, setTemplateSort] = useState<'best' | 'worst' | 'name'>('worst')
   const [userSort, setUserSort] = useState<'best' | 'worst' | 'name'>('worst')
+  const [cardExportMenu, setCardExportMenu] = useState<string | null>(null)
   const responsePerPage = 20
   const router = useRouter()
   const supabase = useMemo(() => createClient(), [])
+  const { refreshKey } = useRealtimeRefresh(['checklists'])
 
   useEffect(() => {
     fetchReportData()
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [period])
+
+  useEffect(() => {
+    if (refreshKey > 0 && navigator.onLine) fetchReportData()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [refreshKey])
 
   const fetchReportData = async () => {
     if (!isSupabaseConfigured || !supabase) {
@@ -358,7 +369,7 @@ export default function RelatoriosPage() {
           const fieldName = ap.field?.name || 'Campo desconhecido'
           const storeName = ap.store?.name || 'Loja desconhecida'
           const assignee = usersLookup.find((u: { id: string }) => u.id === ap.assigned_to)
-          const assigneeName = assignee?.full_name || 'Não atribuído'
+          const assigneeName = assignee?.full_name || 'Nao atribuido'
           const assigneeFunction = assignee?.function_ref?.name
           const responsible = assigneeFunction ? `${assigneeName} — ${assigneeFunction}` : assigneeName
 
@@ -609,7 +620,7 @@ export default function RelatoriosPage() {
   const getStatusBadge = (status: string) => {
     const badges: Record<string, { label: string; cls: string }> = {
       validado: { label: 'Validado', cls: 'bg-success/20 text-success' },
-      concluido: { label: 'Concluído', cls: 'bg-primary/20 text-primary' },
+      concluido: { label: 'Concluido', cls: 'bg-primary/20 text-primary' },
       em_andamento: { label: 'Em Andamento', cls: 'bg-warning/20 text-warning' },
       incompleto: { label: 'Incompleto', cls: 'bg-error/20 text-error' },
       rascunho: { label: 'Rascunho', cls: 'bg-surface-hover text-muted' },
@@ -677,6 +688,50 @@ export default function RelatoriosPage() {
     }
   }
 
+  const handleCardExport = async (cardType: 'template' | 'store' | 'user', format: 'csv' | 'txt' | 'xlsx' | 'pdf') => {
+    setCardExportMenu(null)
+    const timestamp = new Date().toISOString().split('T')[0]
+    if (cardType === 'template') {
+      if (format === 'csv') exportTemplateAdherenceToCSV(sortedTemplateAdherence, period, `adesao_template_${timestamp}.csv`)
+      else if (format === 'txt') exportTemplateAdherenceToTXT(sortedTemplateAdherence, period, `adesao_template_${timestamp}.txt`)
+      else if (format === 'xlsx') await exportTemplateAdherenceToExcel(sortedTemplateAdherence, period, `adesao_template_${timestamp}.xlsx`)
+      else await exportTemplateAdherenceToPDF(sortedTemplateAdherence, period)
+    } else if (cardType === 'store') {
+      if (format === 'csv') exportStoreAdherenceToCSV(sortedStoreAdherence, period, `adesao_loja_${timestamp}.csv`)
+      else if (format === 'txt') exportStoreAdherenceToTXT(sortedStoreAdherence, period, `adesao_loja_${timestamp}.txt`)
+      else if (format === 'xlsx') await exportStoreAdherenceToExcel(sortedStoreAdherence, period, `adesao_loja_${timestamp}.xlsx`)
+      else await exportStoreAdherenceToPDF(sortedStoreAdherence, period)
+    } else {
+      if (format === 'csv') exportUserAdherenceToCSV(sortedUserAdherence, period, `adesao_usuario_${timestamp}.csv`)
+      else if (format === 'txt') exportUserAdherenceToTXT(sortedUserAdherence, period, `adesao_usuario_${timestamp}.txt`)
+      else if (format === 'xlsx') await exportUserAdherenceToExcel(sortedUserAdherence, period, `adesao_usuario_${timestamp}.xlsx`)
+      else await exportUserAdherenceToPDF(sortedUserAdherence, period)
+    }
+  }
+
+  const CardExportDropdown = ({ cardType }: { cardType: 'template' | 'store' | 'user' }) => {
+    const isOpen = cardExportMenu === cardType
+    return (
+      <div className="relative">
+        <button
+          onClick={() => setCardExportMenu(isOpen ? null : cardType)}
+          className="p-1.5 rounded-lg text-muted hover:text-main hover:bg-surface-hover transition-colors"
+          title="Exportar esta tabela"
+        >
+          <FiDownload className="w-4 h-4" />
+        </button>
+        {isOpen && (
+          <div className="absolute right-0 top-full mt-1 bg-surface border border-subtle rounded-lg shadow-lg z-20 min-w-[120px]">
+            <button onClick={() => handleCardExport(cardType, 'csv')} className="w-full px-4 py-2 text-sm text-left text-main hover:bg-surface-hover rounded-t-lg">CSV</button>
+            <button onClick={() => handleCardExport(cardType, 'xlsx')} className="w-full px-4 py-2 text-sm text-left text-main hover:bg-surface-hover">Excel</button>
+            <button onClick={() => handleCardExport(cardType, 'txt')} className="w-full px-4 py-2 text-sm text-left text-main hover:bg-surface-hover">TXT</button>
+            <button onClick={() => handleCardExport(cardType, 'pdf')} className="w-full px-4 py-2 text-sm text-left text-main hover:bg-surface-hover rounded-b-lg">PDF</button>
+          </div>
+        )}
+      </div>
+    )
+  }
+
   const exportDropdown = (
     <div className="relative">
       <button
@@ -706,21 +761,13 @@ export default function RelatoriosPage() {
   }
 
   return (
-    <div className="min-h-screen bg-page">
-      <Header
-        title="Relatórios"
-        icon={FiBarChart2}
-        backHref={APP_CONFIG.routes.admin}
-      />
-
-      {/* Main Content */}
       <PageContainer>
         {/* Offline Warning */}
         {isOffline && (
           <div className="bg-warning/10 border border-warning/30 rounded-xl p-4 mb-6 flex items-center gap-3">
             <FiWifiOff className="w-5 h-5 text-warning" />
             <p className="text-warning text-sm">
-              Você está offline. Os dados de relatórios não estão disponíveis no cache local.
+              Voce esta offline. Os dados de relatorios nao estao disponiveis no cache local.
             </p>
           </div>
         )}
@@ -803,7 +850,7 @@ export default function RelatoriosPage() {
                 <Select
                   value={responseFilterUser}
                   onChange={(v) => { setResponseFilterUser(v); setResponsePage(1) }}
-                  placeholder="Todos os usuários"
+                  placeholder="Todos os usuarios"
                   options={allUsers.map(u => ({ value: u.id, label: u.name }))}
                 />
                 <Select
@@ -897,7 +944,7 @@ export default function RelatoriosPage() {
               {responseTotalPages > 1 && (
                 <div className="flex items-center justify-between px-4 py-3 border-t border-subtle">
                   <p className="text-sm text-muted">
-                    Página {responsePage} de {responseTotalPages}
+                    Pagina {responsePage} de {responseTotalPages}
                   </p>
                   <div className="flex gap-2">
                     <button
@@ -979,15 +1026,15 @@ export default function RelatoriosPage() {
             <div className="card p-4 border-l-4 border-l-[var(--border-subtle)]">
               <p className="text-xs text-muted mb-1">Rascunhos</p>
               <p className="text-3xl font-bold text-muted">{overallMetrics.statusBreakdown.rascunho}</p>
-              <p className="text-[10px] text-muted mt-1">Não iniciados</p>
+              <p className="text-[10px] text-muted mt-1">Nao iniciados</p>
             </div>
             <div className="card p-4 border-l-4 border-l-primary">
-              <p className="text-xs text-muted mb-1">Tempo Médio</p>
+              <p className="text-xs text-muted mb-1">Tempo Medio</p>
               <p className="text-3xl font-bold text-primary">{formatMinutes(avgCompletionTime)}</p>
-              <p className="text-[10px] text-muted mt-1">Início até conclusão</p>
+              <p className="text-[10px] text-muted mt-1">Inicio ate conclusao</p>
             </div>
             <div className={`card p-4 border-l-4 ${coverageGaps.length > 0 ? 'border-l-error' : 'border-l-success'}`}>
-              <p className="text-xs text-muted mb-1">Não Preenchidos</p>
+              <p className="text-xs text-muted mb-1">Nao Preenchidos</p>
               <p className={`text-3xl font-bold ${coverageGaps.length > 0 ? 'text-error' : 'text-success'}`}>{coverageGaps.length}</p>
               <p className="text-[10px] text-muted mt-1">Checklists pendentes de preenchimento</p>
             </div>
@@ -1000,14 +1047,14 @@ export default function RelatoriosPage() {
           const t = sb.total
           const segments = [
             { key: 'validado', label: 'Validado', count: sb.validado, color: 'bg-success', textColor: 'text-success' },
-            { key: 'concluido', label: 'Concluído', count: sb.concluido, color: 'bg-primary', textColor: 'text-primary' },
+            { key: 'concluido', label: 'Concluido', count: sb.concluido, color: 'bg-primary', textColor: 'text-primary' },
             { key: 'em_andamento', label: 'Em Andamento', count: sb.em_andamento, color: 'bg-warning', textColor: 'text-warning' },
             { key: 'incompleto', label: 'Incompleto', count: sb.incompleto, color: 'bg-error', textColor: 'text-error' },
             { key: 'rascunho', label: 'Rascunho', count: sb.rascunho, color: 'bg-surface-hover', textColor: 'text-muted' },
           ].filter(s => s.count > 0)
           return (
             <div className="card p-5 mb-6">
-              <h3 className="text-sm font-semibold text-main mb-3">Distribuição de Status</h3>
+              <h3 className="text-sm font-semibold text-main mb-3">Distribuicao de Status</h3>
               <div className="h-6 rounded-full overflow-hidden flex">
                 {segments.map(s => (
                   <div
@@ -1083,7 +1130,7 @@ export default function RelatoriosPage() {
           <div className="flex flex-wrap gap-3 mb-4">
             {[
               { label: 'Validado', color: 'bg-success' },
-              { label: 'Concluído', color: 'bg-primary' },
+              { label: 'Concluido', color: 'bg-primary' },
               { label: 'Em Andamento', color: 'bg-warning' },
               { label: 'Incompleto', color: 'bg-error' },
               { label: 'Rascunho', color: 'bg-surface-hover' },
@@ -1129,6 +1176,7 @@ export default function RelatoriosPage() {
               <button onClick={() => setTemplateSort('best')} className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${templateSort === 'best' ? 'bg-success/20 text-success' : 'bg-surface-hover text-muted hover:text-main'}`}>Melhor primeiro</button>
               <button onClick={() => setTemplateSort('name')} className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${templateSort === 'name' ? 'bg-primary/20 text-primary' : 'bg-surface-hover text-muted hover:text-main'}`}>A-Z</button>
             </div>
+            <CardExportDropdown cardType="template" />
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -1204,6 +1252,7 @@ export default function RelatoriosPage() {
               <button onClick={() => setStoreSort('best')} className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${storeSort === 'best' ? 'bg-success/20 text-success' : 'bg-surface-hover text-muted hover:text-main'}`}>Melhor primeiro</button>
               <button onClick={() => setStoreSort('name')} className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${storeSort === 'name' ? 'bg-primary/20 text-primary' : 'bg-surface-hover text-muted hover:text-main'}`}>A-Z</button>
             </div>
+            <CardExportDropdown cardType="store" />
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -1217,7 +1266,7 @@ export default function RelatoriosPage() {
                   <th className="px-3 py-3 text-right font-medium text-error">Incomp.</th>
                   <th className="px-3 py-3 text-right font-medium text-muted">Rasc.</th>
                   <th className="px-4 py-3 text-right font-medium text-muted">Taxa</th>
-                  <th className="px-4 py-3 text-left font-medium text-muted">Templates Faltando</th>
+                  <th className="px-4 py-3 text-center font-medium text-muted">Faltando</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-subtle">
@@ -1241,9 +1290,14 @@ export default function RelatoriosPage() {
                           'bg-error/20 text-error'
                         }`}>{s.metrics.completionRate}%</span>
                       </td>
-                      <td className="px-4 py-3">
+                      <td className="px-4 py-3 text-center">
                         {s.templatesNeverFilled.length > 0 ? (
-                          <span className="text-xs text-error">{s.templatesNeverFilled.join(', ')}</span>
+                          <span
+                            className="inline-block px-2 py-0.5 rounded-lg text-xs font-bold bg-error/20 text-error cursor-help"
+                            title={s.templatesNeverFilled.join('\n')}
+                          >
+                            {s.templatesNeverFilled.length}
+                          </span>
                         ) : (
                           <span className="text-xs text-muted">-</span>
                         )}
@@ -1268,6 +1322,7 @@ export default function RelatoriosPage() {
               <button onClick={() => setUserSort('best')} className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${userSort === 'best' ? 'bg-success/20 text-success' : 'bg-surface-hover text-muted hover:text-main'}`}>Melhor primeiro</button>
               <button onClick={() => setUserSort('name')} className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${userSort === 'name' ? 'bg-primary/20 text-primary' : 'bg-surface-hover text-muted hover:text-main'}`}>A-Z</button>
             </div>
+            <CardExportDropdown cardType="user" />
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -1318,9 +1373,9 @@ export default function RelatoriosPage() {
             <div className="px-6 py-4 border-b border-subtle">
               <h3 className="font-semibold text-main flex items-center gap-2">
                 <FiAlertTriangle className="w-4 h-4 text-error" />
-                Checklists Não Preenchidos
+                Checklists Nao Preenchidos
               </h3>
-              <p className="text-xs text-muted mt-1">Combinações de template + loja que deveriam ter sido preenchidas no período mas não foram</p>
+              <p className="text-xs text-muted mt-1">Combinacoes de template + loja que deveriam ter sido preenchidas no periodo mas nao foram</p>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
@@ -1376,7 +1431,7 @@ export default function RelatoriosPage() {
             <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-8">
               <div className="card p-4">
                 <p className="text-2xl font-bold text-main">{complianceSummary.totalNonConformities}</p>
-                <p className="text-xs text-muted">Não Conformidades</p>
+                <p className="text-xs text-muted">Nao Conformidades</p>
               </div>
               <div className="card p-4">
                 <p className="text-2xl font-bold text-success">{complianceSummary.complianceRate}%</p>
@@ -1399,7 +1454,7 @@ export default function RelatoriosPage() {
             {/* By field table */}
             <div className="card overflow-hidden mb-6">
               <div className="px-6 py-4 border-b border-subtle">
-                <h3 className="font-semibold text-main">Não Conformidades por Campo</h3>
+                <h3 className="font-semibold text-main">Nao Conformidades por Campo</h3>
               </div>
               <div className="overflow-x-auto">
                 <table className="w-full">
@@ -1449,7 +1504,7 @@ export default function RelatoriosPage() {
                     <div key={store.storeId} className="px-6 py-4 flex items-center justify-between hover:bg-surface-hover transition-colors">
                       <div>
                         <p className="font-medium text-main">{store.storeName}</p>
-                        <p className="text-xs text-muted">{store.totalPlans} não conformidades, {store.overduePlans} vencidos</p>
+                        <p className="text-xs text-muted">{store.totalPlans} nao conformidades, {store.overduePlans} vencidos</p>
                       </div>
                       <span className={`px-2 py-1 rounded-lg text-xs font-bold ${
                         store.rate >= 80 ? 'bg-success/20 text-success' :
@@ -1584,17 +1639,17 @@ export default function RelatoriosPage() {
             {/* Assignee stats */}
             <div className="card overflow-hidden">
               <div className="px-6 py-4 border-b border-subtle">
-                <h3 className="font-semibold text-main">Desempenho por Responsável</h3>
+                <h3 className="font-semibold text-main">Desempenho por Responsavel</h3>
               </div>
               <div className="overflow-x-auto">
                 <table className="w-full">
                   <thead className="bg-surface-hover">
                     <tr>
-                      <th className="px-4 py-3 text-left text-sm font-medium text-muted">Responsável</th>
+                      <th className="px-4 py-3 text-left text-sm font-medium text-muted">Responsavel</th>
                       <th className="px-4 py-3 text-right text-sm font-medium text-muted">Planos</th>
-                      <th className="px-4 py-3 text-right text-sm font-medium text-muted">Concluídos</th>
+                      <th className="px-4 py-3 text-right text-sm font-medium text-muted">Concluidos</th>
                       <th className="px-4 py-3 text-right text-sm font-medium text-muted">Vencidos</th>
-                      <th className="px-4 py-3 text-right text-sm font-medium text-muted">Tempo Médio</th>
+                      <th className="px-4 py-3 text-right text-sm font-medium text-muted">Tempo Medio</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-subtle">
@@ -1616,6 +1671,5 @@ export default function RelatoriosPage() {
           </div>
         )}
       </PageContainer>
-    </div>
   )
 }

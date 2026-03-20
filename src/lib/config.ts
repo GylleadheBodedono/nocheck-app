@@ -3,23 +3,13 @@
 // Altere aqui para mudar em todo o projeto
 // ============================================
 
-/** Cor primaria padrao (teal) usada como fallback quando o tenant nao define tema */
-const DEFAULT_PRIMARY_COLOR = '#0D9488'
-
-/**
- * Configuracao global da aplicacao.
- *
- * Contem informacoes do app, rotas, mensagens padrao,
- * categorias de templates e roles de usuarios.
- * Valores aqui sao fallbacks — tenants podem sobrescrever via settings.
- */
 export const APP_CONFIG = {
   // Informacoes do App
-  name: 'OpereCheck',
-  fullName: 'OpereCheck - Gestão Operacional e Checklists',
-  description: 'Gestão operacional e checklists inteligentes',
-  version: '2.1.0',
-  company: 'OpereCheck',
+  name: 'NoCheck',
+  fullName: 'NoCheck - Sistema de Checklists',
+  description: 'Sistema de checklists do Grupo Do No',
+  version: '2.0.0',
+  company: 'Grupo Do No',
   year: new Date().getFullYear(),
 
   // Rotas
@@ -48,6 +38,7 @@ export const APP_CONFIG = {
     platform: '/platform',
     platformClientes: '/platform/clientes',
     platformConfiguracoes: '/platform/configuracoes',
+    userReports: '/relatorios',
     checklistNew: '/checklist/novo',
     cadastro: '/cadastro',
     esqueciSenha: '/esqueci-senha',
@@ -74,7 +65,7 @@ export const APP_CONFIG = {
 
   // Configuracoes de storage
   storage: {
-    themeKey: 'operecheck-theme',
+    themeKey: 'nocheck-theme',
   },
 
   // Categorias de templates
@@ -94,54 +85,19 @@ export const APP_CONFIG = {
   ],
 } as const
 
-/** Tipo inferido da configuracao global (readonly) */
+// Tipos para autocomplete
 export type AppConfig = typeof APP_CONFIG
 
-// ============================================
-// HELPERS TENANT-AWARE
-// Mesclam settings do tenant com fallbacks
-// ============================================
-
-import type { Organization } from '@/types/tenant'
-
-/**
- * Retorna o nome do app configurado pelo tenant.
- * Usa "OpereCheck" como fallback se nao houver configuracao.
- *
- * @param org - Organizacao atual (pode ser null durante carregamento)
- * @returns Nome do app do tenant ou fallback
- */
-export function getTenantAppName(org: Organization | null | undefined): string {
-  return org?.settings?.theme?.appName || APP_CONFIG.name
+// Tenant helpers (white-label)
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function getTenantAppName(org?: any): string {
+  if (org?.settings?.theme?.appName) return org.settings.theme.appName
+  if (typeof window !== 'undefined') return document.title || APP_CONFIG.name
+  return APP_CONFIG.name
 }
 
-/**
- * Retorna a URL do logo configurado pelo tenant.
- *
- * @param org - Organizacao atual (pode ser null durante carregamento)
- * @returns URL do logo ou null se nao configurado
- */
-export function getTenantLogoUrl(org: Organization | null | undefined): string | null {
-  return org?.settings?.theme?.logoUrl || null
-}
-
-/**
- * Retorna a URL do favicon configurado pelo tenant.
- *
- * @param org - Organizacao atual (pode ser null durante carregamento)
- * @returns URL do favicon ou null se nao configurado
- */
-export function getTenantFaviconUrl(org: Organization | null | undefined): string | null {
-  return org?.settings?.theme?.faviconUrl || null
-}
-
-/**
- * Retorna a cor primaria do tenant para uso em temas.
- * Usa teal padrao ({@link DEFAULT_PRIMARY_COLOR}) como fallback.
- *
- * @param org - Organizacao atual (pode ser null durante carregamento)
- * @returns Cor hexadecimal (ex: "#0D9488")
- */
-export function getTenantPrimaryColor(org: Organization | null | undefined): string {
-  return org?.settings?.theme?.primaryColor || DEFAULT_PRIMARY_COLOR
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function getTenantLogoUrl(org?: any): string | null {
+  if (org?.settings?.theme?.logoUrl) return org.settings.theme.logoUrl
+  return null
 }

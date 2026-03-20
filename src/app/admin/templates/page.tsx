@@ -12,14 +12,14 @@ import {
   FiEyeOff,
   FiCopy,
   FiSearch,
-  FiClipboard,
   FiWifiOff,
   FiStar,
 } from 'react-icons/fi'
 import { APP_CONFIG } from '@/lib/config'
-import { LoadingPage, Header, PageContainer } from '@/components/ui'
+import { LoadingPage, PageContainer } from '@/components/ui'
 import type { ChecklistTemplate, TemplateField, TemplateVisibility, Store } from '@/types/database'
 import { getAuthCache, getUserCache, getTemplatesCache, getStoresCache } from '@/lib/offlineCache'
+import { useRealtimeRefresh } from '@/hooks/useRealtimeRefresh'
 
 type TemplateWithDetails = ChecklistTemplate & {
   fields: TemplateField[]
@@ -37,11 +37,17 @@ export default function TemplatesPage() {
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
   const router = useRouter()
   const supabase = useMemo(() => createClient(), [])
+  const { refreshKey } = useRealtimeRefresh(['checklist_templates', 'template_fields'])
 
   useEffect(() => {
     fetchTemplates()
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  useEffect(() => {
+    if (refreshKey > 0 && navigator.onLine) fetchTemplates()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [refreshKey])
 
   const fetchTemplates = async () => {
     let userId: string | null = null
@@ -175,15 +181,21 @@ export default function TemplatesPage() {
   }
 
   const duplicateTemplate = async (template: TemplateWithDetails) => {
-    // Create new template
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: newTemplate, error: templateError } = await (supabase as any)
+    const sb = supabase as any
+
+    // 1. Criar template com TODOS os metadados
+    const { data: newTemplate, error: templateError } = await sb
       .from('checklist_templates')
       .insert({
         name: `${template.name} (Cópia)`,
         description: template.description,
         category: template.category,
         is_active: false,
+        allowed_start_time: template.allowed_start_time ?? null,
+        allowed_end_time: template.allowed_end_time ?? null,
+        justification_deadline_hours: template.justification_deadline_hours ?? null,
+        admin_only: template.admin_only ?? false,
       })
       .select()
       .single()
@@ -193,63 +205,65 @@ export default function TemplatesPage() {
       return
     }
 
-    // Copy sections (etapas) and build old→new ID map
+    // 2. Copiar sections e mapear IDs antigos → novos
     const sectionIdMap: Record<number, number> = {}
-
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: originalSections } = await (supabase as any)
-      .from('template_sections')
-      .select('*')
-      .eq('template_id', template.id)
-      .order('sort_order')
+    const { data: originalSections } = await sb
+      .from('template_sections').select('*').eq('template_id', template.id).order('sort_order')
 
     if (originalSections && originalSections.length > 0) {
       for (const section of originalSections) {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const { data: newSection, error: sectionError } = await (supabase as any)
+        const { data: newSection } = await sb
           .from('template_sections')
-          .insert({
-            template_id: newTemplate.id,
-            name: section.name,
-            description: section.description,
-            sort_order: section.sort_order,
-          })
-          .select()
-          .single()
-
-        if (sectionError || !newSection) {
-          console.error('Error copying section:', sectionError)
-          continue
-        }
-
-        sectionIdMap[section.id] = newSection.id
+          .insert({ template_id: newTemplate.id, name: section.name, description: section.description, sort_order: section.sort_order })
+          .select().single()
+        if (newSection) sectionIdMap[section.id] = newSection.id
       }
     }
 
-    // Copy fields (remapping section_id to new sections)
+    // 3. Copiar fields com mapeamento de IDs (necessario para conditions)
+    const fieldIdMap: Record<number, number> = {}
     if (template.fields.length > 0) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { error: fieldsError } = await (supabase as any)
-        .from('template_fields')
-        .insert(
-          template.fields.map(f => ({
-            template_id: newTemplate.id,
-            name: f.name,
-            field_type: f.field_type,
-            is_required: f.is_required,
-            sort_order: f.sort_order,
-            options: f.options,
-            validation: f.validation,
-            calculation: f.calculation,
-            placeholder: f.placeholder,
-            help_text: f.help_text,
-            section_id: f.section_id ? sectionIdMap[f.section_id] || null : null,
-          }))
-        )
-
-      if (fieldsError) {
-        console.error('Error copying fields:', fieldsError)
+      for (const f of template.fields) {
+        const { data: newField } = await sb
+          .from('template_fields')
+          .insert({
+            template_id: newTemplate.id, name: f.name, field_type: f.field_type,
+            is_required: f.is_required, sort_order: f.sort_order, options: f.options,
+            validation: f.validation, calculation: f.calculation, placeholder: f.placeholder,
+            help_text: f.help_text, section_id: f.section_id ? sectionIdMap[f.section_id] || null : null,
+          })
+          .select().single()
+        if (newField) fieldIdMap[f.id] = newField.id
       }
+    }
+
+    // 4. Copiar field_conditions (regras de nao-conformidade)
+    const originalFieldIds = template.fields.map(f => f.id)
+    if (originalFieldIds.length > 0) {
+      const { data: conditions } = await sb.from('field_conditions').select('*').in('field_id', originalFieldIds)
+      if (conditions && conditions.length > 0) {
+        const rows = conditions
+          .filter((c: { field_id: number }) => fieldIdMap[c.field_id])
+          .map((c: { field_id: number; condition_type: string; condition_value: unknown; severity: string; default_assignee_id: string | null; deadline_days: number; description_template: string | null; is_active: boolean; require_photo_on_completion: boolean | null; require_text_on_completion: boolean | null; completion_max_chars: number | null }) => ({
+            field_id: fieldIdMap[c.field_id], condition_type: c.condition_type, condition_value: c.condition_value,
+            severity: c.severity, default_assignee_id: c.default_assignee_id, deadline_days: c.deadline_days,
+            description_template: c.description_template, is_active: c.is_active,
+            require_photo_on_completion: c.require_photo_on_completion ?? false,
+            require_text_on_completion: c.require_text_on_completion ?? false,
+            completion_max_chars: c.completion_max_chars ?? null,
+          }))
+        if (rows.length > 0) await sb.from('field_conditions').insert(rows)
+      }
+    }
+
+    // 5. Copiar template_visibility
+    if (template.visibility && template.visibility.length > 0) {
+      await sb.from('template_visibility').insert(
+        template.visibility.map((v: { store_id: number; sector_id: number | null; function_id: number | null; roles: string[] | null }) => ({
+          template_id: newTemplate.id, store_id: v.store_id, sector_id: v.sector_id ?? null,
+          function_id: v.function_id ?? null, roles: v.roles ?? [],
+        }))
+      )
     }
 
     fetchTemplates()
@@ -371,23 +385,16 @@ export default function TemplatesPage() {
   }
 
   return (
-    <div className="min-h-screen bg-page">
-      <Header
-        title="Modelos de Checklist"
-        icon={FiClipboard}
-        backHref={APP_CONFIG.routes.admin}
-        actions={isOffline ? [] : [
-          {
-            label: 'Novo Checklist',
-            href: APP_CONFIG.routes.adminTemplatesNew,
-            icon: FiPlus,
-            variant: 'primary',
-          },
-        ]}
-      />
-
-      {/* Main Content */}
       <PageContainer>
+        {/* Top actions */}
+        {!isOffline && (
+          <div className="flex items-center justify-end mb-6">
+            <Link href={APP_CONFIG.routes.adminTemplatesNew} className="btn-primary flex items-center gap-2">
+              <FiPlus className="w-4 h-4" />
+              Novo Checklist
+            </Link>
+          </div>
+        )}
         {/* Offline Warning */}
         {isOffline && (
           <div className="bg-warning/10 border border-warning/30 rounded-xl p-4 mb-6 flex items-center gap-3">
@@ -603,6 +610,5 @@ export default function TemplatesPage() {
           </p>
         </div>
       </PageContainer>
-    </div>
   )
 }

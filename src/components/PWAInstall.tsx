@@ -48,7 +48,7 @@ export function PWAInstall() {
   useEffect(() => {
     // Registrar Service Worker e configurar auto-update
     if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('/sw.js').then(registration => {
+      navigator.serviceWorker.register('/sw.js', { updateViaCache: 'none' }).then(registration => {
         console.log('[PWA] SW registered, checking for updates every 60s')
 
         // Verifica se já tem SW waiting (update pendente de sessao anterior)
@@ -145,6 +145,18 @@ export function PWAInstall() {
       window.removeEventListener('appinstalled', handleAppInstalled)
     }
   }, [shouldShowBanner])
+
+  // Auto-update: se banner apareceu e usuario nao clicou, aplica em 30s
+  useEffect(() => {
+    if (!updateAvailable || !waitingRegistration?.waiting) return
+    const timer = setTimeout(() => {
+      if (navigator.onLine && waitingRegistration.waiting) {
+        console.log('[PWA] Auto-update apos 30s sem interacao')
+        waitingRegistration.waiting.postMessage({ type: 'SKIP_WAITING' })
+      }
+    }, 30000)
+    return () => clearTimeout(timer)
+  }, [updateAvailable, waitingRegistration])
 
   const handleInstall = async () => {
     console.log('[PWA] Botão Instalar clicado')

@@ -17,8 +17,9 @@ import {
 } from 'react-icons/fi'
 import Link from 'next/link'
 import { APP_CONFIG } from '@/lib/config'
-import { LoadingPage, Header, Select, PageContainer } from '@/components/ui'
+import { LoadingPage, Select, PageContainer } from '@/components/ui'
 import { getAuthCache, getUserCache } from '@/lib/offlineCache'
+import { useRealtimeRefresh } from '@/hooks/useRealtimeRefresh'
 import {
   fetchNCPhotoReport,
   groupByWeek,
@@ -67,9 +68,9 @@ function getDateRange(preset: PeriodPreset): { from: string; to: string } {
 }
 
 const SEVERITY_CONFIG: Record<string, { label: string; color: string; bg: string }> = {
-  critica: { label: 'Crítica', color: 'text-red-700 dark:text-red-400', bg: 'bg-red-100 dark:bg-red-900/30' },
+  critica: { label: 'Critica', color: 'text-red-700 dark:text-red-400', bg: 'bg-red-100 dark:bg-red-900/30' },
   alta: { label: 'Alta', color: 'text-orange-700 dark:text-orange-400', bg: 'bg-orange-100 dark:bg-orange-900/30' },
-  media: { label: 'Média', color: 'text-yellow-700 dark:text-yellow-400', bg: 'bg-yellow-100 dark:bg-yellow-900/30' },
+  media: { label: 'Media', color: 'text-yellow-700 dark:text-yellow-400', bg: 'bg-yellow-100 dark:bg-yellow-900/30' },
   baixa: { label: 'Baixa', color: 'text-blue-700 dark:text-blue-400', bg: 'bg-blue-100 dark:bg-blue-900/30' },
 }
 
@@ -77,7 +78,7 @@ const STATUS_CONFIG: Record<string, { label: string; color: string }> = {
   aberto: { label: 'Aberto', color: 'text-yellow-600' },
   pendente: { label: 'Pendente', color: 'text-yellow-600' },
   em_andamento: { label: 'Em Andamento', color: 'text-blue-600' },
-  concluido: { label: 'Concluído', color: 'text-green-600' },
+  concluido: { label: 'Concluido', color: 'text-green-600' },
   vencido: { label: 'Vencido', color: 'text-red-600' },
   cancelado: { label: 'Cancelado', color: 'text-gray-500' },
 }
@@ -87,6 +88,7 @@ const PAGE_SIZE = 20
 export default function FotosNCPage() {
   const router = useRouter()
   const supabase = useMemo(() => createClient(), [])
+  const { refreshKey } = useRealtimeRefresh(['checklist_responses', 'action_plans'])
 
   // State
   const [loading, setLoading] = useState(true)
@@ -201,6 +203,11 @@ export default function FotosNCPage() {
     fetchData()
   }, [fetchData])
 
+  useEffect(() => {
+    if (refreshKey > 0 && navigator.onLine) fetchData()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [refreshKey])
+
   // Client-side status filter
   const filteredItems = useMemo(() => {
     if (!statusFilter) return items
@@ -273,13 +280,7 @@ export default function FotosNCPage() {
   if (loading) return <LoadingPage />
 
   return (
-    <div className="min-h-screen bg-background">
-      <Header
-        title="Relatório Fotográfico NC"
-        icon={FiCamera}
-        backHref={APP_CONFIG.routes.adminReports}
-      />
-
+    <>
       <PageContainer className="!py-6 space-y-6">
         {/* Filters */}
         <div className="card p-4 sticky top-0 z-10 space-y-3">
@@ -288,8 +289,8 @@ export default function FotosNCPage() {
             {([
               { key: 'this_week', label: 'Esta semana' },
               { key: 'last_week', label: 'Semana passada' },
-              { key: '30d', label: 'Últimos 30 dias' },
-              { key: 'custom', label: 'Período custom' },
+              { key: '30d', label: 'Ultimos 30 dias' },
+              { key: 'custom', label: 'Periodo custom' },
             ] as { key: PeriodPreset; label: string }[]).map(p => (
               <button
                 key={p.key}
@@ -314,7 +315,7 @@ export default function FotosNCPage() {
                 onChange={e => setCustomFrom(e.target.value)}
                 className="input text-sm"
               />
-              <span className="text-muted text-sm">até</span>
+              <span className="text-muted text-sm">ate</span>
               <input
                 type="date"
                 value={customTo}
@@ -348,9 +349,9 @@ export default function FotosNCPage() {
               placeholder="Severidade"
               className="text-sm min-w-[120px]"
               options={[
-                { value: 'critica', label: 'Crítica' },
+                { value: 'critica', label: 'Critica' },
                 { value: 'alta',    label: 'Alta' },
-                { value: 'media',   label: 'Média' },
+                { value: 'media',   label: 'Media' },
                 { value: 'baixa',   label: 'Baixa' },
               ]}
             />
@@ -363,7 +364,7 @@ export default function FotosNCPage() {
               options={[
                 { value: 'aberto',       label: 'Aberto' },
                 { value: 'em_andamento', label: 'Em Andamento' },
-                { value: 'concluido',    label: 'Concluído' },
+                { value: 'concluido',    label: 'Concluido' },
                 { value: 'vencido',      label: 'Vencido' },
                 { value: 'cancelado',    label: 'Cancelado' },
               ]}
@@ -422,14 +423,14 @@ export default function FotosNCPage() {
           <SummaryCard icon={<FiAlertTriangle />} label="Total NC" value={summary.totalNC} color="text-red-500" />
           <SummaryCard icon={<FiCamera />} label="Com fotos" value={summary.withPhotos} color="text-green-500" />
           <SummaryCard icon={<FiImage />} label="Total fotos" value={summary.totalPhotos} color="text-blue-500" />
-          <SummaryCard icon={<FiCheckCircle />} label="Fotos evidência" value={summary.totalEvidencePhotos} color="text-purple-500" />
+          <SummaryCard icon={<FiCheckCircle />} label="Fotos evidencia" value={summary.totalEvidencePhotos} color="text-purple-500" />
         </div>
 
         {/* Content */}
         {filteredItems.length === 0 ? (
           <div className="card p-12 text-center">
             <FiCamera className="text-4xl text-muted mx-auto mb-3" />
-            <p className="text-muted">Nenhuma não-conformidade encontrada no período selecionado.</p>
+            <p className="text-muted">Nenhuma nao-conformidade encontrada no periodo selecionado.</p>
           </div>
         ) : viewMode === 'date' ? (
           /* Date view - flat list */
@@ -497,7 +498,7 @@ export default function FotosNCPage() {
           />
         </div>
       )}
-    </div>
+    </>
   )
 }
 
@@ -556,7 +557,7 @@ function NCCard({ item, onPhotoClick }: { item: NCPhotoItem; onPhotoClick: (url:
       {/* Texto da resposta (conditionalText) */}
       {item.conditionalText && (
         <div className="p-2.5 rounded-lg bg-red-500/5 border border-red-500/15">
-          <p className="text-xs text-muted mb-0.5">Observação do preenchedor:</p>
+          <p className="text-xs text-muted mb-0.5">Observacao do preenchedor:</p>
           <p className="text-sm text-main">{item.conditionalText}</p>
         </div>
       )}
@@ -609,7 +610,7 @@ function NCCard({ item, onPhotoClick }: { item: NCPhotoItem; onPhotoClick: (url:
         href={`${APP_CONFIG.routes.adminActionPlans}/${item.actionPlanId}`}
         className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
       >
-        Ver plano de ação <FiExternalLink />
+        Ver plano de acao <FiExternalLink />
       </Link>
     </div>
   )

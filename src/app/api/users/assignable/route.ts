@@ -9,8 +9,8 @@ const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || ''
 
 /**
  * GET /api/users/assignable
- * Retorna lista de usuarios ativos (id, full_name) para qualquer usuario autenticado.
- * Usa service role para bypass de RLS.
+ * Retorna lista de funcoes ativas (id, name) para o dropdown de responsaveis.
+ * Cada funcao pode ter multiplos usuarios vinculados.
  */
 export async function GET(request: NextRequest) {
   const auth = await verifyApiAuth(request)
@@ -22,17 +22,17 @@ export async function GET(request: NextRequest) {
     })
 
     const { data, error } = await supabase
-      .from('users')
-      .select('id, full_name')
+      .from('functions')
+      .select('id, name')
       .eq('is_active', true)
-      .order('full_name')
+      .order('name')
 
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 })
     }
 
     return NextResponse.json(
-      { users: data || [] },
+      { functions: data || [] },
       { headers: { 'Cache-Control': 'private, max-age=60' } }
     )
   } catch (err) {

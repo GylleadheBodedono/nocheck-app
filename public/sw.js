@@ -1,9 +1,9 @@
-// OpereCheck Service Worker v13.0.0
+// NoCheck Service Worker v14.0.0
 // Estrategia: Precache COMPLETO + notificacoes do sistema + auto-update
 
-const CACHE_VERSION = 'v13'
-const APP_CACHE = `operecheck-app-${CACHE_VERSION}`
-const STATIC_CACHE = `operecheck-static-${CACHE_VERSION}`
+const CACHE_VERSION = 'v14'
+const APP_CACHE = `nocheck-app-${CACHE_VERSION}`
+const STATIC_CACHE = `nocheck-static-${CACHE_VERSION}`
 
 // URLs que NUNCA devem ser cacheadas
 const NEVER_CACHE = [
@@ -25,7 +25,7 @@ const NEVER_CACHE = [
 // INSTALL - Precache imediato dos assets essenciais
 // ============================================
 self.addEventListener('install', (event) => {
-  console.log('[SW v13] Installing...')
+  console.log('[SW v14] Installing...')
 
   event.waitUntil(
     caches.open(STATIC_CACHE)
@@ -39,11 +39,11 @@ self.addEventListener('install', (event) => {
           '/Logo.png',
           '/Logo-dark.png',
         ]).catch(err => {
-          console.log('[SW v13] Some static assets failed to cache:', err)
+          console.log('[SW v14] Some static assets failed to cache:', err)
         })
       })
       .then(() => {
-        console.log('[SW v13] Install complete, waiting for activation...')
+        console.log('[SW v14] Install complete, waiting for activation...')
         // NAO chama skipWaiting — espera o usuario aceitar a atualizacao via banner
       })
   )
@@ -53,17 +53,17 @@ self.addEventListener('install', (event) => {
 // ACTIVATE - Limpa caches antigos e assume controle
 // ============================================
 self.addEventListener('activate', (event) => {
-  console.log('[SW v13] Activating...')
+  console.log('[SW v14] Activating...')
 
   event.waitUntil(
     caches.keys()
       .then(async (keys) => {
-        const oldAppCaches = keys.filter(k => k.startsWith('operecheck-app-') && k !== APP_CACHE)
-        const oldStaticCaches = keys.filter(k => k.startsWith('operecheck-static-') && k !== STATIC_CACHE)
+        const oldAppCaches = keys.filter(k => k.startsWith('nocheck-app-') && k !== APP_CACHE)
+        const oldStaticCaches = keys.filter(k => k.startsWith('nocheck-static-') && k !== STATIC_CACHE)
 
         // Migra entradas dos caches antigos para os novos
         if (oldAppCaches.length > 0) {
-          console.log('[SW v13] Migrating entries from old app caches:', oldAppCaches)
+          console.log('[SW v14] Migrating entries from old app caches:', oldAppCaches)
           const newCache = await caches.open(APP_CACHE)
           for (const oldName of oldAppCaches) {
             const oldCache = await caches.open(oldName)
@@ -78,13 +78,13 @@ self.addEventListener('activate', (event) => {
         // Deleta caches antigos apos migracao
         await Promise.all(
           [...oldAppCaches, ...oldStaticCaches].map(k => {
-            console.log('[SW v13] Deleting old cache:', k)
+            console.log('[SW v14] Deleting old cache:', k)
             return caches.delete(k)
           })
         )
       })
       .then(() => {
-        console.log('[SW v13] Taking control of all clients')
+        console.log('[SW v14] Taking control of all clients')
         return self.clients.claim()
       })
       .then(() => {
@@ -131,13 +131,13 @@ self.addEventListener('fetch', (event) => {
 
   // Navegacao (paginas HTML) - Network First com fallback para cache
   if (request.mode === 'navigate') {
-    console.log('[SW v13] Navigate:', url.pathname, url.search)
+    console.log('[SW v14] Navigate:', url.pathname, url.search)
     // NUNCA cachear: auth params, landing page (/) ou rotas de auth
     if (url.search.includes('error=') || url.search.includes('code=') || url.search.includes('token') || url.pathname.startsWith('/auth') || url.pathname === '/') {
-      console.log('[SW v13] BYPASS (not cached):', url.pathname)
+      console.log('[SW v14] BYPASS (not cached):', url.pathname)
       return // Deixa o browser lidar normalmente
     }
-    console.log('[SW v13] networkFirst:', url.pathname)
+    console.log('[SW v14] networkFirst:', url.pathname)
     event.respondWith(networkFirstForNavigation(request))
     return
   }
@@ -168,7 +168,7 @@ async function cacheFirst(request) {
 
     return networkResponse
   } catch (error) {
-    console.log('[SW v13] Fetch failed:', request.url)
+    console.log('[SW v14] Fetch failed:', request.url)
 
     // Retorna uma resposta de erro generica
     return new Response('Offline - recurso nao disponivel', {
@@ -196,12 +196,12 @@ async function networkFirstForNavigation(request) {
 
     return networkResponse
   } catch (error) {
-    console.log('[SW v13] Network failed for navigation:', url.pathname)
+    console.log('[SW v14] Network failed for navigation:', url.pathname)
 
     // Tenta o cache
     const cachedResponse = await caches.match(request)
     if (cachedResponse) {
-      console.log('[SW v13] Serving from cache:', url.pathname)
+      console.log('[SW v14] Serving from cache:', url.pathname)
       return cachedResponse
     }
 
@@ -210,7 +210,7 @@ async function networkFirstForNavigation(request) {
     for (const alt of alternatives) {
       const cached = await caches.match(alt)
       if (cached) {
-        console.log('[SW v13] Serving alternative:', alt)
+        console.log('[SW v14] Serving alternative:', alt)
         return cached
       }
     }
@@ -259,7 +259,7 @@ async function cacheAssetsFromHtml(response, origin) {
           const assetResponse = await fetch(url)
           if (assetResponse.ok) {
             await cache.put(url, assetResponse)
-            console.log('[SW v13] Cached asset:', url)
+            console.log('[SW v14] Cached asset:', url)
           }
         }
       } catch {
@@ -267,7 +267,7 @@ async function cacheAssetsFromHtml(response, origin) {
       }
     }
   } catch (error) {
-    console.log('[SW v13] Error caching assets from HTML:', error)
+    console.log('[SW v14] Error caching assets from HTML:', error)
   }
 }
 
@@ -278,7 +278,7 @@ function getOfflineHTML() {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>OpereCheck - Offline</title>
+  <title>NoCheck - Offline</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
@@ -358,7 +358,7 @@ self.addEventListener('message', async (event) => {
     case 'CLEAR_CACHE':
       const keys = await caches.keys()
       await Promise.all(keys.map(key => caches.delete(key)))
-      console.log('[SW v13] All caches cleared')
+      console.log('[SW v14] All caches cleared')
       // Confirmar de volta para o client via MessageChannel
       if (event.ports && event.ports[0]) {
         event.ports[0].postMessage({ type: 'CACHE_CLEARED' })
@@ -390,7 +390,7 @@ self.addEventListener('message', async (event) => {
         await self.registration.showNotification(payload.title, {
           body: payload.body || '',
           icon: '/web-app-manifest-192x192.png',
-          tag: 'operecheck-' + (payload.id != null ? payload.id : Date.now()),
+          tag: 'nocheck-' + (payload.id != null ? payload.id : Date.now()),
           data: { url: fullUrl }
         })
       }
@@ -402,7 +402,7 @@ self.addEventListener('message', async (event) => {
 // PRECACHE COMPLETO - Cacheia toda a aplicacao
 // ============================================
 async function precacheApp() {
-  console.log('[SW v13] Starting FULL app precache...')
+  console.log('[SW v14] Starting FULL app precache...')
 
   const cache = await caches.open(APP_CACHE)
 
@@ -440,10 +440,10 @@ async function precacheApp() {
       if (response.ok) {
         await cache.put(asset, response)
         totalCached++
-        console.log('[SW v13] Cached static:', asset)
+        console.log('[SW v14] Cached static:', asset)
       }
     } catch {
-      console.log('[SW v13] Failed static:', asset)
+      console.log('[SW v14] Failed static:', asset)
     }
   }
 
@@ -458,7 +458,7 @@ async function precacheApp() {
 
         await cache.put(pageUrl, responseToCache)
         totalCached++
-        console.log('[SW v13] Cached page:', pageUrl)
+        console.log('[SW v14] Cached page:', pageUrl)
 
         // Extrai e cacheia todos os assets desta pagina
         const html = await responseToProcess.text()
@@ -482,7 +482,7 @@ async function precacheApp() {
           }
         }
 
-        console.log('[SW v13] Found', assetUrls.size, 'assets in', pageUrl)
+        console.log('[SW v14] Found', assetUrls.size, 'assets in', pageUrl)
 
         // Cacheia cada asset
         for (const assetUrl of assetUrls) {
@@ -501,15 +501,15 @@ async function precacheApp() {
         }
       }
     } catch (err) {
-      console.log('[SW v13] Failed page:', pageUrl, err)
+      console.log('[SW v14] Failed page:', pageUrl, err)
     }
   }
 
-  console.log('[SW v13] Precache COMPLETE! Total items:', totalCached)
+  console.log('[SW v14] Precache COMPLETE! Total items:', totalCached)
 
   // Lista todos os items no cache
   const cachedItems = await cache.keys()
-  console.log('[SW v13] Cache now contains', cachedItems.length, 'items')
+  console.log('[SW v14] Cache now contains', cachedItems.length, 'items')
 }
 
 // ============================================
@@ -546,7 +546,7 @@ self.addEventListener('notificationclick', (event) => {
 // ============================================
 self.addEventListener('sync', (event) => {
   if (event.tag === 'sync-checklists') {
-    console.log('[SW v13] Background sync triggered')
+    console.log('[SW v14] Background sync triggered')
     event.waitUntil(
       self.clients.matchAll().then((clients) => {
         clients.forEach((client) => {
@@ -557,4 +557,4 @@ self.addEventListener('sync', (event) => {
   }
 })
 
-console.log('[SW v13] Service Worker loaded')
+console.log('[SW v14] Service Worker loaded')

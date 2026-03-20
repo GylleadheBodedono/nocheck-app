@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState, useMemo, useCallback } from 'react'
+import { useRealtimeRefresh } from '@/hooks/useRealtimeRefresh'
 import { useRouter } from 'next/navigation'
 import { createClient, isSupabaseConfigured } from '@/lib/supabase'
 import {
@@ -15,7 +16,7 @@ import {
   FiFileText,
 } from 'react-icons/fi'
 import { APP_CONFIG } from '@/lib/config'
-import { LoadingPage, Header, Select, PageContainer } from '@/components/ui'
+import { LoadingPage, Select, PageContainer } from '@/components/ui'
 import { getAuthCache, getUserCache } from '@/lib/offlineCache'
 import type { Severity } from '@/types/database'
 
@@ -29,6 +30,7 @@ type Preset = {
   description_template: string | null
   severity: Severity
   default_assignee_id: string | null
+  default_function_id: number | null
   deadline_days: number
   is_active: boolean
   require_photo_on_completion: boolean
@@ -37,16 +39,16 @@ type Preset = {
   created_at: string
 }
 
-type UserOption = {
-  id: string
-  full_name: string
+type FunctionOption = {
+  id: number
+  name: string
 }
 
 type PresetForm = {
   name: string
   description_template: string
   severity: Severity
-  default_assignee_id: string
+  default_function_id: string
   deadline_days: number
   require_photo_on_completion: boolean
   require_text_on_completion: boolean
@@ -57,7 +59,7 @@ const EMPTY_FORM: PresetForm = {
   name: '',
   description_template: '',
   severity: 'media',
-  default_assignee_id: '',
+  default_function_id: '',
   deadline_days: 7,
   require_photo_on_completion: true,
   require_text_on_completion: true,
@@ -66,9 +68,9 @@ const EMPTY_FORM: PresetForm = {
 
 const SEVERITY_OPTIONS: { value: Severity; label: string; color: string }[] = [
   { value: 'baixa', label: 'Baixa', color: 'text-success' },
-  { value: 'media', label: 'Média', color: 'text-warning' },
+  { value: 'media', label: 'Media', color: 'text-warning' },
   { value: 'alta', label: 'Alta', color: 'text-orange-500' },
-  { value: 'critica', label: 'Crítica', color: 'text-error' },
+  { value: 'critica', label: 'Critica', color: 'text-error' },
 ]
 
 const SEVERITY_BADGE: Record<string, string> = {
@@ -85,7 +87,7 @@ const SEVERITY_BADGE: Record<string, string> = {
 export default function ModelosPlanoDeAcaoPage() {
   const [loading, setLoading] = useState(true)
   const [presets, setPresets] = useState<Preset[]>([])
-  const [users, setUsers] = useState<UserOption[]>([])
+  const [functions, setFunctions] = useState<FunctionOption[]>([])
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
@@ -97,6 +99,7 @@ export default function ModelosPlanoDeAcaoPage() {
 
   const router = useRouter()
   const supabase = useMemo(() => createClient(), [])
+  const { refreshKey } = useRealtimeRefresh(['action_plan_presets'])
 
   // ============================================
   // FETCH DATA
@@ -145,18 +148,18 @@ export default function ModelosPlanoDeAcaoPage() {
     const sb = supabase as any
 
     try {
-      const [presetsRes, usersRes] = await Promise.all([
+      const [presetsRes, functionsRes] = await Promise.all([
         sb.from('action_plan_presets')
           .select('*')
           .order('name'),
-        sb.from('users')
-          .select('id, full_name')
+        sb.from('functions')
+          .select('id, name')
           .eq('is_active', true)
-          .order('full_name'),
+          .order('name'),
       ])
 
       if (presetsRes.data) setPresets(presetsRes.data)
-      if (usersRes.data) setUsers(usersRes.data)
+      if (functionsRes.data) setFunctions(functionsRes.data)
     } catch (err) {
       console.error('[Modelos] Erro ao buscar dados:', err)
     }
@@ -168,6 +171,11 @@ export default function ModelosPlanoDeAcaoPage() {
     fetchData()
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  useEffect(() => {
+    if (refreshKey > 0 && navigator.onLine) fetchData()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [refreshKey])
 
   // ============================================
   // FORM HANDLERS
@@ -185,7 +193,7 @@ export default function ModelosPlanoDeAcaoPage() {
       name: preset.name,
       description_template: preset.description_template || '',
       severity: preset.severity,
-      default_assignee_id: preset.default_assignee_id || '',
+      default_function_id: preset.default_function_id ? String(preset.default_function_id) : '',
       deadline_days: preset.deadline_days,
       require_photo_on_completion: preset.require_photo_on_completion || false,
       require_text_on_completion: preset.require_text_on_completion || false,
@@ -205,7 +213,7 @@ export default function ModelosPlanoDeAcaoPage() {
 
   const handleSave = async () => {
     if (!form.name.trim()) {
-      setError('Nome do modelo é obrigatório')
+      setError('Nome do modelo e obrigatorio')
       return
     }
 
@@ -219,7 +227,7 @@ export default function ModelosPlanoDeAcaoPage() {
         name: form.name.trim(),
         description_template: form.description_template.trim() || null,
         severity: form.severity,
-        default_assignee_id: form.default_assignee_id || null,
+        default_function_id: form.default_function_id ? Number(form.default_function_id) : null,
         deadline_days: form.deadline_days,
         require_photo_on_completion: form.require_photo_on_completion,
         require_text_on_completion: form.require_text_on_completion,
@@ -271,7 +279,7 @@ export default function ModelosPlanoDeAcaoPage() {
   }
 
   const handleDelete = async (preset: Preset) => {
-    if (!confirm(`Excluir o modelo "${preset.name}"? Esta ação não pode ser desfeita.`)) return
+    if (!confirm(`Excluir o modelo "${preset.name}"? Esta acao nao pode ser desfeita.`)) return
 
     try {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -281,7 +289,7 @@ export default function ModelosPlanoDeAcaoPage() {
         .eq('id', preset.id)
       if (delErr) throw delErr
       await fetchData()
-      setSuccess('Modelo excluído')
+      setSuccess('Modelo excluido')
       setTimeout(() => setSuccess(null), 3000)
     } catch (err) {
       console.error('[Modelos] Erro ao excluir:', err)
@@ -299,13 +307,6 @@ export default function ModelosPlanoDeAcaoPage() {
   const inactivePresets = presets.filter(p => !p.is_active)
 
   return (
-    <div className="min-h-screen bg-page">
-      <Header
-        title="Modelos de Plano de Ação"
-        icon={FiLayers}
-        backHref="/admin/planos-de-acao"
-      />
-
       <PageContainer size="md" className="space-y-6">
 
         {/* Messages */}
@@ -353,7 +354,7 @@ export default function ModelosPlanoDeAcaoPage() {
                 value={form.name}
                 onChange={(e) => setForm(f => ({ ...f, name: e.target.value }))}
                 className="input"
-                placeholder="Ex: Câmera com problema, Temperatura fora do padrão"
+                placeholder="Ex: Camera com problema, Temperatura fora do padrao"
               />
             </div>
 
@@ -380,44 +381,44 @@ export default function ModelosPlanoDeAcaoPage() {
             </div>
 
             <div>
-              <label className="block text-xs font-medium text-secondary mb-1">Responsável padrão</label>
+              <label className="block text-xs font-medium text-secondary mb-1">Funcao responsavel</label>
               <Select
-                value={form.default_assignee_id}
-                onChange={(v) => setForm(f => ({ ...f, default_assignee_id: v }))}
+                value={form.default_function_id}
+                onChange={(v) => setForm(f => ({ ...f, default_function_id: v }))}
                 placeholder="Quem preencheu o checklist"
-                options={users.map(u => ({ value: u.id, label: u.full_name }))}
+                options={functions.map(f => ({ value: String(f.id), label: f.name }))}
               />
               <p className="text-xs text-muted mt-1">
-                Se não selecionado, o plano será atribuído a quem preencheu o checklist.
+                Se nao selecionado, o plano sera atribuido a quem preencheu o checklist.
               </p>
             </div>
 
             <div>
-              <label className="block text-xs font-medium text-secondary mb-1">Descrição do plano</label>
+              <label className="block text-xs font-medium text-secondary mb-1">Descricao do plano</label>
               <textarea
                 value={form.description_template}
                 onChange={(e) => setForm(f => ({ ...f, description_template: e.target.value }))}
                 className="input min-h-[80px]"
-                placeholder="Ex: Não conformidade: {field_name} com valor {value} na {store_name}"
+                placeholder="Ex: Nao conformidade: {field_name} com valor {value} na {store_name}"
                 rows={3}
               />
               <p className="text-xs text-muted mt-1">
-                Variáveis disponíveis: {'{field_name}'}, {'{value}'}, {'{store_name}'}
+                Variaveis disponiveis: {'{field_name}'}, {'{value}'}, {'{store_name}'}
               </p>
             </div>
 
             {/* Exigencias para conclusao */}
             <div className="border-t border-subtle pt-4 mt-2">
-              <label className="block text-xs font-medium text-secondary mb-3">Exigências para Conclusão</label>
+              <label className="block text-xs font-medium text-secondary mb-3">Exigencias para Conclusao</label>
               <div className="p-3 bg-primary/5 border border-primary/20 rounded-lg mb-3">
                 <div className="flex items-center gap-2 text-sm text-primary">
                   <FiCamera className="w-4 h-4" />
                   <FiFileText className="w-4 h-4" />
-                  <span>Foto e texto são obrigatórios para concluir o plano de ação.</span>
+                  <span>Foto e texto sao obrigatorios para concluir o plano de acao.</span>
                 </div>
               </div>
               <div>
-                <label className="block text-xs font-medium text-secondary mb-1">Máximo de caracteres</label>
+                <label className="block text-xs font-medium text-secondary mb-1">Maximo de caracteres</label>
                 <input
                   type="number"
                   min={50}
@@ -443,7 +444,7 @@ export default function ModelosPlanoDeAcaoPage() {
                 ) : (
                   <>
                     <FiSave className="w-4 h-4" />
-                    {editingId ? 'Salvar Alterações' : 'Criar Modelo'}
+                    {editingId ? 'Salvar Alteracoes' : 'Criar Modelo'}
                   </>
                 )}
               </button>
@@ -461,7 +462,7 @@ export default function ModelosPlanoDeAcaoPage() {
             <FiLayers className="w-12 h-12 text-muted mx-auto mb-4 opacity-50" />
             <p className="text-muted mb-2">Nenhum modelo criado ainda.</p>
             <p className="text-xs text-muted mb-4">
-              Crie modelos para agilizar a configuração de condições de não-conformidade nos templates de checklist.
+              Crie modelos para agilizar a configuracao de condicoes de nao-conformidade nos templates de checklist.
             </p>
             <button onClick={handleNew} className="btn-primary inline-flex items-center gap-2">
               <FiPlus className="w-4 h-4" />
@@ -483,9 +484,9 @@ export default function ModelosPlanoDeAcaoPage() {
                   <div className="flex items-center gap-4 text-xs text-muted">
                     <span>Prazo: {preset.deadline_days} dia(s)</span>
                     <span>
-                      Responsável: {
-                        preset.default_assignee_id
-                          ? users.find(u => u.id === preset.default_assignee_id)?.full_name || 'Usuário'
+                      Funcao: {
+                        preset.default_function_id
+                          ? functions.find(f => f.id === preset.default_function_id)?.name || 'Funcao'
                           : 'Quem preencheu'
                       }
                     </span>
@@ -561,6 +562,5 @@ export default function ModelosPlanoDeAcaoPage() {
           </div>
         )}
       </PageContainer>
-    </div>
   )
 }

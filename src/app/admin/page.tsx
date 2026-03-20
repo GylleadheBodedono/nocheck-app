@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { createClient, isSupabaseConfigured } from '@/lib/supabase'
 import Link from 'next/link'
 import { APP_CONFIG } from '@/lib/config'
-import { LoadingPage, Header } from '@/components/ui'
+import { LoadingPage } from '@/components/ui'
 import {
   getAuthCache,
   getUserCache,
@@ -36,6 +36,7 @@ import {
 } from 'react-icons/fi'
 import type { IconType } from 'react-icons'
 import { useDebouncedCallback } from 'use-debounce'
+import { useRealtimeRefresh } from '@/hooks/useRealtimeRefresh'
 
 type Stats = {
   totalUsers: number
@@ -80,7 +81,6 @@ export default function AdminPage() {
     recentValidations: [],
   })
   const [loading, setLoading] = useState(true)
-  const [userName, setUserName] = useState('Admin User')
   const [ignoreTimeRestrictions, setIgnoreTimeRestrictions] = useState(false)
   const [togglingTime, setTogglingTime] = useState(false)
   const [bypassStoreIds, setBypassStoreIds] = useState<number[] | 'all'>('all')
@@ -89,6 +89,7 @@ export default function AdminPage() {
   const [notificationBannerMounted, setNotificationBannerMounted] = useState(false)
   const router = useRouter()
   const supabase = useMemo(() => createClient(), [])
+  const { refreshKey } = useRealtimeRefresh(['checklists', 'action_plans', 'users', 'stores'])
 
   useEffect(() => {
     const fetchStats = async () => {
@@ -112,9 +113,7 @@ export default function AdminPage() {
             .eq('id', user.id)
             .single()
           isAdmin = profile && 'is_admin' in profile ? (profile as { is_admin: boolean }).is_admin : false
-          if (profile && 'full_name' in profile && (profile as { full_name: string }).full_name) {
-            setUserName((profile as { full_name: string }).full_name)
-          }
+          // full_name available in profile if needed
         }
       } catch {
         console.log('[Admin] Falha ao buscar online, tentando cache...')
@@ -128,7 +127,7 @@ export default function AdminPage() {
             userId = cachedAuth.userId
             const cachedUser = await getUserCache(cachedAuth.userId)
             isAdmin = cachedUser?.is_admin || false
-            if (cachedUser?.full_name) setUserName(cachedUser.full_name)
+            // cachedUser full_name available if needed
           }
         } catch {
           console.log('[Admin] Falha ao buscar cache')
@@ -260,6 +259,67 @@ export default function AdminPage() {
     fetchStats()
   }, [supabase, router])
 
+  useEffect(() => {
+    if (refreshKey > 0 && navigator.onLine) {
+      // Re-fetch stats without full auth check (already verified on mount)
+      const refetchStats = async () => {
+        try {
+          const [
+            usersRes, templatesRes, storesRes, sectorsRes, functionsRes, checklistsRes, validationsRes,
+            recentUsersRes, recentTemplatesRes, recentStoresRes, recentSectorsRes, recentFunctionsRes, recentChecklistsRes, recentValidationsRes,
+          ] = await Promise.all([
+            supabase.from('users').select('id', { count: 'exact', head: true }),
+            supabase.from('checklist_templates').select('id', { count: 'exact', head: true }).eq('is_active', true),
+            supabase.from('stores').select('id', { count: 'exact', head: true }).eq('is_active', true),
+            supabase.from('sectors').select('id', { count: 'exact', head: true }).eq('is_active', true),
+            supabase.from('functions').select('id', { count: 'exact', head: true }).eq('is_active', true),
+            supabase.from('checklists').select('id', { count: 'exact', head: true }),
+            supabase.from('cross_validations').select('id', { count: 'exact', head: true }).eq('status', 'pendente'),
+            supabase.from('users').select('id, full_name, email, is_active, created_at').order('created_at', { ascending: false }).limit(3),
+            supabase.from('checklist_templates').select('id, name, category, is_active').eq('is_active', true).order('created_at', { ascending: false }).limit(3),
+            supabase.from('stores').select('id, name, is_active').eq('is_active', true).order('created_at', { ascending: false }).limit(3),
+            supabase.from('sectors').select('id, name, color, is_active, store:stores(name)').eq('is_active', true).order('created_at', { ascending: false }).limit(3),
+            supabase.from('functions').select('id, name, color, is_active').eq('is_active', true).order('created_at', { ascending: false }).limit(3),
+            supabase.from('checklists').select('id, status, created_at, template:checklist_templates(name), store:stores(name), user:users(full_name)').order('created_at', { ascending: false }).limit(3),
+            supabase.from('cross_validations').select('id, status, numero_nota, created_at, store:stores(name)').eq('status', 'pendente').order('created_at', { ascending: false }).limit(3),
+          ])
+
+          const today = new Date()
+          today.setHours(0, 0, 0, 0)
+          const { count: checklistsTodayCount } = await supabase
+            .from('checklists')
+            .select('id', { count: 'exact', head: true })
+            .gte('created_at', today.toISOString())
+
+          setStats({
+            totalUsers: usersRes.count || 0,
+            totalTemplates: templatesRes.count || 0,
+            totalStores: storesRes.count || 0,
+            totalSectors: sectorsRes.count || 0,
+            totalFunctions: functionsRes.count || 0,
+            totalChecklists: checklistsRes.count || 0,
+            checklistsToday: checklistsTodayCount || 0,
+            pendingValidations: validationsRes.count || 0,
+          })
+
+          setPreview({
+            recentUsers: recentUsersRes.data || [],
+            recentTemplates: recentTemplatesRes.data || [],
+            recentStores: recentStoresRes.data || [],
+            recentSectors: recentSectorsRes.data || [],
+            recentFunctions: recentFunctionsRes.data || [],
+            recentChecklists: recentChecklistsRes.data || [],
+            recentValidations: recentValidationsRes.data || [],
+          })
+        } catch (err) {
+          console.error('[Admin] Erro ao re-buscar estatísticas:', err)
+        }
+      }
+      refetchStats()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [refreshKey])
+
   // Permissao de notificacoes do sistema (para o banner)
   useEffect(() => {
     if (typeof window !== 'undefined' && 'Notification' in window) {
@@ -312,18 +372,6 @@ export default function AdminPage() {
   const handleBypassStoresChange = (mode: number[] | 'all') => {
     setBypassStoreIds(mode)
     saveBypassStores(mode)
-  }
-
-  const handleSignOut = async () => {
-    try {
-      if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
-        navigator.serviceWorker.controller.postMessage({ type: 'CLEAR_CACHE' })
-      }
-    } catch { /* ignore */ }
-    if (supabase) {
-      await supabase.auth.signOut()
-    }
-    router.push(APP_CONFIG.routes.login)
   }
 
   if (loading) {
@@ -484,20 +532,7 @@ export default function AdminPage() {
   ]
 
   return (
-    <div className="min-h-screen bg-page">
-      <Header
-        title="Painel Admin"
-        subtitle={`${APP_CONFIG.name} v${APP_CONFIG.version}`}
-        icon={FiSettings}
-        showSearch
-        showNotifications
-        notificationCount={stats.pendingValidations}
-        userName={userName}
-        userRole="Super Admin"
-        isAdmin={true}
-        onSignOut={handleSignOut}
-      />
-
+    <>
       {/* Aviso para ativar notificacoes do sistema (PWA) */}
       {notificationBannerMounted && typeof window !== 'undefined' && 'Notification' in window && notificationPermission === 'default' && (
         <div className="mx-auto px-4 sm:px-6 lg:px-8 pt-4">
@@ -875,6 +910,6 @@ export default function AdminPage() {
           </aside>
         </div>
       </div>
-    </div>
+    </>
   )
 }

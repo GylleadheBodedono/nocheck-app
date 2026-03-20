@@ -1,11 +1,12 @@
 'use client'
 
 import { useEffect, useState, useMemo } from 'react'
+import { useRealtimeRefresh } from '@/hooks/useRealtimeRefresh'
 import { useRouter } from 'next/navigation'
 import { createClient, isSupabaseConfigured } from '@/lib/supabase'
-import { FiSave, FiFileText } from 'react-icons/fi'
+import { FiSave } from 'react-icons/fi'
 import { APP_CONFIG } from '@/lib/config'
-import { LoadingPage, Header, Select, PageContainer } from '@/components/ui'
+import { LoadingPage, Select, PageContainer } from '@/components/ui'
 import { getAuthCache, getUserCache } from '@/lib/offlineCache'
 import { createNotification, sendEmailNotification } from '@/lib/notificationService'
 import { buildEmailFromTemplate, SEVERITY_COLORS, type EmailTemplateVariables } from '@/lib/emailTemplateEngine'
@@ -30,6 +31,8 @@ export default function NovoPlanoDeAcaoPage() {
   const [users, setUsers] = useState<UserOption[]>([])
   const router = useRouter()
   const supabase = useMemo(() => createClient(), [])
+  const { refreshKey } = useRealtimeRefresh(['action_plan_presets'])
+  const [reloadTrigger, setReloadTrigger] = useState(0)
 
   // Form state
   const [title, setTitle] = useState('')
@@ -42,6 +45,11 @@ export default function NovoPlanoDeAcaoPage() {
     d.setDate(d.getDate() + 7)
     return d.toISOString().split('T')[0]
   })
+
+  useEffect(() => {
+    if (refreshKey > 0 && navigator.onLine) setReloadTrigger(prev => prev + 1)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [refreshKey])
 
   useEffect(() => {
     const init = async () => {
@@ -117,7 +125,7 @@ export default function NovoPlanoDeAcaoPage() {
 
     init()
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [reloadTrigger])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -131,7 +139,7 @@ export default function NovoPlanoDeAcaoPage() {
     }
 
     if (!assigneeId) {
-      setError('Selecione um responsável')
+      setError('Selecione um responsavel')
       setSaving(false)
       return
     }
@@ -174,11 +182,11 @@ export default function NovoPlanoDeAcaoPage() {
         const assigneeName = users.find(u => u.id === assigneeId)?.full_name || ''
         await createNotification(supabase, assigneeId, {
           type: 'action_plan_assigned',
-          title: 'Novo Plano de Ação atribuído a você',
+          title: 'Novo Plano de Acao atribuido a voce',
           message: `${title} | Severidade: ${severity} | Prazo: ${deadlineDate}`,
           link: `/admin/planos-de-acao/${plan.id}`,
           metadata: { plan_id: plan.id, severity, deadline: deadlineDate, assignee_name: assigneeName },
-        }).catch(err => console.warn('[PlanoDeAcao] Erro ao criar notificação:', err))
+        }).catch(err => console.warn('[PlanoDeAcao] Erro ao criar notificacao:', err))
 
         // Enviar email ao responsavel
         try {
@@ -213,10 +221,10 @@ export default function NovoPlanoDeAcaoPage() {
               description: description || '',
               plan_url: `${window.location.origin}/admin/planos-de-acao/${plan.id}`,
               plan_id: String(plan.id),
-              is_reincidencia: 'Não',
+              is_reincidencia: 'Nao',
               reincidencia_count: '0',
               reincidencia_prefix: '',
-              app_name: 'OpereCheck',
+              app_name: 'NoCheck',
             }
 
             const { html, subject } = buildEmailFromTemplate(
@@ -238,7 +246,7 @@ export default function NovoPlanoDeAcaoPage() {
     } catch (err) {
       console.error('Error creating action plan:', err)
       const supaErr = err as { message?: string; details?: string }
-      setError(supaErr?.message || supaErr?.details || 'Erro ao criar plano de ação')
+      setError(supaErr?.message || supaErr?.details || 'Erro ao criar plano de acao')
       setSaving(false)
     }
   }
@@ -248,23 +256,16 @@ export default function NovoPlanoDeAcaoPage() {
   }
 
   return (
-    <div className="min-h-screen bg-page">
-      <Header
-        title="Novo Plano de Ação"
-        icon={FiFileText}
-        backHref="/admin/planos-de-acao"
-      />
-
       <PageContainer size="sm">
         <form onSubmit={handleSubmit} className="space-y-6">
           <div className="card p-6">
-            <h2 className="text-lg font-semibold text-main mb-4">Informações do Plano</h2>
+            <h2 className="text-lg font-semibold text-main mb-4">Informacoes do Plano</h2>
 
             <div className="space-y-4">
-              {/* Título */}
+              {/* Titulo */}
               <div>
                 <label className="block text-sm font-medium text-main mb-1">
-                  Título *
+                  Titulo *
                 </label>
                 <input
                   type="text"
@@ -276,17 +277,17 @@ export default function NovoPlanoDeAcaoPage() {
                 />
               </div>
 
-              {/* Descrição */}
+              {/* Descricao */}
               <div>
                 <label className="block text-sm font-medium text-main mb-1">
-                  Descrição
+                  Descricao
                 </label>
                 <textarea
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
                   rows={3}
                   className="input resize-none"
-                  placeholder="Descreva o problema e as ações necessárias..."
+                  placeholder="Descreva o problema e as acoes necessarias..."
                 />
               </div>
 
@@ -332,22 +333,22 @@ export default function NovoPlanoDeAcaoPage() {
                   onChange={setSeverity}
                   options={[
                     { value: 'baixa',  label: 'Baixa' },
-                    { value: 'media',  label: 'Média' },
+                    { value: 'media',  label: 'Media' },
                     { value: 'alta',   label: 'Alta' },
-                    { value: 'critica', label: 'Crítica' },
+                    { value: 'critica', label: 'Critica' },
                   ]}
                 />
               </div>
 
-              {/* Responsável */}
+              {/* Responsavel */}
               <div>
                 <label className="block text-sm font-medium text-main mb-1">
-                  Responsável *
+                  Responsavel *
                 </label>
                 <Select
                   value={assigneeId}
                   onChange={setAssigneeId}
-                  placeholder="Selecione o responsável"
+                  placeholder="Selecione o responsavel"
                   options={users.map(user => ({ value: user.id, label: user.full_name }))}
                 />
               </div>
@@ -396,13 +397,12 @@ export default function NovoPlanoDeAcaoPage() {
               ) : (
                 <>
                   <FiSave className="w-4 h-4" />
-                  Criar Plano de Ação
+                  Criar Plano de Acao
                 </>
               )}
             </button>
           </div>
         </form>
       </PageContainer>
-    </div>
   )
 }

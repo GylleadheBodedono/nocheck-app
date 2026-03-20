@@ -4,8 +4,9 @@ import { useEffect, useState, useMemo, useRef, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient, isSupabaseConfigured } from '@/lib/supabase'
 import { APP_CONFIG } from '@/lib/config'
-import { LoadingPage, Header, PageContainer } from '@/components/ui'
+import { LoadingPage, PageContainer } from '@/components/ui'
 import { getAuthCache, getUserCache } from '@/lib/offlineCache'
+import { useRealtimeRefresh } from '@/hooks/useRealtimeRefresh'
 import {
   FiImage,
   FiSearch,
@@ -39,6 +40,7 @@ export default function GaleriaPage() {
   const uploadRef = useRef<HTMLInputElement>(null)
   const router = useRouter()
   const supabase = useMemo(() => createClient(), [])
+  const { refreshKey } = useRealtimeRefresh(['checklist_responses'])
 
   // Auth check
   useEffect(() => {
@@ -101,6 +103,11 @@ export default function GaleriaPage() {
     setSearch('')
     setVisibleCount(ITEMS_PER_PAGE)
   }, [currentFolder, fetchFiles])
+
+  useEffect(() => {
+    if (refreshKey > 0 && navigator.onLine) fetchFiles(currentFolder)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [refreshKey])
 
   const switchFolder = (folder: Folder) => {
     if (folder !== currentFolder) {
@@ -188,14 +195,7 @@ export default function GaleriaPage() {
   }
 
   return (
-    <div className="min-h-screen bg-page">
-      <Header
-        title="Galeria"
-        subtitle="Fotos e anexos do storage"
-        icon={FiImage}
-        backHref={APP_CONFIG.routes.admin}
-      />
-
+    <>
       <PageContainer className="!py-6">
         {/* Folder tabs */}
         <div className="flex gap-3 mb-6">
@@ -221,7 +221,7 @@ export default function GaleriaPage() {
           >
             <FiFolder className="w-5 h-5" />
             <span>Anexos</span>
-            <span className="text-xs opacity-60">(yes/no)</span>
+            <span className="text-xs opacity-60">(sim/nao/n/a)</span>
           </button>
         </div>
 
@@ -382,7 +382,7 @@ export default function GaleriaPage() {
           </div>
         </div>
       )}
-    </div>
+    </>
   )
 }
 

@@ -4,7 +4,7 @@ import { useEffect, useState, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { APP_CONFIG } from '@/lib/config'
-import { LoadingPage, Header, Select, PageContainer } from '@/components/ui'
+import { LoadingPage, Select, PageContainer } from '@/components/ui'
 import {
   FiTrash2,
   FiSearch,
@@ -21,6 +21,7 @@ import {
 import Link from 'next/link'
 import type { Store, ChecklistTemplate, User } from '@/types/database'
 import { getAuthCache, getUserCache } from '@/lib/offlineCache'
+import { useRealtimeRefresh } from '@/hooks/useRealtimeRefresh'
 
 type ChecklistWithDetails = {
   id: number
@@ -59,11 +60,17 @@ export default function AdminChecklistsPage() {
   const [isOffline, setIsOffline] = useState(false)
   const router = useRouter()
   const supabase = useMemo(() => createClient(), [])
+  const { refreshKey } = useRealtimeRefresh(['checklists', 'checklist_responses'])
 
   useEffect(() => {
     fetchData()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  useEffect(() => {
+    if (refreshKey > 0 && navigator.onLine) fetchData()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [refreshKey])
 
   const fetchData = async () => {
     let userId: string | null = null
@@ -328,12 +335,6 @@ export default function AdminChecklistsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-page">
-      <Header
-        title="Gerenciar Checklists"
-        backHref={APP_CONFIG.routes.admin}
-      />
-
       <PageContainer>
         {/* Offline Warning */}
         {isOffline && (
@@ -575,6 +576,5 @@ export default function AdminChecklistsPage() {
           )}
         </div>
       </PageContainer>
-    </div>
   )
 }

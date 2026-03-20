@@ -9,9 +9,9 @@ import {
 } from 'react-icons/fi'
 import { Select } from '@/components/ui/Select'
 
-type AssignableUser = {
-  id: string
-  full_name: string
+type AssignableFunction = {
+  id: number
+  name: string
 }
 
 type ActionPlanPreset = {
@@ -21,7 +21,7 @@ type ActionPlanPreset = {
   deadline_days: number
 }
 
-let _usersCache: AssignableUser[] | null = null
+let _functionsCache: AssignableFunction[] | null = null
 let _presetsCache: ActionPlanPreset[] | null = null
 
 interface FieldRendererProps {
@@ -95,7 +95,7 @@ function TextField({ field, value, onChange }: { field: TemplateField; value: st
 type NumberSubtype = 'monetario' | 'quantidade' | 'decimal' | 'porcentagem'
 
 const NUMBER_SUBTYPES: Record<NumberSubtype, { label: string; prefix: string; suffix: string; placeholder: string; inputMode: 'numeric' | 'decimal' }> = {
-  monetario: { label: 'Monetário (R$)', prefix: 'R$ ', suffix: '', placeholder: '0,00', inputMode: 'decimal' },
+  monetario: { label: 'Monetario (R$)', prefix: 'R$ ', suffix: '', placeholder: '0,00', inputMode: 'decimal' },
   quantidade: { label: 'Quantidade', prefix: '', suffix: ' un', placeholder: '0', inputMode: 'numeric' },
   decimal: { label: 'Decimal', prefix: '', suffix: '', placeholder: '0,00', inputMode: 'decimal' },
   porcentagem: { label: 'Porcentagem (%)', prefix: '', suffix: '%', placeholder: '0', inputMode: 'decimal' },
@@ -568,7 +568,7 @@ function CalculatedField({ field: _field, value }: { field: TemplateField; value
   )
 }
 
-// Yes/No Field (with optional photo support)
+// Yes/No/N/A Field (with optional photo support)
 function YesNoField({ field, value, onChange }: { field: TemplateField; value: unknown; onChange: (v: unknown) => void }) {
   const allowPhoto = (field.options as { allowPhoto?: boolean } | null)?.allowPhoto || false
   const inputRef = useRef<HTMLInputElement>(null)
@@ -594,8 +594,8 @@ function YesNoField({ field, value, onChange }: { field: TemplateField; value: u
   const conditionalPhotos: string[] = typeof value === 'object' && value !== null && 'conditionalPhotos' in (value as Record<string, unknown>)
     ? (value as Record<string, unknown>).conditionalPhotos as string[] || []
     : []
-  const selectedAssigneeId: string | null = typeof value === 'object' && value !== null && 'selectedAssigneeId' in (value as Record<string, unknown>)
-    ? (value as Record<string, unknown>).selectedAssigneeId as string | null
+  const selectedFunctionId: number | null = typeof value === 'object' && value !== null && 'selectedFunctionId' in (value as Record<string, unknown>)
+    ? (value as Record<string, unknown>).selectedFunctionId as number | null
     : null
   const selectedSeverity: string = typeof value === 'object' && value !== null && 'selectedSeverity' in (value as Record<string, unknown>)
     ? (value as Record<string, unknown>).selectedSeverity as string || ''
@@ -604,31 +604,34 @@ function YesNoField({ field, value, onChange }: { field: TemplateField; value: u
     ? (value as Record<string, unknown>).selectedPresetId as number | null
     : null
 
+  // Parse N/A config from options
+  const onNaConfig = opts?.onNa as { showTextField?: boolean; textFieldLabel?: string; textFieldRequired?: boolean; showPhotoField?: boolean; photoFieldLabel?: string; photoFieldRequired?: boolean } | undefined
+
   // Get active conditional config based on current answer
-  const activeConditionalConfig = answer === 'nao' ? onNoConfig : answer === 'sim' ? onYesConfig : undefined
+  const activeConditionalConfig = answer === 'nao' ? onNoConfig : answer === 'sim' ? onYesConfig : answer === 'na' ? onNaConfig : undefined
   const hasConditional = activeConditionalConfig && (activeConditionalConfig.showTextField || activeConditionalConfig.showPhotoField)
   const showUserActionPlan = answer === 'nao' && onNoConfig?.allowUserActionPlan === true
 
-  const [assignableUsers, setAssignableUsers] = useState<AssignableUser[]>(_usersCache || [])
-  const [usersLoading, setUsersLoading] = useState(false)
+  const [assignableFunctions, setAssignableFunctions] = useState<AssignableFunction[]>(_functionsCache || [])
+  const [functionsLoading, setFunctionsLoading] = useState(false)
   const [presets, setPresets] = useState<ActionPlanPreset[]>(_presetsCache || [])
   const [presetsLoading, setPresetsLoading] = useState(false)
 
   useEffect(() => {
     if (!showUserActionPlan) return
-    if (_usersCache) { setAssignableUsers(_usersCache); return }
+    if (_functionsCache) { setAssignableFunctions(_functionsCache); return }
     let cancelled = false
-    setUsersLoading(true)
+    setFunctionsLoading(true)
     fetch('/api/users/assignable')
       .then(res => res.ok ? res.json() : Promise.reject(res.status))
-      .then(({ users }: { users: AssignableUser[] }) => {
+      .then(({ functions }: { functions: AssignableFunction[] }) => {
         if (cancelled) return
-        const list = users || []
-        _usersCache = list
-        setAssignableUsers(list)
-        setUsersLoading(false)
+        const list = functions || []
+        _functionsCache = list
+        setAssignableFunctions(list)
+        setFunctionsLoading(false)
       })
-      .catch(() => { if (!cancelled) setUsersLoading(false) })
+      .catch(() => { if (!cancelled) setFunctionsLoading(false) })
     return () => { cancelled = true }
   }, [showUserActionPlan])
 
@@ -656,16 +659,18 @@ function YesNoField({ field, value, onChange }: { field: TemplateField; value: u
     if (photos.length > 0) base.photos = photos
     if (conditionalText) base.conditionalText = conditionalText
     if (conditionalPhotos.length > 0) base.conditionalPhotos = conditionalPhotos
-    if (selectedAssigneeId) base.selectedAssigneeId = selectedAssigneeId
+    if (selectedFunctionId) base.selectedFunctionId = selectedFunctionId
     if (selectedSeverity) base.selectedSeverity = selectedSeverity
     if (selectedPresetId) base.selectedPresetId = selectedPresetId
     const merged = { ...base, ...updates }
-    // If switching answer, clear conditional data that doesn't apply to the new answer
+    // If switching answer and the new answer has no conditional config, clear conditional data
     if (updates.answer) {
       const newAnswer = updates.answer as string
-      const newConfig = newAnswer === 'nao' ? onNoConfig : newAnswer === 'sim' ? onYesConfig : undefined
-      if (!newConfig?.showTextField) delete merged.conditionalText
-      if (!newConfig?.showPhotoField) delete merged.conditionalPhotos
+      const newConfig = newAnswer === 'nao' ? onNoConfig : newAnswer === 'sim' ? onYesConfig : newAnswer === 'na' ? onNaConfig : undefined
+      if (!newConfig || (!newConfig.showTextField && !newConfig.showPhotoField)) {
+        delete merged.conditionalText
+        delete merged.conditionalPhotos
+      }
       if (newAnswer !== 'nao' || !onNoConfig?.allowUserActionPlan) {
         delete merged.selectedAssigneeId
         delete merged.selectedSeverity
@@ -736,7 +741,18 @@ function YesNoField({ field, value, onChange }: { field: TemplateField; value: u
               : 'bg-surface border-subtle text-muted hover:border-red-500/50 hover:text-red-400'
           }`}
         >
-          Não
+          Nao
+        </button>
+        <button
+          type="button"
+          onClick={() => handleAnswer('na')}
+          className={`flex-1 py-4 rounded-xl font-semibold text-lg transition-all border-2 ${
+            answer === 'na'
+              ? 'bg-amber-500/20 border-amber-500 text-amber-400'
+              : 'bg-surface border-subtle text-muted hover:border-amber-500/50 hover:text-amber-400'
+          }`}
+        >
+          N/A
         </button>
       </div>
 
@@ -795,6 +811,8 @@ function YesNoField({ field, value, onChange }: { field: TemplateField; value: u
         <div className={`p-3 rounded-xl border-2 space-y-3 ${
           answer === 'nao'
             ? 'bg-red-500/5 border-red-500/20'
+            : answer === 'na'
+            ? 'bg-amber-500/5 border-amber-500/20'
             : 'bg-emerald-500/5 border-emerald-500/20'
         }`}>
           {activeConditionalConfig.showTextField && (
@@ -815,7 +833,7 @@ function YesNoField({ field, value, onChange }: { field: TemplateField; value: u
           {activeConditionalConfig.showPhotoField && (
             <div>
               <label className="block text-sm font-medium text-secondary mb-1">
-                {activeConditionalConfig.photoFieldLabel || 'Foto de evidência'}
+                {activeConditionalConfig.photoFieldLabel || 'Foto de evidencia'}
                 {activeConditionalConfig.photoFieldRequired && <span className="text-red-400 ml-1">*</span>}
               </label>
               {conditionalPhotos.length > 0 && (
@@ -860,7 +878,7 @@ function YesNoField({ field, value, onChange }: { field: TemplateField; value: u
                 ref={conditionalInputRef}
                 type="file"
                 accept="image/*"
-                multiple
+                capture="environment"
                 onChange={async (e) => {
                   const files = e.target.files
                   if (!files) return
@@ -888,13 +906,13 @@ function YesNoField({ field, value, onChange }: { field: TemplateField; value: u
       {/* User action plan selection */}
       {showUserActionPlan && (
         <div className="p-3 rounded-xl border-2 border-orange-500/20 bg-orange-500/5 space-y-3">
-          <p className="text-sm font-medium text-orange-400">Plano de Ação</p>
+          <p className="text-sm font-medium text-orange-400">Plano de Acao</p>
           <div>
             <label className="block text-sm font-medium text-secondary mb-1">Modelo</label>
             {presetsLoading ? (
               <p className="text-sm text-muted">Carregando modelos...</p>
             ) : presets.length === 0 ? (
-              <p className="text-sm text-muted italic">Não existem modelos criados</p>
+              <p className="text-sm text-muted italic">Nao existem modelos criados</p>
             ) : (
               <Select
                 value={selectedPresetId ? String(selectedPresetId) : ''}
@@ -910,20 +928,20 @@ function YesNoField({ field, value, onChange }: { field: TemplateField; value: u
               />
             )}
           </div>
-          {usersLoading ? (
+          {functionsLoading ? (
             <div className="flex items-center gap-2 text-sm text-muted">
               <div className="w-4 h-4 border-2 border-secondary border-t-transparent rounded-full animate-spin" />
-              Carregando responsáveis...
+              Carregando funcoes...
             </div>
           ) : (
             <>
               <div>
-                <label className="block text-sm font-medium text-secondary mb-1">Responsável</label>
+                <label className="block text-sm font-medium text-secondary mb-1">Funcao Responsavel</label>
                 <Select
-                  value={selectedAssigneeId || ''}
-                  onChange={(v) => onChange(buildValue({ selectedAssigneeId: v || null }))}
-                  placeholder="Selecione o responsável..."
-                  options={assignableUsers.map(u => ({ value: u.id, label: u.full_name }))}
+                  value={selectedFunctionId ? String(selectedFunctionId) : ''}
+                  onChange={(v) => onChange(buildValue({ selectedFunctionId: v ? Number(v) : null }))}
+                  placeholder="Selecione a funcao responsavel..."
+                  options={assignableFunctions.map(f => ({ value: String(f.id), label: f.name }))}
                 />
               </div>
               <div>
@@ -934,9 +952,9 @@ function YesNoField({ field, value, onChange }: { field: TemplateField; value: u
                   placeholder="Selecione a severidade..."
                   options={[
                     { value: 'baixa', label: 'Baixa' },
-                    { value: 'media', label: 'Média' },
+                    { value: 'media', label: 'Media' },
                     { value: 'alta', label: 'Alta' },
-                    { value: 'critica', label: 'Crítica' },
+                    { value: 'critica', label: 'Critica' },
                   ]}
                 />
               </div>
@@ -950,7 +968,7 @@ function YesNoField({ field, value, onChange }: { field: TemplateField; value: u
 
 // Rating Field (intensity/satisfaction with face emojis)
 const RATING_OPTIONS = [
-  { value: 'pessimo', label: 'Péssimo', face: '😡', color: 'rgb(239, 68, 68)', bgColor: 'rgba(239, 68, 68, 0.15)', borderColor: 'rgb(239, 68, 68)' },
+  { value: 'pessimo', label: 'Pessimo', face: '😡', color: 'rgb(239, 68, 68)', bgColor: 'rgba(239, 68, 68, 0.15)', borderColor: 'rgb(239, 68, 68)' },
   { value: 'ruim', label: 'Ruim', face: '😟', color: 'rgb(249, 115, 22)', bgColor: 'rgba(249, 115, 22, 0.15)', borderColor: 'rgb(249, 115, 22)' },
   { value: 'regular', label: 'Regular', face: '😐', color: 'rgb(234, 179, 8)', bgColor: 'rgba(234, 179, 8, 0.15)', borderColor: 'rgb(234, 179, 8)' },
   { value: 'bom', label: 'Bom', face: '😊', color: 'rgb(34, 197, 94)', bgColor: 'rgba(34, 197, 94, 0.15)', borderColor: 'rgb(34, 197, 94)' },

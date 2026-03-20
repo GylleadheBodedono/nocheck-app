@@ -869,6 +869,7 @@ CREATE POLICY "checklists_select" ON public.checklists
     is_admin()
     OR (user_is_manager() AND store_id IN (SELECT user_store_ids()))
     OR created_by = auth.uid()
+    OR id IN (SELECT checklist_id FROM action_plans WHERE assigned_to = auth.uid())
   );
 CREATE POLICY "checklists_insert" ON public.checklists
   FOR INSERT WITH CHECK (
@@ -902,6 +903,7 @@ CREATE POLICY "responses_select" ON public.checklist_responses
       WHERE (user_is_manager() AND store_id IN (SELECT user_store_ids()))
          OR created_by = auth.uid()
     )
+    OR checklist_id IN (SELECT checklist_id FROM action_plans WHERE assigned_to = auth.uid())
   );
 CREATE POLICY "responses_insert" ON public.checklist_responses
   FOR INSERT WITH CHECK (

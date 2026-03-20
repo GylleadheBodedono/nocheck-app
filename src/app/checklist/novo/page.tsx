@@ -15,10 +15,11 @@ import {
   FiChevronRight,
   FiCloud,
   FiLoader,
+  FiPlus,
 } from 'react-icons/fi'
 import type { ChecklistTemplate, TemplateField, Store, TemplateSection } from '@/types/database'
 import { APP_CONFIG } from '@/lib/config'
-import { LoadingPage, Header } from '@/components/ui'
+import { LoadingPage } from '@/components/ui'
 import { processarValidacaoCruzada } from '@/lib/crossValidation'
 import { processarNaoConformidades } from '@/lib/actionPlanEngine'
 import { saveOfflineChecklist, updateChecklistStatus, getPendingChecklists, updateOfflineFieldResponse, putOfflineChecklist, getOfflineChecklist, deleteOfflineChecklist, type PendingChecklist } from '@/lib/offlineStorage'
@@ -96,6 +97,7 @@ function ChecklistForm() {
   const [sortedSections, setSortedSections] = useState<TemplateSection[]>([])
   const [sectionProgress, setSectionProgress] = useState<SectionProgress[]>([])
   const [activeSection, setActiveSection] = useState<number | null>(null) // section_id being filled
+  const [activeParentSection, setActiveParentSection] = useState<number | null>(null) // parent section for sub-etapa navigation
   const [checklistId, setChecklistId] = useState<number | null>(null) // DB checklist id for sectioned mode
   const [offlineChecklistId, setOfflineChecklistId] = useState<string | null>(null) // Offline UUID for sectioned mode
   const checklistIdRef = useRef<number | null>(null)
@@ -106,6 +108,27 @@ function ChecklistForm() {
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [savedOffline, _setSavedOffline] = useState(false)
   const [autoSaveStatus, setAutoSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
+
+  // Tech user: pode adicionar campos/etapas ao template
+  const [isTechUser, setIsTechUser] = useState(false)
+  const [showAddFieldModal, setShowAddFieldModal] = useState(false)
+  const [addFieldSectionId, setAddFieldSectionId] = useState<number | null>(null)
+  const [newFieldName, setNewFieldName] = useState('')
+  const [newFieldType, setNewFieldType] = useState<'yes_no' | 'text' | 'number' | 'photo' | 'dropdown' | 'checkbox_multiple' | 'rating' | 'signature'>('yes_no')
+  const [newFieldRequired, setNewFieldRequired] = useState(true)
+  const [newFieldPlaceholder, setNewFieldPlaceholder] = useState('')
+  const [newFieldHelpText, setNewFieldHelpText] = useState('')
+  const [newFieldOptions, setNewFieldOptions] = useState<string[]>([])
+  const [newFieldOptionInput, setNewFieldOptionInput] = useState('')
+  const [newFieldAllowPhoto, setNewFieldAllowPhoto] = useState(false)
+  const [newFieldOnNo, setNewFieldOnNo] = useState({
+    showTextField: false,
+    textFieldRequired: false,
+    showPhotoField: false,
+    photoFieldRequired: false,
+    allowUserActionPlan: false,
+  })
+  const [addingField, setAddingField] = useState(false)
   const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const initializingRef = useRef(false) // Guard against double-init (StrictMode / fast re-renders)
 
@@ -118,6 +141,20 @@ function ChecklistForm() {
 
   useEffect(() => { checklistIdRef.current = checklistId }, [checklistId])
   useEffect(() => { offlineChecklistIdRef.current = offlineChecklistId }, [offlineChecklistId])
+
+  // Buscar is_tech do usuario para habilitar botao de adicionar campos
+  useEffect(() => {
+    const checkTech = async () => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser()
+        if (!user) return
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const { data: profile } = await (supabase as any).from('users').select('is_tech').eq('id', user.id).single()
+        if (profile?.is_tech) setIsTechUser(true)
+      } catch { /* nao critico */ }
+    }
+    checkTech()
+  }, [supabase])
 
   // Time restriction states
   const [timeBlocked, setTimeBlocked] = useState(false)
@@ -149,6 +186,43 @@ function ChecklistForm() {
       .filter(f => f.section_id === null && f.field_type !== 'gps')
       .sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0))
   }, [template])
+
+  // ─── Hierarquia 3 niveis: Etapa > Sub-etapa > Campos ─────────────────────
+  /** Etapas-pai: secoes sem parent_id que possuem filhas no template */
+  const parentSections = useMemo(() => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const sectionsWithParent = sortedSections.filter((s: any) => s.parent_id != null)
+    if (sectionsWithParent.length === 0) return [] // no hierarchy, use flat mode
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return sortedSections.filter((s: any) => s.parent_id == null).sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0))
+  }, [sortedSections])
+
+  // Whether this template uses the 3-level hierarchy (etapa > sub-etapa > campos)
+  const hasSubSections = parentSections.length > 0
+
+  // Get sub-sections (sub-etapas) for a given parent section
+  const getSubSections = useCallback((parentId: number): TemplateSection[] => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return sortedSections.filter((s: any) => s.parent_id === parentId).sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0))
+  }, [sortedSections])
+
+  // For hierarchical templates: get all fields for a parent section (across all its sub-sections)
+  const getFieldsForParentSection = useCallback((parentId: number): FieldWithSection[] => {
+    const subSections = getSubSections(parentId)
+    const subSectionIds = subSections.map(s => s.id)
+    if (!template) return []
+    return template.fields.filter(f => f.section_id != null && subSectionIds.includes(f.section_id))
+  }, [template, getSubSections])
+
+  // Flat sections (sections that are NOT parents in hierarchical mode) — used for section list in flat mode
+  const flatSections = useMemo(() => {
+    if (hasSubSections) {
+      // In hierarchical mode, flat sections are the sub-etapas (have parent_id)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      return sortedSections.filter((s: any) => s.parent_id != null)
+    }
+    return sortedSections
+  }, [sortedSections, hasSubSections])
 
   useEffect(() => {
     const fetchData = async () => {
@@ -437,7 +511,15 @@ function ChecklistForm() {
           })
 
           setOfflineChecklistId(offlineId)
-          setSectionProgress(sortedSections.map(s => ({
+          // Only track progress for sections that have fields (sub-etapas, not parent etapas)
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const trackableSections = sortedSections.filter((s: any) => {
+            // Parent sections (no parent_id) that have children should NOT be tracked
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const hasChildren = sortedSections.some((child: any) => child.parent_id === s.id)
+            return !hasChildren // only track leaf sections
+          })
+          setSectionProgress(trackableSections.map(s => ({
             section_id: s.id,
             status: 'pendente' as const,
             completed_at: null,
@@ -934,12 +1016,18 @@ function ChecklistForm() {
       valueJson = { photos: photos || [], uploadedToDrive: false }
     } else if (field.field_type === 'yes_no') {
       if (typeof value === 'object' && value !== null && 'answer' in (value as Record<string, unknown>)) {
-        const yesNoObj = value as { answer: string; photos?: string[]; conditionalText?: string; conditionalPhotos?: string[] }
-        valueText = yesNoObj.answer
+        const yesNoObj = value as Record<string, unknown>
+        valueText = yesNoObj.answer as string
         const jsonParts: Record<string, unknown> = {}
-        if (yesNoObj.photos && yesNoObj.photos.length > 0) jsonParts.photos = yesNoObj.photos
+        if (yesNoObj.photos && (yesNoObj.photos as string[]).length > 0) jsonParts.photos = yesNoObj.photos
         if (yesNoObj.conditionalText) jsonParts.conditionalText = yesNoObj.conditionalText
-        if (yesNoObj.conditionalPhotos && yesNoObj.conditionalPhotos.length > 0) jsonParts.conditionalPhotos = yesNoObj.conditionalPhotos
+        if (yesNoObj.conditionalPhotos && (yesNoObj.conditionalPhotos as string[]).length > 0) jsonParts.conditionalPhotos = yesNoObj.conditionalPhotos
+        // Plano de acao: funcao responsavel, severidade e modelo
+        if (yesNoObj.selectedFunctionId) jsonParts.selectedFunctionId = yesNoObj.selectedFunctionId
+        if (yesNoObj.selectedSeverity) jsonParts.selectedSeverity = yesNoObj.selectedSeverity
+        if (yesNoObj.selectedPresetId) jsonParts.selectedPresetId = yesNoObj.selectedPresetId
+        // Legado: selectedAssigneeId (UUID de usuario)
+        if (yesNoObj.selectedAssigneeId) jsonParts.selectedAssigneeId = yesNoObj.selectedAssigneeId
         if (Object.keys(jsonParts).length > 0) valueJson = jsonParts
       } else {
         valueText = value as string
@@ -1067,15 +1155,38 @@ function ChecklistForm() {
     }
   }, [buildSingleResponseRow, template])
 
-  // Flush auto-save on page unload
+  // Flush auto-save on ANY exit scenario (mobile + desktop)
   useEffect(() => {
+    // Desktop: beforeunload (fecha aba, reload)
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
       autoSaveField.flush()
       e.preventDefault()
     }
+    // Mobile: visibilitychange (tela bloqueou, trocou app, fechou browser)
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'hidden') {
+        autoSaveField.flush()
+      }
+    }
+    // iOS Safari: pagehide (mais confiavel que beforeunload)
+    const handlePageHide = () => {
+      autoSaveField.flush()
+    }
+    // Android: blur no window (trocou de app sem pagehide)
+    const handleWindowBlur = () => {
+      autoSaveField.flush()
+    }
+
     window.addEventListener('beforeunload', handleBeforeUnload)
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+    window.addEventListener('pagehide', handlePageHide)
+    window.addEventListener('blur', handleWindowBlur)
+
     return () => {
       window.removeEventListener('beforeunload', handleBeforeUnload)
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+      window.removeEventListener('pagehide', handlePageHide)
+      window.removeEventListener('blur', handleWindowBlur)
       autoSaveField.flush()
     }
   }, [autoSaveField])
@@ -1085,12 +1196,19 @@ function ChecklistForm() {
     if (errors[fieldId]) {
       setErrors(prev => { const n = { ...prev }; delete n[fieldId]; return n })
     }
-    // Offline: save immediately to IndexedDB (near-instant)
-    if (!navigator.onLine && offlineChecklistIdRef.current) {
+    // Sempre salvar no IndexedDB como backup (rapido, local)
+    if (offlineChecklistIdRef.current) {
       saveFieldOfflineImmediate(fieldId, value)
-    } else {
-      // Online: debounced save to Supabase
+    }
+    // Online: tambem salvar no Supabase
+    if (navigator.onLine) {
       autoSaveField(fieldId, value)
+      // Para respostas de selecao (yes_no, dropdown, rating, checkbox), flush imediato
+      // Texto usa debounce normal (usuario ainda esta digitando)
+      const field = template?.fields.find(f => f.id === fieldId)
+      if (field && ['yes_no', 'dropdown', 'checkbox_multiple', 'rating', 'signature'].includes(field.field_type)) {
+        autoSaveField.flush()
+      }
     }
   }
 
@@ -1164,8 +1282,9 @@ function ChecklistForm() {
           } else if (yesNoObj.conditionalPhotos && yesNoObj.conditionalPhotos.length > 0) {
             jsonParts.conditionalPhotos = yesNoObj.conditionalPhotos
           }
-          // Preservar selectedAssigneeId e selectedSeverity para processarNaoConformidades
+          // Preservar dados do plano de acao para processarNaoConformidades
           const fullObj = value as Record<string, unknown>
+          if (fullObj.selectedFunctionId) jsonParts.selectedFunctionId = fullObj.selectedFunctionId
           if (fullObj.selectedAssigneeId) jsonParts.selectedAssigneeId = fullObj.selectedAssigneeId
           if (fullObj.selectedSeverity) jsonParts.selectedSeverity = fullObj.selectedSeverity
           if (fullObj.selectedPresetId) jsonParts.selectedPresetId = fullObj.selectedPresetId
@@ -1197,6 +1316,10 @@ function ChecklistForm() {
         if (value === undefined || value === null || value === '' || (Array.isArray(value) && value.length === 0)) {
           return true
         }
+        // Texto obrigatorio: minimo 3 caracteres reais
+        if (field.field_type === 'text' && typeof value === 'string' && value.trim().length < 3) {
+          return true
+        }
       }
 
       // 2. Validacoes especificas de yes_no (sub-campos obrigatorios)
@@ -1226,12 +1349,12 @@ function ChecklistForm() {
           }
 
           // Campos condicionais obrigatorios (independente de is_required do campo pai)
-          const condConfig = (ans === 'nao' ? opts?.onNo : ans === 'sim' ? opts?.onYes : undefined) as
+          const condConfig = (ans === 'nao' ? opts?.onNo : ans === 'sim' ? opts?.onYes : ans === 'na' ? opts?.onNa : undefined) as
             { showTextField?: boolean; textFieldRequired?: boolean; showPhotoField?: boolean; photoFieldRequired?: boolean } | undefined
           if (condConfig) {
             if (condConfig.showTextField && condConfig.textFieldRequired) {
               const text = obj.conditionalText as string | undefined
-              if (!text || !text.trim()) return true
+              if (!text || text.trim().length < 3) return true
             }
             if (condConfig.showPhotoField && condConfig.photoFieldRequired) {
               const photos = obj.conditionalPhotos as string[] | undefined
@@ -1251,9 +1374,58 @@ function ChecklistForm() {
 
     const emptyFields = getEmptyRequiredFields()
     if (emptyFields.length > 0) {
-      // Check justification deadline before showing modal
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const rawTpl = template as any
+
+      // Se template tem skip_justifications, auto-preencher e finalizar direto
+      if (rawTpl?.skip_justifications === true) {
+        setSubmitting(true)
+        try {
+          let userId: string | null = null
+          try {
+            const { data: { user } } = await supabase.auth.getUser()
+            userId = user?.id || null
+          } catch { /* offline */ }
+          if (!userId || !checklistId) { setSubmitting(false); return }
+
+          // Inserir justificativas automaticas no banco
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          await (supabase as any).from('checklist_justifications').upsert(
+            emptyFields.map(f => ({
+              checklist_id: checklistId,
+              field_id: f.id,
+              justification_text: 'Campo finalizado vazio',
+              justified_by: userId,
+            })),
+            { onConflict: 'checklist_id,field_id' }
+          )
+          // Marcar como incompleto e finalizar
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          await (supabase as any).from('checklists')
+            .update({ status: 'incompleto', completed_at: new Date().toISOString() })
+            .eq('id', checklistId)
+
+          // Processar nao conformidades
+          if (template) {
+            const allFieldIds = template.fields.map(f => f.id)
+            const allResponseData = await buildResponseRows(allFieldIds, false)
+            const allResponseMapped = allResponseData.map(r => ({
+              field_id: r.fieldId, value_text: r.valueText, value_number: r.valueNumber, value_json: r.valueJson,
+            }))
+            await processarNaoConformidades(
+              supabase, checklistId, Number(templateId), Number(storeId), null, userId,
+              allResponseMapped, template.fields.map(f => ({ id: f.id, name: f.name, field_type: f.field_type, options: f.options }))
+            )
+          }
+          window.location.href = `${APP_CONFIG.routes.dashboard}?finished=true`
+        } catch (err) {
+          console.error('[Checklist] Erro ao finalizar sem justificativas:', err)
+          setSubmitting(false)
+        }
+        return
+      }
+
+      // Check justification deadline before showing modal
       if (rawTpl?.justification_deadline_hours != null && checklistId) {
         try {
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -1358,6 +1530,8 @@ function ChecklistForm() {
         // Campo is_required sem valor
         if (field.is_required) {
           if (v === undefined || v === null || v === '' || (Array.isArray(v) && v.length === 0)) return false
+          // Texto obrigatorio: minimo 3 caracteres reais
+          if (field.field_type === 'text' && typeof v === 'string' && v.trim().length < 3) return false
         }
 
         // Validacoes yes_no (sub-campos obrigatorios)
@@ -1389,7 +1563,7 @@ function ChecklistForm() {
             if (condConfig) {
               if (condConfig.showTextField && condConfig.textFieldRequired) {
                 const text = obj.conditionalText as string | undefined
-                if (!text || !text.trim()) return false
+                if (!text || text.trim().length < 3) return false
               }
               if (condConfig.showPhotoField && condConfig.photoFieldRequired) {
                 const photos = obj.conditionalPhotos as string[] | undefined
@@ -1447,9 +1621,63 @@ function ChecklistForm() {
       }
     }
 
-    setActiveSection(null)
+    // In hierarchical mode, go back to parent section list instead of main list
+    if (hasSubSections && activeParentSection !== null) {
+      setActiveSection(null) // back to sub-etapa list for this parent
+    } else {
+      setActiveSection(null)
+      setActiveParentSection(null)
+    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [autoSaveField, activeSection, getFieldsForSection, buildSingleResponseRow, supabase, checklistId, offlineChecklistId, sectionProgress])
+  }, [autoSaveField, activeSection, getFieldsForSection, buildSingleResponseRow, supabase, checklistId, offlineChecklistId, sectionProgress, hasSubSections, activeParentSection])
+
+  // === SWITCH SECTION: flush + bulk save ANTES de trocar de secao ===
+  // Previne perda de respostas quando o usuario clica direto em outra secao
+  const switchSection = async (newSectionId: number | null) => {
+    // 1. Flush pending debounced auto-save
+    autoSaveField.flush()
+    await new Promise(resolve => setTimeout(resolve, 200))
+
+    // 2. Bulk save current section responses
+    if (activeSection !== null && activeSection !== -1 && navigator.onLine && checklistIdRef.current) {
+      try {
+        const sectionFields = getFieldsForSection(activeSection)
+        let userId: string | null = null
+        try {
+          const { data: { user } } = await supabase.auth.getUser()
+          userId = user?.id || null
+        } catch { /* offline */ }
+
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const rows: any[] = sectionFields
+          .map(f => {
+            const row = buildSingleResponseRow(f.id, responsesRef.current[f.id])
+            if (!row) return null
+            return {
+              checklist_id: checklistIdRef.current,
+              field_id: row.fieldId,
+              value_text: row.valueText,
+              value_number: row.valueNumber,
+              value_json: row.valueJson,
+              answered_by: userId,
+            }
+          })
+          .filter(Boolean)
+
+        if (rows.length > 0) {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          await (supabase as any)
+            .from('checklist_responses')
+            .upsert(rows, { onConflict: 'checklist_id,field_id' })
+        }
+      } catch (err) {
+        console.error('[SwitchSection] Erro ao salvar secao:', err)
+      }
+    }
+
+    // 3. Switch to new section
+    setActiveSection(newSectionId)
+  }
 
   // Handle Android back button and navigation
   // Ref estavel para o handler (evita re-registrar listener a cada campo preenchido)
@@ -1458,16 +1686,20 @@ function ChecklistForm() {
   // Atualiza a ref quando as dependencias mudam (sem re-registrar o listener)
   useEffect(() => {
     popStateHandlerRef.current = async () => {
+      // Sempre salvar pendencias antes de qualquer navegacao
+      autoSaveField.flush()
       if (hasSections && activeSection !== null) {
         window.history.pushState(null, '', window.location.href)
         await handleSectionBack()
+      } else if (hasSubSections && activeParentSection !== null) {
+        window.history.pushState(null, '', window.location.href)
+        setActiveParentSection(null)
       } else {
-        autoSaveField.flush()
         await new Promise(resolve => setTimeout(resolve, 300))
         router.push(APP_CONFIG.routes.dashboard)
       }
     }
-  }, [hasSections, activeSection, handleSectionBack, autoSaveField, router])
+  }, [hasSections, activeSection, handleSectionBack, autoSaveField, router, hasSubSections, activeParentSection])
 
   // Registra listener UMA VEZ no mount + pushState UMA VEZ
   useEffect(() => {
@@ -1636,7 +1868,7 @@ function ChecklistForm() {
   // === FINALIZE WITH JUSTIFICATIONS (incomplete checklist) ===
   const handleFinalizeWithJustifications = async () => {
     // Validate all justifications are filled
-    const missing = emptyRequiredFields.filter(f => !justifications[f.id]?.trim())
+    const missing = emptyRequiredFields.filter(f => !justifications[f.id]?.trim() || justifications[f.id].trim().length < 3)
     if (missing.length > 0) return
 
     if (!navigator.onLine || !checklistId) {
@@ -1741,6 +1973,93 @@ function ChecklistForm() {
     await handlePreFinalize()
   }
 
+  // === TECH USER: Reset all add-field modal states ===
+  const resetAddFieldModal = () => {
+    setShowAddFieldModal(false)
+    setNewFieldName('')
+    setNewFieldType('yes_no')
+    setNewFieldRequired(true)
+    setNewFieldPlaceholder('')
+    setNewFieldHelpText('')
+    setNewFieldOptions([])
+    setNewFieldOptionInput('')
+    setNewFieldAllowPhoto(false)
+    setNewFieldOnNo({
+      showTextField: false,
+      textFieldRequired: false,
+      showPhotoField: false,
+      photoFieldRequired: false,
+      allowUserActionPlan: false,
+    })
+    setAddFieldSectionId(null)
+  }
+
+  // === TECH USER: Adicionar campo ao template ===
+  const handleAddField = async () => {
+    if (!newFieldName.trim() || !template || addingField) return
+    setAddingField(true)
+
+    try {
+      // Calcular sort_order: maior sort_order da secao + 1
+      const sectionFields = addFieldSectionId
+        ? template.fields.filter(f => f.section_id === addFieldSectionId)
+        : template.fields.filter(f => !f.section_id)
+      const maxSort = sectionFields.reduce((max, f) => Math.max(max, f.sort_order || 0), 0)
+
+      // Build options JSONB
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const fieldOptions: Record<string, unknown> = {}
+      if (newFieldType === 'yes_no') {
+        if (newFieldAllowPhoto) fieldOptions.allowPhoto = true
+        if (newFieldOnNo.showTextField || newFieldOnNo.showPhotoField || newFieldOnNo.allowUserActionPlan) {
+          fieldOptions.onNo = { ...newFieldOnNo }
+        }
+      }
+      if ((newFieldType === 'dropdown' || newFieldType === 'checkbox_multiple') && newFieldOptions.length > 0) {
+        fieldOptions.items = newFieldOptions
+      }
+
+      const optionsValue = Object.keys(fieldOptions).length > 0
+        ? fieldOptions
+        : (newFieldType === 'dropdown' || newFieldType === 'checkbox_multiple') ? [] : null
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data: newField, error } = await (supabase as any)
+        .from('template_fields')
+        .insert({
+          template_id: Number(templateId),
+          section_id: addFieldSectionId,
+          name: newFieldName.trim(),
+          field_type: newFieldType,
+          is_required: newFieldRequired,
+          sort_order: maxSort + 1,
+          placeholder: newFieldPlaceholder.trim() || null,
+          help_text: newFieldHelpText.trim() || null,
+          options: optionsValue,
+        })
+        .select()
+        .single()
+
+      if (error) throw error
+
+      // Adicionar o campo ao template local (sem recarregar pagina)
+      if (newField && template) {
+        setTemplate({
+          ...template,
+          fields: [...template.fields, { ...newField, section_id: addFieldSectionId }],
+        })
+      }
+
+      // Limpar modal
+      resetAddFieldModal()
+    } catch (err) {
+      console.error('[TechUser] Erro ao adicionar campo:', err)
+      alert('Erro ao adicionar campo. Tente novamente.')
+    } finally {
+      setAddingField(false)
+    }
+  }
+
   // ========== RENDER ==========
 
   if (loading) return <LoadingPage />
@@ -1828,15 +2147,9 @@ function ChecklistForm() {
 
   // Justification screen (for incomplete checklist finalization)
   if (showJustificationScreen) {
-    const allJustified = emptyRequiredFields.every(f => justifications[f.id]?.trim())
+    const allJustified = emptyRequiredFields.every(f => justifications[f.id]?.trim() && justifications[f.id].trim().length >= 3)
     return (
       <div className="min-h-screen bg-page">
-        <Header
-          onBack={() => setShowJustificationScreen(false)}
-          title="Justificativas"
-          subtitle={template.name}
-          icon={FiAlertCircle}
-        />
         <main className="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           <div className="card p-4 sm:p-6 mb-6 border-l-4 border-warning">
             <p className="text-sm text-secondary">
@@ -1952,32 +2265,94 @@ function ChecklistForm() {
     )
   }
 
+  // ============ HIERARCHICAL TEMPLATE: SUB-ETAPAS LIST VIEW ============
+  if (hasSections && hasSubSections && activeParentSection !== null && activeSection === null) {
+    const parentSection = parentSections.find(s => s.id === activeParentSection)
+    const subSections = getSubSections(activeParentSection)
+    const allParentFields = getFieldsForParentSection(activeParentSection)
+    const completedSubCount = subSections.filter(sub => {
+      const progress = sectionProgress.find(sp => sp.section_id === sub.id)
+      return progress?.status === 'concluido'
+    }).length
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const progressPct = subSections.length > 0 ? Math.round((completedSubCount / subSections.length) * 100) : 0
+
+    return (
+      <div className="min-h-screen bg-page">
+        <main className="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          <div className="flex items-center gap-2 mb-1">
+            <FiLayers className="w-5 h-5 text-primary" />
+            <h2 className="text-lg font-semibold text-main">{parentSection?.name}</h2>
+          </div>
+          <p className="text-xs text-muted mb-6">{allParentFields.length} campo{allParentFields.length !== 1 ? 's' : ''} no total</p>
+
+          <div className="space-y-3">
+            {subSections.map((sub, idx) => {
+              const progress = sectionProgress.find(sp => sp.section_id === sub.id)
+              const isDone = progress?.status === 'concluido'
+              const subFields = getFieldsForSection(sub.id)
+
+              return (
+                <button
+                  key={sub.id}
+                  type="button"
+                  onClick={() => switchSection(sub.id)}
+                  className={`w-full text-left card p-3 sm:p-5 transition-all hover:shadow-theme-md cursor-pointer ${
+                    isDone
+                      ? 'border-success/30 hover:border-success/50'
+                      : 'border-subtle hover:border-primary/30'
+                  }`}
+                >
+                  <div className="flex items-center gap-3 sm:gap-4">
+                    <div className={`w-9 h-9 sm:w-10 sm:h-10 rounded-xl flex items-center justify-center text-sm font-bold shrink-0 ${
+                      isDone ? 'bg-success/20 text-success' : 'bg-primary/10 text-primary'
+                    }`}>
+                      {isDone ? <FiCheckCircle className="w-4 h-4 sm:w-5 sm:h-5" /> : idx + 1}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <h3 className={`font-semibold text-sm sm:text-base ${isDone ? 'text-success' : 'text-main'}`}>
+                        {sub.name}
+                      </h3>
+                      <p className="text-[10px] sm:text-xs text-muted">
+                        {subFields.length} campo{subFields.length !== 1 ? 's' : ''}
+                        {isDone && progress?.completed_at && (
+                          <> &middot; {new Date(progress.completed_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</>
+                        )}
+                      </p>
+                    </div>
+                    <FiChevronRight className={`w-4 h-4 sm:w-5 sm:h-5 shrink-0 ${isDone ? 'text-success' : 'text-muted'}`} />
+                  </div>
+                </button>
+              )
+            })}
+          </div>
+
+          <div className="mt-4">
+            <button onClick={() => setActiveParentSection(null)} className="btn-ghost w-full py-3 text-center block">
+              Voltar às Etapas
+            </button>
+          </div>
+        </main>
+      </div>
+    )
+  }
+
   // ============ SECTIONED TEMPLATE: SECTION LIST VIEW ============
   if (hasSections && activeSection === null) {
-    const completedCount = sectionProgress.filter(sp => sp.status === 'concluido').length
+    // Determine which sections to show at the top level
+    const topLevelSections = hasSubSections ? parentSections : sortedSections
+    const completedCount = hasSubSections
+      ? flatSections.filter(s => sectionProgress.find(sp => sp.section_id === s.id)?.status === 'concluido').length
+      : sectionProgress.filter(sp => sp.status === 'concluido').length
     const hasGeneralFields = generalFields.length > 0
-    const totalCount = sortedSections.length + (hasGeneralFields ? 1 : 0)
+    const totalCount = hasSubSections
+      ? flatSections.length + (hasGeneralFields ? 1 : 0)
+      : topLevelSections.length + (hasGeneralFields ? 1 : 0)
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const progressPct = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0
 
     return (
       <div className="min-h-screen bg-page">
-        <Header
-          onBack={handleBackToDashboard}
-          title={template.name}
-          subtitle={store.name}
-          icon={FiLayers}
-          rightSlot={
-            <div className="text-right">
-              <p className="text-xs sm:text-sm font-medium text-primary">{completedCount}/{totalCount}</p>
-              <p className="text-[10px] sm:text-xs text-muted">etapas</p>
-            </div>
-          }
-        >
-          <div className="h-1 bg-surface-hover">
-            <div className="h-full bg-primary transition-all duration-300" style={{ width: `${progressPct}%` }} />
-          </div>
-        </Header>
-
         <main className="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           <div className="flex items-center gap-2 mb-6">
             <FiLayers className="w-5 h-5 text-primary" />
@@ -1985,7 +2360,51 @@ function ChecklistForm() {
           </div>
 
           <div className="space-y-3">
-            {sortedSections.map((section, idx) => {
+            {topLevelSections.map((section, idx) => {
+              if (hasSubSections) {
+                // Hierarchical mode: show parent sections with aggregated progress
+                const subSections = getSubSections(section.id)
+                const allFields = getFieldsForParentSection(section.id)
+                const completedSubs = subSections.filter(sub => {
+                  const p = sectionProgress.find(sp => sp.section_id === sub.id)
+                  return p?.status === 'concluido'
+                }).length
+                const allDone = completedSubs === subSections.length && subSections.length > 0
+
+                return (
+                  <button
+                    key={section.id}
+                    type="button"
+                    onClick={() => setActiveParentSection(section.id)}
+                    className={`w-full text-left card p-3 sm:p-5 transition-all hover:shadow-theme-md cursor-pointer ${
+                      allDone
+                        ? 'border-success/30 hover:border-success/50'
+                        : 'border-subtle hover:border-primary/30'
+                    }`}
+                  >
+                    <div className="flex items-center gap-3 sm:gap-4">
+                      <div className={`w-9 h-9 sm:w-10 sm:h-10 rounded-xl flex items-center justify-center text-sm font-bold shrink-0 ${
+                        allDone ? 'bg-success/20 text-success' : 'bg-primary/10 text-primary'
+                      }`}>
+                        {allDone ? <FiCheckCircle className="w-4 h-4 sm:w-5 sm:h-5" /> : idx + 1}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <h3 className={`font-semibold text-sm sm:text-base ${allDone ? 'text-success' : 'text-main'}`}>
+                          {section.name}
+                        </h3>
+                        <p className="text-[10px] sm:text-xs text-muted">
+                          {subSections.length} sub-etapa{subSections.length !== 1 ? 's' : ''} &middot; {allFields.length} campo{allFields.length !== 1 ? 's' : ''}
+                          {allDone && <> &middot; <span className="text-success">Concluida</span></>}
+                          {!allDone && completedSubs > 0 && <> &middot; {completedSubs}/{subSections.length} concluida{completedSubs !== 1 ? 's' : ''}</>}
+                        </p>
+                      </div>
+                      <FiChevronRight className={`w-4 h-4 sm:w-5 sm:h-5 shrink-0 ${allDone ? 'text-success' : 'text-muted'}`} />
+                    </div>
+                  </button>
+                )
+              }
+
+              // Flat mode (original behavior)
               const progress = sectionProgress.find(sp => sp.section_id === section.id)
               const isDone = progress?.status === 'concluido'
               const sectionFields = getFieldsForSection(section.id)
@@ -1994,7 +2413,7 @@ function ChecklistForm() {
                 <button
                   key={section.id}
                   type="button"
-                  onClick={() => setActiveSection(section.id)}
+                  onClick={() => switchSection(section.id)}
                   className={`w-full text-left card p-3 sm:p-5 transition-all hover:shadow-theme-md cursor-pointer ${
                     isDone
                       ? 'border-success/30 hover:border-success/50'
@@ -2028,12 +2447,12 @@ function ChecklistForm() {
             {hasGeneralFields && (
               <button
                 type="button"
-                onClick={() => setActiveSection(-1)}
+                onClick={() => switchSection(-1)}
                 className="w-full text-left card p-3 sm:p-5 transition-all hover:shadow-theme-md cursor-pointer border-subtle hover:border-primary/30"
               >
                 <div className="flex items-center gap-3 sm:gap-4">
                   <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl flex items-center justify-center text-sm font-bold shrink-0 bg-primary/10 text-primary">
-                    {sortedSections.length + 1}
+                    {topLevelSections.length + 1}
                   </div>
                   <div className="flex-1 min-w-0">
                     <h3 className="font-semibold text-sm sm:text-base text-main">Campos Gerais</h3>
@@ -2130,6 +2549,7 @@ function ChecklistForm() {
   // ============ SECTIONED TEMPLATE: FILLING A SPECIFIC SECTION ============
   if (hasSections && activeSection !== null) {
     const isGeneralSection = activeSection === -1
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const section = isGeneralSection ? null : sortedSections.find(s => s.id === activeSection)
     const sectionFields = isGeneralSection
       ? generalFields
@@ -2141,27 +2561,18 @@ function ChecklistForm() {
       const v = responses[f.id]
       return v !== undefined && v !== null && v !== '' && !(Array.isArray(v) && v.length === 0)
     }).length
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const progressPct = sectionFields.length > 0 ? Math.round((filledCount / sectionFields.length) * 100) : 0
+
+    // In hierarchical mode, show parent name as subtitle
+    const parentName = hasSubSections && activeParentSection !== null
+      ? parentSections.find(s => s.id === activeParentSection)?.name
+      : undefined
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const headerSubtitle = parentName ? `${parentName} — ${template.name}` : template.name
 
     return (
       <div className="min-h-screen bg-page">
-        <Header
-          onBack={handleSectionBack}
-          title={isGeneralSection ? 'Campos Gerais' : section?.name}
-          subtitle={template.name}
-          icon={FiLayers}
-          rightSlot={
-            <div className="text-right">
-              <p className="text-xs sm:text-sm font-medium text-primary">{progressPct}%</p>
-              <p className="text-[10px] sm:text-xs text-muted">completo</p>
-            </div>
-          }
-        >
-          <div className="h-1 bg-surface-hover">
-            <div className="h-full bg-primary transition-all duration-300" style={{ width: `${progressPct}%` }} />
-          </div>
-        </Header>
-
         <main className="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
             <div className="space-y-6">
               {isDone && (
@@ -2184,6 +2595,21 @@ function ChecklistForm() {
                 </div>
               ))}
 
+              {/* Botao para tech users adicionarem campos */}
+              {isTechUser && !isDone && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAddFieldSectionId(activeSection === -1 ? null : activeSection)
+                    setShowAddFieldModal(true)
+                  }}
+                  className="w-full py-3 border-2 border-dashed border-primary/30 hover:border-primary rounded-xl text-primary/70 hover:text-primary transition-colors flex items-center justify-center gap-2 text-sm"
+                >
+                  <FiPlus className="w-4 h-4" />
+                  <span>Adicionar campo nesta etapa</span>
+                </button>
+              )}
+
               {errors[0] && (
                 <div className="p-4 bg-red-500/10 border border-red-500/30 rounded-xl">
                   <p className="text-red-400">{errors[0]}</p>
@@ -2205,6 +2631,204 @@ function ChecklistForm() {
               </div>
             </div>
         </main>
+
+        {/* Modal para tech users adicionarem campo (view com secoes) */}
+        {showAddFieldModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+            <div className="bg-page rounded-2xl w-full max-w-md shadow-xl border border-subtle p-6 max-h-[80vh] overflow-y-auto space-y-4">
+              <h3 className="text-lg font-bold text-main">Adicionar Campo</h3>
+              <p className="text-xs text-muted">O campo sera adicionado permanentemente ao template.</p>
+
+              {/* Nome do campo */}
+              <div>
+                <label className="block text-sm font-medium text-secondary mb-1">Nome do campo</label>
+                <input
+                  type="text"
+                  value={newFieldName}
+                  onChange={e => setNewFieldName(e.target.value)}
+                  placeholder="Ex: Verificar temperatura..."
+                  className="w-full px-3 py-2 bg-surface border border-subtle rounded-xl text-main text-sm placeholder-muted focus:outline-none focus:ring-2 focus:ring-primary"
+                  autoFocus
+                />
+              </div>
+
+              {/* Tipo */}
+              <div>
+                <label className="block text-sm font-medium text-secondary mb-1">Tipo</label>
+                <select
+                  value={newFieldType}
+                  onChange={e => {
+                    const val = e.target.value as typeof newFieldType
+                    setNewFieldType(val)
+                    // Reset type-specific states on type change
+                    setNewFieldAllowPhoto(false)
+                    setNewFieldOnNo({ showTextField: false, textFieldRequired: false, showPhotoField: false, photoFieldRequired: false, allowUserActionPlan: false })
+                    setNewFieldOptions([])
+                    setNewFieldOptionInput('')
+                  }}
+                  className="w-full px-3 py-2 bg-surface border border-subtle rounded-xl text-main text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                >
+                  <option value="yes_no">Sim / Nao / N/A</option>
+                  <option value="text">Texto</option>
+                  <option value="number">Numero</option>
+                  <option value="photo">Foto</option>
+                  <option value="dropdown">Lista (Dropdown)</option>
+                  <option value="checkbox_multiple">Multipla Escolha</option>
+                  <option value="rating">Avaliacao (Estrelas)</option>
+                  <option value="signature">Assinatura</option>
+                </select>
+              </div>
+
+              {/* Campo obrigatorio */}
+              <label className="flex items-center gap-2 text-sm text-secondary cursor-pointer">
+                <input type="checkbox" checked={newFieldRequired} onChange={e => setNewFieldRequired(e.target.checked)}
+                  className="w-4 h-4 rounded border-subtle text-primary focus:ring-primary" />
+                Campo obrigatorio
+              </label>
+
+              {/* Condicoes para yes_no */}
+              {newFieldType === 'yes_no' && (
+                <div className="space-y-3 p-3 bg-surface rounded-xl border border-subtle">
+                  <p className="text-xs font-medium text-muted uppercase tracking-wide">Opcoes Sim/Nao</p>
+                  <label className="flex items-center gap-2 text-sm text-secondary cursor-pointer">
+                    <input type="checkbox" checked={newFieldAllowPhoto} onChange={e => setNewFieldAllowPhoto(e.target.checked)}
+                      className="w-4 h-4 rounded border-subtle text-primary focus:ring-primary" />
+                    Permitir foto
+                  </label>
+                  <div className="border-t border-subtle pt-3 space-y-2">
+                    <p className="text-xs font-medium text-muted">Condicoes &quot;Quando Nao&quot;</p>
+                    <label className="flex items-center gap-2 text-sm text-secondary cursor-pointer">
+                      <input type="checkbox" checked={newFieldOnNo.showTextField} onChange={e => setNewFieldOnNo(prev => ({ ...prev, showTextField: e.target.checked, textFieldRequired: e.target.checked ? prev.textFieldRequired : false }))}
+                        className="w-4 h-4 rounded border-subtle text-primary focus:ring-primary" />
+                      Exigir texto explicativo
+                    </label>
+                    {newFieldOnNo.showTextField && (
+                      <label className="flex items-center gap-2 text-sm text-secondary cursor-pointer ml-6">
+                        <input type="checkbox" checked={newFieldOnNo.textFieldRequired} onChange={e => setNewFieldOnNo(prev => ({ ...prev, textFieldRequired: e.target.checked }))}
+                          className="w-4 h-4 rounded border-subtle text-primary focus:ring-primary" />
+                        Texto obrigatorio
+                      </label>
+                    )}
+                    <label className="flex items-center gap-2 text-sm text-secondary cursor-pointer">
+                      <input type="checkbox" checked={newFieldOnNo.showPhotoField} onChange={e => setNewFieldOnNo(prev => ({ ...prev, showPhotoField: e.target.checked, photoFieldRequired: e.target.checked ? prev.photoFieldRequired : false }))}
+                        className="w-4 h-4 rounded border-subtle text-primary focus:ring-primary" />
+                      Exigir foto
+                    </label>
+                    {newFieldOnNo.showPhotoField && (
+                      <label className="flex items-center gap-2 text-sm text-secondary cursor-pointer ml-6">
+                        <input type="checkbox" checked={newFieldOnNo.photoFieldRequired} onChange={e => setNewFieldOnNo(prev => ({ ...prev, photoFieldRequired: e.target.checked }))}
+                          className="w-4 h-4 rounded border-subtle text-primary focus:ring-primary" />
+                        Foto obrigatoria
+                      </label>
+                    )}
+                    <label className="flex items-center gap-2 text-sm text-secondary cursor-pointer">
+                      <input type="checkbox" checked={newFieldOnNo.allowUserActionPlan} onChange={e => setNewFieldOnNo(prev => ({ ...prev, allowUserActionPlan: e.target.checked }))}
+                        className="w-4 h-4 rounded border-subtle text-primary focus:ring-primary" />
+                      Permitir preenchedor escolher responsavel
+                    </label>
+                  </div>
+                </div>
+              )}
+
+              {/* Opcoes para dropdown / checkbox_multiple */}
+              {(newFieldType === 'dropdown' || newFieldType === 'checkbox_multiple') && (
+                <div className="space-y-3 p-3 bg-surface rounded-xl border border-subtle">
+                  <p className="text-xs font-medium text-muted uppercase tracking-wide">Opcoes da lista</p>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={newFieldOptionInput}
+                      onChange={e => setNewFieldOptionInput(e.target.value)}
+                      onKeyDown={e => {
+                        if (e.key === 'Enter' && newFieldOptionInput.trim()) {
+                          e.preventDefault()
+                          if (!newFieldOptions.includes(newFieldOptionInput.trim())) {
+                            setNewFieldOptions(prev => [...prev, newFieldOptionInput.trim()])
+                          }
+                          setNewFieldOptionInput('')
+                        }
+                      }}
+                      placeholder="Digite uma opcao..."
+                      className="flex-1 px-3 py-2 bg-page border border-subtle rounded-xl text-main text-sm placeholder-muted focus:outline-none focus:ring-2 focus:ring-primary"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (newFieldOptionInput.trim() && !newFieldOptions.includes(newFieldOptionInput.trim())) {
+                          setNewFieldOptions(prev => [...prev, newFieldOptionInput.trim()])
+                        }
+                        setNewFieldOptionInput('')
+                      }}
+                      disabled={!newFieldOptionInput.trim()}
+                      className="px-3 py-2 btn-primary rounded-xl text-sm disabled:opacity-50"
+                    >
+                      <FiPlus className="w-4 h-4" />
+                    </button>
+                  </div>
+                  {newFieldOptions.length > 0 && (
+                    <div className="space-y-1">
+                      {newFieldOptions.map((opt, i) => (
+                        <div key={i} className="flex items-center justify-between px-3 py-1.5 bg-page rounded-lg border border-subtle">
+                          <span className="text-sm text-main">{opt}</span>
+                          <button
+                            type="button"
+                            onClick={() => setNewFieldOptions(prev => prev.filter((_, idx) => idx !== i))}
+                            className="text-red-400 hover:text-red-300 text-xs ml-2"
+                          >
+                            Remover
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {newFieldOptions.length === 0 && (
+                    <p className="text-xs text-muted">Nenhuma opcao adicionada ainda.</p>
+                  )}
+                </div>
+              )}
+
+              {/* Placeholder */}
+              <div>
+                <label className="block text-sm font-medium text-secondary mb-1">Placeholder <span className="text-muted font-normal">(opcional)</span></label>
+                <input
+                  type="text"
+                  value={newFieldPlaceholder}
+                  onChange={e => setNewFieldPlaceholder(e.target.value)}
+                  placeholder="Texto exibido quando o campo esta vazio..."
+                  className="w-full px-3 py-2 bg-surface border border-subtle rounded-xl text-main text-sm placeholder-muted focus:outline-none focus:ring-2 focus:ring-primary"
+                />
+              </div>
+
+              {/* Texto de ajuda */}
+              <div>
+                <label className="block text-sm font-medium text-secondary mb-1">Texto de ajuda <span className="text-muted font-normal">(opcional)</span></label>
+                <input
+                  type="text"
+                  value={newFieldHelpText}
+                  onChange={e => setNewFieldHelpText(e.target.value)}
+                  placeholder="Instrucao para quem preenche o campo..."
+                  className="w-full px-3 py-2 bg-surface border border-subtle rounded-xl text-main text-sm placeholder-muted focus:outline-none focus:ring-2 focus:ring-primary"
+                />
+              </div>
+
+              <div className="flex gap-2 pt-2">
+                <button
+                  onClick={resetAddFieldModal}
+                  className="flex-1 py-2.5 btn-secondary rounded-xl text-sm"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={handleAddField}
+                  disabled={!newFieldName.trim() || addingField || ((newFieldType === 'dropdown' || newFieldType === 'checkbox_multiple') && newFieldOptions.length === 0)}
+                  className="flex-1 py-2.5 btn-primary rounded-xl text-sm disabled:opacity-50"
+                >
+                  {addingField ? 'Salvando...' : 'Adicionar'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     )
   }
@@ -2212,6 +2836,7 @@ function ChecklistForm() {
   // ============ NON-SECTIONED TEMPLATE: ORIGINAL LINEAR FORM ============
   const visibleFields = template.fields.filter(f => f.field_type !== 'gps')
 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const progress = visibleFields.length > 0
     ? Math.round((Object.keys(responses).filter(k => {
         const v = responses[Number(k)]
@@ -2221,23 +2846,6 @@ function ChecklistForm() {
 
   return (
     <div className="min-h-screen bg-page">
-      <Header
-        onBack={handleBackToDashboard}
-        title={template.name}
-        subtitle={store.name}
-        icon={FiLayers}
-        rightSlot={
-          <div className="text-right">
-            <p className="text-xs sm:text-sm font-medium text-primary">{progress}%</p>
-            <p className="text-[10px] sm:text-xs text-muted">completo</p>
-          </div>
-        }
-      >
-        <div className="h-1 bg-surface-hover">
-          <div className="h-full bg-primary transition-all duration-300" style={{ width: `${progress}%` }} />
-        </div>
-      </Header>
-
       <main className="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
         <div className="space-y-4 sm:space-y-6">
           {visibleFields.map((field, index) => (
@@ -2342,6 +2950,204 @@ function ChecklistForm() {
                   Voltar ao Dashboard (manter pendente)
                 </Link>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal para tech users adicionarem campo */}
+      {showAddFieldModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="bg-page rounded-2xl w-full max-w-md shadow-xl border border-subtle p-6 max-h-[80vh] overflow-y-auto space-y-4" style={{ backgroundColor: 'var(--bg-page, #09090b)' }}>
+            <h3 className="text-lg font-bold text-main">Adicionar Campo</h3>
+            <p className="text-xs text-muted">O campo sera adicionado permanentemente ao template.</p>
+
+            {/* Nome do campo */}
+            <div>
+              <label className="block text-sm font-medium text-secondary mb-1">Nome do campo</label>
+              <input
+                type="text"
+                value={newFieldName}
+                onChange={e => setNewFieldName(e.target.value)}
+                placeholder="Ex: Verificar temperatura..."
+                className="w-full px-3 py-2 bg-surface border border-subtle rounded-xl text-main text-sm placeholder-muted focus:outline-none focus:ring-2 focus:ring-primary"
+                autoFocus
+              />
+            </div>
+
+            {/* Tipo */}
+            <div>
+              <label className="block text-sm font-medium text-secondary mb-1">Tipo</label>
+              <select
+                value={newFieldType}
+                onChange={e => {
+                  const val = e.target.value as typeof newFieldType
+                  setNewFieldType(val)
+                  // Reset type-specific states on type change
+                  setNewFieldAllowPhoto(false)
+                  setNewFieldOnNo({ showTextField: false, textFieldRequired: false, showPhotoField: false, photoFieldRequired: false, allowUserActionPlan: false })
+                  setNewFieldOptions([])
+                  setNewFieldOptionInput('')
+                }}
+                className="w-full px-3 py-2 bg-surface border border-subtle rounded-xl text-main text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+              >
+                <option value="yes_no">Sim / Nao / N/A</option>
+                <option value="text">Texto</option>
+                <option value="number">Numero</option>
+                <option value="photo">Foto</option>
+                <option value="dropdown">Lista (Dropdown)</option>
+                <option value="checkbox_multiple">Multipla Escolha</option>
+                <option value="rating">Avaliacao (Estrelas)</option>
+                <option value="signature">Assinatura</option>
+              </select>
+            </div>
+
+            {/* Campo obrigatorio */}
+            <label className="flex items-center gap-2 text-sm text-secondary cursor-pointer">
+              <input type="checkbox" checked={newFieldRequired} onChange={e => setNewFieldRequired(e.target.checked)}
+                className="w-4 h-4 rounded border-subtle text-primary focus:ring-primary" />
+              Campo obrigatorio
+            </label>
+
+            {/* Condicoes para yes_no */}
+            {newFieldType === 'yes_no' && (
+              <div className="space-y-3 p-3 bg-surface rounded-xl border border-subtle">
+                <p className="text-xs font-medium text-muted uppercase tracking-wide">Opcoes Sim/Nao</p>
+                <label className="flex items-center gap-2 text-sm text-secondary cursor-pointer">
+                  <input type="checkbox" checked={newFieldAllowPhoto} onChange={e => setNewFieldAllowPhoto(e.target.checked)}
+                    className="w-4 h-4 rounded border-subtle text-primary focus:ring-primary" />
+                  Permitir foto
+                </label>
+                <div className="border-t border-subtle pt-3 space-y-2">
+                  <p className="text-xs font-medium text-muted">Condicoes &quot;Quando Nao&quot;</p>
+                  <label className="flex items-center gap-2 text-sm text-secondary cursor-pointer">
+                    <input type="checkbox" checked={newFieldOnNo.showTextField} onChange={e => setNewFieldOnNo(prev => ({ ...prev, showTextField: e.target.checked, textFieldRequired: e.target.checked ? prev.textFieldRequired : false }))}
+                      className="w-4 h-4 rounded border-subtle text-primary focus:ring-primary" />
+                    Exigir texto explicativo
+                  </label>
+                  {newFieldOnNo.showTextField && (
+                    <label className="flex items-center gap-2 text-sm text-secondary cursor-pointer ml-6">
+                      <input type="checkbox" checked={newFieldOnNo.textFieldRequired} onChange={e => setNewFieldOnNo(prev => ({ ...prev, textFieldRequired: e.target.checked }))}
+                        className="w-4 h-4 rounded border-subtle text-primary focus:ring-primary" />
+                      Texto obrigatorio
+                    </label>
+                  )}
+                  <label className="flex items-center gap-2 text-sm text-secondary cursor-pointer">
+                    <input type="checkbox" checked={newFieldOnNo.showPhotoField} onChange={e => setNewFieldOnNo(prev => ({ ...prev, showPhotoField: e.target.checked, photoFieldRequired: e.target.checked ? prev.photoFieldRequired : false }))}
+                      className="w-4 h-4 rounded border-subtle text-primary focus:ring-primary" />
+                    Exigir foto
+                  </label>
+                  {newFieldOnNo.showPhotoField && (
+                    <label className="flex items-center gap-2 text-sm text-secondary cursor-pointer ml-6">
+                      <input type="checkbox" checked={newFieldOnNo.photoFieldRequired} onChange={e => setNewFieldOnNo(prev => ({ ...prev, photoFieldRequired: e.target.checked }))}
+                        className="w-4 h-4 rounded border-subtle text-primary focus:ring-primary" />
+                      Foto obrigatoria
+                    </label>
+                  )}
+                  <label className="flex items-center gap-2 text-sm text-secondary cursor-pointer">
+                    <input type="checkbox" checked={newFieldOnNo.allowUserActionPlan} onChange={e => setNewFieldOnNo(prev => ({ ...prev, allowUserActionPlan: e.target.checked }))}
+                      className="w-4 h-4 rounded border-subtle text-primary focus:ring-primary" />
+                    Permitir preenchedor escolher responsavel
+                  </label>
+                </div>
+              </div>
+            )}
+
+            {/* Opcoes para dropdown / checkbox_multiple */}
+            {(newFieldType === 'dropdown' || newFieldType === 'checkbox_multiple') && (
+              <div className="space-y-3 p-3 bg-surface rounded-xl border border-subtle">
+                <p className="text-xs font-medium text-muted uppercase tracking-wide">Opcoes da lista</p>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={newFieldOptionInput}
+                    onChange={e => setNewFieldOptionInput(e.target.value)}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter' && newFieldOptionInput.trim()) {
+                        e.preventDefault()
+                        if (!newFieldOptions.includes(newFieldOptionInput.trim())) {
+                          setNewFieldOptions(prev => [...prev, newFieldOptionInput.trim()])
+                        }
+                        setNewFieldOptionInput('')
+                      }
+                    }}
+                    placeholder="Digite uma opcao..."
+                    className="flex-1 px-3 py-2 bg-page border border-subtle rounded-xl text-main text-sm placeholder-muted focus:outline-none focus:ring-2 focus:ring-primary"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (newFieldOptionInput.trim() && !newFieldOptions.includes(newFieldOptionInput.trim())) {
+                        setNewFieldOptions(prev => [...prev, newFieldOptionInput.trim()])
+                      }
+                      setNewFieldOptionInput('')
+                    }}
+                    disabled={!newFieldOptionInput.trim()}
+                    className="px-3 py-2 btn-primary rounded-xl text-sm disabled:opacity-50"
+                  >
+                    <FiPlus className="w-4 h-4" />
+                  </button>
+                </div>
+                {newFieldOptions.length > 0 && (
+                  <div className="space-y-1">
+                    {newFieldOptions.map((opt, i) => (
+                      <div key={i} className="flex items-center justify-between px-3 py-1.5 bg-page rounded-lg border border-subtle">
+                        <span className="text-sm text-main">{opt}</span>
+                        <button
+                          type="button"
+                          onClick={() => setNewFieldOptions(prev => prev.filter((_, idx) => idx !== i))}
+                          className="text-red-400 hover:text-red-300 text-xs ml-2"
+                        >
+                          Remover
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {newFieldOptions.length === 0 && (
+                  <p className="text-xs text-muted">Nenhuma opcao adicionada ainda.</p>
+                )}
+              </div>
+            )}
+
+            {/* Placeholder */}
+            <div>
+              <label className="block text-sm font-medium text-secondary mb-1">Placeholder <span className="text-muted font-normal">(opcional)</span></label>
+              <input
+                type="text"
+                value={newFieldPlaceholder}
+                onChange={e => setNewFieldPlaceholder(e.target.value)}
+                placeholder="Texto exibido quando o campo esta vazio..."
+                className="w-full px-3 py-2 bg-surface border border-subtle rounded-xl text-main text-sm placeholder-muted focus:outline-none focus:ring-2 focus:ring-primary"
+              />
+            </div>
+
+            {/* Texto de ajuda */}
+            <div>
+              <label className="block text-sm font-medium text-secondary mb-1">Texto de ajuda <span className="text-muted font-normal">(opcional)</span></label>
+              <input
+                type="text"
+                value={newFieldHelpText}
+                onChange={e => setNewFieldHelpText(e.target.value)}
+                placeholder="Instrucao para quem preenche o campo..."
+                className="w-full px-3 py-2 bg-surface border border-subtle rounded-xl text-main text-sm placeholder-muted focus:outline-none focus:ring-2 focus:ring-primary"
+              />
+            </div>
+
+            <div className="flex gap-2 pt-2">
+              <button
+                onClick={resetAddFieldModal}
+                className="flex-1 py-2.5 btn-secondary rounded-xl text-sm"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleAddField}
+                disabled={!newFieldName.trim() || addingField || ((newFieldType === 'dropdown' || newFieldType === 'checkbox_multiple') && newFieldOptions.length === 0)}
+                className="flex-1 py-2.5 btn-primary rounded-xl text-sm disabled:opacity-50"
+              >
+                {addingField ? 'Salvando...' : 'Adicionar'}
+              </button>
             </div>
           </div>
         </div>

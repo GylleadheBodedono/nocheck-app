@@ -3,10 +3,11 @@
 import { useEffect, useState, useMemo, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient, isSupabaseConfigured } from '@/lib/supabase'
-import { FiSettings, FiCopy, FiEye, FiSave, FiRotateCcw, FiSend, FiChevronDown, FiChevronUp, FiCheck } from 'react-icons/fi'
+import { FiCopy, FiEye, FiSave, FiRotateCcw, FiSend, FiChevronDown, FiChevronUp, FiCheck } from 'react-icons/fi'
 import { APP_CONFIG } from '@/lib/config'
-import { LoadingPage, Header, PageContainer } from '@/components/ui'
+import { LoadingPage, PageContainer } from '@/components/ui'
 import { getAuthCache, getUserCache } from '@/lib/offlineCache'
+import { useRealtimeRefresh } from '@/hooks/useRealtimeRefresh'
 import {
   TEMPLATE_VARIABLES,
   DEFAULT_ACTION_PLAN_EMAIL_HTML,
@@ -24,6 +25,7 @@ export default function ConfiguracoesPage() {
   const [error, setError] = useState<string | null>(null)
   const router = useRouter()
   const supabase = useMemo(() => createClient(), [])
+  const { refreshKey } = useRealtimeRefresh(['app_settings'])
 
   // Template state
   const [emailSubject, setEmailSubject] = useState(DEFAULT_ACTION_PLAN_EMAIL_SUBJECT)
@@ -95,6 +97,28 @@ export default function ConfiguracoesPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  useEffect(() => {
+    if (refreshKey > 0 && navigator.onLine) {
+      // Reload settings from app_settings
+      const reloadSettings = async () => {
+        try {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const sb = supabase as any
+          const [tplRes, subjRes] = await Promise.all([
+            sb.from('app_settings').select('value').eq('key', 'action_plan_email_template').maybeSingle(),
+            sb.from('app_settings').select('value').eq('key', 'action_plan_email_subject').maybeSingle(),
+          ])
+          if (tplRes.data?.value) setEmailTemplate(tplRes.data.value)
+          if (subjRes.data?.value) setEmailSubject(subjRes.data.value)
+        } catch {
+          console.log('[Config] Erro ao recarregar settings via realtime')
+        }
+      }
+      reloadSettings()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [refreshKey])
+
   const handleSave = useCallback(async () => {
     setSaving(true)
     setError(null)
@@ -123,10 +147,10 @@ export default function ConfiguracoesPage() {
       ])
 
       if (!tplRes.ok || !subjRes.ok) {
-        throw new Error('Erro ao salvar configurações')
+        throw new Error('Erro ao salvar configuracoes')
       }
 
-      setSuccess('Configurações salvas com sucesso!')
+      setSuccess('Configuracoes salvas com sucesso!')
       setTimeout(() => setSuccess(null), 3000)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Erro ao salvar')
@@ -136,16 +160,16 @@ export default function ConfiguracoesPage() {
   }, [supabase, emailTemplate, emailSubject])
 
   const handleRestore = useCallback(() => {
-    if (!confirm('Restaurar template padrão? Suas alterações serão perdidas.')) return
+    if (!confirm('Restaurar template padrao? Suas alteracoes serao perdidas.')) return
     setEmailSubject(DEFAULT_ACTION_PLAN_EMAIL_SUBJECT)
     setEmailTemplate(DEFAULT_ACTION_PLAN_EMAIL_HTML)
-    setSuccess('Template restaurado para o padrão. Clique em "Salvar" para aplicar.')
+    setSuccess('Template restaurado para o padrao. Clique em "Salvar" para aplicar.')
     setTimeout(() => setSuccess(null), 4000)
   }, [])
 
   const handleSendTest = useCallback(async () => {
     if (!userEmail) {
-      setError('Email do usuário não encontrado')
+      setError('Email do usuario nao encontrado')
       return
     }
     setSendingTest(true)
@@ -191,13 +215,6 @@ export default function ConfiguracoesPage() {
   if (loading) return <LoadingPage />
 
   return (
-    <div className="min-h-screen bg-page">
-      <Header
-        title="Configurações"
-        icon={FiSettings}
-        backHref="/admin"
-      />
-
       <PageContainer size="md" className="space-y-6">
 
         {/* Variaveis Disponiveis */}
@@ -207,9 +224,9 @@ export default function ConfiguracoesPage() {
             className="w-full flex items-center justify-between p-5 hover:bg-surface-hover transition-colors"
           >
             <div className="text-left">
-              <h2 className="text-base font-semibold text-main">Variáveis Disponíveis</h2>
+              <h2 className="text-base font-semibold text-main">Variaveis Disponiveis</h2>
               <p className="text-sm text-muted mt-0.5">
-                Clique para ver as variáveis que podem ser usadas no template
+                Clique para ver as variaveis que podem ser usadas no template
               </p>
             </div>
             {showVariables ? <FiChevronUp className="w-5 h-5 text-muted" /> : <FiChevronDown className="w-5 h-5 text-muted" />}
@@ -234,7 +251,7 @@ export default function ConfiguracoesPage() {
                     <button
                       onClick={() => handleCopyVariable(v.key)}
                       className="p-1.5 rounded-lg text-muted hover:text-primary hover:bg-surface-hover transition-colors shrink-0"
-                      title="Copiar variável"
+                      title="Copiar variavel"
                     >
                       {copiedVar === v.key ? (
                         <FiCheck className="w-3.5 h-3.5 text-success" />
@@ -253,14 +270,14 @@ export default function ConfiguracoesPage() {
         <div className="card p-5">
           <h2 className="text-base font-semibold text-main mb-1">Assunto do Email</h2>
           <p className="text-sm text-muted mb-4">
-            Template para o assunto do email. Use variáveis como {`{{field_name}}`}.
+            Template para o assunto do email. Use variaveis como {`{{field_name}}`}.
           </p>
           <input
             type="text"
             value={emailSubject}
             onChange={(e) => setEmailSubject(e.target.value)}
             className="input font-mono text-sm"
-            placeholder="[OpereCheck] Plano de Ação: {{field_name}}"
+            placeholder="[NoCheck] Plano de Acao: {{field_name}}"
           />
         </div>
 
@@ -277,7 +294,7 @@ export default function ConfiguracoesPage() {
             </button>
           </div>
           <p className="text-sm text-muted mb-4">
-            HTML completo do email. Use as variáveis {`{{variavel}}`} para inserir dados dinâmicos.
+            HTML completo do email. Use as variaveis {`{{variavel}}`} para inserir dados dinamicos.
           </p>
 
           <textarea
@@ -334,7 +351,7 @@ export default function ConfiguracoesPage() {
             ) : (
               <>
                 <FiSave className="w-4 h-4" />
-                Salvar Configurações
+                Salvar Configuracoes
               </>
             )}
           </button>
@@ -362,17 +379,16 @@ export default function ConfiguracoesPage() {
             className="btn-ghost flex items-center justify-center gap-2 text-muted hover:text-warning"
           >
             <FiRotateCcw className="w-4 h-4" />
-            Restaurar Padrão
+            Restaurar Padrao
           </button>
         </div>
 
         {/* Info */}
         {userEmail && (
           <p className="text-xs text-muted">
-            O email de teste será enviado para: <span className="font-medium text-secondary">{userEmail}</span>
+            O email de teste sera enviado para: <span className="font-medium text-secondary">{userEmail}</span>
           </p>
         )}
       </PageContainer>
-    </div>
   )
 }

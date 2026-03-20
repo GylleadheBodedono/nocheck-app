@@ -57,8 +57,15 @@ function evaluateCondition(
       if (!answer) answer = response.value_text
       if (!answer) return condition.condition_type === 'empty'
 
-      const answerNorm = answer.toLowerCase()
-      const condNorm = ((condValue.value as string) || '').toLowerCase()
+      const normalizeYesNo = (v: string) => {
+        const l = v.toLowerCase().replace(/[\/\s]/g, '')
+        if (l === 'na' || l === 'n/a' || l === 'naoaplicavel') return 'na'
+        if (l === 'nao' || l === 'não') return 'nao'
+        if (l === 'sim') return 'sim'
+        return l
+      }
+      const answerNorm = normalizeYesNo(answer)
+      const condNorm = normalizeYesNo((condValue.value as string) || '')
 
       if (condition.condition_type === 'equals') {
         return answerNorm === condNorm
@@ -182,10 +189,14 @@ async function checkReincidencia(
 function getNonConformityValueStr(field: FieldData, response: ResponseData): string {
   switch (field.field_type) {
     case 'yes_no': {
+      let ans = ''
       if (response.value_json && typeof response.value_json === 'object') {
-        return (response.value_json as Record<string, unknown>).answer as string || response.value_text || ''
+        ans = (response.value_json as Record<string, unknown>).answer as string || response.value_text || ''
+      } else {
+        ans = response.value_text || ''
       }
-      return response.value_text || ''
+      if (ans.toLowerCase() === 'na') return 'N/A'
+      return ans
     }
     case 'number':
     case 'rating':
@@ -264,33 +275,18 @@ export async function processarNaoConformidades(
     let emailSubjectTemplate: string | null = null
 
     try {
-      const results = await Promise.allSettled([
-        sb.from('stores').select('name').eq('id', storeId).single(),
-        sb.from('checklist_templates').select('name').eq('id', templateId).single(),
-        sectorId
-          ? sb.from('sectors').select('name').eq('id', sectorId).single()
-          : Promise.resolve({ data: null }),
-        sb.from('users').select('full_name, email').eq('id', userId).single(),
-        sb.from('checklists').select('completed_at, created_at').eq('id', checklistId).single(),
-        sb.from('app_settings').select('value').eq('key', 'action_plan_email_template').maybeSingle(),
-        sb.from('app_settings').select('value').eq('key', 'action_plan_email_subject').maybeSingle(),
-      ])
-
-      // Extract values with fallbacks for rejected promises
-      const storeResult = results[0].status === 'fulfilled' ? results[0].value : { data: null }
-      const templateResult = results[1].status === 'fulfilled' ? results[1].value : { data: null }
-      const sectorResult = results[2].status === 'fulfilled' ? results[2].value : { data: null }
-      const respondentResult = results[3].status === 'fulfilled' ? results[3].value : { data: null }
-      const checklistResult = results[4].status === 'fulfilled' ? results[4].value : { data: null }
-      const emailTemplateResult = results[5].status === 'fulfilled' ? results[5].value : { data: null }
-      const emailSubjectResult = results[6].status === 'fulfilled' ? results[6].value : { data: null }
-
-      // Log any rejected promises
-      results.forEach((r, i) => {
-        if (r.status === 'rejected') {
-          console.warn(`[ActionPlan] Context query #${i} rejected:`, r.reason)
-        }
-      })
+      const [storeResult, templateResult, sectorResult, respondentResult, checklistResult, emailTemplateResult, emailSubjectResult] =
+        await Promise.all([
+          sb.from('stores').select('name').eq('id', storeId).single(),
+          sb.from('checklist_templates').select('name').eq('id', templateId).single(),
+          sectorId
+            ? sb.from('sectors').select('name').eq('id', sectorId).single()
+            : Promise.resolve({ data: null }),
+          sb.from('users').select('full_name, email').eq('id', userId).single(),
+          sb.from('checklists').select('completed_at, created_at').eq('id', checklistId).single(),
+          sb.from('app_settings').select('value').eq('key', 'action_plan_email_template').maybeSingle(),
+          sb.from('app_settings').select('value').eq('key', 'action_plan_email_subject').maybeSingle(),
+        ])
 
       if (storeResult.data?.name) storeName = storeResult.data.name
       if (templateResult.data?.name) templateName = templateResult.data.name
@@ -308,7 +304,7 @@ export async function processarNaoConformidades(
 
     const appUrl = typeof window !== 'undefined'
       ? window.location.origin
-      : process.env.NEXT_PUBLIC_APP_URL || 'https://operecheck.vercel.app'
+      : process.env.NEXT_PUBLIC_APP_URL || 'https://nocheck-app.vercel.app'
 
     // 3. Avaliar cada condicao contra as respostas
     let plansCreated = 0
@@ -334,9 +330,11 @@ export async function processarNaoConformidades(
       // 4. Nao-conformidade detectada! Verificar reincidencia
       const reincidencia = await checkReincidencia(supabase, field.id, storeId, templateId)
 
-      // Verificar se o usuario selecionou um responsavel, severidade e/ou modelo
+      // Verificar se o usuario selecionou uma funcao, severidade e/ou modelo
       const valueJson = response.value_json as Record<string, unknown> | null
-      const userSelectedAssigneeId = valueJson?.selectedAssigneeId as string | null
+      const userSelectedFunctionId = valueJson?.selectedFunctionId as number | null
+      // Fallback para dados antigos (selectedAssigneeId era UUID de usuario)
+      const legacyAssigneeId = valueJson?.selectedAssigneeId as string | null
       const userSelectedSeverity = valueJson?.selectedSeverity as string | null
       const userSelectedPresetId = valueJson?.selectedPresetId as number | null
 
@@ -352,8 +350,11 @@ export async function processarNaoConformidades(
         }
       }
 
-      // Determinar responsavel: prioridade para o selecionado pelo preenchedor, depois preset, depois condition
-      const assigneeId = userSelectedAssigneeId || presetData?.default_assignee_id || condition.default_assignee_id || userId
+      // Determinar funcao responsavel: prioridade para a selecionada pelo preenchedor, depois preset, depois condition
+      const assignedFunctionId = userSelectedFunctionId || presetData?.default_function_id || condition.default_function_id || null
+      // Fallback: se nenhuma funcao, usa assigned_to legado (usuario direto)
+      const assigneeId = legacyAssigneeId || presetData?.default_assignee_id || condition.default_assignee_id || userId
+      console.log(`[ActionPlan] Campo "${field.name}": assignedFunctionId=${assignedFunctionId}, assigneeId=${assigneeId}, userSelected=${userSelectedFunctionId}, conditionDefault=${condition.default_function_id}`)
 
       // Calcular deadline (preset pode sobrescrever)
       const deadlineDays = presetData?.deadline_days ?? condition.deadline_days
@@ -403,6 +404,7 @@ export async function processarNaoConformidades(
           severity,
           status: 'aberto',
           assigned_to: assigneeId,
+          assigned_function_id: assignedFunctionId,
           assigned_by: userId,
           deadline: deadlineStr,
           is_reincidencia: reincidencia.isReincidencia,
@@ -424,30 +426,79 @@ export async function processarNaoConformidades(
 
       plansCreated++
 
-      // 7. Criar notificacao in-app para o responsavel
-      const notifResult = await createNotification(supabase, assigneeId, {
-        type: reincidencia.isReincidencia ? 'reincidencia_detected' : 'action_plan_assigned',
-        title: reincidencia.isReincidencia
-          ? `Reincidencia #${reincidencia.count + 1}: ${field.name}`
-          : `Novo plano de acao: ${field.name}`,
-        message: `${storeName} - Prazo: ${new Date(deadlineStr).toLocaleDateString('pt-BR')}`,
-        link: `/admin/planos-de-acao/${plan.id}`,
-        metadata: {
-          action_plan_id: plan.id,
-          store_id: storeId,
-          severity,
-          is_reincidencia: reincidencia.isReincidencia,
-        },
-      })
-      if (!notifResult.success) console.error('[ActionPlan] Notification failed:', notifResult.error)
+      // 7. Buscar usuarios responsaveis (todos da funcao ou fallback para usuario unico)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      let responsibleUsers: { id: string; email: string; full_name: string }[] = []
+      let functionWebhookUrl: string | null = null
+      let functionName = ''
 
-      // 7b. Notificar quem respondeu o checklist (se nao for o mesmo que o responsavel)
-      if (userId !== assigneeId) {
-        // Nao buscar assignee name via client (RLS bloqueia) — usar fallback
-        const respondentNotif = await createNotification(supabase, userId, {
+      if (assignedFunctionId) {
+        // Buscar membros da funcao via API (server-side com service role)
+        const membersUrl = `${appUrl}/api/functions/${assignedFunctionId}/members`
+        console.log(`[ActionPlan] Buscando membros: ${membersUrl} (token: ${accessToken ? 'SIM' : 'NAO'})`)
+        try {
+          const membersRes = await fetch(membersUrl, {
+            headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {},
+          })
+          if (membersRes.ok) {
+            const membersData = await membersRes.json()
+            responsibleUsers = membersData.users || []
+            functionName = membersData.functionName || ''
+            functionWebhookUrl = membersData.teamsWebhookUrl || null
+            console.log(`[ActionPlan] Funcao "${functionName}" (ID ${assignedFunctionId}): ${responsibleUsers.length} usuarios`, responsibleUsers.map((u: {full_name: string}) => u.full_name))
+          } else {
+            console.error(`[ActionPlan] Erro ao buscar membros da funcao ${assignedFunctionId}: HTTP ${membersRes.status}`)
+          }
+        } catch (fetchErr) {
+          console.error('[ActionPlan] Erro fetch membros da funcao:', fetchErr)
+        }
+      } else {
+        // Fallback legado: usuario unico
+        try {
+          const { data: userData } = await sb
+            .from('users')
+            .select('id, email, full_name, function_ref:functions!users_function_id_fkey(teams_webhook_url)')
+            .eq('id', assigneeId)
+            .single()
+          if (userData) {
+            responsibleUsers = [{ id: userData.id, email: userData.email, full_name: userData.full_name }]
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const fnRef = (userData as any)?.function_ref
+            if (fnRef?.teams_webhook_url) functionWebhookUrl = fnRef.teams_webhook_url
+          }
+        } catch { /* ignora erro na busca do usuario */ }
+      }
+
+      // 7a. Criar notificacao in-app para CADA usuario responsavel
+      const notifTitle = reincidencia.isReincidencia
+        ? `Reincidencia #${reincidencia.count + 1}: ${field.name}`
+        : `Novo plano de acao: ${field.name}`
+
+      console.log(`[ActionPlan] Notificando ${responsibleUsers.length} responsaveis:`, responsibleUsers.map(u => `${u.full_name} (${u.id})`))
+      for (const responsible of responsibleUsers) {
+        console.log(`[ActionPlan] Criando notificacao para: ${responsible.full_name} (${responsible.id})`)
+        await createNotification(supabase, responsible.id, {
+          type: reincidencia.isReincidencia ? 'reincidencia_detected' : 'action_plan_assigned',
+          title: notifTitle,
+          message: `${storeName} - Prazo: ${new Date(deadlineStr).toLocaleDateString('pt-BR')}`,
+          link: `/admin/planos-de-acao/${plan.id}`,
+          metadata: {
+            action_plan_id: plan.id,
+            store_id: storeId,
+            severity,
+            is_reincidencia: reincidencia.isReincidencia,
+          },
+        })
+      }
+
+      // 7b. Notificar quem respondeu o checklist
+      const isFillerAlsoResponsible = responsibleUsers.some(u => u.id === userId)
+      if (!isFillerAlsoResponsible) {
+        const assigneeLabel = functionName || responsibleUsers.map(u => u.full_name).join(', ') || 'Nao atribuido'
+        await createNotification(supabase, userId, {
           type: 'action_plan_created',
           title: `Plano de acao gerado: ${field.name}`,
-          message: `Voce respondeu "${templateName}" e o campo "${field.name}" foi marcado como "${nonConformityValue}". O responsavel ja foi notificado.`,
+          message: `Voce respondeu "${templateName}" e o campo "${field.name}" foi marcado como "${nonConformityValue}". Responsavel: ${assigneeLabel}.`,
           link: `/admin/planos-de-acao/${plan.id}`,
           metadata: {
             action_plan_id: plan.id,
@@ -456,11 +507,11 @@ export async function processarNaoConformidades(
             non_conformity_value: nonConformityValue,
           },
         })
-        if (!respondentNotif.success) console.error('[ActionPlan] Respondent notification failed:', respondentNotif.error)
       }
 
-      // 8. Enviar email + Teams (busca do email do assignee e feita server-side para contornar RLS)
+      // 8. Enviar email para CADA usuario responsavel + Teams
       try {
+        const assigneeLabel = functionName || responsibleUsers.map(u => u.full_name).join(', ') || 'Nao atribuido'
         const emailVars: EmailTemplateVariables = {
           plan_title: planTitle,
           field_name: field.name,
@@ -469,7 +520,7 @@ export async function processarNaoConformidades(
           template_name: templateName,
           respondent_name: respondentName,
           respondent_time: new Date(respondentTime).toLocaleString('pt-BR'),
-          assignee_name: 'Responsavel',
+          assignee_name: assigneeLabel,
           severity,
           severity_label: severity.charAt(0).toUpperCase() + severity.slice(1),
           severity_color: SEVERITY_COLORS[severity] || '#f59e0b',
@@ -490,43 +541,32 @@ export async function processarNaoConformidades(
           emailVars
         )
 
-        // Envia email via API route (resolve email do assignee server-side com service role)
-        const emailResult = await sendActionPlanEmail(assigneeId, emailSubject, htmlBody, accessToken)
-        const assigneeName = emailResult.assigneeName || 'Nao atribuido'
-
-        if (!emailResult.success) {
-          console.error(`[ActionPlan] FALHA ao enviar email para assignee ${assigneeId}:`, emailResult.error)
+        // Enviar email para CADA usuario da funcao
+        console.log(`[ActionPlan] Enviando email para ${responsibleUsers.length} responsaveis`)
+        for (const responsible of responsibleUsers) {
+          console.log(`[ActionPlan] Email → ${responsible.full_name} (${responsible.id})`)
+          const emailResult = await sendActionPlanEmail(responsible.id, emailSubject, htmlBody, accessToken)
+          console.log(`[ActionPlan] Email resultado: ${emailResult.success ? 'OK' : 'FALHA'} - ${emailResult.error || ''}`)
+          if (!emailResult.success) {
+            console.error(`[ActionPlan] FALHA ao enviar email para ${responsible.email}:`, emailResult.error)
+          }
         }
 
-        // Teams alert — busca webhook da funcao do assignee
-        let assigneeWebhookUrl: string | null = null
-        let assigneeEmail = ''
-        try {
-          const { data: assigneeFnData } = await sb
-            .from('users')
-            .select('email, function_ref:functions!users_function_id_fkey(teams_webhook_url)')
-            .eq('id', assigneeId)
-            .single()
-          if (assigneeFnData?.email) assigneeEmail = assigneeFnData.email
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const fnRef = (assigneeFnData as any)?.function_ref
-          if (fnRef?.teams_webhook_url) assigneeWebhookUrl = fnRef.teams_webhook_url
-        } catch { /* ignora erro na busca extra */ }
-
+        // Teams alert — uma vez por funcao
         await sendActionPlanTeamsAlert({
           title: planTitle,
           fieldName: field.name,
           storeName,
           severity,
           deadline: new Date(deadlineStr).toLocaleDateString('pt-BR'),
-          assigneeName,
+          assigneeName: assigneeLabel,
           nonConformityValue,
           isReincidencia: reincidencia.isReincidencia,
           reincidenciaCount: reincidencia.count,
           respondentName,
           respondentEmail,
-          assigneeEmail,
-          webhookUrl: assigneeWebhookUrl,
+          assigneeEmail: responsibleUsers[0]?.email || '',
+          webhookUrl: functionWebhookUrl,
         })
       } catch (notifErr) {
         console.error('[ActionPlan] Erro ao enviar notificacoes:', notifErr)
@@ -543,7 +583,7 @@ export async function processarNaoConformidades(
 
           for (const admin of admins || []) {
             if (admin.id === assigneeId) continue
-            const adminReincNotif = await createNotification(supabase, admin.id, {
+            await createNotification(supabase, admin.id, {
               type: 'reincidencia_detected',
               title: `Reincidencia #${reincidencia.count + 1}: ${field.name}`,
               message: `${storeName} - ${nonConformityValue} - Ocorrencia ${reincidencia.count + 1}x nos ultimos 90 dias`,
@@ -555,7 +595,6 @@ export async function processarNaoConformidades(
                 reincidencia_count: reincidencia.count + 1,
               },
             })
-            if (!adminReincNotif.success) console.error('[ActionPlan] Admin reincidencia notification failed:', adminReincNotif.error)
           }
         } catch (adminErr) {
           console.error('[ActionPlan] Erro ao notificar admins:', adminErr)
@@ -608,25 +647,23 @@ export async function checkOverduePlans(
     const adminIds = (admins || []).map((a: { id: string }) => a.id)
 
     for (const plan of overduePlans) {
-      const overdueNotif = await createNotification(supabase, plan.assigned_to, {
+      await createNotification(supabase, plan.assigned_to, {
         type: 'action_plan_overdue',
         title: 'Plano de acao vencido',
         message: `O plano "${plan.title}" venceu em ${new Date(plan.deadline).toLocaleDateString('pt-BR')}`,
         link: `/admin/planos-de-acao/${plan.id}`,
         metadata: { action_plan_id: plan.id },
       })
-      if (!overdueNotif.success) console.error('[ActionPlan] Overdue notification failed:', overdueNotif.error)
 
       for (const adminId of adminIds) {
         if (adminId === plan.assigned_to) continue
-        const adminNotif = await createNotification(supabase, adminId, {
+        await createNotification(supabase, adminId, {
           type: 'action_plan_overdue',
           title: 'Plano de acao vencido',
           message: `O plano "${plan.title}" venceu em ${new Date(plan.deadline).toLocaleDateString('pt-BR')}`,
           link: `/admin/planos-de-acao/${plan.id}`,
           metadata: { action_plan_id: plan.id },
         })
-        if (!adminNotif.success) console.error('[ActionPlan] Admin overdue notification failed:', adminNotif.error)
       }
 
       // Enviar email de vencimento ao responsavel
@@ -634,7 +671,7 @@ export async function checkOverduePlans(
         try {
           const appUrl = typeof window !== 'undefined'
             ? window.location.origin
-            : process.env.NEXT_PUBLIC_APP_URL || 'https://operecheck.vercel.app'
+            : process.env.NEXT_PUBLIC_APP_URL || 'https://nocheck-app.vercel.app'
           const planUrl = `${appUrl}/admin/planos-de-acao/${plan.id}`
           const deadlineFormatted = new Date(plan.deadline).toLocaleDateString('pt-BR')
 
@@ -650,7 +687,7 @@ export async function checkOverduePlans(
                 <p style="font-size: 14px; color: #a0a0a0; margin-bottom: 24px;">
                   Por favor, acesse o sistema para tomar as providencias necessarias.
                 </p>
-                <a href="${planUrl}" style="display: inline-block; background: #0D9488; color: white; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: 600;">
+                <a href="${planUrl}" style="display: inline-block; background: #6366f1; color: white; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: 600;">
                   Ver Plano de Acao
                 </a>
               </div>

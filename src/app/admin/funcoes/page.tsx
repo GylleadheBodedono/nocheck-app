@@ -16,8 +16,9 @@ import {
 } from 'react-icons/fi'
 import type { FunctionRow } from '@/types/database'
 import { APP_CONFIG } from '@/lib/config'
-import { LoadingPage, Header, PageContainer } from '@/components/ui'
+import { LoadingPage, PageContainer } from '@/components/ui'
 import { getAuthCache, getUserCache, getFunctionsCache } from '@/lib/offlineCache'
+import { useRealtimeRefresh } from '@/hooks/useRealtimeRefresh'
 
 type FunctionWithStats = FunctionRow & {
   user_count: number
@@ -34,7 +35,7 @@ export default function FuncoesPage() {
   const [formData, setFormData] = useState({
     name: '',
     description: '',
-    color: '#0D9488',
+    color: '#6366f1',
     icon: 'briefcase',
     is_active: true,
     teams_webhook_url: '',
@@ -44,11 +45,17 @@ export default function FuncoesPage() {
 
   const router = useRouter()
   const supabase = useMemo(() => createClient(), [])
+  const { refreshKey } = useRealtimeRefresh(['functions'])
 
   useEffect(() => {
     fetchData()
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  useEffect(() => {
+    if (refreshKey > 0 && navigator.onLine) fetchData()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [refreshKey])
 
   const fetchData = async () => {
     if (!isSupabaseConfigured || !supabase) {
@@ -165,7 +172,7 @@ export default function FuncoesPage() {
       setFormData({
         name: '',
         description: '',
-        color: '#0D9488',
+        color: '#6366f1',
         icon: 'briefcase',
         is_active: true,
         teams_webhook_url: '',
@@ -221,7 +228,7 @@ export default function FuncoesPage() {
       fetchData()
     } catch (error) {
       console.error('Error saving function:', error)
-      alert('Erro ao salvar função')
+      alert('Erro ao salvar funcao')
     }
 
     setSaving(false)
@@ -243,7 +250,7 @@ export default function FuncoesPage() {
   }
 
   const deleteFunction = async (fn: FunctionRow) => {
-    if (!confirm(`Tem certeza que deseja excluir a função "${fn.name}"?`)) return
+    if (!confirm(`Tem certeza que deseja excluir a funcao "${fn.name}"?`)) return
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { error } = await (supabase as any)
@@ -253,7 +260,7 @@ export default function FuncoesPage() {
 
     if (error) {
       console.error('Error deleting function:', error)
-      alert('Erro ao excluir função. Verifique se não existem usuários vinculados.')
+      alert('Erro ao excluir funcao. Verifique se nao existem usuarios vinculados.')
       return
     }
 
@@ -272,28 +279,23 @@ export default function FuncoesPage() {
   }
 
   return (
-    <div className="min-h-screen bg-page">
-      <Header
-        title="Funções"
-        icon={FiBriefcase}
-        backHref={APP_CONFIG.routes.admin}
-        actions={isOffline ? [] : [
-          {
-            label: 'Nova Função',
-            onClick: () => openModal(),
-            icon: FiPlus,
-            variant: 'primary',
-          },
-        ]}
-      />
-
+    <>
       <PageContainer>
+        {/* Top actions */}
+        {!isOffline && (
+          <div className="flex items-center justify-end mb-6">
+            <button onClick={() => openModal()} className="btn-primary flex items-center gap-2">
+              <FiPlus className="w-4 h-4" />
+              Nova Funcao
+            </button>
+          </div>
+        )}
         {/* Offline Warning */}
         {isOffline && (
           <div className="bg-warning/10 border border-warning/30 rounded-xl p-4 mb-6 flex items-center gap-3">
             <FiWifiOff className="w-5 h-5 text-warning" />
             <p className="text-warning text-sm">
-              Você está offline. Os dados mostrados são do cache local. Edições não estão disponíveis.
+              Voce esta offline. Os dados mostrados sao do cache local. Edicoes nao estao disponiveis.
             </p>
           </div>
         )}
@@ -304,7 +306,7 @@ export default function FuncoesPage() {
             <FiSearch className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted" />
             <input
               type="text"
-              placeholder="Buscar função..."
+              placeholder="Buscar funcao..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="input pl-10"
@@ -316,7 +318,7 @@ export default function FuncoesPage() {
         <div className="card overflow-hidden">
           {filteredFunctions.length === 0 ? (
             <div className="p-12 text-center text-muted">
-              {searchTerm ? 'Nenhuma função encontrada' : 'Nenhuma função cadastrada'}
+              {searchTerm ? 'Nenhuma funcao encontrada' : 'Nenhuma funcao cadastrada'}
             </div>
           ) : (
             <div className="divide-y divide-subtle">
@@ -349,7 +351,7 @@ export default function FuncoesPage() {
                       {/* Stats */}
                       <div className="hidden sm:flex items-center gap-1 text-sm text-muted">
                         <FiUsers className="w-4 h-4" />
-                        <span>{fn.user_count} usuários</span>
+                        <span>{fn.user_count} usuarios</span>
                       </div>
 
                       {/* Actions */}
@@ -392,7 +394,7 @@ export default function FuncoesPage() {
 
         {/* Summary */}
         <div className="mt-6 flex items-center justify-between text-sm text-muted">
-          <p>Total: {functions.length} funções</p>
+          <p>Total: {functions.length} funcoes</p>
           <p>
             {functions.filter(f => f.is_active).length} ativas, {functions.filter(f => !f.is_active).length} inativas
           </p>
@@ -404,7 +406,7 @@ export default function FuncoesPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
           <div className="card w-full max-w-md mx-4 p-6">
             <h2 className="text-xl font-bold text-main mb-6">
-              {editingFunction ? 'Editar Função' : 'Nova Função'}
+              {editingFunction ? 'Editar Funcao' : 'Nova Funcao'}
             </h2>
 
             <form onSubmit={handleSubmit} className="space-y-4">
@@ -424,14 +426,14 @@ export default function FuncoesPage() {
 
               <div>
                 <label className="block text-sm font-medium text-secondary mb-1">
-                  Descrição
+                  Descricao
                 </label>
                 <input
                   type="text"
                   value={formData.description}
                   onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                   className="input"
-                  placeholder="Descrição opcional..."
+                  placeholder="Descricao opcional..."
                 />
               </div>
 
@@ -451,7 +453,7 @@ export default function FuncoesPage() {
                     value={formData.color}
                     onChange={(e) => setFormData({ ...formData, color: e.target.value })}
                     className="input flex-1"
-                    placeholder="#0D9488"
+                    placeholder="#6366f1"
                   />
                 </div>
               </div>
@@ -467,7 +469,7 @@ export default function FuncoesPage() {
                   className="input"
                   placeholder="https://....webhook.office.com/..."
                 />
-                <p className="text-xs text-muted mt-1">URL do webhook do canal Teams para alertas desta função</p>
+                <p className="text-xs text-muted mt-1">URL do webhook do canal Teams para alertas desta funcao</p>
               </div>
               <div>
                 <label className="flex items-center gap-2 cursor-pointer">
@@ -477,7 +479,7 @@ export default function FuncoesPage() {
                     onChange={(e) => setFormData({ ...formData, is_active: e.target.checked })}
                     className="w-5 h-5 rounded border-default bg-surface text-primary"
                   />
-                  <span className="text-sm text-secondary">Função ativa</span>
+                  <span className="text-sm text-secondary">Funcao ativa</span>
                 </label>
               </div>
 
@@ -502,6 +504,6 @@ export default function FuncoesPage() {
           </div>
         </div>
       )}
-    </div>
+    </>
   )
 }

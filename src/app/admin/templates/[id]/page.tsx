@@ -2,44 +2,49 @@
 
 export const runtime = 'edge'
 
-import React, { useEffect, useState, useMemo } from 'react'
+import React, { useEffect, useState, useMemo, useRef } from 'react'
+import { useRealtimeRefresh } from '@/hooks/useRealtimeRefresh'
 import { useRouter, useParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { APP_CONFIG } from '@/lib/config'
-import { Header, LoadingPage, IconPicker, Select, PageContainer, Modal } from '@/components/ui'
+import { LoadingPage, Select, Modal } from '@/components/ui'
+import { NodeCard } from '@/components/admin/NodeCard'
+import { SectionCard } from '@/components/admin/SectionCard'
+import { ConnectionLines } from '@/components/admin/ConnectionLines'
+import { SectionEditModal } from '@/components/admin/SectionEditModal'
 import Link from 'next/link'
 import {
-  FiSave,
-  FiTrash2,
-  FiChevronDown,
-  FiChevronUp,
   FiSettings,
-  FiClipboard,
   FiGrid,
   FiBriefcase,
-  FiPlus,
-  FiLayers,
   FiShield,
+  FiArrowLeft,
+  FiHome,
+  FiTrash2,
 } from 'react-icons/fi'
-import { RiDraggable } from 'react-icons/ri'
-import { DndContext, closestCenter, PointerSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core'
-import { SortableContext, verticalListSortingStrategy, useSortable, arrayMove } from '@dnd-kit/sortable'
-import { CSS } from '@dnd-kit/utilities'
 import type { Store, FieldType, TemplateCategory, Sector, TemplateField, FunctionRow } from '@/types/database'
-import { FieldConditionEditor, type ConditionConfig, type PresetOption } from '@/components/admin/FieldConditionEditor'
+import { type ConditionConfig, type PresetOption } from '@/components/admin/FieldConditionEditor'
 
+// ─── Tipos locais ────────────────────────────────────────────────────────────
+
+/** Configuracao de uma etapa ou sub-etapa do template.
+ *  Etapas (parent_id=null) agrupam sub-etapas (parent_id=<etapa_id>).
+ *  Campos sao atribuidos a sub-etapas ou diretamente a etapas sem sub-etapas.
+ *  `dbId` presente indica que a secao ja existe no banco. */
 type SectionConfig = {
   id: string
   dbId?: number
   name: string
   description: string
   sort_order: number
+  parent_id: string | null // null = etapa raiz; string = id da etapa pai
 }
 
+/** Campo individual de um template. `dbId` presente = ja persistido. */
 type FieldConfig = {
   id: string
-  dbId?: number // ID from database for existing fields
-  section_id: string | null // local section id
+  dbId?: number
+  section_id: string | null // id local da etapa/sub-etapa a que pertence
   name: string
   field_type: FieldType
   is_required: boolean
@@ -51,8 +56,9 @@ type FieldConfig = {
   help_text: string
 }
 
+/** Par loja/setor que define onde o template fica visivel. */
 type VisibilityConfig = {
-  id?: number // ID from database for existing visibility
+  id?: number
   store_id: number
   sector_id: number | null
   function_id: number | null
@@ -60,15 +66,6 @@ type VisibilityConfig = {
 
 type SectorWithStore = Sector & {
   store: Store
-}
-
-function SortableItem({ id, children, className }: { id: string; className?: string; children: (listeners: Record<string, unknown>) => React.ReactNode }) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id })
-  return (
-    <div ref={setNodeRef} style={{ transform: CSS.Translate.toString(transform), transition, opacity: isDragging ? 0.5 : 1, position: 'relative', zIndex: isDragging ? 50 : undefined }} className={className} {...attributes}>
-      {children(listeners || {})}
-    </div>
-  )
 }
 
 export default function EditTemplatePage() {
@@ -90,6 +87,7 @@ export default function EditTemplatePage() {
   const [description, setDescription] = useState('')
   const [category, setCategory] = useState<TemplateCategory>('recebimento')
   const [isActive, setIsActive] = useState(true)
+  const [skipJustifications, setSkipJustifications] = useState(false)
   const [adminOnly, setAdminOnly] = useState(false)
 
   // Time settings
@@ -104,7 +102,6 @@ export default function EditTemplatePage() {
   // Fields
   const [fields, setFields] = useState<FieldConfig[]>([])
   const [editingField, setEditingField] = useState<string | null>(null)
-  const [expandedSection, setExpandedSection] = useState<string | null>(null)
   const [deletedFieldIds, setDeletedFieldIds] = useState<number[]>([])
 
   // Visibility - now includes sector_id
@@ -112,10 +109,22 @@ export default function EditTemplatePage() {
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [_originalVisibilityIds, setOriginalVisibilityIds] = useState<number[]>([])
   const [fieldConditions, setFieldConditions] = useState<Record<string, ConditionConfig | null>>({})
-  const [conditionUsers, setConditionUsers] = useState<{ id: string; name: string }[]>([])
+  const [conditionFunctions, setConditionFunctions] = useState<{ id: number; name: string }[]>([])
   const [conditionPresets, setConditionPresets] = useState<PresetOption[]>([])
   const [showSectorModal, setShowSectorModal] = useState(false)
   const [showFunctionModal, setShowFunctionModal] = useState(false)
+  const { refreshKey } = useRealtimeRefresh(['template_fields', 'field_conditions'])
+  const [reloadTrigger, setReloadTrigger] = useState(0)
+
+  // Flow builder state
+  const [editingSectionId, setEditingSectionId] = useState<string | null>(null)
+  const [showConfigModal, setShowConfigModal] = useState(false)
+  const canvasRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (refreshKey > 0 && navigator.onLine) setReloadTrigger(prev => prev + 1)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [refreshKey])
 
   useEffect(() => {
     const fetchData = async () => {
@@ -151,46 +160,34 @@ export default function EditTemplatePage() {
 
       if (functionsData) setFunctions(functionsData as FunctionRow[])
 
-      // Fetch users for condition editor
+      // Fetch functions for condition editor
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data: usersData, error: usersError } = await (supabase as any)
-        .from('users')
-        .select('id, full_name')
+      const { data: condFunctionsData } = await (supabase as any)
+        .from('functions')
+        .select('id, name')
         .eq('is_active', true)
-        .order('full_name')
-      if (usersError) {
-        console.error('[Template] Erro ao buscar usuarios para condicoes:', usersError.message)
-      }
-      if (usersData && usersData.length > 0) {
-        setConditionUsers((usersData as { id: string; full_name: string }[]).map((u) => ({ id: u.id, name: u.full_name })))
-      } else {
-        console.warn('[Template] Nenhum usuario encontrado para condicoes. RLS pode estar bloqueando. Tentando sem filtro...')
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const { data: usersRetry } = await (supabase as any)
-          .from('users')
-          .select('id, full_name')
-          .order('full_name')
-        if (usersRetry && usersRetry.length > 0) {
-          setConditionUsers((usersRetry as { id: string; full_name: string }[]).map((u) => ({ id: u.id, name: u.full_name })))
-        }
+        .order('name')
+      if (condFunctionsData && condFunctionsData.length > 0) {
+        setConditionFunctions((condFunctionsData as { id: number; name: string }[]).map((f) => ({ id: f.id, name: f.name })))
       }
 
       // Fetch action plan presets
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { data: presetsData } = await (supabase as any)
         .from('action_plan_presets')
-        .select('id, name, severity, deadline_days, default_assignee_id, description_template, require_photo_on_completion, require_text_on_completion, completion_max_chars')
+        .select('id, name, severity, deadline_days, default_function_id, description_template, require_photo_on_completion, require_text_on_completion, completion_max_chars')
         .eq('is_active', true)
         .order('name')
       if (presetsData) {
         setConditionPresets(
-          (presetsData as { id: number; name: string; severity: string; deadline_days: number; default_assignee_id: string | null; description_template: string | null; require_photo_on_completion?: boolean; require_text_on_completion?: boolean; completion_max_chars?: number }[])
+          (presetsData as { id: number; name: string; severity: string; deadline_days: number; default_function_id: number | null; description_template: string | null; require_photo_on_completion?: boolean; require_text_on_completion?: boolean; completion_max_chars?: number }[])
             .map(p => ({
               id: p.id,
               name: p.name,
               severity: p.severity as PresetOption['severity'],
               deadlineDays: p.deadline_days,
-              defaultAssigneeId: p.default_assignee_id,
+              defaultAssigneeId: null,
+              defaultFunctionId: p.default_function_id,
               descriptionTemplate: p.description_template || '',
               requirePhotoOnCompletion: p.require_photo_on_completion || false,
               requireTextOnCompletion: p.require_text_on_completion || false,
@@ -213,7 +210,7 @@ export default function EditTemplatePage() {
         .single()
 
       if (templateError || !templateData) {
-        setError('Checklist não encontrado')
+        setError('Checklist nao encontrado')
         setLoading(false)
         return
       }
@@ -223,21 +220,25 @@ export default function EditTemplatePage() {
       setDescription(templateData.description || '')
       setCategory(templateData.category || 'outros')
       setIsActive(templateData.is_active)
+      setSkipJustifications(templateData.skip_justifications || false)
       setAdminOnly(templateData.admin_only || false)
       setAllowedStartTime(templateData.allowed_start_time ? templateData.allowed_start_time.substring(0, 5) : '')
       setAllowedEndTime(templateData.allowed_end_time ? templateData.allowed_end_time.substring(0, 5) : '')
       setJustificationDeadlineHours(templateData.justification_deadline_hours != null ? String(templateData.justification_deadline_hours) : '')
 
-      // Convert sections to SectionConfig format
-      type RawSection = { id: number; name: string; description: string | null; sort_order: number }
-      const existingSections: SectionConfig[] = (templateData.sections || [])
-        .sort((a: RawSection, b: RawSection) => (a.sort_order || 0) - (b.sort_order || 0))
-        .map((s: RawSection) => ({
+      // Converter secoes do banco para SectionConfig local.
+      // Mapeia parent_id numerico (DB) para id local (string).
+      type RawSection = { id: number; name: string; description: string | null; sort_order: number; parent_id: number | null }
+      const dbIdToLocalId: Record<number, string> = {}
+      const rawSections = (templateData.sections || []).sort((a: RawSection, b: RawSection) => (a.sort_order || 0) - (b.sort_order || 0))
+      rawSections.forEach((s: RawSection) => { dbIdToLocalId[s.id] = `section_${s.id}` })
+      const existingSections: SectionConfig[] = rawSections.map((s: RawSection) => ({
           id: `section_${s.id}`,
           dbId: s.id,
           name: s.name,
           description: s.description || '',
           sort_order: s.sort_order || 0,
+          parent_id: s.parent_id ? dbIdToLocalId[s.parent_id] || null : null,
         }))
       setSections(existingSections)
 
@@ -278,7 +279,7 @@ export default function EditTemplatePage() {
           .eq('is_active', true)
         if (existingConditions) {
           const condMap: Record<string, ConditionConfig | null> = {}
-          existingConditions.forEach((ec: { field_id: number; condition_type: string; condition_value: Record<string, unknown>; severity: string; default_assignee_id: string | null; deadline_days: number; description_template: string | null; require_photo_on_completion?: boolean; require_text_on_completion?: boolean; completion_max_chars?: number }) => {
+          existingConditions.forEach((ec: { field_id: number; condition_type: string; condition_value: Record<string, unknown>; severity: string; default_assignee_id: string | null; default_function_id: number | null; deadline_days: number; description_template: string | null; require_photo_on_completion?: boolean; require_text_on_completion?: boolean; completion_max_chars?: number }) => {
             const localField = existingFields.find(f => f.dbId === ec.field_id)
             if (localField) {
               condMap[localField.id] = {
@@ -287,6 +288,7 @@ export default function EditTemplatePage() {
                 conditionValue: ec.condition_value,
                 severity: ec.severity as ConditionConfig['severity'],
                 defaultAssigneeId: ec.default_assignee_id,
+                defaultFunctionId: ec.default_function_id,
                 deadlineDays: ec.deadline_days,
                 descriptionTemplate: ec.description_template || '',
                 requirePhotoOnCompletion: ec.require_photo_on_completion || false,
@@ -329,20 +331,21 @@ export default function EditTemplatePage() {
     }
 
     fetchData()
-  }, [supabase, templateId])
+  }, [supabase, templateId, reloadTrigger]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const fieldTypes: { value: FieldType; label: string; icon: string }[] = [
     { value: 'text', label: 'Texto', icon: 'Aa' },
-    { value: 'number', label: 'Número', icon: '#' },
+    { value: 'number', label: 'Numero', icon: '#' },
     { value: 'photo', label: 'Foto', icon: '📷' },
     { value: 'dropdown', label: 'Lista', icon: '▼' },
     { value: 'signature', label: 'Assinatura', icon: '✍️' },
     { value: 'datetime', label: 'Data/Hora', icon: '📅' },
-    { value: 'checkbox_multiple', label: 'Múltipla Escolha', icon: '☑️' },
-    { value: 'barcode', label: 'Código de Barras', icon: '▮▯▮' },
+    { value: 'checkbox_multiple', label: 'Multipla Escolha', icon: '☑️' },
+    { value: 'barcode', label: 'Codigo de Barras', icon: '▮▯▮' },
     { value: 'calculated', label: 'Calculado', icon: '∑' },
-    { value: 'yes_no', label: 'Sim/Não', icon: '?!' },
-    { value: 'rating', label: 'Avaliação', icon: '😊' },
+    { value: 'yes_no', label: 'Sim/Nao/N/A', icon: '?!' },
+    { value: 'rating', label: 'Avaliacao', icon: '😊' },
   ]
 
   // Get sectors for a specific store
@@ -350,53 +353,67 @@ export default function EditTemplatePage() {
     return sectors.filter(s => s.store_id === storeId)
   }
 
+  // ─── Hierarquia de etapas / sub-etapas ──────────────────────────────────────
+  /** Etapas raiz (nivel 1) — sem parent_id */
+  const parentSections = sections.filter(s => !s.parent_id)
+  /** Sub-etapas de uma etapa pai, ordenadas */
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const getSubSections = (parentId: string) =>
+    sections.filter(s => s.parent_id === parentId).sort((a, b) => a.sort_order - b.sort_order)
+
+  /** Cria nova etapa raiz */
   const addSection = () => {
-    const newSection: SectionConfig = {
+    setSections([...sections, {
       id: `section_${Date.now()}`,
       name: '',
       description: '',
       sort_order: sections.length + 1,
+      parent_id: null,
+    }])
+  }
+
+  /** Cria nova sub-etapa dentro de uma etapa pai */
+  const addSubSection = (parentId: string) => {
+    const newSub: SectionConfig = {
+      id: `section_${Date.now()}`,
+      name: '',
+      description: '',
+      sort_order: sections.length + 1,
+      parent_id: parentId,
     }
-    setSections([...sections, newSection])
+    setSections([...sections, newSub])
   }
 
   const updateSection = (id: string, updates: Partial<SectionConfig>) => {
     setSections(sections.map(s => s.id === id ? { ...s, ...updates } : s))
   }
 
+  /** Remove etapa ou sub-etapa. Se for etapa pai, remove em cascata.
+   *  Registra dbIds removidos para exclusao no banco ao salvar. */
   const removeSection = (id: string) => {
-    if (!confirm('Deseja realmente excluir esta etapa? Os campos dela ficarão sem etapa.')) return
     const section = sections.find(s => s.id === id)
-    if (section?.dbId) setDeletedSectionIds(prev => [...prev, section.dbId!])
-    setSections(sections.filter(s => s.id !== id))
-    setFields(fields.map(f => f.section_id === id ? { ...f, section_id: null } : f))
-  }
+    if (!section) return
 
-  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }))
-
-  const handleSectionDragEnd = (event: DragEndEvent) => {
-    const { active, over } = event
-    if (!over || active.id === over.id) return
-    setSections(prev => {
-      const oldIdx = prev.findIndex(s => s.id === active.id)
-      const newIdx = prev.findIndex(s => s.id === over.id)
-      if (oldIdx === -1 || newIdx === -1) return prev
-      return arrayMove(prev, oldIdx, newIdx).map((s, i) => ({ ...s, sort_order: i + 1 }))
-    })
-  }
-
-  const handleFieldDragEnd = (sectionId: string | null) => (event: DragEndEvent) => {
-    const { active, over } = event
-    if (!over || active.id === over.id) return
-    setFields(prev => {
-      const group = prev.filter(f => f.section_id === sectionId).sort((a, b) => a.sort_order - b.sort_order)
-      const oldIdx = group.findIndex(f => f.id === active.id)
-      const newIdx = group.findIndex(f => f.id === over.id)
-      if (oldIdx === -1 || newIdx === -1) return prev
-      const reordered = arrayMove(group, oldIdx, newIdx)
-      const sortMap = new Map(reordered.map((f, i) => [f.id, i + 1]))
-      return prev.map(f => sortMap.has(f.id) ? { ...f, sort_order: sortMap.get(f.id)! } : f)
-    })
+    if (!section.parent_id) {
+      // Etapa pai: remove ela + sub-etapas + desvincula campos
+      if (!confirm('Deseja realmente excluir esta etapa e todas as suas sub-etapas?')) return
+      const childSections = sections.filter(s => s.parent_id === id)
+      const childIds = childSections.map(s => s.id)
+      if (section.dbId) setDeletedSectionIds(prev => [...prev, section.dbId!])
+      childSections.forEach(c => { if (c.dbId) setDeletedSectionIds(prev => [...prev, c.dbId!]) })
+      setSections(sections.filter(s => s.id !== id && s.parent_id !== id))
+      setFields(fields.map(f =>
+        (f.section_id === id || childIds.includes(f.section_id || ''))
+          ? { ...f, section_id: null }
+          : f
+      ))
+    } else {
+      // Sub-etapa: remove apenas ela + desvincula seus campos
+      if (!confirm('Deseja realmente excluir esta sub-etapa? Os campos dela ficarao sem etapa.')) return
+      if (section.dbId) setDeletedSectionIds(prev => [...prev, section.dbId!])
+      setSections(sections.filter(s => s.id !== id))
+      setFields(fields.map(f => f.section_id === id ? { ...f, section_id: null } : f))
+    }
   }
 
   const addField = (type: FieldType, sectionId?: string | null) => {
@@ -407,7 +424,7 @@ export default function EditTemplatePage() {
       field_type: type,
       is_required: true,
       sort_order: fields.length + 1,
-      options: type === 'dropdown' || type === 'checkbox_multiple' ? [] : type === 'number' ? { numberSubtype: 'decimal' } : type === 'yes_no' ? { onYes: { showPhotoField: true, photoFieldLabel: 'Foto de evidência', photoFieldRequired: false }, onNo: { showTextField: true, textFieldLabel: 'Explique o motivo', textFieldRequired: false } } : null,
+      options: type === 'dropdown' || type === 'checkbox_multiple' ? [] : type === 'number' ? { numberSubtype: 'decimal' } : null,
       validation: null,
       placeholder: '',
       help_text: '',
@@ -438,6 +455,7 @@ export default function EditTemplatePage() {
     return null
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const setFieldIcon = (fieldId: string, iconName: string | null) => {
     setFields(fields.map(f => {
       if (f.id !== fieldId) return f
@@ -454,7 +472,7 @@ export default function EditTemplatePage() {
     }))
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars, @typescript-eslint/no-explicit-any
   const getOptionsItems = (options: any): string[] => {
     if (Array.isArray(options)) return options
     if (options && typeof options === 'object' && 'items' in options) {
@@ -463,7 +481,7 @@ export default function EditTemplatePage() {
     return []
   }
 
-  const handleSaveAsPreset = async (data: { name: string; severity: string; deadlineDays: number; defaultAssigneeId: string | null; descriptionTemplate: string }) => {
+  const handleSaveAsPreset = async (data: { name: string; severity: string; deadlineDays: number; defaultFunctionId: number | null; descriptionTemplate: string }) => {
     try {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { error: insertErr } = await (supabase as any)
@@ -472,7 +490,7 @@ export default function EditTemplatePage() {
           name: data.name,
           severity: data.severity,
           deadline_days: data.deadlineDays,
-          default_assignee_id: data.defaultAssigneeId,
+          default_function_id: data.defaultFunctionId,
           description_template: data.descriptionTemplate,
           is_active: true,
         })
@@ -484,18 +502,19 @@ export default function EditTemplatePage() {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { data: presetsData } = await (supabase as any)
         .from('action_plan_presets')
-        .select('id, name, severity, deadline_days, default_assignee_id, description_template, require_photo_on_completion, require_text_on_completion, completion_max_chars')
+        .select('id, name, severity, deadline_days, default_function_id, description_template, require_photo_on_completion, require_text_on_completion, completion_max_chars')
         .eq('is_active', true)
         .order('name')
       if (presetsData) {
         setConditionPresets(
-          (presetsData as { id: number; name: string; severity: string; deadline_days: number; default_assignee_id: string | null; description_template: string | null; require_photo_on_completion?: boolean; require_text_on_completion?: boolean; completion_max_chars?: number }[])
+          (presetsData as { id: number; name: string; severity: string; deadline_days: number; default_function_id: number | null; description_template: string | null; require_photo_on_completion?: boolean; require_text_on_completion?: boolean; completion_max_chars?: number }[])
             .map(p => ({
               id: p.id,
               name: p.name,
               severity: p.severity as PresetOption['severity'],
               deadlineDays: p.deadline_days,
-              defaultAssigneeId: p.default_assignee_id,
+              defaultAssigneeId: null,
+              defaultFunctionId: p.default_function_id,
               descriptionTemplate: p.description_template || '',
               requirePhotoOnCompletion: p.require_photo_on_completion || false,
               requireTextOnCompletion: p.require_text_on_completion || false,
@@ -517,6 +536,7 @@ export default function EditTemplatePage() {
     return options
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const changeFieldType = (id: string, newType: FieldType) => {
     const currentIcon = getFieldIcon(fields.find(f => f.id === id)!)
     let defaultOptions: unknown = (newType === 'dropdown' || newType === 'checkbox_multiple') ? [] : newType === 'number' ? { numberSubtype: 'decimal' } : null
@@ -609,6 +629,7 @@ export default function EditTemplatePage() {
           description: description || null,
           category,
           is_active: isActive,
+          skip_justifications: skipJustifications,
           admin_only: adminOnly,
           allowed_start_time: allowedStartTime || null,
           allowed_end_time: allowedEndTime || null,
@@ -628,36 +649,71 @@ export default function EditTemplatePage() {
         if (delSecErr) throw delSecErr
       }
 
-      // Build local section id → db section id map
-      const sectionIdMap: Record<string, number> = {}
+      // ─── Salvar etapas/sub-etapas ── pais primeiro, filhas depois ─────────────
+      const sectionIdMap: Record<string, number> = {} // id local → id do banco
 
-      // Update existing sections
+      // Mapear secoes existentes para o sectionIdMap
       for (const section of sections.filter(s => s.dbId)) {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const { error: updSecErr } = await (supabase as any)
-          .from('template_sections')
-          .update({ name: section.name, description: section.description || null, sort_order: section.sort_order })
-          .eq('id', section.dbId)
-        if (updSecErr) throw updSecErr
         sectionIdMap[section.id] = section.dbId!
       }
 
-      // Insert new sections
-      const newSections = sections.filter(s => !s.dbId)
-      if (newSections.length > 0) {
+      // Update existing parent sections first (parent_id = null)
+      for (const section of sections.filter(s => s.dbId && !s.parent_id)) {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const { data: insertedSections, error: insSecErr } = await (supabase as any)
+        const { error: updSecErr } = await (supabase as any)
           .from('template_sections')
-          .insert(newSections.map(s => ({
+          .update({ name: section.name, description: section.description || null, sort_order: section.sort_order, parent_id: null })
+          .eq('id', section.dbId)
+        if (updSecErr) throw updSecErr
+      }
+
+      // Insert new parent sections
+      const newParentSections = sections.filter(s => !s.dbId && !s.parent_id)
+      if (newParentSections.length > 0) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const { data: insertedParents, error: insParErr } = await (supabase as any)
+          .from('template_sections')
+          .insert(newParentSections.map(s => ({
             template_id: Number(templateId),
             name: s.name,
             description: s.description || null,
             sort_order: s.sort_order,
           })))
           .select()
-        if (insSecErr) throw insSecErr
-        if (insertedSections) {
-          newSections.forEach((s, i) => { sectionIdMap[s.id] = insertedSections[i].id })
+        if (insParErr) throw insParErr
+        if (insertedParents) {
+          newParentSections.forEach((s, i) => { sectionIdMap[s.id] = insertedParents[i].id })
+        }
+      }
+
+      // Update existing child sections (with parent_id)
+      for (const section of sections.filter(s => s.dbId && s.parent_id)) {
+        const dbParentId = section.parent_id ? sectionIdMap[section.parent_id] || null : null
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const { error: updSecErr } = await (supabase as any)
+          .from('template_sections')
+          .update({ name: section.name, description: section.description || null, sort_order: section.sort_order, parent_id: dbParentId })
+          .eq('id', section.dbId)
+        if (updSecErr) throw updSecErr
+      }
+
+      // Insert new child sections
+      const newChildSections = sections.filter(s => !s.dbId && s.parent_id)
+      if (newChildSections.length > 0) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const { data: insertedChildren, error: insChErr } = await (supabase as any)
+          .from('template_sections')
+          .insert(newChildSections.map(s => ({
+            template_id: Number(templateId),
+            name: s.name,
+            description: s.description || null,
+            sort_order: s.sort_order,
+            parent_id: s.parent_id ? sectionIdMap[s.parent_id] || null : null,
+          })))
+          .select()
+        if (insChErr) throw insChErr
+        if (insertedChildren) {
+          newChildSections.forEach((s, i) => { sectionIdMap[s.id] = insertedChildren[i].id })
         }
       }
 
@@ -682,25 +738,26 @@ export default function EditTemplatePage() {
         return sectionIdMap[localId] || null
       }
 
-      // Update existing fields
-      for (const field of existingFields) {
+      // Update existing fields (em paralelo para performance)
+      if (existingFields.length > 0) {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const { error: updateError } = await (supabase as any)
-          .from('template_fields')
-          .update({
-            name: field.name,
-            field_type: field.field_type,
-            is_required: field.is_required,
-            sort_order: field.sort_order,
-            section_id: resolveSection(field.section_id),
-            options: serializeOptions(field.options),
-            validation: field.validation,
-            placeholder: field.placeholder || null,
-            help_text: field.help_text || null,
-          })
-          .eq('id', field.dbId)
-
-        if (updateError) throw updateError
+        const sbFields = supabase as any
+        const fieldResults = await Promise.all(existingFields.map(field =>
+          sbFields.from('template_fields')
+            .update({
+              name: field.name,
+              field_type: field.field_type,
+              is_required: field.is_required,
+              sort_order: field.sort_order,
+              section_id: resolveSection(field.section_id),
+              options: serializeOptions(field.options),
+              validation: field.validation,
+              placeholder: field.placeholder || null,
+              help_text: field.help_text || null,
+            })
+            .eq('id', field.dbId)
+        ))
+        for (const r of fieldResults) { if (r.error) throw r.error }
       }
 
       // Insert new fields
@@ -796,7 +853,7 @@ export default function EditTemplatePage() {
           newFields.forEach((f, i) => { newFieldIdMap[f.id] = insertedNewFields[i]?.id })
         }
 
-        const conditionsToInsert: { field_id: number; condition_type: string; condition_value: Record<string, unknown>; severity: string; default_assignee_id: string | null; deadline_days: number; description_template: string | null; is_active: boolean; require_photo_on_completion: boolean; require_text_on_completion: boolean; completion_max_chars: number }[] = []
+        const conditionsToInsert: { field_id: number; condition_type: string; condition_value: Record<string, unknown>; severity: string; default_function_id: number | null; deadline_days: number; description_template: string | null; is_active: boolean; require_photo_on_completion: boolean; require_text_on_completion: boolean; completion_max_chars: number }[] = []
         for (const field of fields) {
           const cond = fieldConditions[field.id]
           if (!cond) continue
@@ -807,7 +864,7 @@ export default function EditTemplatePage() {
             condition_type: cond.conditionType,
             condition_value: cond.conditionValue,
             severity: cond.severity,
-            default_assignee_id: cond.defaultAssigneeId,
+            default_function_id: cond.defaultFunctionId,
             deadline_days: cond.deadlineDays,
             description_template: cond.descriptionTemplate || null,
             is_active: true,
@@ -833,13 +890,155 @@ export default function EditTemplatePage() {
     }
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const getFieldTypeLabel = (type: FieldType) => {
     return fieldTypes.find(f => f.value === type)?.label || type
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const getFieldTypeIcon = (type: FieldType) => {
     return fieldTypes.find(f => f.value === type)?.icon || '?'
   }
+
+  // ─── Flow builder handlers ──────────────────────────────────────────────────
+
+  /** Toggle store visibility (from NodeCard) */
+  const handleStoreToggle = (storeId: number | string) => {
+    const id = Number(storeId)
+    const hasStore = visibility.some(v => v.store_id === id)
+    if (hasStore) {
+      setVisibility(prev => prev.filter(v => v.store_id !== id))
+    } else {
+      const storeSectors = sectors.filter(s => s.store_id === id)
+      const newEntries: VisibilityConfig[] = storeSectors.map(s => ({ store_id: id, sector_id: s.id, function_id: null }))
+      if (newEntries.length === 0) newEntries.push({ store_id: id, sector_id: null as unknown as number, function_id: null })
+      setVisibility(prev => [...prev, ...newEntries])
+    }
+  }
+
+  /** Toggle sector visibility (from NodeCard) */
+  const handleSectorToggle = (sectorId: number | string) => {
+    const id = Number(sectorId)
+    const hasSector = visibility.some(v => v.sector_id === id)
+    if (hasSector) {
+      setVisibility(prev => prev.filter(v => v.sector_id !== id))
+    } else {
+      const sector = sectors.find(s => s.id === id)
+      if (sector) setVisibility(prev => [...prev, { store_id: sector.store_id, sector_id: id, function_id: null }])
+    }
+  }
+
+  /** Toggle function (from NodeCard) */
+  const handleFunctionToggle = (functionId: number | string) => {
+    const id = Number(functionId)
+    setSelectedFunctionIds(prev =>
+      prev.includes(id) ? prev.filter(f => f !== id) : [...prev, id]
+    )
+  }
+
+  /** Section reorder from SectionCard */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const handleSectionReorder = (reorderedSections: any[]) => {
+    setSections(prev => {
+      const updated = [...prev]
+      reorderedSections.forEach((rs: { id: string }, idx: number) => {
+        const section = updated.find(s => s.id === rs.id)
+        if (section) section.sort_order = idx + 1
+      })
+      return updated.sort((a, b) => a.sort_order - b.sort_order)
+    })
+  }
+
+  /** Wrapper: add section (for SectionCard) */
+  const handleAddSection = () => addSection()
+
+  /** Wrapper: update section (for SectionEditModal) */
+  const handleSectionUpdate = (id: string, updates: Partial<{ name: string; description: string }>) => {
+    updateSection(id, updates)
+  }
+
+  /** Wrapper: add sub-section (for SectionEditModal) */
+  const handleAddSubSection = (parentId: string) => addSubSection(parentId)
+
+  /** Wrapper: delete sub-section (for SectionEditModal) */
+  const handleDeleteSubSection = (id: string) => removeSection(id)
+
+  /** Wrapper: add field to section (for SectionEditModal) */
+  const handleAddField = (sectionId: string) => addField('text', sectionId === '__loose__' ? null : sectionId)
+
+  /** Wrapper: update field (for SectionEditModal) */
+  const handleFieldUpdate = (fieldId: string, updates: Partial<FieldConfig>) => updateField(fieldId, updates)
+
+  /** Wrapper: delete field (for SectionEditModal) */
+  const handleDeleteField = (fieldId: string) => removeField(fieldId)
+
+  /** Wrapper: reorder fields (for SectionEditModal) */
+  const handleFieldReorder = (reorderedFields: FieldConfig[]) => {
+    const sortMap = new Map(reorderedFields.map((f, i) => [f.id, i + 1]))
+    setFields(prev => prev.map(f => sortMap.has(f.id) ? { ...f, sort_order: sortMap.get(f.id)! } : f))
+  }
+
+  /** Handle save (wrapper for form submit without event) */
+  const handleSave = () => {
+    const fakeEvent = { preventDefault: () => {} } as React.FormEvent
+    handleSubmit(fakeEvent)
+  }
+
+  /** Handle delete template */
+  const handleDeleteTemplate = async () => {
+    if (!confirm('Deseja realmente excluir este template? Esta acao nao pode ser desfeita.')) return
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { error: delErr } = await (supabase as any)
+        .from('checklist_templates')
+        .delete()
+        .eq('id', templateId)
+      if (delErr) throw delErr
+      router.push(APP_CONFIG.routes.adminTemplates)
+    } catch (err) {
+      console.error('Error deleting template:', err)
+      const supaErr = err as { message?: string; details?: string }
+      setError(supaErr?.message || 'Erro ao excluir template')
+    }
+  }
+
+  /** Sub-sections of a given parent (for SectionCard field counting) */
+  const subSectionsOf = (parentId: string) =>
+    sections.filter(s => s.parent_id === parentId)
+
+  /** Relevant sectors: sectors from stores that have visibility */
+  const relevantSectors = sectors.filter(s => {
+    const storeIds = [...new Set(visibility.map(v => v.store_id))]
+    return storeIds.includes(s.store_id)
+  })
+
+  /** Connection lines: link left/right nodes to center card */
+  const connections = useMemo(() => {
+    const lines: { from: string; to: string; color?: string }[] = []
+    // Left nodes -> center
+    if (visibility.length > 0) {
+      lines.push({ from: 'left-lojas', to: 'center', color: '#0D9488' })
+      if (relevantSectors.length > 0) {
+        lines.push({ from: 'left-setores', to: 'center', color: '#0D9488' })
+      }
+    }
+    // Right nodes -> center
+    if (selectedFunctionIds.length > 0 || adminOnly) {
+      lines.push({ from: 'right-funcoes', to: 'center', color: '#F59E0B' })
+    }
+    lines.push({ from: 'right-configuracoes', to: 'center', color: '#64748B' })
+    return lines
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visibility.length, relevantSectors.length, selectedFunctionIds.length, adminOnly])
+
+  /** Category options for the header Select */
+  const categoryOptions = [
+    { value: 'recebimento', label: 'Recebimento' },
+    { value: 'limpeza',     label: 'Limpeza' },
+    { value: 'abertura',    label: 'Abertura' },
+    { value: 'fechamento',  label: 'Fechamento' },
+    { value: 'outros',      label: 'Outros' },
+  ]
 
   if (loading) {
     return <LoadingPage />
@@ -859,613 +1058,378 @@ export default function EditTemplatePage() {
   }
 
   return (
-    <div className="min-h-screen bg-page">
-      <Header
-        title="Editar Checklist"
-        icon={FiClipboard}
-        backHref={APP_CONFIG.routes.adminTemplates}
+    <div className="min-h-screen bg-page flex flex-col">
+      {/* ─── Top Bar ─────────────────────────────────────────────────────── */}
+      <header className="bg-surface border-b border-subtle px-6 py-4 shrink-0">
+        <div className="flex items-center gap-4">
+          <button
+            type="button"
+            onClick={() => router.push(APP_CONFIG.routes.adminTemplates)}
+            className="p-2 text-muted hover:text-main rounded-lg transition-colors"
+          >
+            <FiArrowLeft className="w-5 h-5" />
+          </button>
+          <input
+            value={name}
+            onChange={e => setName(e.target.value)}
+            placeholder="Nome do template..."
+            className="flex-1 text-xl font-bold bg-transparent border-none outline-none text-main placeholder-muted"
+          />
+          <Select
+            value={category}
+            onChange={v => setCategory(v as TemplateCategory)}
+            options={categoryOptions}
+          />
+          {/* Status toggle */}
+          <button
+            type="button"
+            onClick={() => setIsActive(!isActive)}
+            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+              isActive
+                ? 'bg-success/20 text-success border border-success/30'
+                : 'bg-error/20 text-error border border-error/30'
+            }`}
+          >
+            {isActive ? 'Ativo' : 'Inativo'}
+          </button>
+          <button
+            type="button"
+            onClick={handleSave}
+            disabled={saving}
+            className="btn-primary px-6 py-2.5 rounded-xl font-medium"
+          >
+            {saving ? 'Salvando...' : 'Salvar'}
+          </button>
+          <button
+            type="button"
+            onClick={handleDeleteTemplate}
+            className="p-2 text-error hover:bg-error/10 rounded-lg transition-colors"
+            title="Excluir Template"
+          >
+            <FiTrash2 className="w-5 h-5" />
+          </button>
+        </div>
+        {error && <div className="mt-2 text-sm text-error">{error}</div>}
+      </header>
+
+      {/* ─── Flow Canvas ─────────────────────────────────────────────────── */}
+      <div className="flex-1 relative overflow-hidden" ref={canvasRef}>
+        <ConnectionLines connections={connections} containerRef={canvasRef} />
+
+        <div className="h-full grid grid-cols-1 md:grid-cols-[208px_1fr_208px] gap-6 p-6 items-start content-start">
+          {/* LEFT COLUMN: Lojas + Setores */}
+          <div className="flex flex-col gap-4">
+            <NodeCard
+              title="Lojas"
+              icon={<FiHome />}
+              items={stores.map(s => ({
+                id: s.id,
+                label: s.name,
+                checked: visibility.some(v => v.store_id === s.id),
+              }))}
+              onToggle={handleStoreToggle}
+              selectable
+              position="left"
+              draggable
+              onHeaderClick={() => setShowSectorModal(true)}
+            />
+            <NodeCard
+              title="Setores"
+              icon={<FiGrid />}
+              items={relevantSectors.map(s => ({
+                id: s.id,
+                label: s.name,
+                checked: visibility.some(v => v.sector_id === s.id),
+              }))}
+              onToggle={handleSectorToggle}
+              selectable
+              position="left"
+              draggable
+              onHeaderClick={() => setShowSectorModal(true)}
+            />
+          </div>
+
+          {/* CENTER: Section Card */}
+          <div className="flex justify-center">
+            <SectionCard
+              templateName={name || 'Editar Template'}
+              sections={parentSections.map(s => ({
+                id: s.id,
+                name: s.name,
+                fieldCount: fields.filter(f =>
+                  f.section_id === s.id || subSectionsOf(s.id).some(sub => f.section_id === sub.id)
+                ).length,
+                subSectionCount: sections.filter(sub => sub.parent_id === s.id).length,
+                sort_order: s.sort_order,
+              }))}
+              onSectionClick={(sectionId) => setEditingSectionId(sectionId)}
+              onAddSection={handleAddSection}
+              onReorder={handleSectionReorder}
+              looseFields={fields.filter(f => !f.section_id).map(f => ({ id: f.id, name: f.name, field_type: f.field_type }))}
+              onLooseFieldsClick={() => setEditingSectionId('__loose__')}
+              onAddField={() => handleAddField('__loose__')}
+            />
+          </div>
+
+          {/* RIGHT COLUMN: Funcoes + Config */}
+          <div className="flex flex-col gap-4">
+            <NodeCard
+              title="Funcoes"
+              icon={<FiBriefcase />}
+              items={functions.map(f => ({
+                id: f.id,
+                label: f.name,
+                checked: selectedFunctionIds.includes(f.id),
+                color: f.color,
+              }))}
+              onToggle={handleFunctionToggle}
+              selectable
+              position="right"
+              draggable
+              onHeaderClick={() => setShowFunctionModal(true)}
+            />
+            <NodeCard
+              title="Configuracoes"
+              icon={<FiSettings />}
+              items={[
+                { id: 'desc', label: description || 'Sem descricao' },
+                { id: 'time', label: allowedStartTime ? `${allowedStartTime} - ${allowedEndTime}` : 'Sem restricao horario' },
+                { id: 'justif', label: skipJustifications ? 'Sem justificativas' : 'Com justificativas' },
+                { id: 'admin', label: adminOnly ? 'Somente admin' : 'Todos os usuarios' },
+              ]}
+              position="right"
+              draggable
+              onHeaderClick={() => setShowConfigModal(true)}
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* ─── Section Edit Modal ──────────────────────────────────────────── */}
+      <SectionEditModal
+        isOpen={!!editingSectionId}
+        onClose={() => setEditingSectionId(null)}
+        section={editingSectionId === '__loose__'
+          ? { id: '__loose__', name: 'Campos Gerais', description: 'Campos sem etapa' }
+          : sections.find(s => s.id === editingSectionId) || null}
+        subSections={editingSectionId === '__loose__' ? [] : sections.filter(s => s.parent_id === editingSectionId)}
+        fields={editingSectionId === '__loose__'
+          ? fields.filter(f => !f.section_id)
+          : fields.filter(f =>
+              f.section_id === editingSectionId ||
+              sections.filter(s => s.parent_id === editingSectionId).some(sub => f.section_id === sub.id)
+            )}
+        onSectionUpdate={handleSectionUpdate}
+        onSubSectionAdd={handleAddSubSection}
+        onSubSectionDelete={handleDeleteSubSection}
+        onFieldAdd={handleAddField}
+        onFieldUpdate={handleFieldUpdate}
+        onFieldDelete={handleDeleteField}
+        onFieldReorder={handleFieldReorder}
+        fieldConditions={fieldConditions}
+        onConditionChange={(fieldId, cond) => setFieldConditions(prev => ({ ...prev, [fieldId]: cond }))}
+        conditionFunctions={conditionFunctions}
+        conditionPresets={conditionPresets}
+        onSaveAsPreset={handleSaveAsPreset}
+        editingField={editingField}
+        onEditField={setEditingField}
       />
 
-      {/* Main Content */}
-      <PageContainer>
-        <form onSubmit={handleSubmit} className="w-full space-y-6">
-          {/* Basic Info */}
-          <div className="card p-6">
-            <h2 className="text-lg font-semibold text-main mb-4">Informações do Checklist</h2>
+      {/* ─── Existing Modals (Sector/Function) ──────────────────────────── */}
+      <Modal isOpen={showSectorModal} onClose={() => setShowSectorModal(false)} title="Visibilidade por Setor" size="lg">
+        <p className="text-sm text-muted mb-4">
+          Selecione em quais setores este checklist estara disponivel.
+          Apenas usuarios dos setores selecionados poderao preencher.
+        </p>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="md:col-span-2">
-                <label className="block text-sm font-medium text-secondary mb-2">
-                  Nome do Checklist *
-                </label>
-                <input
-                  type="text"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  required
-                  className="input"
-                  placeholder="Ex: Recebimento - Estoquista"
-                />
-              </div>
+        <div className="space-y-4">
+          {stores.map(store => {
+            const storeSectors = getSectorsForStore(store.id)
+            const isFullyEnabled = isStoreFullyEnabled(store.id)
+            const isPartiallyEnabled = isStorePartiallyEnabled(store.id)
 
-              <div className="md:col-span-2">
-                <label className="block text-sm font-medium text-secondary mb-2">
-                  Descrição
-                </label>
-                <textarea
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                  rows={2}
-                  className="input resize-none"
-                  placeholder="Descrição breve do checklist..."
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-secondary mb-2">
-                  Categoria
-                </label>
-                <Select
-                  value={category}
-                  onChange={(v) => setCategory(v as TemplateCategory)}
-                  options={[
-                    { value: 'recebimento', label: 'Recebimento' },
-                    { value: 'limpeza', label: 'Limpeza' },
-                    { value: 'abertura', label: 'Abertura' },
-                    { value: 'fechamento', label: 'Fechamento' },
-                    { value: 'outros', label: 'Outros' },
-                  ]}
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-secondary mb-2">
-                  Status
-                </label>
-                <label className="flex items-center gap-3 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={isActive}
-                    onChange={(e) => setIsActive(e.target.checked)}
-                    className="w-5 h-5 rounded border-default bg-surface text-primary focus:ring-primary"
-                  />
-                  <span className={isActive ? 'text-success' : 'text-muted'}>
-                    {isActive ? 'Ativo' : 'Inativo'}
-                  </span>
-                </label>
-              </div>
-            </div>
-
-            <div className="flex flex-wrap gap-3 mt-4 pt-4 border-t border-subtle">
-              <button type="button" onClick={() => setShowSectorModal(true)} className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-subtle bg-surface-hover hover:border-primary/40 transition-all text-sm text-secondary hover:text-primary">
-                <FiGrid className="w-4 h-4" />
-                Visibilidade por Setor
-                {visibility.length > 0 && (
-                  <span className="text-xs bg-success/20 text-success px-2 py-0.5 rounded-full">{visibility.length}</span>
-                )}
-              </button>
-              <button type="button" onClick={() => setShowFunctionModal(true)} className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-subtle bg-surface-hover hover:border-primary/40 transition-all text-sm text-secondary hover:text-primary">
-                <FiBriefcase className="w-4 h-4" />
-                Restringir por Função
-                {adminOnly && (
-                  <span className="text-xs bg-red-500/20 text-red-400 px-2 py-0.5 rounded-full">Admin</span>
-                )}
-                {!adminOnly && selectedFunctionIds.length > 0 && (
-                  <span className="text-xs bg-info/20 text-info px-2 py-0.5 rounded-full">{selectedFunctionIds.length}</span>
-                )}
-              </button>
-            </div>
-          </div>
-
-          {/* Configurações de Tempo */}
-          <div className="card p-6">
-            <h2 className="text-lg font-semibold text-main mb-1">Configurações de Tempo</h2>
-            <p className="text-sm text-muted mb-4">Deixe vazio para sem restrição</p>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-secondary mb-2">
-                  Horário início
-                </label>
-                <input
-                  type="time"
-                  value={allowedStartTime}
-                  onChange={(e) => setAllowedStartTime(e.target.value)}
-                  className="input"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-secondary mb-2">
-                  Horário fim
-                </label>
-                <input
-                  type="time"
-                  value={allowedEndTime}
-                  onChange={(e) => setAllowedEndTime(e.target.value)}
-                  className="input"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-secondary mb-2">
-                  Prazo justificativas (horas)
-                </label>
-                <input
-                  type="number"
-                  min="1"
-                  value={justificationDeadlineHours}
-                  onChange={(e) => setJustificationDeadlineHours(e.target.value)}
-                  className="input"
-                  placeholder="Ex: 48"
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* Etapas e Campos */}
-          <div className="card p-6">
-            <div className="flex items-center justify-between mb-2">
-              <h2 className="text-lg font-semibold text-main flex items-center gap-2">
-                <FiLayers className="w-5 h-5 text-primary" />
-                Etapas e Campos
-              </h2>
-              <div className="flex items-center gap-3">
-                <span className="text-sm text-muted">{fields.length} campos</span>
-                <button type="button" onClick={addSection} className="btn-secondary flex items-center gap-2 px-3 py-2 text-sm">
-                  <FiPlus className="w-4 h-4" />
-                  Adicionar Etapa
-                </button>
-              </div>
-            </div>
-            <p className="text-sm text-muted mb-4">
-              Divida o checklist em etapas para preenchimento em momentos diferentes do dia.
-              Se nenhuma etapa for criada, o checklist será preenchido de uma vez.
-            </p>
-
-            {sections.length > 0 ? (
-              <div className="space-y-4">
-                <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleSectionDragEnd}>
-                <SortableContext items={sections.map(s => s.id)} strategy={verticalListSortingStrategy}>
-                {sections.map((section, idx) => {
-                  const sectionFields = fields
-                    .filter(f => f.section_id === section.id)
-                    .sort((a, b) => a.sort_order - b.sort_order)
-                  const isExpanded = expandedSection === section.id
-
-                  return (
-                    <SortableItem key={section.id} id={section.id} className="border border-subtle rounded-xl overflow-hidden">
-                    {(dragListeners) => (<>
-                      <div
-                        className={`flex items-center gap-2 sm:gap-3 p-2 sm:p-3 cursor-pointer transition-colors ${isExpanded ? 'bg-primary/10 border-b border-subtle' : 'bg-surface hover:bg-surface-hover'}`}
-                        onClick={() => setExpandedSection(isExpanded ? null : section.id)}
-                      >
-                        <div {...dragListeners} onClick={e => e.stopPropagation()} className="cursor-grab active:cursor-grabbing p-1 text-muted hover:text-primary touch-none">
-                          <RiDraggable className="w-5 h-5" />
-                        </div>
-                        <span className="w-6 h-6 sm:w-7 sm:h-7 rounded-lg bg-primary/10 flex items-center justify-center text-xs font-bold text-primary shrink-0">{idx + 1}</span>
-                        <input type="text" value={section.name} onChange={(e) => updateSection(section.id, { name: e.target.value })} onClick={e => e.stopPropagation()} placeholder="Nome da etapa" className="flex-1 min-w-0 bg-transparent border-none text-main placeholder:text-muted focus:outline-none font-medium text-sm sm:text-base" />
-                        <span className="text-xs text-muted whitespace-nowrap hidden sm:inline">{sectionFields.length} campos</span>
-                        {isExpanded ? <FiChevronUp className="w-4 h-4 text-primary shrink-0" /> : <FiChevronDown className="w-4 h-4 text-muted shrink-0" />}
-                        <button type="button" onClick={(e) => { e.stopPropagation(); removeSection(section.id) }} className="p-1.5 sm:p-2 text-error hover:bg-error/20 rounded-lg transition-colors shrink-0"><FiTrash2 className="w-3.5 h-3.5 sm:w-4 sm:h-4" /></button>
-                      </div>
-
-                      {isExpanded && (
-                        <div className="p-4 space-y-3">
-                          <div className="flex flex-wrap gap-2 p-3 bg-surface-hover rounded-xl border border-subtle">
-                            <p className="w-full text-xs text-muted mb-1">Adicionar campo nesta etapa:</p>
-                            {fieldTypes.map(type => (
-                              <button key={type.value} type="button" onClick={() => addField(type.value, section.id)} className="btn-secondary flex items-center gap-1 px-2 py-1.5 text-xs">
-                                <span>{type.icon}</span>
-                                <span>{type.label}</span>
-                              </button>
-                            ))}
-                          </div>
-                          {sectionFields.length === 0 ? (
-                            <p className="text-center text-muted text-sm py-4">Nenhum campo nesta etapa</p>
-                          ) : (
-                            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleFieldDragEnd(section.id)}>
-                            <SortableContext items={sectionFields.map(f => f.id)} strategy={verticalListSortingStrategy}>
-                            {sectionFields.map((field) => (
-                              <SortableItem key={field.id} id={field.id} className={`border rounded-xl transition-colors ${editingField === field.id ? 'border-primary bg-surface-hover' : 'border-subtle bg-surface'}`}>
-                              {(fieldListeners) => (<>
-                                <div className="flex items-center gap-2 sm:gap-3 p-2 sm:p-3">
-                                  <div {...fieldListeners} className="cursor-grab active:cursor-grabbing p-1 text-muted hover:text-primary touch-none">
-                                    <RiDraggable className="w-4 h-4" />
-                                  </div>
-                                  <IconPicker value={getFieldIcon(field)} onChange={(icon) => setFieldIcon(field.id, icon)} fallback={getFieldTypeIcon(field.field_type)} />
-                                  <div className="flex-1 min-w-0">
-                                    <input type="text" value={field.name} onChange={(e) => updateField(field.id, { name: e.target.value })} placeholder="Nome do campo" className="w-full bg-transparent border-none text-main placeholder:text-muted focus:outline-none font-medium text-xs sm:text-sm" />
-                                    <p className="text-[10px] sm:text-xs text-muted">{getFieldTypeLabel(field.field_type)}</p>
-                                  </div>
-                                  <div className="flex items-center gap-0.5 sm:gap-1 shrink-0">
-                                    <label className="flex items-center gap-0.5 sm:gap-1 text-[10px] sm:text-xs text-secondary" title="Obrigatório"><input type="checkbox" checked={field.is_required} onChange={(e) => updateField(field.id, { is_required: e.target.checked })} className="rounded border-default bg-surface text-primary focus:ring-primary w-3 h-3 sm:w-3.5 sm:h-3.5" /><span className="hidden sm:inline">Obrig.</span><span className="sm:hidden">*</span></label>
-                                    <button type="button" onClick={() => setEditingField(editingField === field.id ? null : field.id)} className={`p-1 sm:p-1.5 rounded-lg transition-colors ${editingField === field.id ? 'bg-primary/20 text-primary' : 'text-muted hover:bg-surface-hover'}`}><FiSettings className="w-3 h-3 sm:w-3.5 sm:h-3.5" /></button>
-                                    <button type="button" onClick={() => removeField(field.id)} className="p-1 sm:p-1.5 text-error hover:bg-error/20 rounded-lg transition-colors"><FiTrash2 className="w-3 h-3 sm:w-3.5 sm:h-3.5" /></button>
-                                  </div>
-                                </div>
-                                <FieldConditionEditor
-                                  fieldType={field.field_type}
-                                  fieldName={field.name}
-                                  dropdownOptions={field.field_type === 'dropdown' ? getOptionsItems(field.options) : undefined}
-                                  checkboxOptions={field.field_type === 'checkbox_multiple' ? getOptionsItems(field.options) : undefined}
-                                  condition={fieldConditions[field.id] || null}
-                                  onChange={(cond) => setFieldConditions(prev => ({ ...prev, [field.id]: cond }))}
-                                  users={conditionUsers}
-                                  presets={conditionPresets}
-                                  onSaveAsPreset={handleSaveAsPreset}
-                                />
-                                {editingField === field.id && (
-                                  <div className="px-2 pb-2 sm:px-3 sm:pb-3 pt-2 border-t border-subtle space-y-3">
-                                    <div>
-                                      <label className="block text-xs text-muted mb-1">Tipo do campo</label>
-                                      <Select value={field.field_type} onChange={(v) => changeFieldType(field.id, v as FieldType)} className="text-sm" options={fieldTypes.map(ft => ({ value: ft.value, label: ft.icon + ' ' + ft.label }))} />
-                                    </div>
-                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                      <div><label className="block text-xs text-muted mb-1">Placeholder</label><input type="text" value={field.placeholder} onChange={(e) => updateField(field.id, { placeholder: e.target.value })} className="input text-sm" placeholder="Texto de exemplo..." /></div>
-                                      <div><label className="block text-xs text-muted mb-1">Texto de ajuda</label><input type="text" value={field.help_text} onChange={(e) => updateField(field.id, { help_text: e.target.value })} className="input text-sm" placeholder="Instruções para o usuário..." /></div>
-                                    </div>
-                                    {sections.length > 0 && (<div><label className="block text-xs text-muted mb-1">Mover para etapa</label><Select value={field.section_id || ''} onChange={(v) => updateField(field.id, { section_id: v || null })} className="text-sm" placeholder="Sem etapa (geral)" options={sections.map(s => ({ value: String(s.id), label: s.name || '(sem nome)' }))} /></div>)}
-                                    {field.field_type === 'number' && (<div><label className="block text-xs text-muted mb-1">Tipo de número</label><div className="grid grid-cols-2 gap-2">{[{ value: 'monetario', label: 'Monetário (R$)' }, { value: 'quantidade', label: 'Quantidade (un)' }, { value: 'decimal', label: 'Decimal' }, { value: 'porcentagem', label: 'Porcentagem (%)' }].map(st => (<button key={st.value} type="button" onClick={() => updateField(field.id, { options: { numberSubtype: st.value, ...(getFieldIcon(field) ? { icon: getFieldIcon(field) } : {}) } })} className={`px-3 py-2 rounded-lg text-sm font-medium transition-all border ${(field.options as { numberSubtype?: string } | null)?.numberSubtype === st.value ? 'bg-primary/15 border-primary text-primary' : 'bg-surface border-subtle text-muted hover:border-primary/40'}`}>{st.label}</button>))}</div></div>)}
-                                    {(field.field_type === 'dropdown' || field.field_type === 'checkbox_multiple') && (<div><label className="block text-xs text-muted mb-2">Opções</label><div className="space-y-2">{(getOptionsItems(field.options)).map((opt: string, optIdx: number) => (<div key={optIdx} className="flex items-center gap-2"><span className="text-muted cursor-grab text-sm select-none">☰</span><input type="text" value={opt} onChange={(e) => { const newOpts = [...(getOptionsItems(field.options))]; newOpts[optIdx] = e.target.value; updateField(field.id, { options: getFieldIcon(field) ? { items: newOpts, icon: getFieldIcon(field) } : newOpts }) }} placeholder={`Opção ${optIdx + 1}`} className="input text-sm flex-1" /><button type="button" onClick={() => { const newOpts = (getOptionsItems(field.options)).filter((_: string, i: number) => i !== optIdx); updateField(field.id, { options: getFieldIcon(field) ? { items: newOpts, icon: getFieldIcon(field) } : newOpts }) }} className="p-1 text-error hover:bg-error/20 rounded transition-colors shrink-0"><FiTrash2 className="w-3 h-3" /></button></div>))}</div><button type="button" onClick={() => { const newItems = [...getOptionsItems(field.options), '']; updateField(field.id, { options: getFieldIcon(field) ? { items: newItems, icon: getFieldIcon(field) } : newItems }) }} className="mt-2 text-xs text-primary hover:text-primary/80 font-medium py-1.5 px-3 border border-primary/30 rounded-lg hover:bg-primary/5 transition-colors">+ Adicionar opção</button></div>)}
-                                    {field.field_type === 'yes_no' && (<div className="space-y-2"><label className="flex items-center gap-2 text-sm text-secondary cursor-pointer"><input type="checkbox" checked={(field.options as { allowPhoto?: boolean } | null)?.allowPhoto || false} onChange={(e) => updateField(field.id, { options: { ...((field.options as Record<string, unknown>) || {}), allowPhoto: e.target.checked, photoRequired: false } })} className="rounded border-default bg-surface text-primary focus:ring-primary" />Permitir foto</label>{(field.options as { allowPhoto?: boolean } | null)?.allowPhoto && (<Select value={(field.options as { photoRequired?: boolean } | null)?.photoRequired ? 'required' : 'optional'} onChange={(v) => updateField(field.id, { options: { ...((field.options as Record<string, unknown>) || {}), photoRequired: v === 'required' } })} className="text-sm" options={[{ value: 'optional', label: 'Foto opcional' }, { value: 'required', label: 'Foto obrigatória' }]} />)}<div className="mt-3 p-3 bg-emerald-500/5 border border-emerald-500/20 rounded-lg space-y-2"><p className="text-xs font-medium text-emerald-500">Quando resposta for &quot;Sim&quot;:</p><label className="flex items-center gap-2 text-sm text-secondary cursor-pointer"><input type="checkbox" checked={(field.options as Record<string, unknown>)?.onYes ? ((field.options as Record<string, unknown>).onYes as Record<string, unknown>)?.showTextField === true : false} onChange={(e) => { const opts = { ...((field.options as Record<string, unknown>) || {})}; const onYes: Record<string, unknown> = { ...((opts.onYes as Record<string, unknown>) || {}), showTextField: e.target.checked }; if (!e.target.checked) { delete onYes.textFieldLabel; delete onYes.textFieldRequired }; updateField(field.id, { options: { ...opts, onYes } }) }} className="rounded border-default bg-surface text-primary focus:ring-primary" />Exigir texto explicativo</label>{!!(field.options as Record<string, unknown>)?.onYes && !!((field.options as Record<string, unknown>).onYes as Record<string, unknown>)?.showTextField && (<div className="ml-6 space-y-2"><input type="text" value={((field.options as Record<string, unknown>).onYes as Record<string, unknown>)?.textFieldLabel as string || ''} onChange={(e) => { const opts = { ...((field.options as Record<string, unknown>) || {})}; const onYes = { ...((opts.onYes as Record<string, unknown>) || {}), textFieldLabel: e.target.value }; updateField(field.id, { options: { ...opts, onYes } }) }} placeholder="Label do campo (ex: Explique o motivo)" className="input text-sm" /><label className="flex items-center gap-2 text-xs text-muted cursor-pointer"><input type="checkbox" checked={((field.options as Record<string, unknown>)?.onYes as Record<string, unknown>)?.textFieldRequired === true} onChange={(e) => { const opts = { ...((field.options as Record<string, unknown>) || {})}; const onYes = { ...((opts.onYes as Record<string, unknown>) || {}), textFieldRequired: e.target.checked }; updateField(field.id, { options: { ...opts, onYes } }) }} className="rounded border-default bg-surface text-primary focus:ring-primary w-3 h-3" />Texto obrigatório</label></div>)}<label className="flex items-center gap-2 text-sm text-secondary cursor-pointer"><input type="checkbox" checked={(field.options as Record<string, unknown>)?.onYes ? ((field.options as Record<string, unknown>).onYes as Record<string, unknown>)?.showPhotoField === true : false} onChange={(e) => { const opts = { ...((field.options as Record<string, unknown>) || {})}; const onYes: Record<string, unknown> = { ...((opts.onYes as Record<string, unknown>) || {}), showPhotoField: e.target.checked }; if (!e.target.checked) { delete onYes.photoFieldLabel; delete onYes.photoFieldRequired }; updateField(field.id, { options: { ...opts, onYes } }) }} className="rounded border-default bg-surface text-primary focus:ring-primary" />Exigir foto</label>{!!(field.options as Record<string, unknown>)?.onYes && !!((field.options as Record<string, unknown>).onYes as Record<string, unknown>)?.showPhotoField && (<div className="ml-6 space-y-2"><input type="text" value={((field.options as Record<string, unknown>).onYes as Record<string, unknown>)?.photoFieldLabel as string || ''} onChange={(e) => { const opts = { ...((field.options as Record<string, unknown>) || {})}; const onYes = { ...((opts.onYes as Record<string, unknown>) || {}), photoFieldLabel: e.target.value }; updateField(field.id, { options: { ...opts, onYes } }) }} placeholder="Label da foto (ex: Foto da evidência)" className="input text-sm" /><label className="flex items-center gap-2 text-xs text-muted cursor-pointer"><input type="checkbox" checked={((field.options as Record<string, unknown>)?.onYes as Record<string, unknown>)?.photoFieldRequired === true} onChange={(e) => { const opts = { ...((field.options as Record<string, unknown>) || {})}; const onYes = { ...((opts.onYes as Record<string, unknown>) || {}), photoFieldRequired: e.target.checked }; updateField(field.id, { options: { ...opts, onYes } }) }} className="rounded border-default bg-surface text-primary focus:ring-primary w-3 h-3" />Foto obrigatória</label></div>)}</div><div className="p-3 bg-red-500/5 border border-red-500/20 rounded-lg space-y-2"><p className="text-xs font-medium text-red-400">Quando resposta for &quot;Não&quot;:</p><label className="flex items-center gap-2 text-sm text-secondary cursor-pointer"><input type="checkbox" checked={(field.options as Record<string, unknown>)?.onNo ? ((field.options as Record<string, unknown>).onNo as Record<string, unknown>)?.showTextField === true : false} onChange={(e) => { const opts = { ...((field.options as Record<string, unknown>) || {})}; const onNo: Record<string, unknown> = { ...((opts.onNo as Record<string, unknown>) || {}), showTextField: e.target.checked }; if (!e.target.checked) { delete onNo.textFieldLabel; delete onNo.textFieldRequired }; updateField(field.id, { options: { ...opts, onNo } }) }} className="rounded border-default bg-surface text-primary focus:ring-primary" />Exigir texto explicativo</label>{!!(field.options as Record<string, unknown>)?.onNo && !!((field.options as Record<string, unknown>).onNo as Record<string, unknown>)?.showTextField && (<div className="ml-6 space-y-2"><input type="text" value={((field.options as Record<string, unknown>).onNo as Record<string, unknown>)?.textFieldLabel as string || ''} onChange={(e) => { const opts = { ...((field.options as Record<string, unknown>) || {})}; const onNo = { ...((opts.onNo as Record<string, unknown>) || {}), textFieldLabel: e.target.value }; updateField(field.id, { options: { ...opts, onNo } }) }} placeholder="Label do campo (ex: Explique o motivo)" className="input text-sm" /><label className="flex items-center gap-2 text-xs text-muted cursor-pointer"><input type="checkbox" checked={((field.options as Record<string, unknown>)?.onNo as Record<string, unknown>)?.textFieldRequired === true} onChange={(e) => { const opts = { ...((field.options as Record<string, unknown>) || {})}; const onNo = { ...((opts.onNo as Record<string, unknown>) || {}), textFieldRequired: e.target.checked }; updateField(field.id, { options: { ...opts, onNo } }) }} className="rounded border-default bg-surface text-primary focus:ring-primary w-3 h-3" />Texto obrigatório</label></div>)}<label className="flex items-center gap-2 text-sm text-secondary cursor-pointer"><input type="checkbox" checked={(field.options as Record<string, unknown>)?.onNo ? ((field.options as Record<string, unknown>).onNo as Record<string, unknown>)?.showPhotoField === true : false} onChange={(e) => { const opts = { ...((field.options as Record<string, unknown>) || {})}; const onNo: Record<string, unknown> = { ...((opts.onNo as Record<string, unknown>) || {}), showPhotoField: e.target.checked }; if (!e.target.checked) { delete onNo.photoFieldLabel; delete onNo.photoFieldRequired }; updateField(field.id, { options: { ...opts, onNo } }) }} className="rounded border-default bg-surface text-primary focus:ring-primary" />Exigir foto</label>{!!(field.options as Record<string, unknown>)?.onNo && !!((field.options as Record<string, unknown>).onNo as Record<string, unknown>)?.showPhotoField && (<div className="ml-6 space-y-2"><input type="text" value={((field.options as Record<string, unknown>).onNo as Record<string, unknown>)?.photoFieldLabel as string || ''} onChange={(e) => { const opts = { ...((field.options as Record<string, unknown>) || {})}; const onNo = { ...((opts.onNo as Record<string, unknown>) || {}), photoFieldLabel: e.target.value }; updateField(field.id, { options: { ...opts, onNo } }) }} placeholder="Label da foto (ex: Foto da evidência)" className="input text-sm" /><label className="flex items-center gap-2 text-xs text-muted cursor-pointer"><input type="checkbox" checked={((field.options as Record<string, unknown>)?.onNo as Record<string, unknown>)?.photoFieldRequired === true} onChange={(e) => { const opts = { ...((field.options as Record<string, unknown>) || {})}; const onNo = { ...((opts.onNo as Record<string, unknown>) || {}), photoFieldRequired: e.target.checked }; updateField(field.id, { options: { ...opts, onNo } }) }} className="rounded border-default bg-surface text-primary focus:ring-primary w-3 h-3" />Foto obrigatória</label></div>)}<label className="flex items-center gap-2 text-sm text-secondary cursor-pointer"><input type="checkbox" checked={(field.options as Record<string, unknown>)?.onNo ? ((field.options as Record<string, unknown>).onNo as Record<string, unknown>)?.allowUserActionPlan === true : false} onChange={(e) => { const opts = { ...((field.options as Record<string, unknown>) || {})}; const onNo: Record<string, unknown> = { ...((opts.onNo as Record<string, unknown>) || {}), allowUserActionPlan: e.target.checked }; updateField(field.id, { options: { ...opts, onNo } }) }} className="rounded border-default bg-surface text-primary focus:ring-primary" />Permitir preenchedor escolher responsável</label></div></div>)}
-                                    {!['dropdown', 'checkbox_multiple'].includes(field.field_type) && (<div><label className="block text-xs text-muted mb-1">Validação cruzada</label><Select value={(field.options as { validationRole?: string } | null)?.validationRole || ''} onChange={(v) => updateField(field.id, { options: { ...((field.options as Record<string, unknown>) || {}), validationRole: v || null } })} className="text-sm" placeholder="Nenhum" options={[{ value: 'nota', label: 'Número da nota' }, { value: 'valor', label: 'Valor' }]} /></div>)}
-                                  </div>
-                                )}
-                              </>)}
-                              </SortableItem>
-                            ))}
-                            </SortableContext>
-                            </DndContext>
-                          )}
-                        </div>
-                      )}
-                    </>)}
-                    </SortableItem>
-                  )
-                })}
-                </SortableContext>
-                </DndContext>
-
-                {/* Campos Gerais */}
-                <div className="border border-dashed border-subtle rounded-xl p-4 space-y-3">
-                  <h3 className="text-sm font-medium text-muted">Campos Gerais (sem etapa)</h3>
-                  <div className="flex flex-wrap gap-2 p-3 bg-surface-hover rounded-xl border border-subtle">
-                    <p className="w-full text-xs text-muted mb-1">Adicionar campo geral:</p>
-                    {fieldTypes.map(type => (
-                      <button key={type.value} type="button" onClick={() => addField(type.value)} className="btn-secondary flex items-center gap-1 px-2 py-1.5 text-xs">
-                        <span>{type.icon}</span>
-                        <span>{type.label}</span>
-                      </button>
-                    ))}
-                  </div>
-                  {(() => {
-                    const generalFields = fields.filter(f => !f.section_id).sort((a, b) => a.sort_order - b.sort_order)
-                    return generalFields.length === 0 ? (
-                      <p className="text-center text-muted text-sm py-2">Nenhum campo geral</p>
-                    ) : (
-                      <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleFieldDragEnd(null)}>
-                      <SortableContext items={generalFields.map(f => f.id)} strategy={verticalListSortingStrategy}>
-                      {generalFields.map((field) => (
-                        <SortableItem key={field.id} id={field.id} className={`border rounded-xl transition-colors ${editingField === field.id ? 'border-primary bg-surface-hover' : 'border-subtle bg-surface'}`}>
-                        {(fieldListeners) => (<>
-                          <div className="flex items-center gap-2 sm:gap-3 p-2 sm:p-3">
-                            <div {...fieldListeners} className="cursor-grab active:cursor-grabbing p-1 text-muted hover:text-primary touch-none">
-                              <RiDraggable className="w-4 h-4" />
-                            </div>
-                            <IconPicker value={getFieldIcon(field)} onChange={(icon) => setFieldIcon(field.id, icon)} fallback={getFieldTypeIcon(field.field_type)} />
-                            <div className="flex-1 min-w-0">
-                              <input type="text" value={field.name} onChange={(e) => updateField(field.id, { name: e.target.value })} placeholder="Nome do campo" className="w-full bg-transparent border-none text-main placeholder:text-muted focus:outline-none font-medium text-xs sm:text-sm" />
-                              <p className="text-[10px] sm:text-xs text-muted">{getFieldTypeLabel(field.field_type)}</p>
-                            </div>
-                            <div className="flex items-center gap-0.5 sm:gap-1 shrink-0">
-                              <label className="flex items-center gap-0.5 sm:gap-1 text-[10px] sm:text-xs text-secondary" title="Obrigatório"><input type="checkbox" checked={field.is_required} onChange={(e) => updateField(field.id, { is_required: e.target.checked })} className="rounded border-default bg-surface text-primary focus:ring-primary w-3 h-3 sm:w-3.5 sm:h-3.5" /><span className="hidden sm:inline">Obrig.</span><span className="sm:hidden">*</span></label>
-                              <button type="button" onClick={() => setEditingField(editingField === field.id ? null : field.id)} className={`p-1 sm:p-1.5 rounded-lg transition-colors ${editingField === field.id ? 'bg-primary/20 text-primary' : 'text-muted hover:bg-surface-hover'}`}><FiSettings className="w-3 h-3 sm:w-3.5 sm:h-3.5" /></button>
-                              <button type="button" onClick={() => removeField(field.id)} className="p-1 sm:p-1.5 text-error hover:bg-error/20 rounded-lg transition-colors"><FiTrash2 className="w-3 h-3 sm:w-3.5 sm:h-3.5" /></button>
-                            </div>
-                          </div>
-                          <FieldConditionEditor
-                            fieldType={field.field_type}
-                            fieldName={field.name}
-                            dropdownOptions={field.field_type === 'dropdown' ? getOptionsItems(field.options) : undefined}
-                            checkboxOptions={field.field_type === 'checkbox_multiple' ? getOptionsItems(field.options) : undefined}
-                            condition={fieldConditions[field.id] || null}
-                            onChange={(cond) => setFieldConditions(prev => ({ ...prev, [field.id]: cond }))}
-                            users={conditionUsers}
-                            presets={conditionPresets}
-                            onSaveAsPreset={handleSaveAsPreset}
-                          />
-                          {editingField === field.id && (
-                            <div className="px-2 pb-2 sm:px-3 sm:pb-3 pt-2 border-t border-subtle space-y-3">
-                              <div>
-                                <label className="block text-xs text-muted mb-1">Tipo do campo</label>
-                                <Select value={field.field_type} onChange={(v) => changeFieldType(field.id, v as FieldType)} className="text-sm" options={fieldTypes.map(ft => ({ value: ft.value, label: ft.icon + ' ' + ft.label }))} />
-                              </div>
-                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                <div><label className="block text-xs text-muted mb-1">Placeholder</label><input type="text" value={field.placeholder} onChange={(e) => updateField(field.id, { placeholder: e.target.value })} className="input text-sm" placeholder="Texto de exemplo..." /></div>
-                                <div><label className="block text-xs text-muted mb-1">Texto de ajuda</label><input type="text" value={field.help_text} onChange={(e) => updateField(field.id, { help_text: e.target.value })} className="input text-sm" placeholder="Instruções para o usuário..." /></div>
-                              </div>
-                              <div><label className="block text-xs text-muted mb-1">Mover para etapa</label><Select value={field.section_id || ''} onChange={(v) => updateField(field.id, { section_id: v || null })} className="text-sm" placeholder="Sem etapa (geral)" options={sections.map(s => ({ value: String(s.id), label: s.name || '(sem nome)' }))} /></div>
-                              {field.field_type === 'number' && (<div><label className="block text-xs text-muted mb-1">Tipo de número</label><div className="grid grid-cols-2 gap-2">{[{ value: 'monetario', label: 'Monetário (R$)' }, { value: 'quantidade', label: 'Quantidade (un)' }, { value: 'decimal', label: 'Decimal' }, { value: 'porcentagem', label: 'Porcentagem (%)' }].map(st => (<button key={st.value} type="button" onClick={() => updateField(field.id, { options: { numberSubtype: st.value, ...(getFieldIcon(field) ? { icon: getFieldIcon(field) } : {}) } })} className={`px-3 py-2 rounded-lg text-sm font-medium transition-all border ${(field.options as { numberSubtype?: string } | null)?.numberSubtype === st.value ? 'bg-primary/15 border-primary text-primary' : 'bg-surface border-subtle text-muted hover:border-primary/40'}`}>{st.label}</button>))}</div></div>)}
-                              {(field.field_type === 'dropdown' || field.field_type === 'checkbox_multiple') && (<div><label className="block text-xs text-muted mb-2">Opções</label><div className="space-y-2">{(getOptionsItems(field.options)).map((opt: string, optIdx: number) => (<div key={optIdx} className="flex items-center gap-2"><span className="text-muted cursor-grab text-sm select-none">☰</span><input type="text" value={opt} onChange={(e) => { const newOpts = [...(getOptionsItems(field.options))]; newOpts[optIdx] = e.target.value; updateField(field.id, { options: getFieldIcon(field) ? { items: newOpts, icon: getFieldIcon(field) } : newOpts }) }} placeholder={`Opção ${optIdx + 1}`} className="input text-sm flex-1" /><button type="button" onClick={() => { const newOpts = (getOptionsItems(field.options)).filter((_: string, i: number) => i !== optIdx); updateField(field.id, { options: getFieldIcon(field) ? { items: newOpts, icon: getFieldIcon(field) } : newOpts }) }} className="p-1 text-error hover:bg-error/20 rounded transition-colors shrink-0"><FiTrash2 className="w-3 h-3" /></button></div>))}</div><button type="button" onClick={() => { const newItems = [...getOptionsItems(field.options), '']; updateField(field.id, { options: getFieldIcon(field) ? { items: newItems, icon: getFieldIcon(field) } : newItems }) }} className="mt-2 text-xs text-primary hover:text-primary/80 font-medium py-1.5 px-3 border border-primary/30 rounded-lg hover:bg-primary/5 transition-colors">+ Adicionar opção</button></div>)}
-                              {field.field_type === 'yes_no' && (<div className="space-y-2"><label className="flex items-center gap-2 text-sm text-secondary cursor-pointer"><input type="checkbox" checked={(field.options as { allowPhoto?: boolean } | null)?.allowPhoto || false} onChange={(e) => updateField(field.id, { options: { ...((field.options as Record<string, unknown>) || {}), allowPhoto: e.target.checked, photoRequired: false } })} className="rounded border-default bg-surface text-primary focus:ring-primary" />Permitir foto</label>{(field.options as { allowPhoto?: boolean } | null)?.allowPhoto && (<Select value={(field.options as { photoRequired?: boolean } | null)?.photoRequired ? 'required' : 'optional'} onChange={(v) => updateField(field.id, { options: { ...((field.options as Record<string, unknown>) || {}), photoRequired: v === 'required' } })} className="text-sm" options={[{ value: 'optional', label: 'Foto opcional' }, { value: 'required', label: 'Foto obrigatória' }]} />)}<div className="mt-3 p-3 bg-emerald-500/5 border border-emerald-500/20 rounded-lg space-y-2"><p className="text-xs font-medium text-emerald-500">Quando resposta for &quot;Sim&quot;:</p><label className="flex items-center gap-2 text-sm text-secondary cursor-pointer"><input type="checkbox" checked={(field.options as Record<string, unknown>)?.onYes ? ((field.options as Record<string, unknown>).onYes as Record<string, unknown>)?.showTextField === true : false} onChange={(e) => { const opts = { ...((field.options as Record<string, unknown>) || {})}; const onYes: Record<string, unknown> = { ...((opts.onYes as Record<string, unknown>) || {}), showTextField: e.target.checked }; if (!e.target.checked) { delete onYes.textFieldLabel; delete onYes.textFieldRequired }; updateField(field.id, { options: { ...opts, onYes } }) }} className="rounded border-default bg-surface text-primary focus:ring-primary" />Exigir texto explicativo</label>{!!(field.options as Record<string, unknown>)?.onYes && !!((field.options as Record<string, unknown>).onYes as Record<string, unknown>)?.showTextField && (<div className="ml-6 space-y-2"><input type="text" value={((field.options as Record<string, unknown>).onYes as Record<string, unknown>)?.textFieldLabel as string || ''} onChange={(e) => { const opts = { ...((field.options as Record<string, unknown>) || {})}; const onYes = { ...((opts.onYes as Record<string, unknown>) || {}), textFieldLabel: e.target.value }; updateField(field.id, { options: { ...opts, onYes } }) }} placeholder="Label do campo (ex: Explique o motivo)" className="input text-sm" /><label className="flex items-center gap-2 text-xs text-muted cursor-pointer"><input type="checkbox" checked={((field.options as Record<string, unknown>)?.onYes as Record<string, unknown>)?.textFieldRequired === true} onChange={(e) => { const opts = { ...((field.options as Record<string, unknown>) || {})}; const onYes = { ...((opts.onYes as Record<string, unknown>) || {}), textFieldRequired: e.target.checked }; updateField(field.id, { options: { ...opts, onYes } }) }} className="rounded border-default bg-surface text-primary focus:ring-primary w-3 h-3" />Texto obrigatório</label></div>)}<label className="flex items-center gap-2 text-sm text-secondary cursor-pointer"><input type="checkbox" checked={(field.options as Record<string, unknown>)?.onYes ? ((field.options as Record<string, unknown>).onYes as Record<string, unknown>)?.showPhotoField === true : false} onChange={(e) => { const opts = { ...((field.options as Record<string, unknown>) || {})}; const onYes: Record<string, unknown> = { ...((opts.onYes as Record<string, unknown>) || {}), showPhotoField: e.target.checked }; if (!e.target.checked) { delete onYes.photoFieldLabel; delete onYes.photoFieldRequired }; updateField(field.id, { options: { ...opts, onYes } }) }} className="rounded border-default bg-surface text-primary focus:ring-primary" />Exigir foto</label>{!!(field.options as Record<string, unknown>)?.onYes && !!((field.options as Record<string, unknown>).onYes as Record<string, unknown>)?.showPhotoField && (<div className="ml-6 space-y-2"><input type="text" value={((field.options as Record<string, unknown>).onYes as Record<string, unknown>)?.photoFieldLabel as string || ''} onChange={(e) => { const opts = { ...((field.options as Record<string, unknown>) || {})}; const onYes = { ...((opts.onYes as Record<string, unknown>) || {}), photoFieldLabel: e.target.value }; updateField(field.id, { options: { ...opts, onYes } }) }} placeholder="Label da foto (ex: Foto da evidência)" className="input text-sm" /><label className="flex items-center gap-2 text-xs text-muted cursor-pointer"><input type="checkbox" checked={((field.options as Record<string, unknown>)?.onYes as Record<string, unknown>)?.photoFieldRequired === true} onChange={(e) => { const opts = { ...((field.options as Record<string, unknown>) || {})}; const onYes = { ...((opts.onYes as Record<string, unknown>) || {}), photoFieldRequired: e.target.checked }; updateField(field.id, { options: { ...opts, onYes } }) }} className="rounded border-default bg-surface text-primary focus:ring-primary w-3 h-3" />Foto obrigatória</label></div>)}</div><div className="p-3 bg-red-500/5 border border-red-500/20 rounded-lg space-y-2"><p className="text-xs font-medium text-red-400">Quando resposta for &quot;Não&quot;:</p><label className="flex items-center gap-2 text-sm text-secondary cursor-pointer"><input type="checkbox" checked={(field.options as Record<string, unknown>)?.onNo ? ((field.options as Record<string, unknown>).onNo as Record<string, unknown>)?.showTextField === true : false} onChange={(e) => { const opts = { ...((field.options as Record<string, unknown>) || {})}; const onNo: Record<string, unknown> = { ...((opts.onNo as Record<string, unknown>) || {}), showTextField: e.target.checked }; if (!e.target.checked) { delete onNo.textFieldLabel; delete onNo.textFieldRequired }; updateField(field.id, { options: { ...opts, onNo } }) }} className="rounded border-default bg-surface text-primary focus:ring-primary" />Exigir texto explicativo</label>{!!(field.options as Record<string, unknown>)?.onNo && !!((field.options as Record<string, unknown>).onNo as Record<string, unknown>)?.showTextField && (<div className="ml-6 space-y-2"><input type="text" value={((field.options as Record<string, unknown>).onNo as Record<string, unknown>)?.textFieldLabel as string || ''} onChange={(e) => { const opts = { ...((field.options as Record<string, unknown>) || {})}; const onNo = { ...((opts.onNo as Record<string, unknown>) || {}), textFieldLabel: e.target.value }; updateField(field.id, { options: { ...opts, onNo } }) }} placeholder="Label do campo (ex: Explique o motivo)" className="input text-sm" /><label className="flex items-center gap-2 text-xs text-muted cursor-pointer"><input type="checkbox" checked={((field.options as Record<string, unknown>)?.onNo as Record<string, unknown>)?.textFieldRequired === true} onChange={(e) => { const opts = { ...((field.options as Record<string, unknown>) || {})}; const onNo = { ...((opts.onNo as Record<string, unknown>) || {}), textFieldRequired: e.target.checked }; updateField(field.id, { options: { ...opts, onNo } }) }} className="rounded border-default bg-surface text-primary focus:ring-primary w-3 h-3" />Texto obrigatório</label></div>)}<label className="flex items-center gap-2 text-sm text-secondary cursor-pointer"><input type="checkbox" checked={(field.options as Record<string, unknown>)?.onNo ? ((field.options as Record<string, unknown>).onNo as Record<string, unknown>)?.showPhotoField === true : false} onChange={(e) => { const opts = { ...((field.options as Record<string, unknown>) || {})}; const onNo: Record<string, unknown> = { ...((opts.onNo as Record<string, unknown>) || {}), showPhotoField: e.target.checked }; if (!e.target.checked) { delete onNo.photoFieldLabel; delete onNo.photoFieldRequired }; updateField(field.id, { options: { ...opts, onNo } }) }} className="rounded border-default bg-surface text-primary focus:ring-primary" />Exigir foto</label>{!!(field.options as Record<string, unknown>)?.onNo && !!((field.options as Record<string, unknown>).onNo as Record<string, unknown>)?.showPhotoField && (<div className="ml-6 space-y-2"><input type="text" value={((field.options as Record<string, unknown>).onNo as Record<string, unknown>)?.photoFieldLabel as string || ''} onChange={(e) => { const opts = { ...((field.options as Record<string, unknown>) || {})}; const onNo = { ...((opts.onNo as Record<string, unknown>) || {}), photoFieldLabel: e.target.value }; updateField(field.id, { options: { ...opts, onNo } }) }} placeholder="Label da foto (ex: Foto da evidência)" className="input text-sm" /><label className="flex items-center gap-2 text-xs text-muted cursor-pointer"><input type="checkbox" checked={((field.options as Record<string, unknown>)?.onNo as Record<string, unknown>)?.photoFieldRequired === true} onChange={(e) => { const opts = { ...((field.options as Record<string, unknown>) || {})}; const onNo = { ...((opts.onNo as Record<string, unknown>) || {}), photoFieldRequired: e.target.checked }; updateField(field.id, { options: { ...opts, onNo } }) }} className="rounded border-default bg-surface text-primary focus:ring-primary w-3 h-3" />Foto obrigatória</label></div>)}<label className="flex items-center gap-2 text-sm text-secondary cursor-pointer"><input type="checkbox" checked={(field.options as Record<string, unknown>)?.onNo ? ((field.options as Record<string, unknown>).onNo as Record<string, unknown>)?.allowUserActionPlan === true : false} onChange={(e) => { const opts = { ...((field.options as Record<string, unknown>) || {})}; const onNo: Record<string, unknown> = { ...((opts.onNo as Record<string, unknown>) || {}), allowUserActionPlan: e.target.checked }; updateField(field.id, { options: { ...opts, onNo } }) }} className="rounded border-default bg-surface text-primary focus:ring-primary" />Permitir preenchedor escolher responsável</label></div></div>)}
-                              {!['dropdown', 'checkbox_multiple'].includes(field.field_type) && (<div><label className="block text-xs text-muted mb-1">Validação cruzada</label><Select value={(field.options as { validationRole?: string } | null)?.validationRole || ''} onChange={(v) => updateField(field.id, { options: { ...((field.options as Record<string, unknown>) || {}), validationRole: v || null } })} className="text-sm" placeholder="Nenhum" options={[{ value: 'nota', label: 'Número da nota' }, { value: 'valor', label: 'Valor' }]} /></div>)}
-                            </div>
-                          )}
-                        </>)}
-                        </SortableItem>
-                      ))}
-                      </SortableContext>
-                      </DndContext>
-                    )
-                  })()}
-                </div>
-              </div>
-            ) : (
-              <>
-                <div className="flex flex-wrap gap-1.5 sm:gap-2 mb-6 p-2 sm:p-4 bg-surface-hover rounded-xl border border-subtle">
-                  <p className="w-full text-xs sm:text-sm text-muted mb-1 sm:mb-2">Adicionar campo:</p>
-                  {fieldTypes.map(type => (
-                    <button key={type.value} type="button" onClick={() => addField(type.value)} className="btn-secondary flex items-center gap-1 sm:gap-2 px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm">
-                      <span>{type.icon}</span>
-                      <span>{type.label}</span>
-                    </button>
-                  ))}
-                </div>
-                {fields.length === 0 ? (
-                  <div className="text-center py-12 text-muted">
-                    <p>Nenhum campo adicionado</p>
-                    <p className="text-sm mt-1">Clique nos botões acima para adicionar campos</p>
-                  </div>
-                ) : (
-                  <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleFieldDragEnd(null)}>
-                  <SortableContext items={[...fields].sort((a, b) => a.sort_order - b.sort_order).map(f => f.id)} strategy={verticalListSortingStrategy}>
-                  <div className="space-y-3">
-                    {[...fields].sort((a, b) => a.sort_order - b.sort_order).map((field) => (
-                      <SortableItem key={field.id} id={field.id} className={`border rounded-xl transition-colors ${editingField === field.id ? 'border-primary bg-surface-hover' : 'border-subtle bg-surface'}`}>
-                      {(fieldListeners) => (<>
-                        <div className="flex items-center gap-2 sm:gap-3 p-2 sm:p-4">
-                          <div {...fieldListeners} className="cursor-grab active:cursor-grabbing p-1 text-muted hover:text-primary touch-none">
-                            <RiDraggable className="w-4 h-4 sm:w-5 sm:h-5" />
-                          </div>
-                          <IconPicker value={getFieldIcon(field)} onChange={(icon) => setFieldIcon(field.id, icon)} fallback={getFieldTypeIcon(field.field_type)} />
-                          <div className="flex-1 min-w-0">
-                            <input type="text" value={field.name} onChange={(e) => updateField(field.id, { name: e.target.value })} placeholder="Nome do campo" className="w-full bg-transparent border-none text-main placeholder:text-muted focus:outline-none font-medium text-sm sm:text-base" />
-                            <p className="text-[10px] sm:text-xs text-muted">{getFieldTypeLabel(field.field_type)}</p>
-                          </div>
-                          <div className="flex items-center gap-1 sm:gap-2 shrink-0">
-                            <label className="flex items-center gap-1 sm:gap-2 text-[10px] sm:text-sm text-secondary" title="Obrigatório"><input type="checkbox" checked={field.is_required} onChange={(e) => updateField(field.id, { is_required: e.target.checked })} className="rounded border-default bg-surface text-primary focus:ring-primary w-3 h-3 sm:w-4 sm:h-4" /><span className="hidden sm:inline">Obrigatório</span><span className="sm:hidden">*</span></label>
-                            <button type="button" onClick={() => setEditingField(editingField === field.id ? null : field.id)} className={`p-1 sm:p-2 rounded-lg transition-colors ${editingField === field.id ? 'bg-primary/20 text-primary' : 'text-muted hover:bg-surface-hover'}`}><FiSettings className="w-3.5 h-3.5 sm:w-4 sm:h-4" /></button>
-                            <button type="button" onClick={() => removeField(field.id)} className="p-1 sm:p-2 text-error hover:bg-error/20 rounded-lg transition-colors"><FiTrash2 className="w-3.5 h-3.5 sm:w-4 sm:h-4" /></button>
-                          </div>
-                        </div>
-                        <FieldConditionEditor
-                          fieldType={field.field_type}
-                          fieldName={field.name}
-                          dropdownOptions={field.field_type === 'dropdown' ? getOptionsItems(field.options) : undefined}
-                          checkboxOptions={field.field_type === 'checkbox_multiple' ? getOptionsItems(field.options) : undefined}
-                          condition={fieldConditions[field.id] || null}
-                          onChange={(cond) => setFieldConditions(prev => ({ ...prev, [field.id]: cond }))}
-                          users={conditionUsers}
-                          presets={conditionPresets}
-                          onSaveAsPreset={handleSaveAsPreset}
-                        />
-                        {editingField === field.id && (
-                          <div className="px-2 pb-2 sm:px-4 sm:pb-4 pt-2 border-t border-subtle space-y-3 sm:space-y-4">
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
-                              <div><label className="block text-xs text-muted mb-1">Tipo do campo</label><Select value={field.field_type} onChange={(v) => changeFieldType(field.id, v as FieldType)} className="text-sm" options={fieldTypes.map(ft => ({ value: ft.value, label: ft.icon + ' ' + ft.label }))} /></div>
-                              <div><label className="block text-xs text-muted mb-1">Placeholder</label><input type="text" value={field.placeholder} onChange={(e) => updateField(field.id, { placeholder: e.target.value })} className="input text-sm" placeholder="Texto de exemplo..." /></div>
-                              <div><label className="block text-xs text-muted mb-1">Texto de ajuda</label><input type="text" value={field.help_text} onChange={(e) => updateField(field.id, { help_text: e.target.value })} className="input text-sm" placeholder="Instruções para o usuário..." /></div>
-                            </div>
-                            {field.field_type === 'number' && (<div><label className="block text-xs text-muted mb-1">Tipo de número</label><div className="grid grid-cols-2 gap-2">{[{ value: 'monetario', label: 'Monetário (R$)' }, { value: 'quantidade', label: 'Quantidade (un)' }, { value: 'decimal', label: 'Decimal' }, { value: 'porcentagem', label: 'Porcentagem (%)' }].map(st => (<button key={st.value} type="button" onClick={() => updateField(field.id, { options: { numberSubtype: st.value, ...(getFieldIcon(field) ? { icon: getFieldIcon(field) } : {}) } })} className={`px-3 py-2 rounded-lg text-sm font-medium transition-all border ${(field.options as { numberSubtype?: string } | null)?.numberSubtype === st.value ? 'bg-primary/15 border-primary text-primary' : 'bg-surface border-subtle text-muted hover:border-primary/40'}`}>{st.label}</button>))}</div></div>)}
-                            {(field.field_type === 'dropdown' || field.field_type === 'checkbox_multiple') && (<div><label className="block text-xs text-muted mb-2">Opções</label><div className="space-y-2">{(getOptionsItems(field.options)).map((opt: string, optIdx: number) => (<div key={optIdx} className="flex items-center gap-2"><span className="text-muted cursor-grab text-sm select-none">☰</span><input type="text" value={opt} onChange={(e) => { const newOpts = [...(getOptionsItems(field.options))]; newOpts[optIdx] = e.target.value; updateField(field.id, { options: getFieldIcon(field) ? { items: newOpts, icon: getFieldIcon(field) } : newOpts }) }} placeholder={`Opção ${optIdx + 1}`} className="input text-sm flex-1" /><button type="button" onClick={() => { const newOpts = (getOptionsItems(field.options)).filter((_: string, i: number) => i !== optIdx); updateField(field.id, { options: getFieldIcon(field) ? { items: newOpts, icon: getFieldIcon(field) } : newOpts }) }} className="p-1 text-error hover:bg-error/20 rounded transition-colors shrink-0"><FiTrash2 className="w-3 h-3" /></button></div>))}</div><button type="button" onClick={() => { const newItems = [...getOptionsItems(field.options), '']; updateField(field.id, { options: getFieldIcon(field) ? { items: newItems, icon: getFieldIcon(field) } : newItems }) }} className="mt-2 text-xs text-primary hover:text-primary/80 font-medium py-1.5 px-3 border border-primary/30 rounded-lg hover:bg-primary/5 transition-colors">+ Adicionar opção</button></div>)}
-                            {field.field_type === 'yes_no' && (<div className="space-y-2"><label className="flex items-center gap-2 text-sm text-secondary cursor-pointer"><input type="checkbox" checked={(field.options as { allowPhoto?: boolean } | null)?.allowPhoto || false} onChange={(e) => updateField(field.id, { options: { ...((field.options as Record<string, unknown>) || {}), allowPhoto: e.target.checked, photoRequired: false } })} className="rounded border-default bg-surface text-primary focus:ring-primary" />Permitir foto</label>{(field.options as { allowPhoto?: boolean } | null)?.allowPhoto && (<Select value={(field.options as { photoRequired?: boolean } | null)?.photoRequired ? 'required' : 'optional'} onChange={(v) => updateField(field.id, { options: { ...((field.options as Record<string, unknown>) || {}), photoRequired: v === 'required' } })} className="text-sm" options={[{ value: 'optional', label: 'Foto opcional' }, { value: 'required', label: 'Foto obrigatória' }]} />)}<div className="mt-3 p-3 bg-emerald-500/5 border border-emerald-500/20 rounded-lg space-y-2"><p className="text-xs font-medium text-emerald-500">Quando resposta for &quot;Sim&quot;:</p><label className="flex items-center gap-2 text-sm text-secondary cursor-pointer"><input type="checkbox" checked={(field.options as Record<string, unknown>)?.onYes ? ((field.options as Record<string, unknown>).onYes as Record<string, unknown>)?.showTextField === true : false} onChange={(e) => { const opts = { ...((field.options as Record<string, unknown>) || {})}; const onYes: Record<string, unknown> = { ...((opts.onYes as Record<string, unknown>) || {}), showTextField: e.target.checked }; if (!e.target.checked) { delete onYes.textFieldLabel; delete onYes.textFieldRequired }; updateField(field.id, { options: { ...opts, onYes } }) }} className="rounded border-default bg-surface text-primary focus:ring-primary" />Exigir texto explicativo</label>{!!(field.options as Record<string, unknown>)?.onYes && !!((field.options as Record<string, unknown>).onYes as Record<string, unknown>)?.showTextField && (<div className="ml-6 space-y-2"><input type="text" value={((field.options as Record<string, unknown>).onYes as Record<string, unknown>)?.textFieldLabel as string || ''} onChange={(e) => { const opts = { ...((field.options as Record<string, unknown>) || {})}; const onYes = { ...((opts.onYes as Record<string, unknown>) || {}), textFieldLabel: e.target.value }; updateField(field.id, { options: { ...opts, onYes } }) }} placeholder="Label do campo (ex: Explique o motivo)" className="input text-sm" /><label className="flex items-center gap-2 text-xs text-muted cursor-pointer"><input type="checkbox" checked={((field.options as Record<string, unknown>)?.onYes as Record<string, unknown>)?.textFieldRequired === true} onChange={(e) => { const opts = { ...((field.options as Record<string, unknown>) || {})}; const onYes = { ...((opts.onYes as Record<string, unknown>) || {}), textFieldRequired: e.target.checked }; updateField(field.id, { options: { ...opts, onYes } }) }} className="rounded border-default bg-surface text-primary focus:ring-primary w-3 h-3" />Texto obrigatório</label></div>)}<label className="flex items-center gap-2 text-sm text-secondary cursor-pointer"><input type="checkbox" checked={(field.options as Record<string, unknown>)?.onYes ? ((field.options as Record<string, unknown>).onYes as Record<string, unknown>)?.showPhotoField === true : false} onChange={(e) => { const opts = { ...((field.options as Record<string, unknown>) || {})}; const onYes: Record<string, unknown> = { ...((opts.onYes as Record<string, unknown>) || {}), showPhotoField: e.target.checked }; if (!e.target.checked) { delete onYes.photoFieldLabel; delete onYes.photoFieldRequired }; updateField(field.id, { options: { ...opts, onYes } }) }} className="rounded border-default bg-surface text-primary focus:ring-primary" />Exigir foto</label>{!!(field.options as Record<string, unknown>)?.onYes && !!((field.options as Record<string, unknown>).onYes as Record<string, unknown>)?.showPhotoField && (<div className="ml-6 space-y-2"><input type="text" value={((field.options as Record<string, unknown>).onYes as Record<string, unknown>)?.photoFieldLabel as string || ''} onChange={(e) => { const opts = { ...((field.options as Record<string, unknown>) || {})}; const onYes = { ...((opts.onYes as Record<string, unknown>) || {}), photoFieldLabel: e.target.value }; updateField(field.id, { options: { ...opts, onYes } }) }} placeholder="Label da foto (ex: Foto da evidência)" className="input text-sm" /><label className="flex items-center gap-2 text-xs text-muted cursor-pointer"><input type="checkbox" checked={((field.options as Record<string, unknown>)?.onYes as Record<string, unknown>)?.photoFieldRequired === true} onChange={(e) => { const opts = { ...((field.options as Record<string, unknown>) || {})}; const onYes = { ...((opts.onYes as Record<string, unknown>) || {}), photoFieldRequired: e.target.checked }; updateField(field.id, { options: { ...opts, onYes } }) }} className="rounded border-default bg-surface text-primary focus:ring-primary w-3 h-3" />Foto obrigatória</label></div>)}</div><div className="p-3 bg-red-500/5 border border-red-500/20 rounded-lg space-y-2"><p className="text-xs font-medium text-red-400">Quando resposta for &quot;Não&quot;:</p><label className="flex items-center gap-2 text-sm text-secondary cursor-pointer"><input type="checkbox" checked={(field.options as Record<string, unknown>)?.onNo ? ((field.options as Record<string, unknown>).onNo as Record<string, unknown>)?.showTextField === true : false} onChange={(e) => { const opts = { ...((field.options as Record<string, unknown>) || {})}; const onNo: Record<string, unknown> = { ...((opts.onNo as Record<string, unknown>) || {}), showTextField: e.target.checked }; if (!e.target.checked) { delete onNo.textFieldLabel; delete onNo.textFieldRequired }; updateField(field.id, { options: { ...opts, onNo } }) }} className="rounded border-default bg-surface text-primary focus:ring-primary" />Exigir texto explicativo</label>{!!(field.options as Record<string, unknown>)?.onNo && !!((field.options as Record<string, unknown>).onNo as Record<string, unknown>)?.showTextField && (<div className="ml-6 space-y-2"><input type="text" value={((field.options as Record<string, unknown>).onNo as Record<string, unknown>)?.textFieldLabel as string || ''} onChange={(e) => { const opts = { ...((field.options as Record<string, unknown>) || {})}; const onNo = { ...((opts.onNo as Record<string, unknown>) || {}), textFieldLabel: e.target.value }; updateField(field.id, { options: { ...opts, onNo } }) }} placeholder="Label do campo (ex: Explique o motivo)" className="input text-sm" /><label className="flex items-center gap-2 text-xs text-muted cursor-pointer"><input type="checkbox" checked={((field.options as Record<string, unknown>)?.onNo as Record<string, unknown>)?.textFieldRequired === true} onChange={(e) => { const opts = { ...((field.options as Record<string, unknown>) || {})}; const onNo = { ...((opts.onNo as Record<string, unknown>) || {}), textFieldRequired: e.target.checked }; updateField(field.id, { options: { ...opts, onNo } }) }} className="rounded border-default bg-surface text-primary focus:ring-primary w-3 h-3" />Texto obrigatório</label></div>)}<label className="flex items-center gap-2 text-sm text-secondary cursor-pointer"><input type="checkbox" checked={(field.options as Record<string, unknown>)?.onNo ? ((field.options as Record<string, unknown>).onNo as Record<string, unknown>)?.showPhotoField === true : false} onChange={(e) => { const opts = { ...((field.options as Record<string, unknown>) || {})}; const onNo: Record<string, unknown> = { ...((opts.onNo as Record<string, unknown>) || {}), showPhotoField: e.target.checked }; if (!e.target.checked) { delete onNo.photoFieldLabel; delete onNo.photoFieldRequired }; updateField(field.id, { options: { ...opts, onNo } }) }} className="rounded border-default bg-surface text-primary focus:ring-primary" />Exigir foto</label>{!!(field.options as Record<string, unknown>)?.onNo && !!((field.options as Record<string, unknown>).onNo as Record<string, unknown>)?.showPhotoField && (<div className="ml-6 space-y-2"><input type="text" value={((field.options as Record<string, unknown>).onNo as Record<string, unknown>)?.photoFieldLabel as string || ''} onChange={(e) => { const opts = { ...((field.options as Record<string, unknown>) || {})}; const onNo = { ...((opts.onNo as Record<string, unknown>) || {}), photoFieldLabel: e.target.value }; updateField(field.id, { options: { ...opts, onNo } }) }} placeholder="Label da foto (ex: Foto da evidência)" className="input text-sm" /><label className="flex items-center gap-2 text-xs text-muted cursor-pointer"><input type="checkbox" checked={((field.options as Record<string, unknown>)?.onNo as Record<string, unknown>)?.photoFieldRequired === true} onChange={(e) => { const opts = { ...((field.options as Record<string, unknown>) || {})}; const onNo = { ...((opts.onNo as Record<string, unknown>) || {}), photoFieldRequired: e.target.checked }; updateField(field.id, { options: { ...opts, onNo } }) }} className="rounded border-default bg-surface text-primary focus:ring-primary w-3 h-3" />Foto obrigatória</label></div>)}<label className="flex items-center gap-2 text-sm text-secondary cursor-pointer"><input type="checkbox" checked={(field.options as Record<string, unknown>)?.onNo ? ((field.options as Record<string, unknown>).onNo as Record<string, unknown>)?.allowUserActionPlan === true : false} onChange={(e) => { const opts = { ...((field.options as Record<string, unknown>) || {})}; const onNo: Record<string, unknown> = { ...((opts.onNo as Record<string, unknown>) || {}), allowUserActionPlan: e.target.checked }; updateField(field.id, { options: { ...opts, onNo } }) }} className="rounded border-default bg-surface text-primary focus:ring-primary" />Permitir preenchedor escolher responsável</label></div></div>)}
-                            {!['dropdown', 'checkbox_multiple'].includes(field.field_type) && (<div><label className="block text-xs text-muted mb-1">Validação cruzada</label><Select value={(field.options as { validationRole?: string } | null)?.validationRole || ''} onChange={(v) => updateField(field.id, { options: { ...((field.options as Record<string, unknown>) || {}), validationRole: v || null } })} className="text-sm" placeholder="Nenhum" options={[{ value: 'nota', label: 'Número da nota' }, { value: 'valor', label: 'Valor' }]} /></div>)}
-                          </div>
-                        )}
-                      </>)}
-                      </SortableItem>
-                    ))}
-                  </div>
-                  </SortableContext>
-                  </DndContext>
-                )}
-              </>
-            )}
-          </div>
-
-          {/* Modal: Visibilidade por Setor */}
-          <Modal isOpen={showSectorModal} onClose={() => setShowSectorModal(false)} title="Visibilidade por Setor" size="lg">
-            <p className="text-sm text-muted mb-4">
-              Selecione em quais setores este checklist estará disponível.
-              Apenas usuários dos setores selecionados poderão preencher.
-            </p>
-            <div className="space-y-4">
-              {stores.map(store => {
-                const storeSectors = getSectorsForStore(store.id)
-                const isFullyEnabled = isStoreFullyEnabled(store.id)
-                const isPartiallyEnabled = isStorePartiallyEnabled(store.id)
-
-                return (
-                  <div
-                    key={store.id}
-                    className={`rounded-xl border transition-all ${
-                      isPartiallyEnabled
-                        ? 'border-primary bg-primary/5'
-                        : 'border-subtle bg-surface'
-                    }`}
-                  >
-                    {/* Store Header */}
-                    <div className="p-4 flex items-center justify-between">
-                      <label className="flex items-center gap-3 cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={isFullyEnabled}
-                          ref={input => {
-                            if (input) {
-                              input.indeterminate = isPartiallyEnabled && !isFullyEnabled
-                            }
-                          }}
-                          onChange={() => toggleAllStoreSectors(store.id)}
-                          className="w-5 h-5 rounded border-default bg-surface text-primary focus:ring-primary"
-                        />
-                        <span className={isPartiallyEnabled ? 'text-main font-medium' : 'text-secondary'}>
-                          {store.name}
-                        </span>
-                      </label>
-
-                      <span className="text-xs text-muted">
-                        {storeSectors.filter(s => isSectorEnabled(store.id, s.id)).length} / {storeSectors.length} setores
-                      </span>
-                    </div>
-
-                    {/* Sectors */}
-                    {storeSectors.length > 0 && (
-                      <div className="px-4 pb-4 flex flex-wrap gap-2">
-                        {storeSectors.map(sector => (
-                          <label
-                            key={sector.id}
-                            className={`flex items-center gap-2 px-3 py-2 rounded-lg cursor-pointer transition-all text-sm ${
-                              isSectorEnabled(store.id, sector.id)
-                                ? 'bg-primary/20 text-primary border border-primary/30'
-                                : 'bg-surface-hover text-muted border border-transparent hover:border-subtle'
-                            }`}
-                          >
-                            <input
-                              type="checkbox"
-                              checked={isSectorEnabled(store.id, sector.id)}
-                              onChange={() => toggleSectorVisibility(store.id, sector.id)}
-                              className="sr-only"
-                            />
-                            <FiGrid className="w-4 h-4" style={{ color: sector.color }} />
-                            {sector.name}
-                          </label>
-                        ))}
-                      </div>
-                    )}
-
-                    {storeSectors.length === 0 && (
-                      <div className="px-4 pb-4">
-                        <p className="text-xs text-muted">
-                          Nenhum setor cadastrado nesta loja.{' '}
-                          <Link href={APP_CONFIG.routes.adminSectors} className="text-primary hover:underline">
-                            Criar setor
-                          </Link>
-                        </p>
-                      </div>
-                    )}
-                  </div>
-                )
-              })}
-            </div>
-            {visibility.length > 0 && (
-              <div className="mt-4 p-3 bg-success/10 rounded-lg">
-                <p className="text-sm text-success">
-                  {visibility.length} setor{visibility.length > 1 ? 'es' : ''} selecionado{visibility.length > 1 ? 's' : ''}
-                </p>
-              </div>
-            )}
-          </Modal>
-
-          {/* Modal: Restringir por Função */}
-          <Modal isOpen={showFunctionModal} onClose={() => setShowFunctionModal(false)} title="Restringir por Função" size="md">
-            <p className="text-sm text-muted mb-4">
-              Se nenhuma função for selecionada, o checklist estará disponível para todas as funções.
-            </p>
-            <div className="flex flex-wrap gap-2">
-              <label
-                className={`flex items-center gap-2 px-3 py-2 rounded-lg cursor-pointer transition-all text-sm ${
-                  adminOnly
-                    ? 'bg-red-500/20 text-red-400 border border-red-500/30'
-                    : 'bg-surface-hover text-muted border border-transparent hover:border-subtle'
+            return (
+              <div
+                key={store.id}
+                className={`rounded-xl border transition-all ${
+                  isPartiallyEnabled
+                    ? 'border-primary bg-primary/5'
+                    : 'border-subtle bg-surface'
                 }`}
               >
-                <input
-                  type="checkbox"
-                  checked={adminOnly}
-                  onChange={(e) => setAdminOnly(e.target.checked)}
-                  className="sr-only"
-                />
-                <FiShield className="w-4 h-4" />
-                Somente Administradores
-              </label>
-              {!adminOnly && functions.map(fn => (
-                  <label
-                    key={fn.id}
-                    className={`flex items-center gap-2 px-3 py-2 rounded-lg cursor-pointer transition-all text-sm ${
-                      selectedFunctionIds.includes(fn.id)
-                        ? 'bg-primary/20 text-primary border border-primary/30'
-                        : 'bg-surface-hover text-muted border border-transparent hover:border-subtle'
-                    }`}
-                  >
+                <div className="p-4 flex items-center justify-between">
+                  <label className="flex items-center gap-3 cursor-pointer">
                     <input
                       type="checkbox"
-                      checked={selectedFunctionIds.includes(fn.id)}
-                      onChange={() => {
-                        setSelectedFunctionIds(prev =>
-                          prev.includes(fn.id)
-                            ? prev.filter(id => id !== fn.id)
-                            : [...prev, fn.id]
-                        )
+                      checked={isFullyEnabled}
+                      ref={input => {
+                        if (input) {
+                          input.indeterminate = isPartiallyEnabled && !isFullyEnabled
+                        }
                       }}
-                      className="sr-only"
+                      onChange={() => toggleAllStoreSectors(store.id)}
+                      className="w-5 h-5 rounded border-default bg-surface text-primary focus:ring-primary"
                     />
-                    <FiBriefcase className="w-4 h-4" style={{ color: fn.color }} />
-                    {fn.name}
+                    <span className={isPartiallyEnabled ? 'text-main font-medium' : 'text-secondary'}>
+                      {store.name}
+                    </span>
                   </label>
-                ))}
-            </div>
-            {adminOnly && (
-              <div className="mt-4 p-3 bg-red-500/10 rounded-lg">
-                <p className="text-sm text-red-400">
-                  Este checklist será visível apenas para administradores, independente de loja ou setor.
-                </p>
-              </div>
-            )}
-            {!adminOnly && selectedFunctionIds.length > 0 && (
-              <div className="mt-4 p-3 bg-info/10 rounded-lg">
-                <p className="text-sm text-info">
-                  Restrito a {selectedFunctionIds.length} {selectedFunctionIds.length > 1 ? 'funções' : 'função'}
-                </p>
-              </div>
-            )}
-          </Modal>
 
-          {/* Error */}
-          {error && (
-            <div className="p-4 bg-error/10 rounded-xl border border-error/30">
-              <p className="text-error text-sm">{error}</p>
-            </div>
-          )}
+                  <span className="text-xs text-muted">
+                    {storeSectors.filter(s => isSectorEnabled(store.id, s.id)).length} / {storeSectors.length} setores
+                  </span>
+                </div>
 
-          {/* Actions */}
-          <div className="flex items-center justify-end gap-4">
-            <Link
-              href={APP_CONFIG.routes.adminTemplates}
-              className="btn-ghost"
-            >
-              Cancelar
-            </Link>
-            <button
-              type="submit"
-              disabled={saving}
-              className="btn-primary flex items-center gap-2 px-6 py-3"
-            >
-              {saving ? (
-                <>
-                  <div className="w-4 h-4 border-2 border-primary-foreground/30 border-t-primary-foreground rounded-full animate-spin" />
-                  Salvando...
-                </>
-              ) : (
-                <>
-                  <FiSave className="w-4 h-4" />
-                  Salvar Alteracoes
-                </>
-              )}
-            </button>
+                {storeSectors.length > 0 && (
+                  <div className="px-4 pb-4 flex flex-wrap gap-2">
+                    {storeSectors.map(sector => (
+                      <label
+                        key={sector.id}
+                        className={`flex items-center gap-2 px-3 py-2 rounded-lg cursor-pointer transition-all text-sm ${
+                          isSectorEnabled(store.id, sector.id)
+                            ? 'bg-primary/20 text-primary border border-primary/30'
+                            : 'bg-surface-hover text-muted border border-transparent hover:border-subtle'
+                        }`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={isSectorEnabled(store.id, sector.id)}
+                          onChange={() => toggleSectorVisibility(store.id, sector.id)}
+                          className="sr-only"
+                        />
+                        <FiGrid className="w-4 h-4" style={{ color: sector.color }} />
+                        {sector.name}
+                      </label>
+                    ))}
+                  </div>
+                )}
+
+                {storeSectors.length === 0 && (
+                  <div className="px-4 pb-4">
+                    <p className="text-xs text-muted">
+                      Nenhum setor cadastrado nesta loja.{' '}
+                      <Link href={APP_CONFIG.routes.adminSectors} className="text-primary hover:underline">
+                        Criar setor
+                      </Link>
+                    </p>
+                  </div>
+                )}
+              </div>
+            )
+          })}
+        </div>
+        {visibility.length > 0 && (
+          <div className="mt-4 p-3 bg-success/10 rounded-lg">
+            <p className="text-sm text-success">
+              {visibility.length} setor{visibility.length > 1 ? 'es' : ''} selecionado{visibility.length > 1 ? 's' : ''}
+            </p>
           </div>
-        </form>
-      </PageContainer>
+        )}
+      </Modal>
+
+      <Modal isOpen={showFunctionModal} onClose={() => setShowFunctionModal(false)} title="Restringir por Funcao" size="md">
+        <p className="text-sm text-muted mb-4">
+          Se nenhuma funcao for selecionada, o checklist estara disponivel para todas as funcoes.
+        </p>
+        <div className="flex flex-wrap gap-2">
+          <label
+            className={`flex items-center gap-2 px-3 py-2 rounded-lg cursor-pointer transition-all text-sm ${
+              adminOnly
+                ? 'bg-red-500/20 text-red-400 border border-red-500/30'
+                : 'bg-surface-hover text-muted border border-transparent hover:border-subtle'
+            }`}
+          >
+            <input
+              type="checkbox"
+              checked={adminOnly}
+              onChange={(e) => setAdminOnly(e.target.checked)}
+              className="sr-only"
+            />
+            <FiShield className="w-4 h-4" />
+            Somente Administradores
+          </label>
+          {!adminOnly && functions.map(fn => (
+            <label
+              key={fn.id}
+              className={`flex items-center gap-2 px-3 py-2 rounded-lg cursor-pointer transition-all text-sm ${
+                selectedFunctionIds.includes(fn.id)
+                  ? 'bg-primary/20 text-primary border border-primary/30'
+                  : 'bg-surface-hover text-muted border border-transparent hover:border-subtle'
+              }`}
+            >
+              <input
+                type="checkbox"
+                checked={selectedFunctionIds.includes(fn.id)}
+                onChange={() => {
+                  setSelectedFunctionIds(prev =>
+                    prev.includes(fn.id)
+                      ? prev.filter(id => id !== fn.id)
+                      : [...prev, fn.id]
+                  )
+                }}
+                className="sr-only"
+              />
+              <FiBriefcase className="w-4 h-4" style={{ color: fn.color }} />
+              {fn.name}
+            </label>
+          ))}
+        </div>
+        {adminOnly && (
+          <div className="mt-4 p-3 bg-red-500/10 rounded-lg">
+            <p className="text-sm text-red-400">
+              Este checklist sera visivel apenas para administradores, independente de loja ou setor.
+            </p>
+          </div>
+        )}
+        {!adminOnly && selectedFunctionIds.length > 0 && (
+          <div className="mt-4 p-3 bg-info/10 rounded-lg">
+            <p className="text-sm text-info">
+              Restrito a {selectedFunctionIds.length} funcao{selectedFunctionIds.length > 1 ? 'es' : ''}
+            </p>
+          </div>
+        )}
+      </Modal>
+
+      {/* Config Modal */}
+      <Modal isOpen={showConfigModal} onClose={() => setShowConfigModal(false)} title="Configuracoes do Template" size="md">
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-secondary mb-1">Descricao</label>
+            <textarea value={description} onChange={e => setDescription(e.target.value)}
+              className="input min-h-[60px]" placeholder="Descricao do template (opcional)" rows={2} />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-sm font-medium text-secondary mb-1">Horario inicio</label>
+              <input type="time" value={allowedStartTime} onChange={e => setAllowedStartTime(e.target.value)} className="input" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-secondary mb-1">Horario fim</label>
+              <input type="time" value={allowedEndTime} onChange={e => setAllowedEndTime(e.target.value)} className="input" />
+            </div>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-secondary mb-1">Prazo justificativa (horas)</label>
+            <input type="number" min={1} max={365} value={justificationDeadlineHours}
+              onChange={e => setJustificationDeadlineHours(e.target.value)} className="input w-32" placeholder="Ex: 24" />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-secondary mb-2">Exigir justificativas?</label>
+            <div className="flex items-center gap-4">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input type="radio" checked={!skipJustifications} onChange={() => setSkipJustifications(false)}
+                  className="w-4 h-4 text-primary" />
+                <span className={!skipJustifications ? 'text-success font-medium' : 'text-muted'}>Sim</span>
+              </label>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input type="radio" checked={skipJustifications} onChange={() => setSkipJustifications(true)}
+                  className="w-4 h-4 text-primary" />
+                <span className={skipJustifications ? 'text-warning font-medium' : 'text-muted'}>Nao</span>
+              </label>
+            </div>
+          </div>
+        </div>
+      </Modal>
     </div>
   )
 }

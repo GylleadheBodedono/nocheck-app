@@ -17,12 +17,10 @@ import {
 } from 'react-icons/fi'
 import type { Store } from '@/types/database'
 import { APP_CONFIG } from '@/lib/config'
-import { LoadingPage, Header, PageContainer } from '@/components/ui'
+import { LoadingPage, PageContainer } from '@/components/ui'
 import { LocationPicker } from '@/components/ui/LocationPickerDynamic'
 import { getAuthCache, getUserCache, getStoresCache } from '@/lib/offlineCache'
-import { useTenant } from '@/hooks/useTenant'
-import { checkStoreLimit, getLimitMessage } from '@/lib/planLimits'
-import type { Plan } from '@/types/tenant'
+import { useRealtimeRefresh } from '@/hooks/useRealtimeRefresh'
 
 type StoreWithStats = Store & {
   user_count: number
@@ -39,16 +37,19 @@ export default function LojasPage() {
   const [formData, setFormData] = useState({ name: '', is_active: true, require_gps: true, latitude: null as number | null, longitude: null as number | null })
   const [saving, setSaving] = useState(false)
   const [isOffline, setIsOffline] = useState(false)
-  const [limitReached, setLimitReached] = useState(false)
-  const [limitMessage, setLimitMessage] = useState('')
   const router = useRouter()
   const supabase = useMemo(() => createClient(), [])
-  const { organization } = useTenant()
+  const { refreshKey } = useRealtimeRefresh(['stores'])
 
   useEffect(() => {
     fetchStores()
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  useEffect(() => {
+    if (refreshKey > 0 && navigator.onLine) fetchStores()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [refreshKey])
 
   const fetchStores = async () => {
     if (!isSupabaseConfigured || !supabase) {
@@ -158,8 +159,6 @@ export default function LojasPage() {
   }
 
   const openModal = (store?: Store) => {
-    setLimitReached(false)
-    setLimitMessage('')
     if (store) {
       setEditingStore(store)
       setFormData({ name: store.name, is_active: store.is_active, require_gps: store.require_gps ?? true, latitude: store.latitude ?? null, longitude: store.longitude ?? null })
@@ -183,19 +182,6 @@ export default function LojasPage() {
     setSaving(true)
 
     try {
-      // Verificar limite de lojas ao criar nova
-      if (!editingStore && organization) {
-        const plan = (organization.plan || 'trial') as Plan
-        const maxStores = organization.max_stores || 3
-        const check = checkStoreLimit(stores.length, plan, maxStores)
-        if (!check.allowed) {
-          setLimitReached(true)
-          setLimitMessage(getLimitMessage('stores', check))
-          setSaving(false)
-          return
-        }
-      }
-
       if (editingStore) {
         // Update existing store
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -264,7 +250,7 @@ export default function LojasPage() {
 
     if (error) {
       console.error('Error deleting store:', error)
-      alert('Erro ao excluir loja. Verifique se não existem usuários ou checklists vinculados.')
+      alert('Erro ao excluir loja. Verifique se nao existem usuarios ou checklists vinculados.')
       return
     }
 
@@ -275,8 +261,8 @@ export default function LojasPage() {
 
   const toggleAllGps = async (enable: boolean) => {
     if (!confirm(enable
-      ? 'Ativar verificação GPS para TODAS as lojas?'
-      : 'Desativar verificação GPS para TODAS as lojas?'
+      ? 'Ativar verificacao GPS para TODAS as lojas?'
+      : 'Desativar verificacao GPS para TODAS as lojas?'
     )) return
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -306,29 +292,25 @@ export default function LojasPage() {
   }
 
   return (
-    <div className="min-h-screen bg-page">
-      <Header
-        title="Lojas"
-        icon={FiMapPin}
-        backHref={APP_CONFIG.routes.admin}
-        actions={isOffline ? [] : [
-          {
-            label: 'Nova Loja',
-            onClick: () => openModal(),
-            icon: FiPlus,
-            variant: 'primary',
-          },
-        ]}
-      />
-
+    <>
       {/* Main Content */}
       <PageContainer>
+        {/* Top actions */}
+        {!isOffline && (
+          <div className="flex items-center justify-end mb-6">
+            <button onClick={() => openModal()} className="btn-primary flex items-center gap-2">
+              <FiPlus className="w-4 h-4" />
+              Nova Loja
+            </button>
+          </div>
+        )}
+
         {/* Offline Warning */}
         {isOffline && (
           <div className="bg-warning/10 border border-warning/30 rounded-xl p-4 mb-6 flex items-center gap-3">
             <FiWifiOff className="w-5 h-5 text-warning" />
             <p className="text-warning text-sm">
-              Você está offline. Os dados mostrados são do cache local. Edições não estão disponíveis.
+              Voce esta offline. Os dados mostrados sao do cache local. Edicoes nao estao disponiveis.
             </p>
           </div>
         )}
@@ -340,10 +322,10 @@ export default function LojasPage() {
               <FiShield className={`w-5 h-5 ${allGpsEnabled ? 'text-success' : 'text-warning'}`} />
               <div>
                 <p className="text-sm font-medium text-main">
-                  Verificação GPS: {allGpsEnabled ? 'Ativa em todas' : 'Desativada em algumas'}
+                  Verificacao GPS: {allGpsEnabled ? 'Ativa em todas' : 'Desativada em algumas'}
                 </p>
                 <p className="text-xs text-muted">
-                  Controla se funcionários precisam estar no local da loja para responder checklists
+                  Controla se funcionarios precisam estar no local da loja para responder checklists
                 </p>
               </div>
             </div>
@@ -435,7 +417,7 @@ export default function LojasPage() {
                 <div className="flex items-center gap-4 mb-4 text-sm text-muted">
                   <div className="flex items-center gap-1">
                     <FiUsers className="w-4 h-4" />
-                    <span>{store.user_count} usuários</span>
+                    <span>{store.user_count} usuarios</span>
                   </div>
                   <div className="flex items-center gap-1">
                     <FiCheckCircle className="w-4 h-4" />
@@ -505,12 +487,6 @@ export default function LojasPage() {
               {editingStore ? 'Editar Loja' : 'Nova Loja'}
             </h2>
 
-            {limitReached && (
-              <div className="p-3 bg-error/10 border border-error/30 rounded-xl mb-4 text-error text-sm">
-                {limitMessage}
-              </div>
-            )}
-
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-secondary mb-1">
@@ -546,10 +522,10 @@ export default function LojasPage() {
                     onChange={(e) => setFormData({ ...formData, require_gps: e.target.checked })}
                     className="w-5 h-5 rounded border-default bg-surface text-primary"
                   />
-                  <span className="text-sm text-secondary">Exigir verificação GPS</span>
+                  <span className="text-sm text-secondary">Exigir verificacao GPS</span>
                 </label>
                 <p className="text-xs text-muted mt-1 ml-7">
-                  Desative para permitir checklists sem validar a localização do funcionário
+                  Desative para permitir checklists sem validar a localizacao do funcionario
                 </p>
               </div>
 
@@ -580,6 +556,6 @@ export default function LojasPage() {
           </div>
         </div>
       )}
-    </div>
+    </>
   )
 }

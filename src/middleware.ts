@@ -83,7 +83,7 @@ export async function middleware(request: NextRequest) {
   const isPublicRoute = publicRoutes.includes(pathname) || pathname.startsWith('/auth')
 
   // Rotas que funcionam offline ou precisam de auth
-  const protectedRoutes = ['/dashboard', '/checklist', '/admin', '/onboarding', '/platform']
+  const protectedRoutes = ['/dashboard', '/checklist', '/admin', '/relatorios', '/onboarding', '/platform']
   const isProtectedRoute = protectedRoutes.some(route => pathname.startsWith(route))
 
   // IMPORTANTE: Sempre chama getUser() para refresh da sessão

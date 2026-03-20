@@ -3,10 +3,11 @@
 export const runtime = 'edge'
 
 import { useEffect, useState, useMemo } from 'react'
+import { useRealtimeRefresh } from '@/hooks/useRealtimeRefresh'
 import { useRouter, useParams } from 'next/navigation'
 import { createClient, isSupabaseConfigured } from '@/lib/supabase'
 import { APP_CONFIG } from '@/lib/config'
-import { LoadingPage, Header } from '@/components/ui'
+import { LoadingPage } from '@/components/ui'
 import { ReadOnlyFieldRenderer } from '@/components/fields/ReadOnlyFieldRenderer'
 import type { TemplateField, GPSValue } from '@/types/database'
 import {
@@ -64,6 +65,7 @@ type TemplateSection = {
   name: string
   description: string | null
   sort_order: number
+  parent_id: number | null
 }
 
 type ChecklistSectionRow = {
@@ -89,11 +91,17 @@ export default function ChecklistViewPage() {
   const params = useParams()
   const checklistId = params.id as string
   const supabase = useMemo(() => createClient(), [])
+  const { refreshKey } = useRealtimeRefresh(['checklist_responses'])
 
   useEffect(() => {
     fetchChecklist()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [checklistId])
+
+  useEffect(() => {
+    if (refreshKey > 0 && navigator.onLine) fetchChecklist()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [refreshKey])
 
   /**
    * Carrega checklist do cache IndexedDB (modo offline)
@@ -110,11 +118,13 @@ export default function ChecklistViewPage() {
       const cl = cachedChecklists.find(c => c.id === Number(checklistId))
       if (!cl) return false
 
-      // Verifica permissao
+      // Permissao basica no cache: admin, criador, ou manager (offline nao tem RLS)
       const isAdmin = cachedUser.is_admin === true
       const isCreator = cl.created_by === cachedAuth.userId
-      if (!isAdmin && !isCreator) {
-        setError('Você não tem permissão para ver este checklist')
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const isManager = (cachedUser as any).is_manager === true
+      if (!isAdmin && !isCreator && !isManager) {
+        setError('Voce nao tem permissao para ver este checklist')
         setLoading(false)
         return true
       }
@@ -176,14 +186,14 @@ export default function ChecklistViewPage() {
     if (!navigator.onLine) {
       const loaded = await loadFromCache()
       if (!loaded) {
-        setError('Checklist não disponível offline')
+        setError('Checklist nao disponivel offline')
         setLoading(false)
       }
       return
     }
 
     if (!isSupabaseConfigured || !supabase) {
-      setError('Supabase não configurado')
+      setError('Supabase nao configurado')
       setLoading(false)
       return
     }
@@ -195,15 +205,7 @@ export default function ChecklistViewPage() {
         return
       }
 
-      // Fetch user profile for auth check
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data: profile } = await (supabase as any)
-        .from('users')
-        .select('is_admin')
-        .eq('id', user.id)
-        .single()
-
-      // Fetch checklist with relations
+      // Fetch checklist with relations (RLS garante permissao)
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { data: checklistData, error: checklistError } = await (supabase as any)
         .from('checklists')
@@ -218,20 +220,14 @@ export default function ChecklistViewPage() {
         .single()
 
       if (checklistError || !checklistData) {
-        setError('Checklist não encontrado')
+        console.error('[ChecklistView] Erro ao buscar checklist:', checklistId, checklistError?.message, checklistError?.code)
+        setError('Checklist nao encontrado')
         setLoading(false)
         return
       }
 
-      // Auth check: admin or creator
-      const isAdmin = profile?.is_admin === true
-      const isCreator = checklistData.created_by === user.id
-
-      if (!isAdmin && !isCreator) {
-        setError('Você não tem permissão para ver este checklist')
-        setLoading(false)
-        return
-      }
+      // Permissao ja verificada pela RLS do Supabase
+      // Se a query retornou dados, o usuario tem acesso (admin, manager da loja, ou criador)
 
       setChecklist(checklistData)
 
@@ -354,6 +350,20 @@ export default function ChecklistViewPage() {
 
   const hasSections = sections.length > 0
 
+  // ─── Hierarquia 3 niveis: Etapa > Sub-etapa > Campos ─────────────────────
+  /** Etapas-pai: detecta automaticamente se o template usa hierarquia */
+  const parentSections = useMemo(() => {
+    const withParent = sections.filter(s => s.parent_id != null)
+    if (withParent.length === 0) return []
+    return sections.filter(s => s.parent_id == null).sort((a, b) => a.sort_order - b.sort_order)
+  }, [sections])
+
+  const hasSubSections = parentSections.length > 0
+
+  const getSubSections = (parentId: number) => {
+    return sections.filter(s => s.parent_id === parentId).sort((a, b) => a.sort_order - b.sort_order)
+  }
+
   // Group fields by section
   const fieldsBySection = useMemo(() => {
     if (!hasSections) return null
@@ -368,7 +378,7 @@ export default function ChecklistViewPage() {
   }, [fields, sections])
 
   const statusLabel: Record<string, { text: string; color: string }> = {
-    concluido: { text: 'Concluído', color: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' },
+    concluido: { text: 'Concluido', color: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' },
     incompleto: { text: 'Incompleto', color: 'bg-amber-500/20 text-amber-400 border-amber-500/30' },
     em_andamento: { text: 'Em andamento', color: 'bg-amber-500/20 text-amber-400 border-amber-500/30' },
     rascunho: { text: 'Rascunho', color: 'bg-gray-500/20 text-gray-400 border-gray-500/30' },
@@ -378,17 +388,14 @@ export default function ChecklistViewPage() {
 
   if (error) {
     return (
-      <div className="min-h-screen bg-page">
-        <Header title="Checklist" backHref={APP_CONFIG.routes.dashboard} />
-        <main className="max-w-2xl mx-auto px-4 py-8">
-          <div className="card p-8 text-center">
-            <p className="text-red-400 mb-4">{error}</p>
-            <button onClick={() => router.back()} className="btn-primary px-6 py-2 rounded-xl">
-              Voltar
-            </button>
-          </div>
-        </main>
-      </div>
+      <main className="max-w-2xl mx-auto px-4 py-8">
+        <div className="card p-8 text-center">
+          <p className="text-red-400 mb-4">{error}</p>
+          <button onClick={() => router.back()} className="btn-primary px-6 py-2 rounded-xl">
+            Voltar
+          </button>
+        </div>
+      </main>
     )
   }
 
@@ -397,12 +404,6 @@ export default function ChecklistViewPage() {
   const status = statusLabel[checklist.status] || { text: checklist.status, color: 'bg-gray-500/20 text-gray-400' }
 
   return (
-    <div className="min-h-screen bg-page">
-      <Header
-        title={checklist.template?.name || 'Checklist'}
-        backHref={APP_CONFIG.routes.dashboard}
-      />
-
       <main className="max-w-2xl mx-auto px-4 py-6 space-y-6">
         {/* Metadata Card */}
         <div className="card p-5 space-y-3">
@@ -439,7 +440,7 @@ export default function ChecklistViewPage() {
             {checklist.completed_at && (
               <div className="flex items-center gap-2 text-secondary">
                 <FiCheckCircle className="w-4 h-4 text-emerald-400" />
-                <span>Concluído {formatDate(checklist.completed_at)}</span>
+                <span>Concluido {formatDate(checklist.completed_at)}</span>
               </div>
             )}
             {checklist.started_at && !checklist.completed_at && (
@@ -459,7 +460,7 @@ export default function ChecklistViewPage() {
               </div>
               <p className="text-xs text-secondary mt-1">
                 Lat: {(checklist.latitude as number).toFixed(6)}, Lng: {(checklist.longitude as number).toFixed(6)}
-                {checklist.accuracy && ` (precisão: ${(checklist.accuracy as number).toFixed(0)}m)`}
+                {checklist.accuracy && ` (precisao: ${(checklist.accuracy as number).toFixed(0)}m)`}
               </p>
             </div>
           )}
@@ -473,7 +474,7 @@ export default function ChecklistViewPage() {
               <span className="font-semibold text-warning text-sm">Checklist Incompleto</span>
             </div>
             <p className="text-xs text-secondary">
-              Este checklist foi finalizado com {Object.keys(justifications).length} campo{Object.keys(justifications).length !== 1 ? 's' : ''} obrigatório{Object.keys(justifications).length !== 1 ? 's' : ''} não preenchido{Object.keys(justifications).length !== 1 ? 's' : ''}, com justificativas.
+              Este checklist foi finalizado com {Object.keys(justifications).length} campo{Object.keys(justifications).length !== 1 ? 's' : ''} obrigatorio{Object.keys(justifications).length !== 1 ? 's' : ''} nao preenchido{Object.keys(justifications).length !== 1 ? 's' : ''}, com justificativas.
             </p>
           </div>
         )}
@@ -484,83 +485,169 @@ export default function ChecklistViewPage() {
 
           {hasSections && fieldsBySection ? (
             <>
-              {/* Render fields grouped by section */}
-              {sections.map(section => {
-                const sectionFields = fieldsBySection.get(section.id) || []
-                const sectionStatus = checklistSections.find(cs => cs.section_id === section.id)
-                const isCollapsed = collapsedSections.has(section.id)
-                const sectionResponses = sectionFields.filter(f => responses.some(r => r.field_id === f.id))
+              {/* Render fields grouped by section — with hierarchy support */}
+              {hasSubSections ? (
+                /* Hierarchical mode: Etapa > Sub-etapa > Campos */
+                parentSections.map(parent => {
+                  const subSections = getSubSections(parent.id)
+                  const isParentCollapsed = collapsedSections.has(parent.id)
 
-                return (
-                  <div key={section.id} className="card overflow-hidden">
-                    {/* Section header */}
-                    <button
-                      onClick={() => toggleSectionCollapse(section.id)}
-                      className="w-full p-4 flex items-center justify-between bg-surface-hover/50 hover:bg-surface-hover transition-colors"
-                    >
-                      <div className="flex items-center gap-3">
-                        <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${
-                          sectionStatus?.status === 'concluido'
-                            ? 'bg-success/20'
-                            : 'bg-warning/20'
-                        }`}>
-                          {sectionStatus?.status === 'concluido' ? (
-                            <FiCheckCircle className="w-4 h-4 text-success" />
-                          ) : (
-                            <FiLayers className="w-4 h-4 text-warning" />
+                  return (
+                    <div key={parent.id} className="space-y-2">
+                      {/* Parent section (etapa) header */}
+                      <button
+                        onClick={() => toggleSectionCollapse(parent.id)}
+                        className="w-full p-4 flex items-center justify-between bg-primary/5 border border-primary/20 rounded-xl hover:bg-primary/10 transition-colors"
+                      >
+                        <div className="flex items-center gap-3">
+                          <FiLayers className="w-5 h-5 text-primary" />
+                          <h4 className="font-bold text-main text-sm">{parent.name}</h4>
+                          <span className="text-xs text-muted">{subSections.length} sub-etapa{subSections.length !== 1 ? 's' : ''}</span>
+                        </div>
+                        {isParentCollapsed ? (
+                          <FiChevronDown className="w-5 h-5 text-muted" />
+                        ) : (
+                          <FiChevronUp className="w-5 h-5 text-muted" />
+                        )}
+                      </button>
+
+                      {/* Sub-sections (sub-etapas) */}
+                      {!isParentCollapsed && subSections.map(section => {
+                        const sectionFields = fieldsBySection.get(section.id) || []
+                        const sectionStatus = checklistSections.find(cs => cs.section_id === section.id)
+                        const isCollapsed = collapsedSections.has(section.id)
+                        const sectionResponses = sectionFields.filter(f => responses.some(r => r.field_id === f.id))
+
+                        return (
+                          <div key={section.id} className="card overflow-hidden ml-4">
+                            <button
+                              onClick={() => toggleSectionCollapse(section.id)}
+                              className="w-full p-4 flex items-center justify-between bg-surface-hover/50 hover:bg-surface-hover transition-colors"
+                            >
+                              <div className="flex items-center gap-3">
+                                <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${
+                                  sectionStatus?.status === 'concluido' ? 'bg-success/20' : 'bg-warning/20'
+                                }`}>
+                                  {sectionStatus?.status === 'concluido' ? (
+                                    <FiCheckCircle className="w-4 h-4 text-success" />
+                                  ) : (
+                                    <FiLayers className="w-4 h-4 text-warning" />
+                                  )}
+                                </div>
+                                <div className="text-left">
+                                  <h4 className="font-semibold text-main text-sm">{section.name}</h4>
+                                  <p className="text-xs text-muted">
+                                    {sectionResponses.length}/{sectionFields.length} campos preenchidos
+                                    {sectionStatus?.completed_at && ` - Concluido ${formatDate(sectionStatus.completed_at)}`}
+                                  </p>
+                                </div>
+                              </div>
+                              {isCollapsed ? (
+                                <FiChevronDown className="w-5 h-5 text-muted" />
+                              ) : (
+                                <FiChevronUp className="w-5 h-5 text-muted" />
+                              )}
+                            </button>
+
+                            {!isCollapsed && (
+                              <div className="p-4 space-y-3">
+                                {sectionFields.map(field => {
+                                  const value = getFieldValue(field)
+                                  const gpsVal = field.field_type === 'gps' ? value as GPSValue : null
+                                  return (
+                                    <div key={field.id} className="p-3 bg-surface rounded-xl">
+                                      <ReadOnlyFieldRenderer field={field} value={value} />
+                                      {gpsVal?.latitude && gpsVal?.longitude && (
+                                        <a href={`https://www.google.com/maps?q=${gpsVal.latitude},${gpsVal.longitude}`} target="_blank" rel="noopener noreferrer" className="text-xs text-primary hover:underline mt-2 inline-block">Ver no Google Maps</a>
+                                      )}
+                                      {justifications[field.id] && (
+                                        <div className="mt-2 p-2 bg-warning/10 border border-warning/20 rounded-lg">
+                                          <p className="text-xs font-medium text-warning mb-1">Justificativa:</p>
+                                          <p className="text-xs text-secondary">{justifications[field.id]}</p>
+                                        </div>
+                                      )}
+                                    </div>
+                                  )
+                                })}
+                                {sectionFields.length === 0 && (
+                                  <p className="text-sm text-muted text-center py-2">Nenhum campo nesta sub-etapa</p>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )
+                })
+              ) : (
+                /* Flat mode (original behavior) */
+                sections.map(section => {
+                  const sectionFields = fieldsBySection.get(section.id) || []
+                  const sectionStatus = checklistSections.find(cs => cs.section_id === section.id)
+                  const isCollapsed = collapsedSections.has(section.id)
+                  const sectionResponses = sectionFields.filter(f => responses.some(r => r.field_id === f.id))
+
+                  return (
+                    <div key={section.id} className="card overflow-hidden">
+                      <button
+                        onClick={() => toggleSectionCollapse(section.id)}
+                        className="w-full p-4 flex items-center justify-between bg-surface-hover/50 hover:bg-surface-hover transition-colors"
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${
+                            sectionStatus?.status === 'concluido' ? 'bg-success/20' : 'bg-warning/20'
+                          }`}>
+                            {sectionStatus?.status === 'concluido' ? (
+                              <FiCheckCircle className="w-4 h-4 text-success" />
+                            ) : (
+                              <FiLayers className="w-4 h-4 text-warning" />
+                            )}
+                          </div>
+                          <div className="text-left">
+                            <h4 className="font-semibold text-main text-sm">{section.name}</h4>
+                            <p className="text-xs text-muted">
+                              {sectionResponses.length}/{sectionFields.length} campos preenchidos
+                              {sectionStatus?.completed_at && ` - Concluido ${formatDate(sectionStatus.completed_at)}`}
+                            </p>
+                          </div>
+                        </div>
+                        {isCollapsed ? (
+                          <FiChevronDown className="w-5 h-5 text-muted" />
+                        ) : (
+                          <FiChevronUp className="w-5 h-5 text-muted" />
+                        )}
+                      </button>
+
+                      {!isCollapsed && (
+                        <div className="p-4 space-y-3">
+                          {sectionFields.map(field => {
+                            const value = getFieldValue(field)
+                            const gpsVal = field.field_type === 'gps' ? value as GPSValue : null
+                            return (
+                              <div key={field.id} className="p-3 bg-surface rounded-xl">
+                                <ReadOnlyFieldRenderer field={field} value={value} />
+                                {gpsVal?.latitude && gpsVal?.longitude && (
+                                  <a href={`https://www.google.com/maps?q=${gpsVal.latitude},${gpsVal.longitude}`} target="_blank" rel="noopener noreferrer" className="text-xs text-primary hover:underline mt-2 inline-block">Ver no Google Maps</a>
+                                )}
+                                {justifications[field.id] && (
+                                  <div className="mt-2 p-2 bg-warning/10 border border-warning/20 rounded-lg">
+                                    <p className="text-xs font-medium text-warning mb-1">Justificativa:</p>
+                                    <p className="text-xs text-secondary">{justifications[field.id]}</p>
+                                  </div>
+                                )}
+                              </div>
+                            )
+                          })}
+                          {sectionFields.length === 0 && (
+                            <p className="text-sm text-muted text-center py-2">Nenhum campo nesta secao</p>
                           )}
                         </div>
-                        <div className="text-left">
-                          <h4 className="font-semibold text-main text-sm">{section.name}</h4>
-                          <p className="text-xs text-muted">
-                            {sectionResponses.length}/{sectionFields.length} campos preenchidos
-                            {sectionStatus?.completed_at && ` - Concluído ${formatDate(sectionStatus.completed_at)}`}
-                          </p>
-                        </div>
-                      </div>
-                      {isCollapsed ? (
-                        <FiChevronDown className="w-5 h-5 text-muted" />
-                      ) : (
-                        <FiChevronUp className="w-5 h-5 text-muted" />
                       )}
-                    </button>
-
-                    {/* Section fields */}
-                    {!isCollapsed && (
-                      <div className="p-4 space-y-3">
-                        {sectionFields.map(field => {
-                          const value = getFieldValue(field)
-                          const gpsVal = field.field_type === 'gps' ? value as GPSValue : null
-                          return (
-                            <div key={field.id} className="p-3 bg-surface rounded-xl">
-                              <ReadOnlyFieldRenderer field={field} value={value} />
-                              {gpsVal?.latitude && gpsVal?.longitude && (
-                                <a
-                                  href={`https://www.google.com/maps?q=${gpsVal.latitude},${gpsVal.longitude}`}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="text-xs text-primary hover:underline mt-2 inline-block"
-                                >
-                                  Ver no Google Maps
-                                </a>
-                              )}
-                              {justifications[field.id] && (
-                                <div className="mt-2 p-2 bg-warning/10 border border-warning/20 rounded-lg">
-                                  <p className="text-xs font-medium text-warning mb-1">Justificativa:</p>
-                                  <p className="text-xs text-secondary">{justifications[field.id]}</p>
-                                </div>
-                              )}
-                            </div>
-                          )
-                        })}
-                        {sectionFields.length === 0 && (
-                          <p className="text-sm text-muted text-center py-2">Nenhum campo nesta seção</p>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                )
-              })}
+                    </div>
+                  )
+                })
+              )}
 
               {/* Fields without section (orphan fields) */}
               {(() => {
@@ -637,6 +724,5 @@ export default function ChecklistViewPage() {
           )}
         </div>
       </main>
-    </div>
   )
 }

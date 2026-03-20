@@ -3,11 +3,12 @@
 import { useEffect, useState, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
+import { useRealtimeDashboard } from '@/hooks/useRealtimeDashboard'
 import { APP_CONFIG } from '@/lib/config'
 import type { User } from '@supabase/supabase-js'
 import type { Store, ChecklistTemplate, Checklist, Sector, FunctionRow } from '@/types/database'
-import { LoadingPage, Header, PageContainer } from '@/components/ui'
-import { FiClipboard, FiClock, FiCheckCircle, FiUser, FiCalendar, FiAlertCircle, FiRefreshCw, FiAlertTriangle, FiUploadCloud, FiLayers, FiPlay, FiArrowRight, FiCloudOff, FiBell, FiTool, FiExternalLink } from 'react-icons/fi'
+import { LoadingPage, PageContainer } from '@/components/ui'
+import { FiClipboard, FiClock, FiCheckCircle, FiUser, FiCalendar, FiAlertCircle, FiRefreshCw, FiAlertTriangle, FiUploadCloud, FiLayers, FiPlay, FiArrowRight, FiCloudOff, FiBell, FiTool, FiExternalLink, FiBarChart2, FiChevronRight } from 'react-icons/fi'
 import Link from 'next/link'
 import {
   getAuthCache,
@@ -27,7 +28,6 @@ import { getPendingChecklists, type PendingChecklist } from '@/lib/offlineStorag
 import { syncAll, subscribeSyncStatus } from '@/lib/syncService'
 import { fullLogout } from '@/lib/logout'
 import { isWithinTimeRange } from '@/lib/timeUtils'
-import { TrialBanner } from '@/components/tenant/TrialBanner'
 
 type TemplateSection = {
   id: number
@@ -162,6 +162,16 @@ export default function DashboardPage() {
   const [notificationBannerMounted, setNotificationBannerMounted] = useState(false)
   const router = useRouter()
   const supabase = useMemo(() => createClient(), [])
+
+  // Realtime: derive store IDs from allStores for subscriptions
+  const realtimeStoreIds = useMemo(() => allStores.map(s => s.id), [allStores])
+
+  // Realtime dashboard subscriptions (only active when online)
+  const { refreshTrigger } = useRealtimeDashboard({
+    userId: profile?.id ?? null,
+    userFunctionId: profile?.function_id ?? null,
+    storeIds: realtimeStoreIds,
+  })
 
   // Monitora status de conexao
   useEffect(() => {
@@ -533,13 +543,19 @@ export default function DashboardPage() {
       pendingSync: pendingSyncCount,
     })
 
+    // Filtro de planos: usuario direto OU funcao do usuario
+    const userFunctionId = profileData?.function_id
+    const apFilter = userFunctionId
+      ? `assigned_to.eq.${user.id},assigned_function_id.eq.${userFunctionId}`
+      : `assigned_to.eq.${user.id}`
+
     // Buscar planos de acao pendentes do usuario
     try {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { count: apCount } = await (supabase as any)
         .from('action_plans')
         .select('id', { count: 'exact', head: true })
-        .eq('assigned_to', user.id)
+        .or(apFilter)
         .in('status', ['aberto', 'em_andamento'])
 
       setPendingActionPlans(apCount || 0)
@@ -557,7 +573,7 @@ export default function DashboardPage() {
           (supabase as any)
             .from('action_plans')
             .select(`id, title, severity, status, deadline, created_at, is_reincidencia, store:stores!action_plans_store_id_fkey(id, name)`)
-            .eq('assigned_to', user.id)
+            .or(apFilter)
             .neq('status', 'cancelado')
             .order('created_at', { ascending: false })
             .limit(20),
@@ -820,6 +836,16 @@ export default function DashboardPage() {
     }
   }
 
+  // Realtime: refetch data when any subscribed table changes
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (refreshTrigger === 0) return // skip initial
+    if (!navigator.onLine) return
+    console.log('[Dashboard] Realtime refresh triggered:', refreshTrigger)
+    fetchData()
+  }, [refreshTrigger])
+
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const handleSignOut = async () => {
     await fullLogout(supabase)
   }
@@ -915,7 +941,7 @@ export default function DashboardPage() {
     const badges: Record<string, { label: string; class: string }> = {
       rascunho: { label: 'Rascunho', class: 'bg-surface-hover text-muted' },
       em_andamento: { label: 'Em Andamento', class: 'bg-warning/20 text-warning' },
-      concluido: { label: 'Concluído', class: 'bg-success/20 text-success' },
+      concluido: { label: 'Concluido', class: 'bg-success/20 text-success' },
       validado: { label: 'Validado', class: 'bg-info/20 text-info' },
       incompleto: { label: 'Incompleto', class: 'bg-error/20 text-error' },
     }
@@ -949,50 +975,30 @@ export default function DashboardPage() {
   // User has no access (no store assigned, not admin)
   if (!profile?.is_admin && stores.length === 0) {
     return (
-      <div className="min-h-screen bg-page">
-        <Header
-          userName={profile?.full_name}
-          isAdmin={profile?.is_admin}
-          showAdminLink
-          onSignOut={handleSignOut}
-        />
-
-        <PageContainer>
-          <div className="text-center py-16">
-            <div className="w-20 h-20 rounded-full bg-warning/20 flex items-center justify-center mx-auto mb-6">
-              <FiAlertCircle className="w-10 h-10 text-warning" />
-            </div>
-            <h2 className="text-2xl font-bold text-main mb-2">
-              Acesso Pendente
-            </h2>
-            <p className="text-muted max-w-md mx-auto mb-6">
-              Sua conta ainda não foi configurada com acesso a nenhuma loja.
-              Entre em contato com o administrador para liberar seu acesso.
-            </p>
-            <div className="card p-6 max-w-sm mx-auto">
-              <p className="text-sm text-secondary mb-2">Seus dados:</p>
-              <p className="font-medium text-main">{profile?.full_name}</p>
-              <p className="text-sm text-muted">{profile?.email}</p>
-            </div>
+      <PageContainer>
+        <div className="text-center py-16">
+          <div className="w-20 h-20 rounded-full bg-warning/20 flex items-center justify-center mx-auto mb-6">
+            <FiAlertCircle className="w-10 h-10 text-warning" />
           </div>
-        </PageContainer>
-      </div>
+          <h2 className="text-2xl font-bold text-main mb-2">
+            Acesso Pendente
+          </h2>
+          <p className="text-muted max-w-md mx-auto mb-6">
+            Sua conta ainda nao foi configurada com acesso a nenhuma loja.
+            Entre em contato com o administrador para liberar seu acesso.
+          </p>
+          <div className="card p-6 max-w-sm mx-auto">
+            <p className="text-sm text-secondary mb-2">Seus dados:</p>
+            <p className="font-medium text-main">{profile?.full_name}</p>
+            <p className="text-sm text-muted">{profile?.email}</p>
+          </div>
+        </div>
+      </PageContainer>
     )
   }
 
   return (
-    <div className="min-h-screen bg-page">
-      <Header
-        userName={profile?.full_name}
-        isAdmin={profile?.is_admin}
-        showAdminLink
-        showNotifications
-        onSignOut={handleSignOut}
-      />
-
-      {/* Banner de trial */}
-      <TrialBanner />
-
+    <>
       {/* Aviso para ativar notificacoes do sistema (PWA) */}
       {notificationBannerMounted && typeof window !== 'undefined' && 'Notification' in window && notificationPermission === 'default' && (
         <div className="mx-auto px-4 sm:px-6 lg:px-8 pt-4">
@@ -1006,7 +1012,7 @@ export default function DashboardPage() {
                   Receba avisos no celular
                 </p>
                 <p className="text-xs text-muted">
-                  Planos de ação, vencimentos e alertas como notificação do sistema.
+                  Planos de acao, vencimentos e alertas como notificacao do sistema.
                 </p>
               </div>
             </div>
@@ -1019,7 +1025,7 @@ export default function DashboardPage() {
               }}
               className="btn-primary text-sm shrink-0 self-start sm:self-center"
             >
-              Ativar notificações
+              Ativar notificacoes
             </button>
           </div>
         </div>
@@ -1038,10 +1044,10 @@ export default function DashboardPage() {
               </div>
               <div>
                 <p className="font-medium text-main">
-                  Você tem {pendingActionPlans} plano{pendingActionPlans > 1 ? 's' : ''} de ação pendente{pendingActionPlans > 1 ? 's' : ''}
+                  Voce tem {pendingActionPlans} plano{pendingActionPlans > 1 ? 's' : ''} de acao pendente{pendingActionPlans > 1 ? 's' : ''}
                 </p>
                 <p className="text-xs text-muted">
-                  Clique para ver seus planos de ação
+                  Clique para ver seus planos de acao
                 </p>
               </div>
             </div>
@@ -1055,7 +1061,7 @@ export default function DashboardPage() {
         {/* Stats */}
         <div className="flex items-center justify-between mb-3">
           <p className="text-sm font-medium text-muted">
-            {profile?.is_admin ? 'Dados do sistema' : isTechUser ? 'Meus planos de ação' : 'Seus dados'}
+            {profile?.is_admin ? 'Dados do sistema' : isTechUser ? 'Meus planos de acao' : 'Seus dados'}
           </p>
         </div>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
@@ -1096,7 +1102,7 @@ export default function DashboardPage() {
                     <p className="text-2xl font-bold text-main">
                       {myActionPlans.filter(p => p.status === 'concluido').length}
                     </p>
-                    <p className="text-xs text-muted">Concluídos</p>
+                    <p className="text-xs text-muted">Concluidos</p>
                   </div>
                 </div>
               </div>
@@ -1163,7 +1169,7 @@ export default function DashboardPage() {
                   </div>
                   <div>
                     <p className="text-2xl font-bold text-main">{stats.completedThisMonth}</p>
-                    <p className="text-xs text-muted">Este Mês</p>
+                    <p className="text-xs text-muted">Este Mes</p>
                   </div>
                 </div>
               </div>
@@ -1181,10 +1187,10 @@ export default function DashboardPage() {
                 </div>
                 <div>
                   <p className="font-medium text-main">
-                    {stats.pendingSync} checklist{stats.pendingSync > 1 ? 's' : ''} aguardando sincronização
+                    {stats.pendingSync} checklist{stats.pendingSync > 1 ? 's' : ''} aguardando sincronizacao
                   </p>
                   <p className="text-xs text-muted">
-                    {navigator.onLine ? 'Conectado - pronto para sincronizar' : 'Offline - sincronizará automaticamente quando conectar'}
+                    {navigator.onLine ? 'Conectado - pronto para sincronizar' : 'Offline - sincronizara automaticamente quando conectar'}
                   </p>
                 </div>
               </div>
@@ -1202,6 +1208,21 @@ export default function DashboardPage() {
           </div>
         )}
 
+        {/* ── Link para Meus Relatorios (todos os usuarios) ── */}
+        <Link
+          href={APP_CONFIG.routes.userReports}
+          className="card p-4 mb-6 flex items-center gap-3 hover:bg-surface-hover transition-colors"
+        >
+          <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
+            <FiBarChart2 className="w-5 h-5 text-primary" />
+          </div>
+          <div>
+            <p className="text-sm font-semibold text-main">Meus Relatorios</p>
+            <p className="text-xs text-muted">Veja estatisticas dos seus checklists</p>
+          </div>
+          <FiChevronRight className="w-4 h-4 text-muted ml-auto" />
+        </Link>
+
         {/* ── Tech user sections ── */}
         {isTechUser && (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
@@ -1209,11 +1230,11 @@ export default function DashboardPage() {
             <div className="md:col-span-2 card p-5">
               <h2 className="text-lg font-semibold text-main mb-4 flex items-center gap-2">
                 <FiTool className="w-5 h-5 text-primary" />
-                Meus Planos de Ação
+                Meus Planos de Acao
               </h2>
               {myActionPlans.length === 0 ? (
                 <div className="p-4 text-center">
-                  <p className="text-sm text-muted">Nenhum plano de ação atribuído</p>
+                  <p className="text-sm text-muted">Nenhum plano de acao atribuido</p>
                 </div>
               ) : (
                 <>
@@ -1228,7 +1249,7 @@ export default function DashboardPage() {
                       const statusConfig: Record<string, { label: string; cls: string }> = {
                         aberto:       { label: 'Aberto',       cls: 'bg-error/20 text-error' },
                         em_andamento: { label: 'Em Andamento', cls: 'bg-warning/20 text-warning' },
-                        concluido:    { label: 'Concluído',    cls: 'bg-success/20 text-success' },
+                        concluido:    { label: 'Concluido',    cls: 'bg-success/20 text-success' },
                         vencido:      { label: 'Vencido',      cls: 'bg-error/20 text-error' },
                       }
                       const sev = sevConfig[plan.severity] || sevConfig.media
@@ -1251,7 +1272,7 @@ export default function DashboardPage() {
                             </span>
                             {plan.is_reincidencia && (
                               <span className="px-2 py-0.5 rounded text-xs font-bold bg-error/20 text-error">
-                                Reincidência
+                                Reincidencia
                               </span>
                             )}
                           </div>
@@ -1282,11 +1303,11 @@ export default function DashboardPage() {
             <div className="card p-5">
               <h2 className="text-lg font-semibold text-main mb-4 flex items-center gap-2">
                 <FiBell className="w-5 h-5 text-primary" />
-                Notificações
+                Notificacoes
               </h2>
               {myNotifications.length === 0 ? (
                 <div className="p-4 text-center">
-                  <p className="text-sm text-muted">Nenhuma notificação recente</p>
+                  <p className="text-sm text-muted">Nenhuma notificacao recente</p>
                 </div>
               ) : (
                 <div className="space-y-2">
@@ -1331,11 +1352,11 @@ export default function DashboardPage() {
             <div className="card p-5">
               <h2 className="text-lg font-semibold text-main mb-4 flex items-center gap-2">
                 <FiClock className="w-5 h-5 text-primary" />
-                Histórico Recente
+                Historico Recente
               </h2>
               {recentChecklists.length === 0 ? (
                 <div className="p-4 text-center">
-                  <p className="text-sm text-muted">Você ainda não preencheu nenhum checklist</p>
+                  <p className="text-sm text-muted">Voce ainda nao preencheu nenhum checklist</p>
                 </div>
               ) : (
                 <div className="space-y-2">
@@ -1473,7 +1494,7 @@ export default function DashboardPage() {
                             {item.store?.name} - {formatDate(item.created_at)}
                           </p>
                           {!withinTime && (
-                            <p className="text-xs text-warning font-medium mb-2">Fora do horário permitido</p>
+                            <p className="text-xs text-warning font-medium mb-2">Fora do horario permitido</p>
                           )}
                           {hasSections && pct !== null && (
                             <>
@@ -1483,7 +1504,7 @@ export default function DashboardPage() {
                                   style={{ width: `${pct}%` }}
                                 />
                               </div>
-                              <p className="text-xs text-muted mt-1">{pct}% concluído</p>
+                              <p className="text-xs text-muted mt-1">{pct}% concluido</p>
                             </>
                           )}
                         </>
@@ -1493,7 +1514,7 @@ export default function DashboardPage() {
                           <div
                             key={item.id}
                             className="p-5 border-l-4 border-warning rounded-xl border border-subtle bg-surface opacity-75 cursor-not-allowed"
-                            title="Fora do horário permitido para preenchimento"
+                            title="Fora do horario permitido para preenchimento"
                           >
                             {cardContent}
                           </div>
@@ -1552,7 +1573,7 @@ export default function DashboardPage() {
                                   style={{ width: `${pct}%` }}
                                 />
                               </div>
-                              <p className="text-xs text-muted mt-1">{pct}% concluído</p>
+                              <p className="text-xs text-muted mt-1">{pct}% concluido</p>
                             </>
                           )}
                         </Link>
@@ -1563,8 +1584,8 @@ export default function DashboardPage() {
               )
             })()}
 
-            {/* Available Checklists — hidden for tech users */}
-            {!isTechUser && (
+            {/* Available Checklists */}
+            {(
             <>
             <h2 className="text-lg font-semibold text-main mb-4 flex items-center gap-2">
               <FiClipboard className="w-5 h-5 text-primary" />
@@ -1606,7 +1627,7 @@ export default function DashboardPage() {
                           </div>
                           <div className="flex items-center gap-2">
                             <span className="badge-secondary text-xs bg-success/20 text-success">
-                              Concluído hoje
+                              Concluido hoje
                             </span>
                           </div>
                         </div>
@@ -1677,7 +1698,7 @@ export default function DashboardPage() {
           <div>
             <h2 className="text-lg font-semibold text-main mb-4 flex items-center gap-2">
               <FiClock className="w-5 h-5 text-primary" />
-              Histórico Recente
+              Historico Recente
             </h2>
 
             {/* Pending Checklists (excluding drafts — those show in "Continuar Preenchimento") */}
@@ -1687,7 +1708,7 @@ export default function DashboardPage() {
                 <div className="mb-4">
                   <p className="text-xs font-medium text-warning mb-2 flex items-center gap-1">
                     <FiUploadCloud className="w-3 h-3" />
-                    Aguardando Sincronização
+                    Aguardando Sincronizacao
                   </p>
                   <div className="space-y-2">
                     {syncablePending.map(pending => {
@@ -1747,7 +1768,7 @@ export default function DashboardPage() {
               <div className="card p-6 text-center">
                 <FiClipboard className="w-10 h-10 text-muted mx-auto mb-3" />
                 <p className="text-muted text-sm">
-                  Você ainda não preencheu nenhum checklist
+                  Voce ainda nao preencheu nenhum checklist
                 </p>
               </div>
             ) : recentChecklists.length > 0 ? (
@@ -1794,6 +1815,6 @@ export default function DashboardPage() {
           </div>
         </div>
       </PageContainer>
-    </div>
+    </>
   )
 }

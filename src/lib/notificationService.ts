@@ -32,6 +32,7 @@ export async function createNotification(
         title: data.title,
         message: data.message || null,
         link: data.link || null,
+        action_url: data.link || null,
         metadata: data.metadata || null,
       })
 

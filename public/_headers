@@ -1,0 +1,10 @@
+# Cloudflare Pages custom headers
+# Service Worker NUNCA deve ser cacheado pelo CDN
+/sw.js
+  Cache-Control: no-cache, no-store, must-revalidate
+  Pragma: no-cache
+  Expires: 0
+
+# Manifest tambem nao deve ser cacheado
+/manifest.json
+  Cache-Control: no-cache, no-store, must-revalidate

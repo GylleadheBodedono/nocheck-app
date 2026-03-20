@@ -22,8 +22,9 @@ import {
 } from 'react-icons/fi'
 import Link from 'next/link'
 import { APP_CONFIG } from '@/lib/config'
-import { LoadingPage, Header, Select, PageContainer } from '@/components/ui'
+import { LoadingPage, Select, PageContainer } from '@/components/ui'
 import { getAuthCache, getUserCache } from '@/lib/offlineCache'
+import { useRealtimeRefresh } from '@/hooks/useRealtimeRefresh'
 import {
   fetchActionPlanReport,
   type ActionPlanReportItem,
@@ -75,16 +76,16 @@ function getDateRange(preset: PeriodPreset): { from: string; to: string } {
 }
 
 const SEVERITY_CONFIG: Record<string, { label: string; color: string; bg: string }> = {
-  critica: { label: 'Crítica', color: 'text-red-700 dark:text-red-400', bg: 'bg-red-100 dark:bg-red-900/30' },
+  critica: { label: 'Critica', color: 'text-red-700 dark:text-red-400', bg: 'bg-red-100 dark:bg-red-900/30' },
   alta: { label: 'Alta', color: 'text-orange-700 dark:text-orange-400', bg: 'bg-orange-100 dark:bg-orange-900/30' },
-  media: { label: 'Média', color: 'text-yellow-700 dark:text-yellow-400', bg: 'bg-yellow-100 dark:bg-yellow-900/30' },
+  media: { label: 'Media', color: 'text-yellow-700 dark:text-yellow-400', bg: 'bg-yellow-100 dark:bg-yellow-900/30' },
   baixa: { label: 'Baixa', color: 'text-blue-700 dark:text-blue-400', bg: 'bg-blue-100 dark:bg-blue-900/30' },
 }
 
 const STATUS_CONFIG: Record<string, { label: string; color: string }> = {
   aberto: { label: 'Aberto', color: 'text-yellow-600' },
   em_andamento: { label: 'Em Andamento', color: 'text-blue-600' },
-  concluido: { label: 'Concluído', color: 'text-green-600' },
+  concluido: { label: 'Concluido', color: 'text-green-600' },
   vencido: { label: 'Vencido', color: 'text-red-600' },
   cancelado: { label: 'Cancelado', color: 'text-gray-500' },
 }
@@ -94,6 +95,7 @@ const PAGE_SIZE = 20
 export default function PlanoDeAcaoReportPage() {
   const router = useRouter()
   const supabase = useMemo(() => createClient(), [])
+  const { refreshKey } = useRealtimeRefresh(['action_plans'])
 
   // State
   const [loading, setLoading] = useState(true)
@@ -209,6 +211,11 @@ export default function PlanoDeAcaoReportPage() {
     fetchData()
   }, [fetchData])
 
+  useEffect(() => {
+    if (refreshKey > 0 && navigator.onLine) fetchData()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [refreshKey])
+
   // Pagination
   const totalPages = Math.ceil(items.length / PAGE_SIZE)
   const paginatedItems = items.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
@@ -263,13 +270,7 @@ export default function PlanoDeAcaoReportPage() {
   if (loading) return <LoadingPage />
 
   return (
-    <div className="min-h-screen bg-background">
-      <Header
-        title="Relatório de Planos de Ação"
-        icon={FiClipboard}
-        backHref={APP_CONFIG.routes.adminReports}
-      />
-
+    <>
       <PageContainer className="!py-6 space-y-6">
         {/* Filters */}
         <div className="card p-4 sticky top-0 z-10 space-y-3">
@@ -278,8 +279,8 @@ export default function PlanoDeAcaoReportPage() {
             {([
               { key: 'this_week', label: 'Esta semana' },
               { key: 'last_week', label: 'Semana passada' },
-              { key: '30d', label: 'Últimos 30 dias' },
-              { key: 'custom', label: 'Período custom' },
+              { key: '30d', label: 'Ultimos 30 dias' },
+              { key: 'custom', label: 'Periodo custom' },
             ] as { key: PeriodPreset; label: string }[]).map(p => (
               <button
                 key={p.key}
@@ -304,7 +305,7 @@ export default function PlanoDeAcaoReportPage() {
                 onChange={e => setCustomFrom(e.target.value)}
                 className="input text-sm"
               />
-              <span className="text-muted text-sm">até</span>
+              <span className="text-muted text-sm">ate</span>
               <input
                 type="date"
                 value={customTo}
@@ -338,9 +339,9 @@ export default function PlanoDeAcaoReportPage() {
               placeholder="Severidade"
               className="text-sm min-w-[120px]"
               options={[
-                { value: 'critica', label: 'Crítica' },
+                { value: 'critica', label: 'Critica' },
                 { value: 'alta',    label: 'Alta' },
-                { value: 'media',   label: 'Média' },
+                { value: 'media',   label: 'Media' },
                 { value: 'baixa',   label: 'Baixa' },
               ]}
             />
@@ -353,7 +354,7 @@ export default function PlanoDeAcaoReportPage() {
               options={[
                 { value: 'aberto',       label: 'Aberto' },
                 { value: 'em_andamento', label: 'Em Andamento' },
-                { value: 'concluido',    label: 'Concluído' },
+                { value: 'concluido',    label: 'Concluido' },
                 { value: 'vencido',      label: 'Vencido' },
                 { value: 'cancelado',    label: 'Cancelado' },
               ]}
@@ -362,7 +363,7 @@ export default function PlanoDeAcaoReportPage() {
             <Select
               value={assigneeFilter ?? ''}
               onChange={v => setAssigneeFilter(v || undefined)}
-              placeholder="Responsável"
+              placeholder="Responsavel"
               className="text-sm min-w-[140px]"
               options={users.map(u => ({ value: u.id, label: u.full_name }))}
             />
@@ -402,7 +403,7 @@ export default function PlanoDeAcaoReportPage() {
         {/* Summary cards */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <SummaryCard icon={<FiClipboard />} label="Total" value={summary.total} color="text-blue-500" />
-          <SummaryCard icon={<FiCheckCircle />} label="Concluídos" value={summary.concluidos} color="text-green-500" />
+          <SummaryCard icon={<FiCheckCircle />} label="Concluidos" value={summary.concluidos} color="text-green-500" />
           <SummaryCard icon={<FiAlertOctagon />} label="Vencidos" value={summary.vencidos} color="text-red-500" />
           <SummaryCard icon={<FiActivity />} label="Em Andamento" value={summary.emAndamento} color="text-yellow-500" />
         </div>
@@ -411,7 +412,7 @@ export default function PlanoDeAcaoReportPage() {
         {items.length === 0 ? (
           <div className="card p-12 text-center">
             <FiClipboard className="text-4xl text-muted mx-auto mb-3" />
-            <p className="text-muted">Nenhum plano de ação encontrado no período selecionado.</p>
+            <p className="text-muted">Nenhum plano de acao encontrado no periodo selecionado.</p>
           </div>
         ) : (
           <>
@@ -434,7 +435,7 @@ export default function PlanoDeAcaoReportPage() {
                   <FiChevronLeft className="w-5 h-5" />
                 </button>
                 <span className="text-sm text-muted">
-                  Página {page} de {totalPages}
+                  Pagina {page} de {totalPages}
                 </span>
                 <button
                   onClick={() => setPage(p => Math.min(totalPages, p + 1))}
@@ -470,7 +471,7 @@ export default function PlanoDeAcaoReportPage() {
           />
         </div>
       )}
-    </div>
+    </>
   )
 }
 
@@ -547,7 +548,7 @@ function ActionPlanCard({ item, onPhotoClick }: { item: ActionPlanReportItem; on
         <div className="p-2.5 rounded-lg bg-green-500/5 border border-green-500/15">
           <p className="text-xs text-muted mb-0.5 flex items-center gap-1">
             <FiCheckCircle className="w-3 h-3 text-green-500" />
-            Texto de conclusão
+            Texto de conclusao
             {item.completedAt && (
               <span className="ml-1">— {new Date(item.completedAt).toLocaleDateString('pt-BR')}</span>
             )}
@@ -559,7 +560,7 @@ function ActionPlanCard({ item, onPhotoClick }: { item: ActionPlanReportItem; on
       {/* Evidence photos */}
       {item.evidencePhotos.length > 0 ? (
         <div>
-          <p className="text-xs text-muted mb-1">Fotos Evidência ({item.evidencePhotos.length})</p>
+          <p className="text-xs text-muted mb-1">Fotos Evidencia ({item.evidencePhotos.length})</p>
           <div className="flex flex-wrap gap-2">
             {item.evidencePhotos.map((url, i) => (
               <PhotoThumb
@@ -573,7 +574,7 @@ function ActionPlanCard({ item, onPhotoClick }: { item: ActionPlanReportItem; on
         </div>
       ) : item.status === 'concluido' ? (
         <span className="inline-block px-2 py-1 rounded text-xs bg-gray-100 dark:bg-gray-800 text-muted">
-          Sem fotos de evidência
+          Sem fotos de evidencia
         </span>
       ) : null}
 
@@ -582,7 +583,7 @@ function ActionPlanCard({ item, onPhotoClick }: { item: ActionPlanReportItem; on
         href={`${APP_CONFIG.routes.adminActionPlans}/${item.id}`}
         className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
       >
-        Ver plano de ação <FiExternalLink />
+        Ver plano de acao <FiExternalLink />
       </Link>
     </div>
   )
@@ -603,7 +604,7 @@ function PhotoThumb({ url, borderColor, onClick }: { url: string; borderColor: s
     // eslint-disable-next-line @next/next/no-img-element
     <img
       src={url}
-      alt="Foto evidência"
+      alt="Foto evidencia"
       className={`w-20 h-20 rounded-lg object-cover border-2 ${borderColor} cursor-pointer hover:opacity-80 transition-opacity`}
       onError={() => setError(true)}
       onClick={onClick}
