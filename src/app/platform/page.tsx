@@ -31,7 +31,10 @@ export default function PlatformDashboard() {
       const sb = createClient() as any
       try {
         const { data: orgList } = await sb.from('organizations').select('id, name, slug, plan, is_active, created_at, trial_ends_at')
-        const all = orgList || []
+        // Esconder a org do superadmin (platform admin) da lista de clientes
+        const { data: { user: currentUser } } = await sb.auth.getUser()
+        const adminOrgId = currentUser?.app_metadata?.org_id || currentUser?.user_metadata?.org_id
+        const all = (orgList || []).filter((o: { id: string }) => o.id !== adminOrgId)
         const active = all.filter((o: { is_active: boolean }) => o.is_active)
         const trial = all.filter((o: { plan: string }) => o.plan === 'trial')
         let mrr = 0

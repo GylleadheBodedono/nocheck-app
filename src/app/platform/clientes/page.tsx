@@ -20,9 +20,13 @@ export default function ClientesPage() {
 
   useEffect(() => {
     const load = async () => {
+      const sb = createClient()
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data } = await (createClient() as any).from('organizations').select('*').order('created_at', { ascending: false })
-      setOrgs(data || [])
+      const { data } = await (sb as any).from('organizations').select('*').order('created_at', { ascending: false })
+      // Esconder a org do superadmin
+      const { data: { user } } = await sb.auth.getUser()
+      const adminOrgId = user?.app_metadata?.org_id || user?.user_metadata?.org_id
+      setOrgs((data || []).filter((o: OrgRow) => o.id !== adminOrgId))
       setLoading(false)
     }
     load()
