@@ -14,11 +14,13 @@ import { PLAN_CONFIGS, type Plan } from '@/types/tenant'
 import { createPortalSession, getTrialDaysRemaining } from '@/services/billing.service'
 import { LoadingPage } from '@/components/ui'
 import { PaymentModal } from '@/components/billing/PaymentModal'
+import { DowngradeModal } from '@/components/billing/DowngradeModal'
 
 type OrgBilling = {
   id: string; name: string; plan: Plan; stripe_customer_id: string | null
   stripe_subscription_id: string | null; trial_ends_at: string | null; features: string[]
   max_users: number; max_stores: number
+  pending_plan: string | null; current_period_end: string | null; cancel_at_period_end: boolean
 }
 
 type UsageStats = {
@@ -26,11 +28,16 @@ type UsageStats = {
   currentStores: number
 }
 
+const PLAN_LABELS: Record<string, string> = {
+  trial: 'Trial (Gratis)', starter: 'Starter', professional: 'Professional', enterprise: 'Enterprise',
+}
+
 export default function BillingPage() {
   const [org, setOrg] = useState<OrgBilling | null>(null)
   const [usage, setUsage] = useState<UsageStats>({ currentUsers: 0, currentStores: 0 })
   const [loading, setLoading] = useState(true)
   const [selectedPlan, setSelectedPlan] = useState<Plan | null>(null)
+  const [downgradePlan, setDowngradePlan] = useState<Plan | null>(null)
   const router = useRouter()
   const searchParams = useSearchParams()
   const supabase = useMemo(() => createClient(), [])
@@ -51,13 +58,12 @@ export default function BillingPage() {
     if (!orgId) { setLoading(false); return }
 
     const [orgRes, usersRes, storesRes] = await Promise.all([
-      sb.rpc('get_org_billing', { p_org_id: orgId }),
+      sb.from('organizations').select('id, name, plan, stripe_customer_id, stripe_subscription_id, trial_ends_at, features, max_users, max_stores, pending_plan, current_period_end, cancel_at_period_end').eq('id', orgId).single(),
       sb.from('users').select('id', { count: 'exact', head: true }).eq('tenant_id', orgId).eq('is_active', true),
       sb.from('stores').select('id', { count: 'exact', head: true }).eq('tenant_id', orgId),
     ])
 
-    console.log('[Billing] get_org_billing result:', orgRes)
-    if (orgRes.data && orgRes.data.length > 0) setOrg(orgRes.data[0] as OrgBilling)
+    if (orgRes.data) setOrg(orgRes.data as OrgBilling)
     setUsage({
       currentUsers: usersRes.count || 0,
       currentStores: storesRes.count || 0,
@@ -200,6 +206,23 @@ export default function BillingPage() {
           )
         })()}
 
+        {/* Banner de mudanca pendente */}
+        {org?.pending_plan && (
+          <div className="mb-6 p-4 bg-warning/10 border border-warning/20 rounded-xl flex items-start gap-3">
+            <FiStar className="w-5 h-5 text-warning shrink-0 mt-0.5" />
+            <div className="flex-1">
+              <p className="text-sm font-medium text-warning">
+                Mudanca de plano agendada
+              </p>
+              <p className="text-sm text-secondary mt-1">
+                Seu plano mudara de <strong>{PLAN_LABELS[currentPlan] || currentPlan}</strong> para <strong>{PLAN_LABELS[org.pending_plan] || org.pending_plan}</strong>
+                {org.current_period_end && ` em ${new Date(org.current_period_end).toLocaleDateString('pt-BR')}`}.
+                Ate la, voce mantera todas as features do plano atual.
+              </p>
+            </div>
+          </div>
+        )}
+
         {/* Cards de planos */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {(['starter', 'professional', 'enterprise'] as Plan[]).map(plan => {
@@ -245,7 +268,7 @@ export default function BillingPage() {
                   </button>
                 ) : isDowngrade ? (
                   <button
-                    onClick={handlePortal}
+                    onClick={() => setDowngradePlan(plan as Plan)}
                     className="w-full py-2.5 btn-secondary rounded-xl text-sm"
                   >
                     Fazer Downgrade
@@ -268,7 +291,7 @@ export default function BillingPage() {
         </div>
       </div>
 
-      {/* Payment Modal */}
+      {/* Payment Modal (upgrade) */}
       {selectedPlan && org && (
         <PaymentModal
           isOpen={!!selectedPlan}
@@ -277,6 +300,23 @@ export default function BillingPage() {
           orgId={org.id}
           currentPlan={currentPlan}
           onSuccess={handlePaymentSuccess}
+        />
+      )}
+
+      {/* Downgrade Modal */}
+      {downgradePlan && org && (
+        <DowngradeModal
+          isOpen={!!downgradePlan}
+          onClose={() => setDowngradePlan(null)}
+          currentPlan={currentPlan}
+          targetPlan={downgradePlan}
+          orgId={org.id}
+          currentStoreCount={usage.currentStores}
+          currentUserCount={usage.currentUsers}
+          onSuccess={(pendingPlan, effectiveDate) => {
+            setOrg(prev => prev ? { ...prev, pending_plan: pendingPlan, current_period_end: effectiveDate, cancel_at_period_end: true } : prev)
+            setDowngradePlan(null)
+          }}
         />
       )}
     </div>

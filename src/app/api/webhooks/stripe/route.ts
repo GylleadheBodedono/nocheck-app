@@ -81,21 +81,38 @@ export async function POST(req: NextRequest) {
 
       // Subscription atualizada (upgrade/downgrade)
       case 'customer.subscription.updated': {
-        const sub = event.data.object as Stripe.Subscription
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const sub = event.data.object as any
         const orgId = sub.metadata?.org_id
         if (!orgId) break
 
         const priceId = sub.items.data[0]?.price?.id
         const plan = priceId ? getPlanFromPriceId(priceId) || 'starter' : 'starter'
+        const supabase = getSupabaseAdmin()
 
         try {
-          await updateOrgPlan(orgId, plan)
+          // Se cancelamento agendado, salvar pending state
+          if (sub.cancel_at_period_end) {
+            await supabase.from('organizations').update({
+              pending_plan: 'trial',
+              current_period_end: new Date(sub.current_period_end * 1000).toISOString(),
+              cancel_at_period_end: true,
+            }).eq('id', orgId)
+            console.log(`[Stripe] Subscription cancel scheduled: org ${orgId} → trial em ${new Date(sub.current_period_end * 1000).toLocaleDateString()}`)
+          } else {
+            // Mudanca imediata ou restauracao
+            await updateOrgPlan(orgId, plan, {
+              pending_plan: null,
+              current_period_end: new Date(sub.current_period_end * 1000).toISOString(),
+              cancel_at_period_end: false,
+            })
+            console.log(`[Stripe] Subscription updated: org ${orgId} → ${plan}`)
+          }
         } catch (updateErr) {
           console.error('[Stripe Webhook] DB update failed (customer.subscription.updated):', updateErr)
           hasErrors = true
         }
 
-        console.log(`[Stripe] Subscription updated: org ${orgId} → ${plan}`)
         break
       }
 
@@ -108,7 +125,10 @@ export async function POST(req: NextRequest) {
         try {
           await updateOrgPlan(orgId, 'trial', {
             stripe_subscription_id: null,
-            trial_ends_at: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString(), // 14 dias trial
+            trial_ends_at: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString(),
+            pending_plan: null,
+            current_period_end: null,
+            cancel_at_period_end: false,
           })
         } catch (updateErr) {
           console.error('[Stripe Webhook] DB update failed (customer.subscription.deleted):', updateErr)
