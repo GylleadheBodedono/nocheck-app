@@ -855,9 +855,9 @@ export default function ActionPlanDetailPage() {
               {(() => {
                 const vJson = plan.response?.value_json as Record<string, unknown> | null
                 if (!vJson) return null
-                const photos = (vJson.photos as string[] || []).filter((p: string) => typeof p === 'string' && p.startsWith('http'))
+                const photos = (vJson.photos as string[] || []).filter((p: string) => typeof p === 'string' && p.length > 0)
                 const condText = vJson.conditionalText as string | undefined
-                const condPhotos = (vJson.conditionalPhotos as string[] || []).filter((p: string) => typeof p === 'string' && p.startsWith('http'))
+                const condPhotos = (vJson.conditionalPhotos as string[] || []).filter((p: string) => typeof p === 'string' && p.length > 0)
                 const allPhotos = [...photos, ...condPhotos]
                 if (allPhotos.length === 0 && !condText) return null
 

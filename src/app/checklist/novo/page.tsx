@@ -991,7 +991,60 @@ function ChecklistForm() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hasSections, template, loading, store, timeBlocked])
 
-  // Build response data for a single field (no photo upload - photos stay as base64 during auto-save)
+  // Upload base64 photos em background e atualizar DB com URLs (fire-and-forget)
+  const uploadAndReplaceBase64 = useCallback(async (clId: number, fieldId: number, json: Record<string, unknown>) => {
+    try {
+      const updated = { ...json }
+      let changed = false
+
+      const uploadArray = async (arr: string[], prefix: string): Promise<string[]> => {
+        const result: string[] = []
+        for (let i = 0; i < arr.length; i++) {
+          if (arr[i].startsWith('data:')) {
+            const url = await uploadPhoto(arr[i], `autosave_f${fieldId}_${prefix}_${i + 1}_${Date.now()}.jpg`, 'anexos')
+            result.push(url || arr[i])
+            if (url) changed = true
+          } else {
+            result.push(arr[i])
+          }
+        }
+        return result
+      }
+
+      if (Array.isArray(json.photos) && json.photos.some((p: string) => typeof p === 'string' && p.startsWith('data:'))) {
+        updated.photos = await uploadArray(json.photos as string[], 'foto')
+      }
+      if (Array.isArray(json.conditionalPhotos) && json.conditionalPhotos.some((p: string) => typeof p === 'string' && p.startsWith('data:'))) {
+        updated.conditionalPhotos = await uploadArray(json.conditionalPhotos as string[], 'cond')
+      }
+
+      if (changed) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        await (supabase as any)
+          .from('checklist_responses')
+          .update({ value_json: updated })
+          .eq('checklist_id', clId)
+          .eq('field_id', fieldId)
+
+        // Atualizar React state com URLs
+        setResponses(prev => {
+          const current = prev[fieldId]
+          if (typeof current === 'object' && current !== null) {
+            const obj = { ...(current as Record<string, unknown>) }
+            if (updated.photos) obj.photos = updated.photos
+            if (updated.conditionalPhotos) obj.conditionalPhotos = updated.conditionalPhotos
+            return { ...prev, [fieldId]: obj }
+          }
+          return prev
+        })
+        console.log(`[AutoSave] Background upload OK: field ${fieldId}`)
+      }
+    } catch (err) {
+      console.error(`[AutoSave] Background upload error field ${fieldId}:`, err)
+    }
+  }, [supabase])
+
+  // Build response data for a single field (photos preserved as-is, upload happens in background)
   const buildSingleResponseRow = useCallback((fieldId: number, value: unknown) => {
     if (value === undefined || value === null) return null
     const field = template?.fields.find(f => f.id === fieldId)
@@ -1019,15 +1072,13 @@ function ChecklistForm() {
         const yesNoObj = value as Record<string, unknown>
         valueText = yesNoObj.answer as string
         const jsonParts: Record<string, unknown> = {}
-        // Salvar apenas URLs de fotos (nunca base64 — base64 fica no state ate upload ao Storage)
+        // Salvar TODAS as fotos (base64 + URLs) — upload em background substitui base64 por URLs
         if (yesNoObj.photos && (yesNoObj.photos as string[]).length > 0) {
-          const urls = (yesNoObj.photos as string[]).filter(p => typeof p === 'string' && p.startsWith('http'))
-          if (urls.length > 0) jsonParts.photos = urls
+          jsonParts.photos = yesNoObj.photos
         }
         if (yesNoObj.conditionalText) jsonParts.conditionalText = yesNoObj.conditionalText
         if (yesNoObj.conditionalPhotos && (yesNoObj.conditionalPhotos as string[]).length > 0) {
-          const urls = (yesNoObj.conditionalPhotos as string[]).filter(p => typeof p === 'string' && p.startsWith('http'))
-          if (urls.length > 0) jsonParts.conditionalPhotos = urls
+          jsonParts.conditionalPhotos = yesNoObj.conditionalPhotos
         }
         // Plano de acao: funcao responsavel, severidade e modelo
         if (yesNoObj.selectedFunctionId) jsonParts.selectedFunctionId = yesNoObj.selectedFunctionId
@@ -1134,6 +1185,16 @@ function ChecklistForm() {
       setAutoSaveStatus('saved')
       if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current)
       autoSaveTimerRef.current = setTimeout(() => setAutoSaveStatus('idle'), 2000)
+
+      // Background: upload base64 photos e substituir por URLs no DB
+      if (navigator.onLine && checklistIdRef.current && row.valueJson && typeof row.valueJson === 'object') {
+        const json = row.valueJson as Record<string, unknown>
+        const hasBase64 = (arr: unknown) =>
+          Array.isArray(arr) && arr.some((p: string) => typeof p === 'string' && p.startsWith('data:'))
+        if (hasBase64(json.photos) || hasBase64(json.conditionalPhotos)) {
+          uploadAndReplaceBase64(checklistIdRef.current, row.fieldId, json)
+        }
+      }
     } catch (err) {
       console.error('[AutoSave] Error:', err)
       setAutoSaveStatus('error')
@@ -1276,9 +1337,7 @@ function ChecklistForm() {
             }
             jsonParts.photos = uploadedUrls
           } else if (yesNoObj.photos && yesNoObj.photos.length > 0) {
-            // Sem upload: salvar apenas URLs (nunca base64)
-            const urls = yesNoObj.photos.filter((p: string) => p.startsWith('http'))
-            if (urls.length > 0) jsonParts.photos = urls
+            jsonParts.photos = yesNoObj.photos
           }
           if (yesNoObj.conditionalText) jsonParts.conditionalText = yesNoObj.conditionalText
           if (yesNoObj.conditionalPhotos && yesNoObj.conditionalPhotos.length > 0 && attemptUpload) {
@@ -1290,8 +1349,7 @@ function ChecklistForm() {
             // Filtrar base64 residuais (upload falhou)
             jsonParts.conditionalPhotos = uploadedUrls.filter((u: string) => u.startsWith('http'))
           } else if (yesNoObj.conditionalPhotos && yesNoObj.conditionalPhotos.length > 0) {
-            const urls = yesNoObj.conditionalPhotos.filter((p: string) => p.startsWith('http'))
-            if (urls.length > 0) jsonParts.conditionalPhotos = urls
+            jsonParts.conditionalPhotos = yesNoObj.conditionalPhotos
           }
           // Preservar dados do plano de acao para processarNaoConformidades
           const fullObj = value as Record<string, unknown>
@@ -1828,10 +1886,21 @@ function ChecklistForm() {
           // attemptUpload: true — uploads base64 photos from React state to Storage
           const allResponseData = await buildResponseRows(allFieldIds, true)
 
-          // Atualizar DB com URLs uploadadas (auto-save filtrou base64, agora temos URLs)
+          // Limpar base64 residual (uploads que falharam) e salvar no DB
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           const sb = supabase as any
           for (const row of allResponseData) {
+            if (row.valueJson && typeof row.valueJson === 'object') {
+              const json = row.valueJson as Record<string, unknown>
+              if (Array.isArray(json.photos)) {
+                json.photos = (json.photos as string[]).filter((p: string) => p.startsWith('http'))
+                if ((json.photos as string[]).length === 0) delete json.photos
+              }
+              if (Array.isArray(json.conditionalPhotos)) {
+                json.conditionalPhotos = (json.conditionalPhotos as string[]).filter((p: string) => p.startsWith('http'))
+                if ((json.conditionalPhotos as string[]).length === 0) delete json.conditionalPhotos
+              }
+            }
             await sb.from('checklist_responses')
               .update({
                 value_text: row.valueText,
@@ -1941,10 +2010,21 @@ function ChecklistForm() {
         // attemptUpload: true — uploads base64 photos from React state to Storage
         const allResponseData = await buildResponseRows(allFieldIds, true)
 
-        // Atualizar DB com URLs uploadadas
+        // Limpar base64 residual (uploads que falharam) e salvar no DB
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const sb = supabase as any
         for (const row of allResponseData) {
+          if (row.valueJson && typeof row.valueJson === 'object') {
+            const json = row.valueJson as Record<string, unknown>
+            if (Array.isArray(json.photos)) {
+              json.photos = (json.photos as string[]).filter((p: string) => p.startsWith('http'))
+              if ((json.photos as string[]).length === 0) delete json.photos
+            }
+            if (Array.isArray(json.conditionalPhotos)) {
+              json.conditionalPhotos = (json.conditionalPhotos as string[]).filter((p: string) => p.startsWith('http'))
+              if ((json.conditionalPhotos as string[]).length === 0) delete json.conditionalPhotos
+            }
+          }
           await sb.from('checklist_responses')
             .update({
               value_text: row.valueText,
