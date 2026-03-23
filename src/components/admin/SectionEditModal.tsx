@@ -796,7 +796,7 @@ export function SectionEditModal({
                   onClick={() =>
                     setShowFieldTypePicker(showFieldTypePicker ? null : section.id)
                   }
-                  className="flex items-center gap-1.5 px-3 py-1.5 bg-primary text-white text-xs font-medium rounded-lg hover:bg-primary/90 transition-colors"
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-primary text-primary-foreground text-xs font-medium rounded-lg hover:bg-primary/90 transition-colors"
                 >
                   <FiPlus className="w-3.5 h-3.5" />
                   Adicionar Campo

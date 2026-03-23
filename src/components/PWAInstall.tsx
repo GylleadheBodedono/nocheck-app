@@ -200,19 +200,19 @@ export function PWAInstall() {
   if (updateAvailable) {
     return (
       <div className="fixed top-0 left-0 right-0 z-[100] animate-fade-in">
-        <div className="bg-primary text-white px-4 py-3 shadow-lg">
+        <div className="bg-primary text-primary-foreground px-4 py-3 shadow-lg">
           <div className="max-w-lg mx-auto flex items-center justify-between gap-3">
             <div className="flex items-center gap-3 min-w-0">
               <FiRefreshCw className="w-5 h-5 shrink-0 animate-spin" style={{ animationDuration: '3s' }} />
               <div className="min-w-0">
                 <p className="font-semibold text-sm">Nova atualizacao disponivel!</p>
-                <p className="text-xs opacity-90">Toque em atualizar ou feche e abra o app.</p>
+                <p className="text-xs opacity-80">Toque em atualizar ou feche e abra o app.</p>
               </div>
             </div>
             <button
               type="button"
               onClick={handleUpdate}
-              className="shrink-0 px-4 py-2 bg-white text-primary font-bold text-sm rounded-lg hover:bg-white/90 transition-colors"
+              className="shrink-0 px-4 py-2 bg-primary-foreground text-primary font-bold text-sm rounded-lg hover:opacity-90 transition-colors"
             >
               Atualizar
             </button>

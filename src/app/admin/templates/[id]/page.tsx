@@ -1165,6 +1165,7 @@ export default function EditTemplatePage() {
               onSectionClick={(sectionId) => setEditingSectionId(sectionId)}
               onAddSection={handleAddSection}
               onReorder={handleSectionReorder}
+              onSectionDelete={removeSection}
               looseFields={fields.filter(f => !f.section_id).map(f => ({ id: f.id, name: f.name, field_type: f.field_type }))}
               onLooseFieldsClick={() => setEditingSectionId('__loose__')}
               onAddField={() => handleAddField('__loose__')}
