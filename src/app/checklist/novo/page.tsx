@@ -1011,8 +1011,18 @@ function ChecklistForm() {
   }, [hasSections, template, loading, store, timeBlocked])
 
   // Upload base64 photos em background e atualizar DB com URLs (fire-and-forget)
-  const uploadAndReplaceBase64 = useCallback(async (clId: number, fieldId: number, json: Record<string, unknown>) => {
+  // Controle de concorrencia: apenas 1 upload por vez
+  const uploadingRef = useRef(false)
+  const uploadQueueRef = useRef<Array<{ clId: number; fieldId: number; json: Record<string, unknown> }>>([])
+
+  const processUploadQueue = useCallback(async () => {
+    if (uploadingRef.current) return
+    const next = uploadQueueRef.current.shift()
+    if (!next) return
+
+    uploadingRef.current = true
     try {
+      const { clId, fieldId, json } = next
       const updated = { ...json }
       let changed = false
 
@@ -1045,7 +1055,6 @@ function ChecklistForm() {
           .eq('checklist_id', clId)
           .eq('field_id', fieldId)
 
-        // Atualizar React state com URLs
         setResponses(prev => {
           const current = prev[fieldId]
           if (typeof current === 'object' && current !== null) {
@@ -1059,9 +1068,19 @@ function ChecklistForm() {
         console.log(`[AutoSave] Background upload OK: field ${fieldId}`)
       }
     } catch (err) {
-      console.error(`[AutoSave] Background upload error field ${fieldId}:`, err)
+      console.error(`[AutoSave] Background upload error:`, err)
     }
+    uploadingRef.current = false
+    // Processar proximo da fila
+    if (uploadQueueRef.current.length > 0) processUploadQueue()
   }, [supabase])
+
+  const uploadAndReplaceBase64 = useCallback((clId: number, fieldId: number, json: Record<string, unknown>) => {
+    // Remover entrada duplicada do mesmo field na fila
+    uploadQueueRef.current = uploadQueueRef.current.filter(q => q.fieldId !== fieldId)
+    uploadQueueRef.current.push({ clId, fieldId, json })
+    processUploadQueue()
+  }, [processUploadQueue])
 
   // Build response data for a single field (photos preserved as-is, upload happens in background)
   const buildSingleResponseRow = useCallback((fieldId: number, value: unknown) => {
@@ -1118,21 +1137,52 @@ function ChecklistForm() {
     return { fieldId, valueText, valueNumber, valueJson }
   }, [template])
 
+  // Safety timeout: se ficar em 'saving' por mais de 10s, forcar para 'saved'
+  const savingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const setSavingWithTimeout = (status: 'saving' | 'saved' | 'error' | 'idle') => {
+    if (savingTimeoutRef.current) clearTimeout(savingTimeoutRef.current)
+    setAutoSaveStatus(status)
+    if (status === 'saving') {
+      savingTimeoutRef.current = setTimeout(() => {
+        setAutoSaveStatus('saved')
+        if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current)
+        autoSaveTimerRef.current = setTimeout(() => setAutoSaveStatus('idle'), 2000)
+      }, 10000)
+    }
+  }
+
+  // Strip base64 from value_json para evitar payloads enormes no upsert
+  const stripBase64ForUpsert = (valueJson: unknown): unknown => {
+    if (!valueJson || typeof valueJson !== 'object') return valueJson
+    const json = { ...(valueJson as Record<string, unknown>) }
+    if (Array.isArray(json.photos)) {
+      json.photos = (json.photos as string[]).filter((p: string) => typeof p === 'string' && p.startsWith('http'))
+      if ((json.photos as string[]).length === 0) delete json.photos
+    }
+    if (Array.isArray(json.conditionalPhotos)) {
+      json.conditionalPhotos = (json.conditionalPhotos as string[]).filter((p: string) => typeof p === 'string' && p.startsWith('http'))
+      if ((json.conditionalPhotos as string[]).length === 0) delete json.conditionalPhotos
+    }
+    return Object.keys(json).length > 0 ? json : null
+  }
+
   // Debounced auto-save: saves a single field response after 1.5s of inactivity
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const autoSaveField = useDebouncedCallback(async (fieldId: number, value: unknown) => {
     const row = buildSingleResponseRow(fieldId, value)
     if (!row) return
 
-    setAutoSaveStatus('saving')
+    setSavingWithTimeout('saving')
     try {
       if (navigator.onLine && checklistIdRef.current) {
-        // Online: upsert to checklist_responses
+        // Online: upsert to checklist_responses (sem base64 para evitar 413)
         let userId: string | null = null
         try {
           const { data: { user } } = await supabase.auth.getUser()
           userId = user?.id || null
         } catch { /* offline */ }
+
+        const upsertJson = stripBase64ForUpsert(row.valueJson)
 
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const { error: upsertErr } = await (supabase as any)
@@ -1142,12 +1192,12 @@ function ChecklistForm() {
             field_id: row.fieldId,
             value_text: row.valueText,
             value_number: row.valueNumber,
-            value_json: row.valueJson,
+            value_json: upsertJson,
             answered_by: userId,
           }, { onConflict: 'checklist_id,field_id' })
         if (upsertErr) {
           console.error('[AutoSave] Upsert error:', upsertErr)
-          setAutoSaveStatus('error')
+          setSavingWithTimeout('error')
           return
         }
       } else if (offlineChecklistIdRef.current) {
@@ -1183,7 +1233,7 @@ function ChecklistForm() {
             }, { onConflict: 'checklist_id,field_id' })
           if (retryErr) {
             console.error('[AutoSave] Retry upsert error:', retryErr)
-            setAutoSaveStatus('error')
+            setSavingWithTimeout('error')
             return
           }
         } else if (offlineChecklistIdRef.current) {
@@ -1196,12 +1246,12 @@ function ChecklistForm() {
           })
         } else {
           console.warn('[AutoSave] IDs nao disponiveis ainda, resposta mantida em memoria')
-          setAutoSaveStatus('idle')
+          setSavingWithTimeout('idle')
           return
         }
       }
 
-      setAutoSaveStatus('saved')
+      setSavingWithTimeout('saved')
       if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current)
       autoSaveTimerRef.current = setTimeout(() => setAutoSaveStatus('idle'), 2000)
 
@@ -1216,15 +1266,14 @@ function ChecklistForm() {
       }
     } catch (err) {
       console.error('[AutoSave] Error:', err)
-      setAutoSaveStatus('error')
+      setSavingWithTimeout('error')
     }
   }, 1500)
 
-  // Immediate offline save (IndexedDB is near-instant, no need for 1.5s debounce)
+  // Immediate offline save (IndexedDB backup — silencioso, NAO toca no autoSaveStatus)
   const saveFieldOfflineImmediate = useCallback(async (fieldId: number, value: unknown) => {
     const row = buildSingleResponseRow(fieldId, value)
     if (!row || !offlineChecklistIdRef.current) return
-    setAutoSaveStatus('saving')
     try {
       const field = template?.fields.find(f => f.id === fieldId)
       const sectionId = field?.section_id ?? null
@@ -1233,12 +1282,8 @@ function ChecklistForm() {
         valueNumber: row.valueNumber,
         valueJson: row.valueJson,
       })
-      setAutoSaveStatus('saved')
-      if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current)
-      autoSaveTimerRef.current = setTimeout(() => setAutoSaveStatus('idle'), 2000)
     } catch (err) {
-      console.error('[AutoSave] Offline immediate error:', err)
-      setAutoSaveStatus('error')
+      console.error('[AutoSave] Offline backup error:', err)
     }
   }, [buildSingleResponseRow, template])
 
