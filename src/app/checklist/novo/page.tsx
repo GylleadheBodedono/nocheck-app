@@ -13,6 +13,8 @@ import {
   FiMapPin,
   FiLayers,
   FiChevronRight,
+  FiChevronLeft,
+  FiSave,
   FiCloud,
   FiLoader,
   FiPlus,
@@ -482,7 +484,7 @@ function ChecklistForm() {
               completed_at: s.completedAt,
             })))
             const restoredResponses = restoreOfflineResponses(existingOffline)
-            if (Object.keys(restoredResponses).length > 0) setResponses(restoredResponses)
+            if (Object.keys(restoredResponses).length > 0) setResponses(prev => ({ ...prev, ...restoredResponses }))
           }
         }
         return
@@ -510,7 +512,7 @@ function ChecklistForm() {
           })))
           // Restaurar respostas de todas as secoes
           const restoredResponses = restoreOfflineResponses(existingOffline)
-          if (Object.keys(restoredResponses).length > 0) setResponses(restoredResponses)
+          if (Object.keys(restoredResponses).length > 0) setResponses(prev => ({ ...prev, ...restoredResponses }))
         } else {
           // Create new offline sectioned checklist
           const sectionEntries = sortedSections.map(s => ({
@@ -561,7 +563,7 @@ function ChecklistForm() {
 
       if (offlineDraftSec) {
         const restoredResponses = restoreOfflineResponses(offlineDraftSec)
-        if (Object.keys(restoredResponses).length > 0) setResponses(restoredResponses)
+        if (Object.keys(restoredResponses).length > 0) setResponses(prev => ({ ...prev, ...restoredResponses }))
         await deleteOfflineChecklist(offlineDraftSec.id)
         console.log('[Checklist] Draft offline sectioned migrado para online:', offlineDraftSec.id)
       }
@@ -823,7 +825,7 @@ function ChecklistForm() {
             restoredResponses[r.field_id] = r.value_text
         }
       }
-      setResponses(restoredResponses)
+      setResponses(prev => ({ ...prev, ...restoredResponses }))
     }
   }
 
@@ -893,7 +895,7 @@ function ChecklistForm() {
           setOfflineChecklistId(existingOffline.id)
           // Restaurar respostas usando funcao utilitaria
           const restoredResponses = restoreOfflineResponses(existingOffline)
-          if (Object.keys(restoredResponses).length > 0) setResponses(restoredResponses)
+          if (Object.keys(restoredResponses).length > 0) setResponses(prev => ({ ...prev, ...restoredResponses }))
         } else {
           const offlineId = await saveOfflineChecklist({
             templateId: Number(templateId),
@@ -921,7 +923,7 @@ function ChecklistForm() {
 
       if (offlineDraftNS) {
         const restoredResponses = restoreOfflineResponses(offlineDraftNS)
-        if (Object.keys(restoredResponses).length > 0) setResponses(restoredResponses)
+        if (Object.keys(restoredResponses).length > 0) setResponses(prev => ({ ...prev, ...restoredResponses }))
         await deleteOfflineChecklist(offlineDraftNS.id)
         console.log('[Checklist] Draft offline migrado para online:', offlineDraftNS.id)
       }
@@ -1332,6 +1334,8 @@ function ChecklistForm() {
   }, [autoSaveField])
 
   const updateResponse = (fieldId: number, value: unknown) => {
+    // Sync IMEDIATO do ref antes de qualquer coisa (previne stale reads no bulk save)
+    responsesRef.current = { ...responsesRef.current, [fieldId]: value }
     setResponses(prev => ({ ...prev, [fieldId]: value }))
     if (errors[fieldId]) {
       setErrors(prev => { const n = { ...prev }; delete n[fieldId]; return n })
@@ -1617,8 +1621,9 @@ function ChecklistForm() {
   // === SECTION BACK: auto-mark section as complete if all required fields are filled ===
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const handleSectionBack = useCallback(async () => {
-    // Flush pending auto-save
+    // Flush pending auto-save e esperar completar
     autoSaveField.flush()
+    await new Promise(resolve => setTimeout(resolve, 300))
 
     if (activeSection === null) { setActiveSection(null); return }
 
@@ -2789,19 +2794,125 @@ function ChecklistForm() {
                 </div>
               )}
 
-              {/* Auto-save status indicator */}
-              <div className="sticky bottom-4 flex justify-center">
-                <div className={`inline-flex items-center gap-2 px-4 py-2 rounded-full text-xs font-medium backdrop-blur-sm transition-all duration-300 ${
-                  autoSaveStatus === 'saving' ? 'bg-primary/10 text-primary border border-primary/20' :
-                  autoSaveStatus === 'saved' ? 'bg-success/10 text-success border border-success/20' :
-                  autoSaveStatus === 'error' ? 'bg-error/10 text-error border border-error/20' :
-                  'bg-surface/80 text-muted border border-subtle opacity-0'
-                }`}>
-                  {autoSaveStatus === 'saving' && <><FiLoader className="w-3.5 h-3.5 animate-spin" /> Salvando...</>}
-                  {autoSaveStatus === 'saved' && <><FiCloud className="w-3.5 h-3.5" /> Salvo</>}
-                  {autoSaveStatus === 'error' && <><FiAlertCircle className="w-3.5 h-3.5" /> Erro ao salvar</>}
-                </div>
-              </div>
+              {/* Section navigation buttons */}
+              {(() => {
+                const navSections = isGeneralSection ? [] : flatSections
+                const currentIdx = navSections.findIndex(s => s.id === activeSection)
+                const isFirst = currentIdx <= 0
+                const isLast = currentIdx >= navSections.length - 1
+                const totalNav = navSections.length
+
+                const handleNavSave = async (targetSectionId: number | null) => {
+                  // 1. Flush auto-save
+                  autoSaveField.flush()
+                  await new Promise(r => setTimeout(r, 300))
+
+                  // 2. Bulk save current section
+                  try {
+                    if (navigator.onLine && checklistIdRef.current) {
+                      let userId: string | null = null
+                      try {
+                        const { data: { user } } = await supabase.auth.getUser()
+                        userId = user?.id || null
+                      } catch { /* offline */ }
+
+                      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                      const rows: any[] = sectionFields
+                        .map(f => {
+                          const row = buildSingleResponseRow(f.id, responsesRef.current[f.id])
+                          if (!row) return null
+                          return {
+                            checklist_id: checklistIdRef.current,
+                            field_id: row.fieldId,
+                            value_text: row.valueText,
+                            value_number: row.valueNumber,
+                            value_json: stripBase64ForUpsert(row.valueJson),
+                            answered_by: userId,
+                          }
+                        })
+                        .filter(Boolean)
+
+                      if (rows.length > 0) {
+                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                        await (supabase as any)
+                          .from('checklist_responses')
+                          .upsert(rows, { onConflict: 'checklist_id,field_id' })
+                      }
+                    } else if (offlineChecklistIdRef.current) {
+                      for (const f of sectionFields) {
+                        const row = buildSingleResponseRow(f.id, responsesRef.current[f.id])
+                        if (!row) continue
+                        await updateOfflineFieldResponse(offlineChecklistIdRef.current, activeSection!, f.id, {
+                          valueText: row.valueText,
+                          valueNumber: row.valueNumber,
+                          valueJson: row.valueJson,
+                        })
+                      }
+                    }
+                  } catch (err) {
+                    console.error('[NavSave] Erro ao salvar secao:', err)
+                  }
+
+                  // 3. Navegar
+                  if (targetSectionId !== null) {
+                    setActiveSection(targetSectionId)
+                    window.scrollTo({ top: 0, behavior: 'smooth' })
+                  }
+                }
+
+                if (isGeneralSection || navSections.length === 0) return null
+
+                return (
+                  <div className="flex items-center justify-between pt-4 mt-2 border-t border-subtle">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (isFirst) {
+                          handleSectionBack()
+                        } else {
+                          handleNavSave(navSections[currentIdx - 1].id)
+                        }
+                      }}
+                      className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium bg-surface border border-subtle text-secondary hover:text-primary hover:border-primary/40 transition-colors"
+                    >
+                      <FiChevronLeft className="w-4 h-4" />
+                      {isFirst ? 'Voltar' : 'Etapa Anterior'}
+                    </button>
+
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-muted">{currentIdx + 1} de {totalNav}</span>
+                      <div className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[10px] font-medium transition-all duration-300 ${
+                        autoSaveStatus === 'saving' ? 'bg-primary/10 text-primary' :
+                        autoSaveStatus === 'saved' ? 'bg-success/10 text-success' :
+                        'bg-transparent text-transparent'
+                      }`}>
+                        {autoSaveStatus === 'saving' && <><FiLoader className="w-3 h-3 animate-spin" /> Salvando</>}
+                        {autoSaveStatus === 'saved' && <><FiSave className="w-3 h-3" /> Salvo</>}
+                      </div>
+                    </div>
+
+                    {isLast ? (
+                      <button
+                        type="button"
+                        onClick={() => handleNavSave(null).then(() => handleSectionBack())}
+                        className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
+                      >
+                        <FiCheckCircle className="w-4 h-4" />
+                        Concluir
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => handleNavSave(navSections[currentIdx + 1].id)}
+                        className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
+                      >
+                        Proxima Etapa
+                        <FiChevronRight className="w-4 h-4" />
+                      </button>
+                    )}
+                  </div>
+                )
+              })()}
             </div>
         </main>
 
