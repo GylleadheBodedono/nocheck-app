@@ -1196,8 +1196,9 @@ function ChecklistForm() {
             answered_by: userId,
           }, { onConflict: 'checklist_id,field_id' })
         if (upsertErr) {
-          console.error('[AutoSave] Upsert error:', upsertErr)
-          setSavingWithTimeout('error')
+          console.warn('[AutoSave] Upsert falhou (dados seguros no IndexedDB):', upsertErr.message || upsertErr)
+          // NAO mostrar 'error' — dados estao salvos no IndexedDB e React state
+          setSavingWithTimeout('saved')
           return
         }
       } else if (offlineChecklistIdRef.current) {
@@ -1232,8 +1233,8 @@ function ChecklistForm() {
               value_json: row.valueJson,
             }, { onConflict: 'checklist_id,field_id' })
           if (retryErr) {
-            console.error('[AutoSave] Retry upsert error:', retryErr)
-            setSavingWithTimeout('error')
+            console.warn('[AutoSave] Retry upsert falhou (dados seguros no IndexedDB):', retryErr.message || retryErr)
+            setSavingWithTimeout('saved')
             return
           }
         } else if (offlineChecklistIdRef.current) {
@@ -1265,8 +1266,8 @@ function ChecklistForm() {
         }
       }
     } catch (err) {
-      console.error('[AutoSave] Error:', err)
-      setSavingWithTimeout('error')
+      console.warn('[AutoSave] Erro geral (dados seguros no IndexedDB):', err)
+      setSavingWithTimeout('saved')
     }
   }, 1500)
 
