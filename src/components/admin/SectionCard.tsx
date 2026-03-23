@@ -1,7 +1,7 @@
 'use client'
 
 import React from 'react'
-import { FiPlus } from 'react-icons/fi'
+import { FiPlus, FiTrash2 } from 'react-icons/fi'
 import { RiDraggable } from 'react-icons/ri'
 import {
   DndContext,
@@ -41,6 +41,7 @@ type Props = {
   onSectionClick: (sectionId: string) => void
   onAddSection: () => void
   onReorder: (sections: SectionItem[]) => void
+  onSectionDelete?: (sectionId: string) => void
   // Campos sem etapa (quando template nao tem secoes)
   looseFields?: FieldItem[]
   onLooseFieldsClick?: () => void
@@ -53,10 +54,12 @@ function SortableSectionRow({
   section,
   index,
   onClick,
+  onDelete,
 }: {
   section: SectionItem
   index: number
   onClick: () => void
+  onDelete?: () => void
 }) {
   const {
     attributes,
@@ -91,7 +94,7 @@ function SortableSectionRow({
       </div>
 
       {/* Number badge */}
-      <span className="flex items-center justify-center bg-primary text-white rounded-full w-6 h-6 text-xs font-semibold shrink-0">
+      <span className="flex items-center justify-center bg-primary text-primary-foreground rounded-full w-6 h-6 text-xs font-semibold shrink-0">
         {index + 1}
       </span>
 
@@ -107,6 +110,18 @@ function SortableSectionRow({
           <> &middot; {section.subSectionCount} sub</>
         )}
       </span>
+
+      {/* Delete button */}
+      {onDelete && (
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); onDelete() }}
+          className="p-1 text-muted hover:text-error hover:bg-error/10 rounded transition-colors opacity-0 group-hover:opacity-100"
+          title="Apagar etapa"
+        >
+          <FiTrash2 className="w-3.5 h-3.5" />
+        </button>
+      )}
     </div>
   )
 }
@@ -119,6 +134,7 @@ export function SectionCard({
   onSectionClick,
   onAddSection,
   onReorder,
+  onSectionDelete,
   looseFields = [],
   onLooseFieldsClick,
   onAddField,
@@ -145,7 +161,8 @@ export function SectionCard({
   return (
     <div
       data-node-id="center"
-      className="min-w-[320px] max-w-[400px] border-2 border-primary rounded-2xl bg-primary/5 shadow-sm flex flex-col"
+      className="min-w-[320px] max-w-[700px] border-2 border-primary rounded-2xl bg-primary/5 shadow-sm flex flex-col"
+      style={{ resize: 'horizontal', overflow: 'auto', width: 400 }}
     >
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-primary/20">
@@ -164,7 +181,7 @@ export function SectionCard({
           <button
             type="button"
             onClick={onAddSection}
-            className="flex items-center gap-1 px-2.5 py-1.5 bg-primary text-white text-xs font-medium rounded-lg hover:bg-primary/90 transition-colors shrink-0"
+            className="flex items-center gap-1 px-2.5 py-1.5 bg-primary text-primary-foreground text-xs font-medium rounded-lg hover:bg-primary/90 transition-colors shrink-0"
           >
             <FiPlus className="w-3 h-3" />
             Etapa
@@ -221,6 +238,7 @@ export function SectionCard({
                     section={section}
                     index={index}
                     onClick={() => onSectionClick(section.id)}
+                    onDelete={onSectionDelete ? () => onSectionDelete(section.id) : undefined}
                   />
                 ))}
               </div>
