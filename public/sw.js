@@ -1,7 +1,7 @@
-// OpereCheck Service Worker v19.0.0
+// OpereCheck Service Worker v20.0.0
 // Estrategia: Precache COMPLETO + notificacoes do sistema + auto-update
 
-const CACHE_VERSION = 'v19'
+const CACHE_VERSION = 'v20'
 const APP_CACHE = `nocheck-app-${CACHE_VERSION}`
 const STATIC_CACHE = `nocheck-static-${CACHE_VERSION}`
 
@@ -25,7 +25,7 @@ const NEVER_CACHE = [
 // INSTALL - Precache imediato dos assets essenciais
 // ============================================
 self.addEventListener('install', (event) => {
-  console.log('[SW v19] Installing...')
+  console.log('[SW v20] Installing...')
 
   event.waitUntil(
     caches.open(STATIC_CACHE)
@@ -39,11 +39,11 @@ self.addEventListener('install', (event) => {
           '/Logo.png',
           '/Logo-dark.png',
         ]).catch(err => {
-          console.log('[SW v19] Some static assets failed to cache:', err)
+          console.log('[SW v20] Some static assets failed to cache:', err)
         })
       })
       .then(() => {
-        console.log('[SW v19] Install complete, waiting for activation...')
+        console.log('[SW v20] Install complete, waiting for activation...')
         // NAO chama skipWaiting — espera o usuario aceitar a atualizacao via banner
       })
   )
@@ -53,7 +53,7 @@ self.addEventListener('install', (event) => {
 // ACTIVATE - Limpa caches antigos e assume controle
 // ============================================
 self.addEventListener('activate', (event) => {
-  console.log('[SW v19] Activating...')
+  console.log('[SW v20] Activating...')
 
   event.waitUntil(
     caches.keys()
@@ -63,7 +63,7 @@ self.addEventListener('activate', (event) => {
 
         // Migra entradas dos caches antigos para os novos
         if (oldAppCaches.length > 0) {
-          console.log('[SW v19] Migrating entries from old app caches:', oldAppCaches)
+          console.log('[SW v20] Migrating entries from old app caches:', oldAppCaches)
           const newCache = await caches.open(APP_CACHE)
           for (const oldName of oldAppCaches) {
             const oldCache = await caches.open(oldName)
@@ -78,13 +78,13 @@ self.addEventListener('activate', (event) => {
         // Deleta caches antigos apos migracao
         await Promise.all(
           [...oldAppCaches, ...oldStaticCaches].map(k => {
-            console.log('[SW v19] Deleting old cache:', k)
+            console.log('[SW v20] Deleting old cache:', k)
             return caches.delete(k)
           })
         )
       })
       .then(() => {
-        console.log('[SW v19] Taking control of all clients')
+        console.log('[SW v20] Taking control of all clients')
         return self.clients.claim()
       })
       .then(() => {
@@ -131,13 +131,13 @@ self.addEventListener('fetch', (event) => {
 
   // Navegacao (paginas HTML) - Network First com fallback para cache
   if (request.mode === 'navigate') {
-    console.log('[SW v19] Navigate:', url.pathname, url.search)
+    console.log('[SW v20] Navigate:', url.pathname, url.search)
     // NUNCA cachear: auth params, landing page (/) ou rotas de auth
     if (url.search.includes('error=') || url.search.includes('code=') || url.search.includes('token') || url.pathname.startsWith('/auth') || url.pathname === '/') {
-      console.log('[SW v19] BYPASS (not cached):', url.pathname)
+      console.log('[SW v20] BYPASS (not cached):', url.pathname)
       return // Deixa o browser lidar normalmente
     }
-    console.log('[SW v19] networkFirst:', url.pathname)
+    console.log('[SW v20] networkFirst:', url.pathname)
     event.respondWith(networkFirstForNavigation(request))
     return
   }
@@ -168,7 +168,7 @@ async function cacheFirst(request) {
 
     return networkResponse
   } catch (error) {
-    console.log('[SW v19] Fetch failed:', request.url)
+    console.log('[SW v20] Fetch failed:', request.url)
 
     // Retorna uma resposta de erro generica
     return new Response('Offline - recurso nao disponivel', {
@@ -196,12 +196,12 @@ async function networkFirstForNavigation(request) {
 
     return networkResponse
   } catch (error) {
-    console.log('[SW v19] Network failed for navigation:', url.pathname)
+    console.log('[SW v20] Network failed for navigation:', url.pathname)
 
     // Tenta o cache
     const cachedResponse = await caches.match(request)
     if (cachedResponse) {
-      console.log('[SW v19] Serving from cache:', url.pathname)
+      console.log('[SW v20] Serving from cache:', url.pathname)
       return cachedResponse
     }
 
@@ -210,7 +210,7 @@ async function networkFirstForNavigation(request) {
     for (const alt of alternatives) {
       const cached = await caches.match(alt)
       if (cached) {
-        console.log('[SW v19] Serving alternative:', alt)
+        console.log('[SW v20] Serving alternative:', alt)
         return cached
       }
     }
@@ -259,7 +259,7 @@ async function cacheAssetsFromHtml(response, origin) {
           const assetResponse = await fetch(url)
           if (assetResponse.ok) {
             await cache.put(url, assetResponse)
-            console.log('[SW v19] Cached asset:', url)
+            console.log('[SW v20] Cached asset:', url)
           }
         }
       } catch {
@@ -267,7 +267,7 @@ async function cacheAssetsFromHtml(response, origin) {
       }
     }
   } catch (error) {
-    console.log('[SW v19] Error caching assets from HTML:', error)
+    console.log('[SW v20] Error caching assets from HTML:', error)
   }
 }
 
@@ -358,7 +358,7 @@ self.addEventListener('message', async (event) => {
     case 'CLEAR_CACHE':
       const keys = await caches.keys()
       await Promise.all(keys.map(key => caches.delete(key)))
-      console.log('[SW v19] All caches cleared')
+      console.log('[SW v20] All caches cleared')
       // Confirmar de volta para o client via MessageChannel
       if (event.ports && event.ports[0]) {
         event.ports[0].postMessage({ type: 'CACHE_CLEARED' })
@@ -402,7 +402,7 @@ self.addEventListener('message', async (event) => {
 // PRECACHE COMPLETO - Cacheia toda a aplicacao
 // ============================================
 async function precacheApp() {
-  console.log('[SW v19] Starting FULL app precache...')
+  console.log('[SW v20] Starting FULL app precache...')
 
   const cache = await caches.open(APP_CACHE)
 
@@ -440,10 +440,10 @@ async function precacheApp() {
       if (response.ok) {
         await cache.put(asset, response)
         totalCached++
-        console.log('[SW v19] Cached static:', asset)
+        console.log('[SW v20] Cached static:', asset)
       }
     } catch {
-      console.log('[SW v19] Failed static:', asset)
+      console.log('[SW v20] Failed static:', asset)
     }
   }
 
@@ -458,7 +458,7 @@ async function precacheApp() {
 
         await cache.put(pageUrl, responseToCache)
         totalCached++
-        console.log('[SW v19] Cached page:', pageUrl)
+        console.log('[SW v20] Cached page:', pageUrl)
 
         // Extrai e cacheia todos os assets desta pagina
         const html = await responseToProcess.text()
@@ -482,7 +482,7 @@ async function precacheApp() {
           }
         }
 
-        console.log('[SW v19] Found', assetUrls.size, 'assets in', pageUrl)
+        console.log('[SW v20] Found', assetUrls.size, 'assets in', pageUrl)
 
         // Cacheia cada asset
         for (const assetUrl of assetUrls) {
@@ -501,15 +501,15 @@ async function precacheApp() {
         }
       }
     } catch (err) {
-      console.log('[SW v19] Failed page:', pageUrl, err)
+      console.log('[SW v20] Failed page:', pageUrl, err)
     }
   }
 
-  console.log('[SW v19] Precache COMPLETE! Total items:', totalCached)
+  console.log('[SW v20] Precache COMPLETE! Total items:', totalCached)
 
   // Lista todos os items no cache
   const cachedItems = await cache.keys()
-  console.log('[SW v19] Cache now contains', cachedItems.length, 'items')
+  console.log('[SW v20] Cache now contains', cachedItems.length, 'items')
 }
 
 // ============================================
@@ -546,7 +546,7 @@ self.addEventListener('notificationclick', (event) => {
 // ============================================
 self.addEventListener('sync', (event) => {
   if (event.tag === 'sync-checklists') {
-    console.log('[SW v19] Background sync triggered')
+    console.log('[SW v20] Background sync triggered')
     event.waitUntil(
       self.clients.matchAll().then((clients) => {
         clients.forEach((client) => {
@@ -557,4 +557,4 @@ self.addEventListener('sync', (event) => {
   }
 })
 
-console.log('[SW v19] Service Worker loaded')
+console.log('[SW v20] Service Worker loaded')

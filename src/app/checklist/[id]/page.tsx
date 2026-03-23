@@ -21,6 +21,8 @@ import {
   FiChevronDown,
   FiChevronUp,
   FiAlertCircle,
+  FiTerminal,
+  FiX,
 } from 'react-icons/fi'
 import {
   getAuthCache,
@@ -86,6 +88,8 @@ export default function ChecklistViewPage() {
   const [collapsedSections, setCollapsedSections] = useState<Set<number>>(new Set())
   const [justifications, setJustifications] = useState<Record<number, string>>({}) // field_id -> justification_text
   const [error, setError] = useState<string | null>(null)
+  const [showDebugLog, setShowDebugLog] = useState(false)
+  const [isAdmin, setIsAdmin] = useState(false)
 
   const router = useRouter()
   const params = useParams()
@@ -119,11 +123,12 @@ export default function ChecklistViewPage() {
       if (!cl) return false
 
       // Permissao basica no cache: admin, criador, ou manager (offline nao tem RLS)
-      const isAdmin = cachedUser.is_admin === true
+      const adminCheck = cachedUser.is_admin === true
+      if (adminCheck) setIsAdmin(true)
       const isCreator = cl.created_by === cachedAuth.userId
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const isManager = (cachedUser as any).is_manager === true
-      if (!isAdmin && !isCreator && !isManager) {
+      if (!adminCheck && !isCreator && !isManager) {
         setError('Voce nao tem permissao para ver este checklist')
         setLoading(false)
         return true
@@ -409,9 +414,21 @@ export default function ChecklistViewPage() {
         <div className="card p-5 space-y-3">
           <div className="flex items-center justify-between">
             <h2 className="font-semibold text-main text-lg">{checklist.template?.name}</h2>
-            <span className={`px-3 py-1 rounded-lg text-xs font-medium border ${status.color}`}>
-              {status.text}
-            </span>
+            <div className="flex items-center gap-2">
+              {isAdmin && checklist.debug_log && (
+                <button
+                  type="button"
+                  onClick={() => setShowDebugLog(true)}
+                  className="p-1.5 text-muted hover:text-primary hover:bg-primary/10 rounded-lg transition-colors"
+                  title="Ver logs de debug"
+                >
+                  <FiTerminal className="w-4 h-4" />
+                </button>
+              )}
+              <span className={`px-3 py-1 rounded-lg text-xs font-medium border ${status.color}`}>
+                {status.text}
+              </span>
+            </div>
           </div>
 
           <div className="grid grid-cols-2 gap-3 text-sm">
@@ -724,5 +741,41 @@ export default function ChecklistViewPage() {
           )}
         </div>
       </main>
+
+      {/* Debug Log Modal */}
+      {showDebugLog && checklist.debug_log && (
+        <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4" onClick={() => setShowDebugLog(false)}>
+          <div className="relative w-full max-w-2xl max-h-[85vh] flex flex-col bg-[#1a1b26] rounded-xl shadow-2xl border border-white/10" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-4 py-3 border-b border-white/10">
+              <div className="flex items-center gap-2">
+                <FiTerminal className="w-4 h-4 text-emerald-400" />
+                <span className="text-sm font-mono font-bold text-emerald-400">Debug Console</span>
+                <span className="text-xs text-white/40">{(checklist.debug_log as unknown[]).length} entradas</span>
+              </div>
+              <button onClick={() => setShowDebugLog(false)} className="p-1 text-white/40 hover:text-white">
+                <FiX className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-4 font-mono text-xs leading-relaxed">
+              {(checklist.debug_log as Array<{ ts: string; action: string; field?: number; detail?: string }>).map((log, i) => {
+                const time = new Date(log.ts).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+                const actionColor = log.action.includes('error') || log.action.includes('fail')
+                  ? 'text-red-400'
+                  : log.action.includes('switch') || log.action.includes('finalize')
+                  ? 'text-yellow-400'
+                  : 'text-emerald-400'
+                return (
+                  <div key={i} className="flex gap-2 py-0.5 hover:bg-white/5 rounded px-1">
+                    <span className="text-white/30 shrink-0">{time}</span>
+                    <span className={`font-semibold shrink-0 ${actionColor}`}>{log.action}</span>
+                    {log.field && <span className="text-blue-400">f:{log.field}</span>}
+                    {log.detail && <span className="text-white/60 truncate">{log.detail}</span>}
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        </div>
+      )}
   )
 }

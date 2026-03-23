@@ -126,6 +126,19 @@ function ChecklistForm() {
   const responsesRef = useRef(responses)
   useEffect(() => { responsesRef.current = responses }, [responses])
 
+  // Debug log collector — salvo junto com o checklist na finalizacao
+  const debugLogRef = useRef<Array<{ ts: string; action: string; field?: number; detail?: string }>>([])
+  const addLog = useCallback((action: string, fieldId?: number, detail?: string) => {
+    debugLogRef.current.push({
+      ts: new Date().toISOString(),
+      action,
+      field: fieldId,
+      detail: detail?.substring(0, 200),
+    })
+    // Limitar a 500 entradas para nao sobrecarregar
+    if (debugLogRef.current.length > 500) debugLogRef.current = debugLogRef.current.slice(-400)
+  }, [])
+
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [savedOffline, _setSavedOffline] = useState(false)
   const [autoSaveStatus, setAutoSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
@@ -1205,6 +1218,7 @@ function ChecklistForm() {
             answered_by: userId,
           }, { onConflict: 'checklist_id,field_id' })
         if (upsertErr) {
+          addLog('upsert_fail', row.fieldId, upsertErr.message || String(upsertErr))
           console.warn('[AutoSave] Upsert falhou (dados seguros no IndexedDB):', upsertErr.message || upsertErr)
           // NAO mostrar 'error' — dados estao salvos no IndexedDB e React state
           setSavingWithTimeout('saved')
@@ -1275,6 +1289,7 @@ function ChecklistForm() {
         }
       }
     } catch (err) {
+      addLog('autosave_error', undefined, err instanceof Error ? err.message : String(err))
       console.warn('[AutoSave] Erro geral (dados seguros no IndexedDB):', err)
       setSavingWithTimeout('saved')
     }
@@ -1337,6 +1352,9 @@ function ChecklistForm() {
     // Sync IMEDIATO do ref antes de qualquer coisa (previne stale reads no bulk save)
     responsesRef.current = { ...responsesRef.current, [fieldId]: value }
     setResponses(prev => ({ ...prev, [fieldId]: value }))
+    const vType = typeof value === 'object' && value !== null && 'answer' in (value as Record<string, unknown>)
+      ? (value as Record<string, unknown>).answer as string : (typeof value === 'string' ? value.substring(0, 30) : typeof value)
+    addLog('response', fieldId, `val=${vType}`)
     if (errors[fieldId]) {
       setErrors(prev => { const n = { ...prev }; delete n[fieldId]; return n })
     }
@@ -1809,6 +1827,7 @@ function ChecklistForm() {
   // === SWITCH SECTION: flush + bulk save ANTES de trocar de secao ===
   // Previne perda de respostas quando o usuario clica direto em outra secao
   const switchSection = async (newSectionId: number | null) => {
+    addLog('switchSection', undefined, `from=${activeSection} to=${newSectionId}`)
     // 1. Flush pending debounced auto-save
     autoSaveField.flush()
     await new Promise(resolve => setTimeout(resolve, 200))
@@ -2009,6 +2028,13 @@ function ChecklistForm() {
           )
         }
 
+        // Salvar debug logs no checklist
+        addLog('finalize', undefined, `responses=${Object.keys(responsesRef.current).length}`)
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        await (supabase as any).from('checklists')
+          .update({ debug_log: debugLogRef.current })
+          .eq('id', checklistId)
+
         // Activity log
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         await (supabase as any).from('activity_log').insert({
@@ -2121,6 +2147,13 @@ function ChecklistForm() {
           template.fields.map(f => ({ id: f.id, name: f.name, field_type: f.field_type, options: f.options }))
         )
       }
+
+      // Salvar debug logs no checklist
+      addLog('finalize_justif', undefined, `responses=${Object.keys(responsesRef.current).length}`)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await (supabase as any).from('checklists')
+        .update({ debug_log: debugLogRef.current })
+        .eq('id', checklistId)
 
       // Activity log
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
