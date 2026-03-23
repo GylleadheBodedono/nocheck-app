@@ -409,6 +409,7 @@ export default function ChecklistViewPage() {
   const status = statusLabel[checklist.status] || { text: checklist.status, color: 'bg-gray-500/20 text-gray-400' }
 
   return (
+    <>
       <main className="max-w-2xl mx-auto px-4 py-6 space-y-6">
         {/* Metadata Card */}
         <div className="card p-5 space-y-3">
@@ -777,5 +778,6 @@ export default function ChecklistViewPage() {
           </div>
         </div>
       )}
+    </>
   )
 }
