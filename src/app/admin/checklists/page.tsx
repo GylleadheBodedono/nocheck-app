@@ -194,7 +194,7 @@ export default function AdminChecklistsPage() {
       const [clRes, respRes, fieldsRes] = await Promise.all([
         sb.from('checklists').select('*, template:checklist_templates(name), store:stores(name), user:users!checklists_created_by_fkey(full_name)').eq('id', checklistId).single(),
         sb.from('checklist_responses').select('field_id, value_text, value_number, value_json').eq('checklist_id', checklistId),
-        sb.from('template_fields').select('id, name, field_type, section_id').eq('template_id', checklists.find(c => c.id === checklistId)?.template_id || 0).order('sort_order'),
+        sb.from('template_fields').select('id, name, field_type, section_id').eq('template_id', checklists.find(c => c.id === checklistId)?.template?.id || 0).order('sort_order'),
       ])
 
       if (!clRes.data || !respRes.data) { alert('Erro ao buscar dados'); return }
