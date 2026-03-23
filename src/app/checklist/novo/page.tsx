@@ -709,12 +709,15 @@ function ChecklistForm() {
           break
         }
         case 'yes_no': {
-          const yJson = r.valueJson as { photos?: string[]; conditionalText?: string; conditionalPhotos?: string[] } | null
-          if (yJson && (yJson.photos?.length || yJson.conditionalText || yJson.conditionalPhotos?.length)) {
+          const yJson = r.valueJson as Record<string, unknown> | null
+          if (yJson && Object.keys(yJson).length > 0) {
             const val: Record<string, unknown> = { answer: r.valueText || '' }
-            if (yJson.photos && yJson.photos.length > 0) val.photos = yJson.photos
-            if (yJson.conditionalText) val.conditionalText = yJson.conditionalText
-            if (yJson.conditionalPhotos && yJson.conditionalPhotos.length > 0) val.conditionalPhotos = yJson.conditionalPhotos
+            for (const [key, v] of Object.entries(yJson)) {
+              if (v !== null && v !== undefined && v !== '') {
+                if (Array.isArray(v) && v.length === 0) continue
+                val[key] = v
+              }
+            }
             restoredResponses[r.fieldId] = val
           } else {
             restoredResponses[r.fieldId] = r.valueText
@@ -795,12 +798,16 @@ function ChecklistForm() {
             break
           }
           case 'yes_no': {
-            const yJson = r.value_json as { photos?: string[]; conditionalText?: string; conditionalPhotos?: string[] } | null
-            if (yJson && (yJson.photos?.length || yJson.conditionalText || yJson.conditionalPhotos?.length)) {
+            const yJson = r.value_json as Record<string, unknown> | null
+            if (yJson && Object.keys(yJson).length > 0) {
               const val: Record<string, unknown> = { answer: r.value_text || '' }
-              if (yJson.photos && yJson.photos.length > 0) val.photos = yJson.photos
-              if (yJson.conditionalText) val.conditionalText = yJson.conditionalText
-              if (yJson.conditionalPhotos && yJson.conditionalPhotos.length > 0) val.conditionalPhotos = yJson.conditionalPhotos
+              // Restaurar TODOS os campos do value_json — fotos, texto, plano de acao, etc.
+              for (const [key, v] of Object.entries(yJson)) {
+                if (v !== null && v !== undefined && v !== '') {
+                  if (Array.isArray(v) && v.length === 0) continue
+                  val[key] = v
+                }
+              }
               restoredResponses[r.field_id] = val
             } else {
               restoredResponses[r.field_id] = r.value_text
@@ -1636,7 +1643,7 @@ function ChecklistForm() {
               field_id: row.fieldId,
               value_text: row.valueText,
               value_number: row.valueNumber,
-              value_json: row.valueJson,
+              value_json: stripBase64ForUpsert(row.valueJson),
               answered_by: userId,
             }
           })
@@ -1647,6 +1654,18 @@ function ChecklistForm() {
           await (supabase as any)
             .from('checklist_responses')
             .upsert(rows, { onConflict: 'checklist_id,field_id' })
+        }
+
+        // Background: upload fotos base64 dos campos desta secao
+        for (const f of sectionFields) {
+          const row = buildSingleResponseRow(f.id, responsesRef.current[f.id])
+          if (!row?.valueJson || typeof row.valueJson !== 'object') continue
+          const json = row.valueJson as Record<string, unknown>
+          const hasBase64 = (arr: unknown) =>
+            Array.isArray(arr) && arr.some((p: string) => typeof p === 'string' && p.startsWith('data:'))
+          if (hasBase64(json.photos) || hasBase64(json.conditionalPhotos)) {
+            uploadAndReplaceBase64(checklistIdRef.current!, f.id, json)
+          }
         }
       } else if (offlineChecklistIdRef.current) {
         // Propagate DB checklist ID to offline record (started online, now offline)
@@ -1789,37 +1808,64 @@ function ChecklistForm() {
     autoSaveField.flush()
     await new Promise(resolve => setTimeout(resolve, 200))
 
-    // 2. Bulk save current section responses
-    if (activeSection !== null && activeSection !== -1 && navigator.onLine && checklistIdRef.current) {
+    // 2. Bulk save current section responses (online + offline)
+    if (activeSection !== null && activeSection !== -1) {
       try {
         const sectionFields = getFieldsForSection(activeSection)
-        let userId: string | null = null
-        try {
-          const { data: { user } } = await supabase.auth.getUser()
-          userId = user?.id || null
-        } catch { /* offline */ }
 
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const rows: any[] = sectionFields
-          .map(f => {
-            const row = buildSingleResponseRow(f.id, responsesRef.current[f.id])
-            if (!row) return null
-            return {
-              checklist_id: checklistIdRef.current,
-              field_id: row.fieldId,
-              value_text: row.valueText,
-              value_number: row.valueNumber,
-              value_json: row.valueJson,
-              answered_by: userId,
-            }
-          })
-          .filter(Boolean)
+        if (navigator.onLine && checklistIdRef.current) {
+          // Online: upsert ao Supabase (sem base64 para evitar payload grande)
+          let userId: string | null = null
+          try {
+            const { data: { user } } = await supabase.auth.getUser()
+            userId = user?.id || null
+          } catch { /* offline */ }
 
-        if (rows.length > 0) {
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          await (supabase as any)
-            .from('checklist_responses')
-            .upsert(rows, { onConflict: 'checklist_id,field_id' })
+          const rows: any[] = sectionFields
+            .map(f => {
+              const row = buildSingleResponseRow(f.id, responsesRef.current[f.id])
+              if (!row) return null
+              return {
+                checklist_id: checklistIdRef.current,
+                field_id: row.fieldId,
+                value_text: row.valueText,
+                value_number: row.valueNumber,
+                value_json: stripBase64ForUpsert(row.valueJson),
+                answered_by: userId,
+              }
+            })
+            .filter(Boolean)
+
+          if (rows.length > 0) {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            await (supabase as any)
+              .from('checklist_responses')
+              .upsert(rows, { onConflict: 'checklist_id,field_id' })
+          }
+
+          // Background: upload fotos base64 dos campos desta secao
+          for (const f of sectionFields) {
+            const row = buildSingleResponseRow(f.id, responsesRef.current[f.id])
+            if (!row?.valueJson || typeof row.valueJson !== 'object') continue
+            const json = row.valueJson as Record<string, unknown>
+            const hasBase64 = (arr: unknown) =>
+              Array.isArray(arr) && arr.some((p: string) => typeof p === 'string' && p.startsWith('data:'))
+            if (hasBase64(json.photos) || hasBase64(json.conditionalPhotos)) {
+              uploadAndReplaceBase64(checklistIdRef.current, f.id, json)
+            }
+          }
+        } else if (offlineChecklistIdRef.current) {
+          // Offline: salvar no IndexedDB
+          for (const f of sectionFields) {
+            const row = buildSingleResponseRow(f.id, responsesRef.current[f.id])
+            if (!row) continue
+            await updateOfflineFieldResponse(offlineChecklistIdRef.current, activeSection, f.id, {
+              valueText: row.valueText,
+              valueNumber: row.valueNumber,
+              valueJson: row.valueJson,
+            })
+          }
         }
       } catch (err) {
         console.error('[SwitchSection] Erro ao salvar secao:', err)
