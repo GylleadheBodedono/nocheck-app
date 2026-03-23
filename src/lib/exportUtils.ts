@@ -1861,3 +1861,106 @@ export async function exportReincidenciasToPDF(data: ReincidenciaExportData): Pr
   const timestamp = new Date().toISOString().split('T')[0]
   doc.save(`relatorio_reincidencias_${timestamp}.pdf`)
 }
+
+// ─── EXPORTACAO DETALHADA DE CHECKLIST INDIVIDUAL (com fotos embutidas) ──────
+
+export type ChecklistFieldResponse = {
+  fieldName: string
+  fieldType: string
+  answer: string
+  photos: string[]
+}
+
+export async function exportChecklistDetailToPDF(
+  meta: { userName: string; userEmail: string; storeName: string; templateName: string; status: string; createdAt: string; completedAt: string | null },
+  fields: ChecklistFieldResponse[]
+): Promise<void> {
+  const { jsPDF } = await import('jspdf')
+  const doc = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4' })
+
+  const allUrls = new Set<string>()
+  for (const f of fields) {
+    for (const url of f.photos) {
+      if (url && !url.startsWith('data:')) allUrls.add(url)
+    }
+  }
+
+  const base64Map = new Map<string, string | null>()
+  await Promise.allSettled(
+    Array.from(allUrls).map(async url => {
+      base64Map.set(url, await fetchAsBase64(url))
+    })
+  )
+
+  const stLabel: Record<string, string> = {
+    concluido: 'Concluido', em_andamento: 'Em Andamento',
+    pendente: 'Pendente', incompleto: 'Incompleto',
+  }
+
+  let y = addPdfHeader(doc, 'RELATORIO DE CHECKLIST', [
+    `Usuario: ${meta.userName} (${meta.userEmail})`,
+    `Template: ${meta.templateName}  |  Loja: ${meta.storeName}`,
+    `Status: ${stLabel[meta.status] || meta.status}  |  Criado: ${fmtDateBR(meta.createdAt)}${meta.completedAt ? `  |  Concluido: ${fmtDateBR(meta.completedAt)}` : ''}`,
+    `Gerado em: ${new Date().toLocaleString('pt-BR')}`,
+  ])
+
+  const ensureSpace = (needed: number) => {
+    if (y + needed > PAGE_BOTTOM) { doc.addPage(); y = MARGIN }
+  }
+
+  for (const [idx, field] of fields.entries()) {
+    ensureSpace(22)
+    doc.setDrawColor('#E2E8F0')
+    doc.line(MARGIN, y, MARGIN + CONTENT_W, y)
+    y += 5
+
+    doc.setFontSize(9)
+    doc.setFont('helvetica', 'bold')
+    doc.setTextColor('#0D9488')
+    doc.text(n(`${idx + 1}. ${field.fieldName}`), MARGIN, y)
+    y += 5
+
+    doc.setFontSize(8)
+    doc.setFont('helvetica', 'normal')
+    doc.setTextColor('#334155')
+    const wrappedLines = doc.splitTextToSize(n(`Resposta: ${field.answer || '-'}`), CONTENT_W)
+    doc.text(wrappedLines, MARGIN, y)
+    y += wrappedLines.length * 4 + 2
+
+    if (field.photos.length > 0) {
+      ensureSpace(8)
+      doc.setFontSize(7)
+      doc.setTextColor('#666666')
+      doc.text(n(`Fotos (${field.photos.length}):`), MARGIN, y)
+      y += 4
+
+      let col = 0
+      for (const url of field.photos) {
+        if (col === PHOTOS_PER_ROW) { col = 0; y += IMG_H + IMG_GAP; ensureSpace(IMG_H + 8) }
+        const x = MARGIN + col * (IMG_W + IMG_GAP)
+        const b64 = base64Map.get(url)
+        if (b64) {
+          try {
+            doc.addImage(b64, b64.startsWith('data:image/png') ? 'PNG' : 'JPEG', x, y, IMG_W, IMG_H)
+          } catch {
+            doc.setFillColor('#F0F0F0'); doc.rect(x, y, IMG_W, IMG_H, 'F')
+            doc.setFontSize(7); doc.setTextColor('#999999')
+            doc.text('Foto indisponivel', x + 2, y + IMG_H / 2)
+          }
+        } else {
+          doc.setFillColor('#F0F0F0'); doc.rect(x, y, IMG_W, IMG_H, 'F')
+          doc.setFontSize(7); doc.setTextColor('#999999')
+          doc.text('Foto indisponivel', x + 2, y + IMG_H / 2)
+        }
+        col++
+      }
+      y += IMG_H + IMG_GAP
+    }
+    y += 3
+  }
+
+  addPdfFooters(doc)
+  const ts = new Date().toISOString().split('T')[0]
+  const safeName = n(meta.templateName).replace(/[^a-z0-9]/gi, '_').toLowerCase()
+  doc.save(`checklist_${safeName}_${ts}.pdf`)
+}
