@@ -14,6 +14,12 @@ import {
   FiUpload,
   FiFolder,
   FiX,
+  FiDownload,
+  FiCheckSquare,
+  FiSquare,
+  FiCalendar,
+  FiFilter,
+  FiCopy,
 } from 'react-icons/fi'
 
 type StorageFile = {
@@ -33,10 +39,15 @@ export default function GaleriaPage() {
   const [files, setFiles] = useState<StorageFile[]>([])
   const [currentFolder, setCurrentFolder] = useState<Folder>('uploads')
   const [search, setSearch] = useState('')
+  const [dateFrom, setDateFrom] = useState('')
+  const [dateTo, setDateTo] = useState('')
+  const [showFilters, setShowFilters] = useState(false)
   const [visibleCount, setVisibleCount] = useState(ITEMS_PER_PAGE)
-  const [deleting, setDeleting] = useState<string | null>(null)
+  const [deleting, setDeleting] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [preview, setPreview] = useState<StorageFile | null>(null)
+  const [selectedPaths, setSelectedPaths] = useState<Set<string>>(new Set())
+  const [operationLoading, setOperationLoading] = useState(false)
   const uploadRef = useRef<HTMLInputElement>(null)
   const router = useRouter()
   const supabase = useMemo(() => createClient(), [])
@@ -97,11 +108,13 @@ export default function GaleriaPage() {
     setLoading(false)
   }, [])
 
-  // Fetch files when folder changes
   useEffect(() => {
     fetchFiles(currentFolder)
     setSearch('')
+    setDateFrom('')
+    setDateTo('')
     setVisibleCount(ITEMS_PER_PAGE)
+    setSelectedPaths(new Set())
   }, [currentFolder, fetchFiles])
 
   useEffect(() => {
@@ -115,18 +128,83 @@ export default function GaleriaPage() {
     }
   }
 
+  // Filtered files: search + date range
   const filteredFiles = useMemo(() => {
-    if (!search.trim()) return files
-    const q = search.toLowerCase()
-    return files.filter(f => f.name.toLowerCase().includes(q) || f.path.toLowerCase().includes(q))
-  }, [files, search])
+    let result = files
+
+    if (search.trim()) {
+      const q = search.toLowerCase()
+      result = result.filter(f => f.name.toLowerCase().includes(q) || f.path.toLowerCase().includes(q))
+    }
+
+    if (dateFrom) {
+      const from = new Date(dateFrom)
+      from.setHours(0, 0, 0, 0)
+      result = result.filter(f => new Date(f.created_at) >= from)
+    }
+
+    if (dateTo) {
+      const to = new Date(dateTo)
+      to.setHours(23, 59, 59, 999)
+      result = result.filter(f => new Date(f.created_at) <= to)
+    }
+
+    return result
+  }, [files, search, dateFrom, dateTo])
 
   const visibleFiles = filteredFiles.slice(0, visibleCount)
+  const hasActiveFilters = search || dateFrom || dateTo
+  const selectionCount = selectedPaths.size
 
+  // Selection helpers
+  const toggleSelect = (path: string) => {
+    setSelectedPaths(prev => {
+      const next = new Set(prev)
+      if (next.has(path)) next.delete(path)
+      else next.add(path)
+      return next
+    })
+  }
+
+  const allVisibleSelected = visibleFiles.length > 0 && visibleFiles.every(f => selectedPaths.has(f.path))
+
+  const toggleSelectAll = () => {
+    if (allVisibleSelected) {
+      setSelectedPaths(new Set())
+    } else {
+      setSelectedPaths(new Set(filteredFiles.map(f => f.path)))
+    }
+  }
+
+  const clearSelection = () => setSelectedPaths(new Set())
+
+  // Bulk delete
+  const handleBulkDelete = async () => {
+    if (selectionCount === 0) return
+    if (!window.confirm(`Deletar ${selectionCount} arquivo(s)? Esta acao nao pode ser desfeita.`)) return
+
+    setDeleting(true)
+    try {
+      const paths = [...selectedPaths]
+      const res = await fetch('/api/storage', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ paths }),
+      })
+      const data = await res.json()
+      if (data.success) {
+        setFiles(prev => prev.filter(f => !selectedPaths.has(f.path)))
+        setSelectedPaths(new Set())
+      }
+    } catch { /* ignore */ }
+    setDeleting(false)
+  }
+
+  // Single delete
   const handleDelete = async (file: StorageFile) => {
     if (!window.confirm(`Deletar "${file.name}"? Esta acao nao pode ser desfeita.`)) return
 
-    setDeleting(file.path)
+    setDeleting(true)
     try {
       const res = await fetch('/api/storage', {
         method: 'DELETE',
@@ -136,43 +214,90 @@ export default function GaleriaPage() {
       const data = await res.json()
       if (data.success) {
         setFiles(prev => prev.filter(f => f.path !== file.path))
+        setSelectedPaths(prev => { const n = new Set(prev); n.delete(file.path); return n })
       }
-    } catch {
-      // ignore
-    }
-    setDeleting(null)
+    } catch { /* ignore */ }
+    setDeleting(false)
   }
 
+  // Bulk download
+  const handleBulkDownload = async () => {
+    if (selectionCount === 0) return
+    setOperationLoading(true)
+
+    const selected = files.filter(f => selectedPaths.has(f.path))
+    for (const file of selected) {
+      try {
+        const response = await fetch(file.publicUrl)
+        const blob = await response.blob()
+        const url = URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        a.href = url
+        a.download = file.name
+        document.body.appendChild(a)
+        a.click()
+        document.body.removeChild(a)
+        URL.revokeObjectURL(url)
+        // Small delay between downloads to not overwhelm browser
+        if (selected.length > 1) await new Promise(r => setTimeout(r, 300))
+      } catch {
+        console.error(`[Galeria] Erro ao baixar: ${file.name}`)
+      }
+    }
+    setOperationLoading(false)
+  }
+
+  // Copy URLs
+  const handleCopyUrls = () => {
+    const selected = files.filter(f => selectedPaths.has(f.path))
+    const urls = selected.map(f => f.publicUrl).join('\n')
+    navigator.clipboard.writeText(urls).then(() => {
+      alert(`${selected.length} URL(s) copiada(s) para a area de transferencia!`)
+    }).catch(() => {
+      // Fallback
+      const textarea = document.createElement('textarea')
+      textarea.value = urls
+      document.body.appendChild(textarea)
+      textarea.select()
+      document.execCommand('copy')
+      document.body.removeChild(textarea)
+      alert(`${selected.length} URL(s) copiada(s)!`)
+    })
+  }
+
+  // Upload
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (!file) return
+    const uploadFiles = e.target.files
+    if (!uploadFiles || uploadFiles.length === 0) return
 
     setUploading(true)
-    try {
-      // Read file as base64
-      const base64 = await new Promise<string>((resolve, reject) => {
-        const reader = new FileReader()
-        reader.readAsDataURL(file)
-        reader.onload = () => resolve(reader.result as string)
-        reader.onerror = reject
-      })
+    for (let fi = 0; fi < uploadFiles.length; fi++) {
+      const file = uploadFiles[fi]
+      try {
+        const base64 = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader()
+          reader.readAsDataURL(file)
+          reader.onload = () => resolve(reader.result as string)
+          reader.onerror = reject
+        })
 
-      const fileName = `galeria_${Date.now()}_${file.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`
-      const res = await fetch('/api/upload', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ image: base64, fileName, folder: currentFolder }),
-      })
-      const data = await res.json()
-      if (data.success) {
-        // Refresh list
-        await fetchFiles(currentFolder)
-      }
-    } catch {
-      // ignore
+        const fileName = `galeria_${Date.now()}_${file.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`
+        await fetch('/api/upload', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ image: base64, fileName, folder: currentFolder }),
+        })
+      } catch { /* ignore */ }
     }
+    await fetchFiles(currentFolder)
     setUploading(false)
     if (uploadRef.current) uploadRef.current.value = ''
+  }
+
+  const clearFilters = () => {
+    setSearch('')
+    setDateFrom('')
+    setDateTo('')
   }
 
   const formatSize = (bytes: number) => {
@@ -225,8 +350,8 @@ export default function GaleriaPage() {
           </button>
         </div>
 
-        {/* Search + Upload */}
-        <div className="flex gap-3 mb-6">
+        {/* Search + Filters + Upload */}
+        <div className="flex gap-3 mb-4">
           <div className="relative flex-1">
             <FiSearch className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted" />
             <input
@@ -243,6 +368,17 @@ export default function GaleriaPage() {
             )}
           </div>
           <button
+            onClick={() => setShowFilters(!showFilters)}
+            className={`px-4 py-3 rounded-xl flex items-center gap-2 border-2 transition-all ${
+              showFilters || dateFrom || dateTo
+                ? 'bg-primary/10 border-primary text-primary'
+                : 'bg-surface border-subtle text-secondary hover:border-primary/50'
+            }`}
+          >
+            <FiFilter className="w-4 h-4" />
+            <span className="hidden sm:inline">Filtros</span>
+          </button>
+          <button
             onClick={() => uploadRef.current?.click()}
             disabled={uploading}
             className="btn-primary px-5 py-3 rounded-xl flex items-center gap-2 disabled:opacity-50"
@@ -250,12 +386,12 @@ export default function GaleriaPage() {
             {uploading ? (
               <>
                 <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                <span>Enviando...</span>
+                <span className="hidden sm:inline">Enviando...</span>
               </>
             ) : (
               <>
                 <FiUpload className="w-4 h-4" />
-                <span>Importar</span>
+                <span className="hidden sm:inline">Importar</span>
               </>
             )}
           </button>
@@ -263,10 +399,109 @@ export default function GaleriaPage() {
             ref={uploadRef}
             type="file"
             accept="image/*"
+            multiple
             onChange={handleUpload}
             className="hidden"
           />
         </div>
+
+        {/* Date filters (collapsible) */}
+        {showFilters && (
+          <div className="card p-4 mb-4 flex flex-wrap items-end gap-4">
+            <div className="flex items-center gap-2 text-sm text-muted">
+              <FiCalendar className="w-4 h-4" />
+              <span>Periodo:</span>
+            </div>
+            <div className="flex-1 min-w-[140px]">
+              <label className="text-xs text-muted block mb-1">De</label>
+              <input
+                type="date"
+                value={dateFrom}
+                onChange={(e) => setDateFrom(e.target.value)}
+                className="input w-full px-3 py-2 rounded-lg text-sm"
+              />
+            </div>
+            <div className="flex-1 min-w-[140px]">
+              <label className="text-xs text-muted block mb-1">Ate</label>
+              <input
+                type="date"
+                value={dateTo}
+                onChange={(e) => setDateTo(e.target.value)}
+                className="input w-full px-3 py-2 rounded-lg text-sm"
+              />
+            </div>
+            {hasActiveFilters && (
+              <button onClick={clearFilters} className="text-sm text-primary hover:underline pb-1">
+                Limpar filtros
+              </button>
+            )}
+          </div>
+        )}
+
+        {/* Selection toolbar */}
+        {selectionCount > 0 && (
+          <div className="card p-3 mb-4 flex items-center justify-between bg-primary/5 border-primary/20">
+            <div className="flex items-center gap-3">
+              <button onClick={clearSelection} className="p-1.5 text-muted hover:text-main rounded-lg hover:bg-surface">
+                <FiX className="w-4 h-4" />
+              </button>
+              <span className="text-sm font-medium text-primary">{selectionCount} selecionado(s)</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handleCopyUrls}
+                disabled={operationLoading}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium text-secondary hover:bg-surface transition-colors"
+                title="Copiar URLs"
+              >
+                <FiCopy className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Copiar URLs</span>
+              </button>
+              <button
+                onClick={handleBulkDownload}
+                disabled={operationLoading}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium text-secondary hover:bg-surface transition-colors disabled:opacity-50"
+                title="Baixar selecionados"
+              >
+                {operationLoading ? (
+                  <div className="w-3.5 h-3.5 border-2 border-secondary border-t-transparent rounded-full animate-spin" />
+                ) : (
+                  <FiDownload className="w-3.5 h-3.5" />
+                )}
+                <span className="hidden sm:inline">Baixar</span>
+              </button>
+              <button
+                onClick={handleBulkDelete}
+                disabled={deleting}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium text-error hover:bg-error/10 transition-colors disabled:opacity-50"
+                title="Deletar selecionados"
+              >
+                {deleting ? (
+                  <div className="w-3.5 h-3.5 border-2 border-red-400 border-t-transparent rounded-full animate-spin" />
+                ) : (
+                  <FiTrash2 className="w-3.5 h-3.5" />
+                )}
+                <span className="hidden sm:inline">Deletar</span>
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Select all + count */}
+        {!loading && filteredFiles.length > 0 && (
+          <div className="flex items-center justify-between mb-4">
+            <button
+              onClick={toggleSelectAll}
+              className="flex items-center gap-2 text-sm text-secondary hover:text-primary transition-colors"
+            >
+              {allVisibleSelected ? <FiCheckSquare className="w-4 h-4 text-primary" /> : <FiSquare className="w-4 h-4" />}
+              <span>{allVisibleSelected ? 'Desmarcar todos' : 'Selecionar todos'}</span>
+            </button>
+            <p className="text-sm text-muted">
+              {filteredFiles.length} foto(s){hasActiveFilters ? ' (filtrado)' : ''}
+            </p>
+          </div>
+        )}
 
         {/* Loading state */}
         {loading && (
@@ -280,56 +515,73 @@ export default function GaleriaPage() {
           <div className="card p-12 text-center">
             <FiImage className="w-16 h-16 text-muted mx-auto mb-4" />
             <p className="text-secondary text-lg font-medium">
-              {search ? 'Nenhuma foto encontrada' : 'Pasta vazia'}
+              {hasActiveFilters ? 'Nenhuma foto encontrada' : 'Pasta vazia'}
             </p>
             <p className="text-muted text-sm mt-1">
-              {search ? `Nenhum resultado para "${search}"` : `Nenhuma foto na pasta ${currentFolder}`}
+              {hasActiveFilters ? 'Tente ajustar os filtros' : `Nenhuma foto na pasta ${currentFolder}`}
             </p>
+            {hasActiveFilters && (
+              <button onClick={clearFilters} className="mt-3 text-primary text-sm hover:underline">
+                Limpar filtros
+              </button>
+            )}
           </div>
         )}
 
         {/* Photo grid */}
         {!loading && visibleFiles.length > 0 && (
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-4">
-            {visibleFiles.map((file) => (
-              <div key={file.path} className="card overflow-hidden group">
-                {/* Thumbnail */}
-                <GaleriaThumbnail file={file} onClick={() => setPreview(file)} />
+            {visibleFiles.map((file) => {
+              const isSelected = selectedPaths.has(file.path)
+              return (
+                <div key={file.path} className={`card overflow-hidden group relative ${isSelected ? 'ring-2 ring-primary' : ''}`}>
+                  {/* Selection checkbox */}
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); toggleSelect(file.path) }}
+                    className={`absolute top-2 left-2 z-10 w-6 h-6 rounded flex items-center justify-center transition-all ${
+                      isSelected
+                        ? 'bg-primary text-white'
+                        : 'bg-black/40 text-white opacity-0 group-hover:opacity-100'
+                    }`}
+                  >
+                    {isSelected ? <FiCheckSquare className="w-4 h-4" /> : <FiSquare className="w-4 h-4" />}
+                  </button>
 
-                {/* Info */}
-                <div className="p-2.5">
-                  <p className="text-xs text-main font-medium truncate" title={file.name}>
-                    {file.name}
-                  </p>
-                  {(() => {
-                    const subPath = file.path.replace(/^(uploads|anexos)\//, '').replace(`/${file.name}`, '')
-                    return subPath ? (
-                      <p className="text-[10px] text-muted truncate" title={subPath}>{subPath}</p>
-                    ) : null
-                  })()}
-                  <div className="flex items-center justify-between mt-1">
-                    <div className="text-xs text-muted">
-                      <span>{formatSize(file.size)}</span>
-                      <span className="mx-1">·</span>
-                      <span>{formatDate(file.created_at)}</span>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => handleDelete(file)}
-                      disabled={deleting === file.path}
-                      className="p-1 text-muted hover:text-red-400 hover:bg-red-500/10 rounded transition-colors disabled:opacity-50"
-                      title="Deletar"
-                    >
-                      {deleting === file.path ? (
-                        <div className="w-3.5 h-3.5 border-2 border-red-400 border-t-transparent rounded-full animate-spin" />
-                      ) : (
+                  {/* Thumbnail */}
+                  <GaleriaThumbnail file={file} onClick={() => setPreview(file)} />
+
+                  {/* Info */}
+                  <div className="p-2.5">
+                    <p className="text-xs text-main font-medium truncate" title={file.name}>
+                      {file.name}
+                    </p>
+                    {(() => {
+                      const subPath = file.path.replace(/^(uploads|anexos)\//, '').replace(`/${file.name}`, '')
+                      return subPath ? (
+                        <p className="text-[10px] text-muted truncate" title={subPath}>{subPath}</p>
+                      ) : null
+                    })()}
+                    <div className="flex items-center justify-between mt-1">
+                      <div className="text-xs text-muted">
+                        <span>{formatSize(file.size)}</span>
+                        <span className="mx-1">·</span>
+                        <span>{formatDate(file.created_at)}</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handleDelete(file)}
+                        disabled={deleting}
+                        className="p-1 text-muted hover:text-red-400 hover:bg-red-500/10 rounded transition-colors disabled:opacity-50"
+                        title="Deletar"
+                      >
                         <FiTrash2 className="w-3.5 h-3.5" />
-                      )}
-                    </button>
+                      </button>
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
+              )
+            })}
           </div>
         )}
 
@@ -371,13 +623,25 @@ export default function GaleriaPage() {
                 <p className="text-main font-medium">{preview.name}</p>
                 <p className="text-muted text-sm">{formatSize(preview.size)} · {formatDate(preview.created_at)}</p>
               </div>
-              <button
-                onClick={() => { handleDelete(preview); setPreview(null) }}
-                className="btn-secondary px-3 py-2 rounded-lg text-red-400 hover:bg-red-500/10 flex items-center gap-2 text-sm"
-              >
-                <FiTrash2 className="w-4 h-4" />
-                Deletar
-              </button>
+              <div className="flex gap-2">
+                <a
+                  href={preview.publicUrl}
+                  download={preview.name}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="btn-secondary px-3 py-2 rounded-lg flex items-center gap-2 text-sm"
+                >
+                  <FiDownload className="w-4 h-4" />
+                  Baixar
+                </a>
+                <button
+                  onClick={() => { handleDelete(preview); setPreview(null) }}
+                  className="btn-secondary px-3 py-2 rounded-lg text-red-400 hover:bg-red-500/10 flex items-center gap-2 text-sm"
+                >
+                  <FiTrash2 className="w-4 h-4" />
+                  Deletar
+                </button>
+              </div>
             </div>
           </div>
         </div>
