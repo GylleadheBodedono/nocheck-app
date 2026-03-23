@@ -34,6 +34,8 @@ type ActionPlan = {
   created_at: string
   store: { name: string } | null
   assigned_user: { full_name: string } | null
+  assigned_function: { name: string } | null
+  assigned_function_id: number | null
   field: { name: string } | null
   template: { name: string } | null
   action_plan_stores?: { store: { name: string }; store_id: number }[]
@@ -136,7 +138,7 @@ export default function PlanoDeAcaoPage() {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       let plansQuery = (supabase as any)
         .from('action_plans')
-        .select(`*, store:stores(name), field:template_fields(name), template:checklist_templates(name), action_plan_stores(store_id, store:stores(name))`)
+        .select(`*, store:stores(name), assigned_function:functions(name), field:template_fields(name), template:checklist_templates(name), action_plan_stores(store_id, store:stores(name))`)
         .order('created_at', { ascending: false })
 
       if (!isAdminUser) {
@@ -180,8 +182,8 @@ export default function PlanoDeAcaoPage() {
             usersMap = new Map(assignees.map((u: { id: string; full_name: string }) => [u.id, u.full_name]))
           }
         }
-        // Montar assigned_user em cada plano
-        const plansWithUsers = plansRes.data.map((p: { assigned_to: string }) => ({
+        // Montar assigned_user em cada plano (assigned_function ja vem do join)
+        const plansWithUsers = plansRes.data.map((p: { assigned_to: string; assigned_function_id: number | null }) => ({
           ...p,
           assigned_user: usersMap.get(p.assigned_to) ? { full_name: usersMap.get(p.assigned_to) } : null,
         }))
@@ -210,6 +212,8 @@ export default function PlanoDeAcaoPage() {
             created_at: p.created_at,
             store: p.store_name ? { name: p.store_name } : null,
             assigned_user: p.assignee_name ? { full_name: p.assignee_name } : null,
+            assigned_function: null,
+            assigned_function_id: null,
             field: p.field_name ? { name: p.field_name } : null,
             template: p.template_name ? { name: p.template_name } : null,
           })))
@@ -255,7 +259,10 @@ export default function PlanoDeAcaoPage() {
         const matchesMulti = p.action_plan_stores?.some(aps => aps.store?.name === filterStore)
         if (!matchesLegacy && !matchesMulti) return false
       }
-      if (filterAssignee && p.assigned_user?.full_name !== filterAssignee) return false
+      if (filterAssignee) {
+        const displayName = p.assigned_function?.name || p.assigned_user?.full_name
+        if (displayName !== filterAssignee) return false
+      }
       return true
     })
   }, [actionPlans, filterStatus, filterSeverity, filterStore, filterAssignee])
@@ -644,7 +651,9 @@ export default function PlanoDeAcaoPage() {
                           </span>
                         </td>
                         <td className="px-4 py-3">
-                          <p className="text-sm text-main">{plan.assigned_user?.full_name || '-'}</p>
+                          <p className="text-sm text-main">
+                            {plan.assigned_function?.name || plan.assigned_user?.full_name || '-'}
+                          </p>
                         </td>
                         <td className="px-4 py-3">
                           <p className={`text-sm ${overdue ? 'text-error font-medium' : 'text-muted'}`}>

@@ -244,7 +244,27 @@ export async function processarNaoConformidades(
       return { success: false, plansCreated: 0, error: condError.message }
     }
 
-    if (!conditions || conditions.length === 0) {
+    console.log(`[ActionPlan] ========== INICIO ==========`)
+    console.log(`[ActionPlan] Template: ${templateId}, Store: ${storeId}, User: ${userId}`)
+    console.log(`[ActionPlan] Fields: ${fields.map(f => `${f.name}(${f.id})`).join(', ')}`)
+    console.log(`[ActionPlan] Responses: ${responses.map(r => `field_${r.field_id}=${r.value_text || '(json)'}`).join(', ')}`)
+    console.log(`[ActionPlan] Conditions encontradas: ${conditions?.length || 0}`)
+
+    // Logar value_json de cada response para debug
+    for (const r of responses) {
+      const vj = r.value_json as Record<string, unknown> | null
+      if (vj) {
+        console.log(`[ActionPlan] Response field_${r.field_id} value_json keys: [${Object.keys(vj).join(', ')}] selectedFunctionId=${vj.selectedFunctionId || 'N/A'} selectedSeverity=${vj.selectedSeverity || 'N/A'}`)
+      }
+    }
+
+    // Se nao ha conditions E nao ha responses com selectedFunctionId, nao ha nada a fazer
+    const hasUserSelectedFunctions = responses.some(r => {
+      const vj = r.value_json as Record<string, unknown> | null
+      return vj?.selectedFunctionId
+    })
+    if ((!conditions || conditions.length === 0) && !hasUserSelectedFunctions) {
+      console.log(`[ActionPlan] Nenhuma condition e nenhum selectedFunctionId — retornando`)
       return { success: true, plansCreated: 0 }
     }
 
@@ -308,11 +328,14 @@ export async function processarNaoConformidades(
 
     // 3. Avaliar cada condicao contra as respostas
     let plansCreated = 0
+    const createdFieldIds = new Set<number>()
 
-    for (const condition of conditions as FieldCondition[]) {
+    console.log(`[ActionPlan] === PRIMEIRO PASSO: ${(conditions || []).length} conditions ===`)
+    for (const condition of (conditions || []) as FieldCondition[]) {
+      console.log(`[ActionPlan] Condition ${condition.id}: field_id=${condition.field_id}, type=${condition.condition_type}`)
       const field = fields.find(f => f.id === condition.field_id)
       if (!field) {
-        console.warn(`[ActionPlan][DEBUG] Campo ID ${condition.field_id} NAO encontrado nos fields recebidos. Fields IDs: [${fields.map(f => f.id).join(', ')}]`)
+        console.warn(`[ActionPlan] Campo ID ${condition.field_id} NAO encontrado nos fields. Fields IDs: [${fields.map(f => f.id).join(', ')}]`)
         continue
       }
 
@@ -323,9 +346,12 @@ export async function processarNaoConformidades(
       }
 
       const isNonConforming = evaluateCondition(field, response, condition)
+      console.log(`[ActionPlan] Campo "${field.name}" (${field.id}): value_text="${response.value_text}", isNonConforming=${isNonConforming}`)
       if (!isNonConforming) {
+        console.log(`[ActionPlan] Campo "${field.name}" nao e nao-conforme, pulando`)
         continue
       }
+      console.log(`[ActionPlan] >>> NAO-CONFORMIDADE detectada: "${field.name}" — criando plano...`)
 
       // 4. Nao-conformidade detectada! Verificar reincidencia
       const reincidencia = await checkReincidencia(supabase, field.id, storeId, templateId)
@@ -352,8 +378,11 @@ export async function processarNaoConformidades(
 
       // Determinar funcao responsavel: prioridade para a selecionada pelo preenchedor, depois preset, depois condition
       const assignedFunctionId = userSelectedFunctionId || presetData?.default_function_id || condition.default_function_id || null
-      // Fallback: se nenhuma funcao, usa assigned_to legado (usuario direto)
-      const assigneeId = legacyAssigneeId || presetData?.default_assignee_id || condition.default_assignee_id || userId
+      // Se funcao atribuida, assigned_to = quem preencheu (funcao inteira recebe notificacoes)
+      // Senao, fallback legado: usuario direto
+      const assigneeId = assignedFunctionId
+        ? userId
+        : (legacyAssigneeId || presetData?.default_assignee_id || condition.default_assignee_id || userId)
       console.log(`[ActionPlan] Campo "${field.name}": assignedFunctionId=${assignedFunctionId}, assigneeId=${assigneeId}, userSelected=${userSelectedFunctionId}, conditionDefault=${condition.default_function_id}`)
 
       // Calcular deadline (preset pode sobrescrever)
@@ -371,7 +400,7 @@ export async function processarNaoConformidades(
               .replace('{field_name}', field.name)
               .replace('{value}', nonConformityValue)
               .replace('{store_name}', storeName)
-          : `Não conformidade: ${field.name} - ${storeName}`
+          : `Nao conformidade: ${field.name} - ${storeName}`
 
       // Severidade: prioridade para a selecionada pelo usuario, depois preset, depois condition
       let severity = (userSelectedSeverity || presetData?.severity || condition.severity) as string
@@ -425,6 +454,7 @@ export async function processarNaoConformidades(
       }
 
       plansCreated++
+      createdFieldIds.add(field.id)
 
       // 7. Buscar usuarios responsaveis (todos da funcao ou fallback para usuario unico)
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -447,10 +477,32 @@ export async function processarNaoConformidades(
             functionWebhookUrl = membersData.teamsWebhookUrl || null
             console.log(`[ActionPlan] Funcao "${functionName}" (ID ${assignedFunctionId}): ${responsibleUsers.length} usuarios`, responsibleUsers.map((u: {full_name: string}) => u.full_name))
           } else {
-            console.error(`[ActionPlan] Erro ao buscar membros da funcao ${assignedFunctionId}: HTTP ${membersRes.status}`)
+            const errorText = await membersRes.text().catch(() => '(sem body)')
+            console.error(`[ActionPlan] Erro ao buscar membros da funcao ${assignedFunctionId}: HTTP ${membersRes.status} - ${errorText}`)
           }
         } catch (fetchErr) {
           console.error('[ActionPlan] Erro fetch membros da funcao:', fetchErr)
+        }
+
+        // Fallback: se API falhou, buscar direto do banco
+        if (responsibleUsers.length === 0) {
+          console.warn(`[ActionPlan] API retornou 0 membros para funcao ${assignedFunctionId}, tentando query direta...`)
+          try {
+            const [usersResult, fnResult] = await Promise.all([
+              sb.from('users').select('id, email, full_name').eq('function_id', assignedFunctionId).eq('is_active', true),
+              sb.from('functions').select('name, teams_webhook_url').eq('id', assignedFunctionId).single(),
+            ])
+            if (usersResult.data && usersResult.data.length > 0) {
+              responsibleUsers = usersResult.data
+              functionName = fnResult.data?.name || ''
+              functionWebhookUrl = fnResult.data?.teams_webhook_url || null
+              console.log(`[ActionPlan] Fallback DB: funcao "${functionName}" — ${responsibleUsers.length} usuarios`)
+            } else {
+              console.error(`[ActionPlan] Nenhum usuario ativo na funcao ${assignedFunctionId}`)
+            }
+          } catch (dbErr) {
+            console.error('[ActionPlan] Erro fallback DB membros:', dbErr)
+          }
         }
       } else {
         // Fallback legado: usuario unico
@@ -470,48 +522,52 @@ export async function processarNaoConformidades(
       }
 
       // 7a. Criar notificacao in-app para CADA usuario responsavel
-      const notifTitle = reincidencia.isReincidencia
-        ? `Reincidência #${reincidencia.count + 1}: ${field.name}`
-        : `Novo plano de ação: ${field.name}`
+      try {
+        const notifTitle = reincidencia.isReincidencia
+          ? `Reincidencia #${reincidencia.count + 1}: ${field.name}`
+          : `Novo plano de acao: ${field.name}`
 
-      console.log(`[ActionPlan] Notificando ${responsibleUsers.length} responsaveis:`, responsibleUsers.map(u => `${u.full_name} (${u.id})`))
-      for (const responsible of responsibleUsers) {
-        console.log(`[ActionPlan] Criando notificacao para: ${responsible.full_name} (${responsible.id})`)
-        await createNotification(supabase, responsible.id, {
-          type: reincidencia.isReincidencia ? 'reincidencia_detected' : 'action_plan_assigned',
-          title: notifTitle,
-          message: `${storeName} - Prazo: ${new Date(deadlineStr).toLocaleDateString('pt-BR')}`,
-          link: `/admin/planos-de-acao/${plan.id}`,
-          metadata: {
-            action_plan_id: plan.id,
-            store_id: storeId,
-            severity,
-            is_reincidencia: reincidencia.isReincidencia,
-          },
-        })
-      }
+        console.log(`[ActionPlan] Notificando ${responsibleUsers.length} responsaveis:`, responsibleUsers.map(u => `${u.full_name} (${u.id})`))
+        for (const responsible of responsibleUsers) {
+          console.log(`[ActionPlan] Criando notificacao para: ${responsible.full_name} (${responsible.id})`)
+          await createNotification(supabase, responsible.id, {
+            type: reincidencia.isReincidencia ? 'reincidencia_detected' : 'action_plan_assigned',
+            title: notifTitle,
+            message: `${storeName} - Prazo: ${new Date(deadlineStr).toLocaleDateString('pt-BR')}`,
+            link: `/admin/planos-de-acao/${plan.id}`,
+            metadata: {
+              action_plan_id: plan.id,
+              store_id: storeId,
+              severity,
+              is_reincidencia: reincidencia.isReincidencia,
+            },
+          })
+        }
 
-      // 7b. Notificar quem respondeu o checklist
-      const isFillerAlsoResponsible = responsibleUsers.some(u => u.id === userId)
-      if (!isFillerAlsoResponsible) {
-        const assigneeLabel = functionName || responsibleUsers.map(u => u.full_name).join(', ') || 'Não atribuído'
-        await createNotification(supabase, userId, {
-          type: 'action_plan_created',
-          title: `Plano de ação gerado: ${field.name}`,
-          message: `Você respondeu "${templateName}" e o campo "${field.name}" foi marcado como "${nonConformityValue}". Responsável: ${assigneeLabel}.`,
-          link: `/admin/planos-de-acao/${plan.id}`,
-          metadata: {
-            action_plan_id: plan.id,
-            store_id: storeId,
-            field_name: field.name,
-            non_conformity_value: nonConformityValue,
-          },
-        })
+        // 7b. Notificar quem respondeu o checklist
+        const isFillerAlsoResponsible = responsibleUsers.some(u => u.id === userId)
+        if (!isFillerAlsoResponsible) {
+          const assigneeLabel = functionName || responsibleUsers.map(u => u.full_name).join(', ') || 'Nao atribuido'
+          await createNotification(supabase, userId, {
+            type: 'action_plan_created',
+            title: `Plano de acao gerado: ${field.name}`,
+            message: `Voce respondeu "${templateName}" e o campo "${field.name}" foi marcado como "${nonConformityValue}". Responsavel: ${assigneeLabel}.`,
+            link: `/admin/planos-de-acao/${plan.id}`,
+            metadata: {
+              action_plan_id: plan.id,
+              store_id: storeId,
+              field_name: field.name,
+              non_conformity_value: nonConformityValue,
+            },
+          })
+        }
+      } catch (notifErr) {
+        console.error(`[ActionPlan] Erro ao criar notificacoes in-app para campo "${field.name}":`, notifErr)
       }
 
       // 8. Enviar email para CADA usuario responsavel + Teams
       try {
-        const assigneeLabel = functionName || responsibleUsers.map(u => u.full_name).join(', ') || 'Não atribuído'
+        const assigneeLabel = functionName || responsibleUsers.map(u => u.full_name).join(', ') || 'Nao atribuido'
         const emailVars: EmailTemplateVariables = {
           plan_title: planTitle,
           field_name: field.name,
@@ -585,8 +641,8 @@ export async function processarNaoConformidades(
             if (admin.id === assigneeId) continue
             await createNotification(supabase, admin.id, {
               type: 'reincidencia_detected',
-              title: `Reincidência #${reincidencia.count + 1}: ${field.name}`,
-              message: `${storeName} - ${nonConformityValue} - Ocorrência ${reincidencia.count + 1}x nos últimos 90 dias`,
+              title: `Reincidencia #${reincidencia.count + 1}: ${field.name}`,
+              message: `${storeName} - ${nonConformityValue} - Ocorrencia ${reincidencia.count + 1}x nos ultimos 90 dias`,
               link: `/admin/planos-de-acao/${plan.id}`,
               metadata: {
                 action_plan_id: plan.id,
@@ -602,9 +658,200 @@ export async function processarNaoConformidades(
       }
     }
 
+    // 10. Segundo passo: campos onde usuario selecionou funcao/severidade
+    //     mas NAO tinham field_condition configurado no banco
+    console.log(`[ActionPlan] === SEGUNDO PASSO: ${responses.length} responses, createdFieldIds=[${[...createdFieldIds].join(',')}] ===`)
+    for (const response of responses) {
+      const vJson = response.value_json as Record<string, unknown> | null
+      const userFunctionId = vJson?.selectedFunctionId as number | null
+
+      if (createdFieldIds.has(response.field_id)) {
+        console.log(`[ActionPlan] 2P: field_${response.field_id} ja processado no primeiro passo, pulando`)
+        continue
+      }
+      if (!userFunctionId) {
+        console.log(`[ActionPlan] 2P: field_${response.field_id} sem selectedFunctionId (value_json keys: [${vJson ? Object.keys(vJson).join(',') : 'null'}]), pulando`)
+        continue
+      }
+
+      const field = fields.find(f => f.id === response.field_id)
+      if (!field) continue
+
+      console.log(`[ActionPlan] 2P: >>> campo "${field.name}" (${field.id}) tem selectedFunctionId=${userFunctionId} — criando plano...`)
+
+      try {
+        const userSeverity = (vJson?.selectedSeverity as string) || 'media'
+        const userPresetId = vJson?.selectedPresetId as number | null
+
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        let presetData2: any = null
+        if (userPresetId) {
+          try {
+            const { data } = await sb.from('action_plan_presets').select('*').eq('id', userPresetId).single()
+            if (data) presetData2 = data
+          } catch { /* ignora */ }
+        }
+
+        const reincidencia2 = await checkReincidencia(supabase, field.id, storeId, templateId)
+
+        const assignedFunctionId2 = userFunctionId
+        const assigneeId2 = userId
+        const deadlineDays2 = presetData2?.deadline_days ?? 7
+        const deadline2 = new Date()
+        deadline2.setDate(deadline2.getDate() + deadlineDays2)
+        const deadlineStr2 = deadline2.toISOString().split('T')[0]
+
+        const nonConformityValue2 = getNonConformityValueStr(field, response)
+        const planTitle2 = presetData2?.name || `Nao conformidade: ${field.name} - ${storeName}`
+
+        let severity2 = presetData2?.severity || userSeverity
+        if (reincidencia2.isReincidencia && reincidencia2.count >= 3) {
+          const escalation: Record<string, string> = { baixa: 'media', media: 'alta', alta: 'critica' }
+          severity2 = escalation[severity2] || severity2
+        }
+
+        const { data: responseRow2 } = await sb
+          .from('checklist_responses')
+          .select('id')
+          .eq('checklist_id', checklistId)
+          .eq('field_id', field.id)
+          .single()
+
+        const { data: plan2, error: planError2 } = await sb
+          .from('action_plans')
+          .insert({
+            checklist_id: checklistId,
+            field_id: field.id,
+            field_condition_id: null,
+            response_id: responseRow2?.id || null,
+            template_id: templateId,
+            store_id: storeId,
+            sector_id: sectorId,
+            title: planTitle2,
+            description: null,
+            severity: severity2,
+            status: 'aberto',
+            assigned_to: assigneeId2,
+            assigned_function_id: assignedFunctionId2,
+            assigned_by: userId,
+            deadline: deadlineStr2,
+            is_reincidencia: reincidencia2.isReincidencia,
+            reincidencia_count: reincidencia2.count,
+            parent_action_plan_id: reincidencia2.parentPlanId,
+            non_conformity_value: nonConformityValue2,
+            require_photo_on_completion: presetData2?.require_photo_on_completion ?? true,
+            require_text_on_completion: presetData2?.require_text_on_completion ?? true,
+            completion_max_chars: presetData2?.completion_max_chars || 800,
+            created_by: userId,
+          })
+          .select('id')
+          .single()
+
+        if (planError2) {
+          console.error(`[ActionPlan] Segundo passo: erro ao criar plano para "${field.name}":`, planError2)
+          continue
+        }
+
+        plansCreated++
+        createdFieldIds.add(field.id)
+        console.log(`[ActionPlan] Segundo passo: plano #${plan2.id} criado para "${field.name}" → funcao ${assignedFunctionId2}`)
+
+        // Buscar membros da funcao
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        let responsibleUsers2: { id: string; email: string; full_name: string }[] = []
+        let functionName2 = ''
+        let functionWebhookUrl2: string | null = null
+
+        try {
+          const [usersResult, fnResult] = await Promise.all([
+            sb.from('users').select('id, email, full_name').eq('function_id', assignedFunctionId2).eq('is_active', true),
+            sb.from('functions').select('name, teams_webhook_url').eq('id', assignedFunctionId2).single(),
+          ])
+          if (usersResult.data && usersResult.data.length > 0) {
+            responsibleUsers2 = usersResult.data
+            functionName2 = fnResult.data?.name || ''
+            functionWebhookUrl2 = fnResult.data?.teams_webhook_url || null
+          }
+        } catch (fetchErr2) {
+          console.error('[ActionPlan] Segundo passo: erro ao buscar membros:', fetchErr2)
+        }
+
+        // Notificacoes
+        try {
+          for (const responsible of responsibleUsers2) {
+            await createNotification(supabase, responsible.id, {
+              type: 'action_plan_assigned',
+              title: `Novo plano de acao: ${field.name}`,
+              message: `${storeName} - Prazo: ${new Date(deadlineStr2).toLocaleDateString('pt-BR')}`,
+              link: `/admin/planos-de-acao/${plan2.id}`,
+              metadata: { action_plan_id: plan2.id, store_id: storeId, severity: severity2 },
+            })
+          }
+          const isFillerAlso = responsibleUsers2.some(u => u.id === userId)
+          if (!isFillerAlso) {
+            const label2 = functionName2 || responsibleUsers2.map(u => u.full_name).join(', ') || 'Nao atribuido'
+            await createNotification(supabase, userId, {
+              type: 'action_plan_created',
+              title: `Plano de acao gerado: ${field.name}`,
+              message: `Campo "${field.name}" marcado como "${nonConformityValue2}". Responsavel: ${label2}.`,
+              link: `/admin/planos-de-acao/${plan2.id}`,
+              metadata: { action_plan_id: plan2.id, store_id: storeId },
+            })
+          }
+        } catch (notifErr2) {
+          console.error(`[ActionPlan] Segundo passo: erro notificacoes "${field.name}":`, notifErr2)
+        }
+
+        // Emails
+        try {
+          const label2 = functionName2 || responsibleUsers2.map(u => u.full_name).join(', ') || 'Nao atribuido'
+          const emailVars2: EmailTemplateVariables = {
+            plan_title: planTitle2,
+            field_name: field.name,
+            store_name: storeName,
+            sector_name: sectorName,
+            template_name: templateName,
+            respondent_name: respondentName,
+            respondent_time: new Date(respondentTime).toLocaleString('pt-BR'),
+            assignee_name: label2,
+            severity: severity2,
+            severity_label: severity2.charAt(0).toUpperCase() + severity2.slice(1),
+            severity_color: SEVERITY_COLORS[severity2] || '#f59e0b',
+            deadline: new Date(deadlineStr2).toLocaleDateString('pt-BR'),
+            non_conformity_value: nonConformityValue2,
+            description: '',
+            plan_url: `${appUrl}/admin/planos-de-acao/${plan2.id}`,
+            plan_id: String(plan2.id),
+            is_reincidencia: reincidencia2.isReincidencia ? 'Sim' : 'Nao',
+            reincidencia_count: String(reincidencia2.count),
+            reincidencia_prefix: reincidencia2.isReincidencia ? `REINCIDENCIA #${reincidencia2.count + 1} - ` : '',
+            app_name: 'OpereCheck',
+          }
+          const { html: htmlBody2, subject: emailSubject2 } = buildEmailFromTemplate(emailTemplateHtml, emailSubjectTemplate, emailVars2)
+          for (const responsible of responsibleUsers2) {
+            await sendActionPlanEmail(responsible.id, emailSubject2, htmlBody2, accessToken)
+          }
+          await sendActionPlanTeamsAlert({
+            title: planTitle2, fieldName: field.name, storeName, severity: severity2,
+            deadline: new Date(deadlineStr2).toLocaleDateString('pt-BR'),
+            assigneeName: label2, nonConformityValue: nonConformityValue2,
+            isReincidencia: reincidencia2.isReincidencia, reincidenciaCount: reincidencia2.count,
+            respondentName, respondentEmail,
+            assigneeEmail: responsibleUsers2[0]?.email || '',
+            webhookUrl: functionWebhookUrl2,
+          })
+        } catch (emailErr2) {
+          console.error(`[ActionPlan] Segundo passo: erro email/Teams "${field.name}":`, emailErr2)
+        }
+      } catch (err2) {
+        console.error(`[ActionPlan] Segundo passo: erro geral campo "${field.name}":`, err2)
+      }
+    }
+
+    console.log(`[ActionPlan] ========== FIM: ${plansCreated} plano(s) criado(s), fields processados: [${[...createdFieldIds].join(',')}] ==========`)
     return { success: true, plansCreated }
   } catch (err) {
-    console.error('[ActionPlan] Erro no processamento:', err)
+    console.error('[ActionPlan] ERRO FATAL no processamento:', err)
     return { success: false, plansCreated: 0, error: err instanceof Error ? err.message : 'Erro desconhecido' }
   }
 }
@@ -649,7 +896,7 @@ export async function checkOverduePlans(
     for (const plan of overduePlans) {
       await createNotification(supabase, plan.assigned_to, {
         type: 'action_plan_overdue',
-        title: 'Plano de ação vencido',
+        title: 'Plano de acao vencido',
         message: `O plano "${plan.title}" venceu em ${new Date(plan.deadline).toLocaleDateString('pt-BR')}`,
         link: `/admin/planos-de-acao/${plan.id}`,
         metadata: { action_plan_id: plan.id },
@@ -659,7 +906,7 @@ export async function checkOverduePlans(
         if (adminId === plan.assigned_to) continue
         await createNotification(supabase, adminId, {
           type: 'action_plan_overdue',
-          title: 'Plano de ação vencido',
+          title: 'Plano de acao vencido',
           message: `O plano "${plan.title}" venceu em ${new Date(plan.deadline).toLocaleDateString('pt-BR')}`,
           link: `/admin/planos-de-acao/${plan.id}`,
           metadata: { action_plan_id: plan.id },
@@ -678,24 +925,24 @@ export async function checkOverduePlans(
           const htmlBody = `
             <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
               <div style="background: #dc2626; color: white; padding: 20px; border-radius: 12px 12px 0 0;">
-                <h2 style="margin: 0;">Plano de Ação Vencido</h2>
+                <h2 style="margin: 0;">Plano de Acao Vencido</h2>
               </div>
               <div style="padding: 24px; background: #1a1a2e; color: #e0e0e0; border-radius: 0 0 12px 12px;">
                 <p style="font-size: 16px; margin-bottom: 16px;">
-                  O plano de ação <strong>"${plan.title}"</strong> venceu em <strong style="color: #ef4444;">${deadlineFormatted}</strong>.
+                  O plano de acao <strong>"${plan.title}"</strong> venceu em <strong style="color: #ef4444;">${deadlineFormatted}</strong>.
                 </p>
                 <p style="font-size: 14px; color: #a0a0a0; margin-bottom: 24px;">
-                  Por favor, acesse o sistema para tomar as providências necessárias.
+                  Por favor, acesse o sistema para tomar as providencias necessarias.
                 </p>
                 <a href="${planUrl}" style="display: inline-block; background: #6366f1; color: white; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: 600;">
-                  Ver Plano de Ação
+                  Ver Plano de Acao
                 </a>
               </div>
             </div>
           `
           await sendActionPlanEmail(
             plan.assigned_to,
-            `Plano de Ação Vencido: "${plan.title}"`,
+            `Plano de Acao Vencido: "${plan.title}"`,
             htmlBody,
             accessToken
           )

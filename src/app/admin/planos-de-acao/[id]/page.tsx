@@ -244,9 +244,10 @@ export default function ActionPlanDetailPage() {
 
   const fetchUpdates = useCallback(async () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data, error: fetchError } = await (supabase as any)
+    const sb = supabase as any
+    const { data, error: fetchError } = await sb
       .from('action_plan_updates')
-      .select(`*, user:users(full_name)`)
+      .select('*')
       .eq('action_plan_id', planId)
       .order('created_at', { ascending: false })
 
@@ -255,7 +256,17 @@ export default function ActionPlanDetailPage() {
       return []
     }
 
-    return (data || []) as PlanUpdate[]
+    if (!data || data.length === 0) return []
+
+    // Resolver nomes de usuarios separadamente (FK aponta para auth.users, nao public.users)
+    const userIds = [...new Set(data.map((u: { user_id: string }) => u.user_id))]
+    const { data: users } = await sb.from('users').select('id, full_name').in('id', userIds)
+    const userMap = new Map((users || []).map((u: { id: string; full_name: string }) => [u.id, u.full_name]))
+
+    return data.map((u: { user_id: string }) => ({
+      ...u,
+      user: userMap.has(u.user_id) ? { full_name: userMap.get(u.user_id) } : null,
+    })) as PlanUpdate[]
   }, [supabase, planId])
 
   const loadData = useCallback(async () => {
@@ -855,9 +866,9 @@ export default function ActionPlanDetailPage() {
               {(() => {
                 const vJson = plan.response?.value_json as Record<string, unknown> | null
                 if (!vJson) return null
-                const photos = (vJson.photos as string[] || []).filter((p: string) => typeof p === 'string' && p.startsWith('http'))
+                const photos = (vJson.photos as string[] || []).filter((p: string) => typeof p === 'string' && p.length > 0)
                 const condText = vJson.conditionalText as string | undefined
-                const condPhotos = (vJson.conditionalPhotos as string[] || []).filter((p: string) => typeof p === 'string' && p.startsWith('http'))
+                const condPhotos = (vJson.conditionalPhotos as string[] || []).filter((p: string) => typeof p === 'string' && p.length > 0)
                 const allPhotos = [...photos, ...condPhotos]
                 if (allPhotos.length === 0 && !condText) return null
 

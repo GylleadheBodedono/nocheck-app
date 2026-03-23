@@ -43,6 +43,17 @@ type SectionProgress = {
 
 // Upload photo helper
 async function uploadPhoto(base64Image: string, fileName: string, folder?: string): Promise<string | null> {
+  // PROTECAO: se ja e URL, retornar direto — NUNCA enviar URL ao upload API
+  if (base64Image.startsWith('http')) {
+    console.log(`[Upload] SKIP (ja e URL): ${fileName} → ${base64Image.substring(0, 80)}...`)
+    return base64Image
+  }
+  if (!base64Image.startsWith('data:')) {
+    console.error(`[Upload] SKIP (formato invalido): ${fileName} (${base64Image.substring(0, 30)}...)`)
+    return null
+  }
+  const sizeKB = Math.round(base64Image.length / 1024)
+  console.log(`[Upload] Iniciando: ${fileName} (base64, ${sizeKB}KB)`)
   try {
     const response = await fetch('/api/upload', {
       method: 'POST',
@@ -50,10 +61,18 @@ async function uploadPhoto(base64Image: string, fileName: string, folder?: strin
       body: JSON.stringify({ image: base64Image, fileName, folder }),
     })
     const result = await response.json()
-    if (!response.ok) return null
-    if (result.success && result.url) return result.url
+    if (!response.ok) {
+      console.error(`[Upload] FALHA HTTP ${response.status}: ${fileName}`, result)
+      return null
+    }
+    if (result.success && result.url) {
+      console.log(`[Upload] OK: ${fileName} → ${result.url.substring(0, 80)}...`)
+      return result.url
+    }
+    console.error(`[Upload] FALHA (sem URL): ${fileName}`, result)
     return null
-  } catch {
+  } catch (err) {
+    console.error(`[Upload] ERRO: ${fileName}`, err)
     return null
   }
 }
@@ -991,7 +1010,60 @@ function ChecklistForm() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hasSections, template, loading, store, timeBlocked])
 
-  // Build response data for a single field (no photo upload - photos stay as base64 during auto-save)
+  // Upload base64 photos em background e atualizar DB com URLs (fire-and-forget)
+  const uploadAndReplaceBase64 = useCallback(async (clId: number, fieldId: number, json: Record<string, unknown>) => {
+    try {
+      const updated = { ...json }
+      let changed = false
+
+      const uploadArray = async (arr: string[], prefix: string): Promise<string[]> => {
+        const result: string[] = []
+        for (let i = 0; i < arr.length; i++) {
+          if (arr[i].startsWith('data:')) {
+            const url = await uploadPhoto(arr[i], `autosave_f${fieldId}_${prefix}_${i + 1}_${Date.now()}.jpg`, 'anexos')
+            result.push(url || arr[i])
+            if (url) changed = true
+          } else {
+            result.push(arr[i])
+          }
+        }
+        return result
+      }
+
+      if (Array.isArray(json.photos) && json.photos.some((p: string) => typeof p === 'string' && p.startsWith('data:'))) {
+        updated.photos = await uploadArray(json.photos as string[], 'foto')
+      }
+      if (Array.isArray(json.conditionalPhotos) && json.conditionalPhotos.some((p: string) => typeof p === 'string' && p.startsWith('data:'))) {
+        updated.conditionalPhotos = await uploadArray(json.conditionalPhotos as string[], 'cond')
+      }
+
+      if (changed) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        await (supabase as any)
+          .from('checklist_responses')
+          .update({ value_json: updated })
+          .eq('checklist_id', clId)
+          .eq('field_id', fieldId)
+
+        // Atualizar React state com URLs
+        setResponses(prev => {
+          const current = prev[fieldId]
+          if (typeof current === 'object' && current !== null) {
+            const obj = { ...(current as Record<string, unknown>) }
+            if (updated.photos) obj.photos = updated.photos
+            if (updated.conditionalPhotos) obj.conditionalPhotos = updated.conditionalPhotos
+            return { ...prev, [fieldId]: obj }
+          }
+          return prev
+        })
+        console.log(`[AutoSave] Background upload OK: field ${fieldId}`)
+      }
+    } catch (err) {
+      console.error(`[AutoSave] Background upload error field ${fieldId}:`, err)
+    }
+  }, [supabase])
+
+  // Build response data for a single field (photos preserved as-is, upload happens in background)
   const buildSingleResponseRow = useCallback((fieldId: number, value: unknown) => {
     if (value === undefined || value === null) return null
     const field = template?.fields.find(f => f.id === fieldId)
@@ -1019,15 +1091,13 @@ function ChecklistForm() {
         const yesNoObj = value as Record<string, unknown>
         valueText = yesNoObj.answer as string
         const jsonParts: Record<string, unknown> = {}
-        // Salvar apenas URLs de fotos (nunca base64 — base64 fica no state ate upload ao Storage)
+        // Salvar TODAS as fotos (base64 + URLs) — upload em background substitui base64 por URLs
         if (yesNoObj.photos && (yesNoObj.photos as string[]).length > 0) {
-          const urls = (yesNoObj.photos as string[]).filter(p => typeof p === 'string' && p.startsWith('http'))
-          if (urls.length > 0) jsonParts.photos = urls
+          jsonParts.photos = yesNoObj.photos
         }
         if (yesNoObj.conditionalText) jsonParts.conditionalText = yesNoObj.conditionalText
         if (yesNoObj.conditionalPhotos && (yesNoObj.conditionalPhotos as string[]).length > 0) {
-          const urls = (yesNoObj.conditionalPhotos as string[]).filter(p => typeof p === 'string' && p.startsWith('http'))
-          if (urls.length > 0) jsonParts.conditionalPhotos = urls
+          jsonParts.conditionalPhotos = yesNoObj.conditionalPhotos
         }
         // Plano de acao: funcao responsavel, severidade e modelo
         if (yesNoObj.selectedFunctionId) jsonParts.selectedFunctionId = yesNoObj.selectedFunctionId
@@ -1134,6 +1204,16 @@ function ChecklistForm() {
       setAutoSaveStatus('saved')
       if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current)
       autoSaveTimerRef.current = setTimeout(() => setAutoSaveStatus('idle'), 2000)
+
+      // Background: upload base64 photos e substituir por URLs no DB
+      if (navigator.onLine && checklistIdRef.current && row.valueJson && typeof row.valueJson === 'object') {
+        const json = row.valueJson as Record<string, unknown>
+        const hasBase64 = (arr: unknown) =>
+          Array.isArray(arr) && arr.some((p: string) => typeof p === 'string' && p.startsWith('data:'))
+        if (hasBase64(json.photos) || hasBase64(json.conditionalPhotos)) {
+          uploadAndReplaceBase64(checklistIdRef.current, row.fieldId, json)
+        }
+      }
     } catch (err) {
       console.error('[AutoSave] Error:', err)
       setAutoSaveStatus('error')
@@ -1255,8 +1335,14 @@ function ChecklistForm() {
         if (photos && photos.length > 0 && attemptUpload) {
           const uploadedUrls: string[] = []
           for (let i = 0; i < photos.length; i++) {
-            const url = await uploadPhoto(photos[i], `checklist_${Date.now()}_foto_${i + 1}.jpg`)
-            uploadedUrls.push(url || photos[i])
+            if (photos[i].startsWith('http')) {
+              console.log(`[buildResponseRows] photo field_${fieldId}[${i}]: ja e URL, mantendo`)
+              uploadedUrls.push(photos[i])
+            } else {
+              const url = await uploadPhoto(photos[i], `checklist_${Date.now()}_foto_${i + 1}.jpg`)
+              console.log(`[buildResponseRows] photo field_${fieldId}[${i}]: upload ${url ? 'OK' : 'FALHA'}`)
+              uploadedUrls.push(url || photos[i])
+            }
           }
           valueJson = { photos: uploadedUrls, uploadedToDrive: uploadedUrls.some(u => u.startsWith('http')) }
         } else {
@@ -1271,27 +1357,35 @@ function ChecklistForm() {
           if (yesNoObj.photos && yesNoObj.photos.length > 0 && attemptUpload) {
             const uploadedUrls: string[] = []
             for (let i = 0; i < yesNoObj.photos.length; i++) {
-              const url = await uploadPhoto(yesNoObj.photos[i], `checklist_${Date.now()}_yesno_foto_${i + 1}.jpg`, 'anexos')
-              uploadedUrls.push(url || yesNoObj.photos[i])
+              if (yesNoObj.photos[i].startsWith('http')) {
+                console.log(`[buildResponseRows] yes_no.photos field_${fieldId}[${i}]: ja e URL, mantendo`)
+                uploadedUrls.push(yesNoObj.photos[i])
+              } else {
+                const url = await uploadPhoto(yesNoObj.photos[i], `checklist_${Date.now()}_yesno_foto_${i + 1}.jpg`, 'anexos')
+                console.log(`[buildResponseRows] yes_no.photos field_${fieldId}[${i}]: upload ${url ? 'OK' : 'FALHA'}`)
+                uploadedUrls.push(url || yesNoObj.photos[i])
+              }
             }
             jsonParts.photos = uploadedUrls
           } else if (yesNoObj.photos && yesNoObj.photos.length > 0) {
-            // Sem upload: salvar apenas URLs (nunca base64)
-            const urls = yesNoObj.photos.filter((p: string) => p.startsWith('http'))
-            if (urls.length > 0) jsonParts.photos = urls
+            jsonParts.photos = yesNoObj.photos
           }
           if (yesNoObj.conditionalText) jsonParts.conditionalText = yesNoObj.conditionalText
           if (yesNoObj.conditionalPhotos && yesNoObj.conditionalPhotos.length > 0 && attemptUpload) {
             const uploadedUrls: string[] = []
             for (let i = 0; i < yesNoObj.conditionalPhotos.length; i++) {
-              const url = await uploadPhoto(yesNoObj.conditionalPhotos[i], `checklist_${Date.now()}_yesno_cond_foto_${i + 1}.jpg`, 'anexos')
-              uploadedUrls.push(url || yesNoObj.conditionalPhotos[i])
+              if (yesNoObj.conditionalPhotos[i].startsWith('http')) {
+                console.log(`[buildResponseRows] yes_no.condPhotos field_${fieldId}[${i}]: ja e URL, mantendo`)
+                uploadedUrls.push(yesNoObj.conditionalPhotos[i])
+              } else {
+                const url = await uploadPhoto(yesNoObj.conditionalPhotos[i], `checklist_${Date.now()}_yesno_cond_foto_${i + 1}.jpg`, 'anexos')
+                console.log(`[buildResponseRows] yes_no.condPhotos field_${fieldId}[${i}]: upload ${url ? 'OK' : 'FALHA'}`)
+                uploadedUrls.push(url || yesNoObj.conditionalPhotos[i])
+              }
             }
-            // Filtrar base64 residuais (upload falhou)
-            jsonParts.conditionalPhotos = uploadedUrls.filter((u: string) => u.startsWith('http'))
+            jsonParts.conditionalPhotos = uploadedUrls
           } else if (yesNoObj.conditionalPhotos && yesNoObj.conditionalPhotos.length > 0) {
-            const urls = yesNoObj.conditionalPhotos.filter((p: string) => p.startsWith('http'))
-            if (urls.length > 0) jsonParts.conditionalPhotos = urls
+            jsonParts.conditionalPhotos = yesNoObj.conditionalPhotos
           }
           // Preservar dados do plano de acao para processarNaoConformidades
           const fullObj = value as Record<string, unknown>
@@ -1720,68 +1814,6 @@ function ChecklistForm() {
     return () => window.removeEventListener('popstate', handler)
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // === UPLOAD PENDING PHOTOS (base64 → cloud) ===
-  const uploadPendingPhotos = async (clId: number) => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: respData } = await (supabase as any)
-      .from('checklist_responses')
-      .select('id, field_id, value_json')
-      .eq('checklist_id', clId)
-
-    if (!respData) return
-
-    for (const r of respData) {
-      const json = r.value_json as Record<string, unknown> | null
-      if (!json) continue
-
-      const photos = json.photos as string[] | undefined
-      const condPhotos = json.conditionalPhotos as string[] | undefined
-      const hasBase64Photos = photos?.some((p: string) => p.startsWith('data:')) || false
-      const hasBase64CondPhotos = condPhotos?.some((p: string) => p.startsWith('data:')) || false
-      if (!hasBase64Photos && !hasBase64CondPhotos) continue
-
-      const updatedJson: Record<string, unknown> = { ...json }
-
-      const sanitizeName = (s: string) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-zA-Z0-9_-]/g, '_').substring(0, 40)
-      const tName = template?.name ? sanitizeName(template.name) : `t${templateId}`
-      const sName = store?.name ? sanitizeName(store.name) : `s${storeId}`
-      const folder = templateId ? `uploads/${tName}/${sName}_cl${clId}` : undefined
-
-      if (photos && hasBase64Photos) {
-        const uploadedUrls: string[] = []
-        for (let i = 0; i < photos.length; i++) {
-          if (photos[i].startsWith('data:')) {
-            const url = await uploadPhoto(photos[i], `field_${r.field_id}_foto_${i + 1}.jpg`, folder)
-            uploadedUrls.push(url || photos[i])
-          } else {
-            uploadedUrls.push(photos[i])
-          }
-        }
-        updatedJson.photos = uploadedUrls
-        updatedJson.uploadedToDrive = true
-      }
-
-      if (condPhotos && hasBase64CondPhotos) {
-        const uploadedUrls: string[] = []
-        for (let i = 0; i < condPhotos.length; i++) {
-          if (condPhotos[i].startsWith('data:')) {
-            const url = await uploadPhoto(condPhotos[i], `field_${r.field_id}_cond_foto_${i + 1}.jpg`, folder)
-            uploadedUrls.push(url || condPhotos[i])
-          } else {
-            uploadedUrls.push(condPhotos[i])
-          }
-        }
-        updatedJson.conditionalPhotos = uploadedUrls
-      }
-
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      await (supabase as any)
-        .from('checklist_responses')
-        .update({ value_json: updatedJson })
-        .eq('id', r.id)
-    }
-  }
-
   // === FINALIZE CHECKLIST (both sectioned and non-sectioned) ===
   const handleFinalizeChecklist = async () => {
     // Finalizar exige internet — show modal if offline
@@ -1815,9 +1847,6 @@ function ChecklistForm() {
     try {
       // === ONLINE ===
       if (checklistId) {
-        // Upload pending photos (base64 → cloud)
-        await uploadPendingPhotos(checklistId)
-
         // Finalize checklist status
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         await (supabase as any)
@@ -1828,7 +1857,34 @@ function ChecklistForm() {
         // Process cross validation + non-conformity
         if (template) {
           const allFieldIds = template.fields.map(f => f.id)
-          const allResponseData = await buildResponseRows(allFieldIds, false)
+          console.log(`[Checklist] Finalizando: ${allFieldIds.length} campos, template=${template.name}`)
+          // attemptUpload: true — uploads base64 photos from React state to Storage
+          const allResponseData = await buildResponseRows(allFieldIds, true)
+
+          // Log detalhado de cada response antes de salvar
+          for (const row of allResponseData) {
+            const vj = row.valueJson as Record<string, unknown> | null
+            const field = template.fields.find(f => f.id === row.fieldId)
+            const hasPhotos = vj && Array.isArray(vj.photos) ? (vj.photos as string[]).length : 0
+            const hasCondPhotos = vj && Array.isArray(vj.conditionalPhotos) ? (vj.conditionalPhotos as string[]).length : 0
+            const selFunc = vj?.selectedFunctionId || null
+            console.log(`[Checklist] Response field_${row.fieldId} "${field?.name}": text="${row.valueText}", photos=${hasPhotos}, condPhotos=${hasCondPhotos}, selectedFunctionId=${selFunc}`)
+          }
+
+          // Salvar respostas com URLs uploadadas no DB (base64 mantido como fallback se upload falhou)
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const sb = supabase as any
+          for (const row of allResponseData) {
+            await sb.from('checklist_responses')
+              .update({
+                value_text: row.valueText,
+                value_number: row.valueNumber,
+                value_json: row.valueJson,
+              })
+              .eq('checklist_id', checklistId)
+              .eq('field_id', row.fieldId)
+          }
+
           const allResponseMapped = allResponseData.map(r => ({
             field_id: r.fieldId,
             value_text: r.valueText,
@@ -1905,8 +1961,6 @@ function ChecklistForm() {
     }
 
     try {
-      await uploadPendingPhotos(checklistId)
-
       // Insert justifications
       const justificationRows = emptyRequiredFields.map(field => ({
         checklist_id: checklistId,
@@ -1927,7 +1981,23 @@ function ChecklistForm() {
       // Process cross-validation + non-conformities
       if (template) {
         const allFieldIds = template.fields.map(f => f.id)
-        const allResponseData = await buildResponseRows(allFieldIds, false)
+        // attemptUpload: true — uploads base64 photos from React state to Storage
+        const allResponseData = await buildResponseRows(allFieldIds, true)
+
+        // Salvar respostas com URLs uploadadas no DB (base64 mantido como fallback se upload falhou)
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const sb = supabase as any
+        for (const row of allResponseData) {
+          await sb.from('checklist_responses')
+            .update({
+              value_text: row.valueText,
+              value_number: row.valueNumber,
+              value_json: row.valueJson,
+            })
+            .eq('checklist_id', checklistId)
+            .eq('field_id', row.fieldId)
+        }
+
         const allResponseMapped = allResponseData.map(r => ({
           field_id: r.fieldId,
           value_text: r.valueText,
