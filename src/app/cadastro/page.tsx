@@ -1,12 +1,14 @@
  'use client'
 
-import { useState, useRef, useCallback } from 'react'
+import { useState, useRef, useCallback, useEffect } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { APP_CONFIG } from '@/lib/config'
 import { ThemeToggle, LoadingInline } from '@/components/ui'
 import { FiLock, FiMail, FiUser, FiPhone, FiCheckCircle, FiArrowLeft, FiEye, FiEyeOff } from 'react-icons/fi'
+import { WelcomeModal } from '@/components/billing/WelcomeModal'
+import { CheckoutFlow } from '@/components/billing/CheckoutModal'
 
 export default function CadastroPage() {
   const [fullName, setFullName] = useState('')
@@ -23,6 +25,8 @@ export default function CadastroPage() {
   const [resending, setResending] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
   const [showConfirmPassword, setShowConfirmPassword] = useState(false)
+  const [postSignupStep, setPostSignupStep] = useState<'welcome' | 'checkout' | null>(null)
+  const [userOrgId, setUserOrgId] = useState<string | null>(null)
   const otpRefs = useRef<(HTMLInputElement | null)[]>([])
   const router = useRouter()
 
@@ -169,28 +173,55 @@ export default function CadastroPage() {
     }
   }
 
-  // Tela de confirmacao concluida
+  // Buscar orgId quando verificado
+  useEffect(() => {
+    if (!verified) return
+    setPostSignupStep('welcome')
+    async function fetchOrgId() {
+      try {
+        const supabase = createClient()
+        const { data: { user } } = await supabase.auth.getUser()
+        if (!user) return
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const { data } = await (supabase as any)
+          .from('organization_members')
+          .select('organization_id')
+          .eq('user_id', user.id)
+          .limit(1)
+          .single()
+        if (data?.organization_id) setUserOrgId(data.organization_id)
+      } catch {
+        // org may not exist yet — will be created in onboarding
+      }
+    }
+    fetchOrgId()
+  }, [verified])
+
+  // Tela de confirmacao concluida — fluxo de assinatura
   if (verified) {
+    if (postSignupStep === 'checkout' && userOrgId) {
+      return (
+        <CheckoutFlow
+          orgId={userOrgId}
+          onBack={() => setPostSignupStep('welcome')}
+          onSuccess={() => router.push('/dashboard')}
+          onSkip={() => router.push('/dashboard')}
+        />
+      )
+    }
+
     return (
-      <div className="min-h-screen bg-page flex items-center justify-center p-4">
-        <div className="card p-8 max-w-md w-full text-center">
-          <div className="w-20 h-20 rounded-full bg-success/20 flex items-center justify-center mx-auto mb-6">
-            <FiCheckCircle className="w-10 h-10 text-success" />
-          </div>
-          <h1 className="text-2xl font-bold text-main mb-2">
-            Email confirmado!
-          </h1>
-          <p className="text-muted mb-8">
-            Sua conta foi verificada com sucesso. Agora você pode acessar o sistema.
-          </p>
-          <button
-            onClick={() => router.push('/dashboard')}
-            className="btn-primary inline-flex items-center gap-2 px-6 py-3 text-base"
-          >
-            Acessar o sistema
-          </button>
-        </div>
-      </div>
+      <WelcomeModal
+        onTrial={() => router.push('/dashboard')}
+        onSubscribe={() => {
+          if (userOrgId) {
+            setPostSignupStep('checkout')
+          } else {
+            // Sem org ainda — vai para onboarding primeiro, depois billing
+            router.push('/onboarding')
+          }
+        }}
+      />
     )
   }
 
