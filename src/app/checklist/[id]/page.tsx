@@ -51,6 +51,8 @@ type ChecklistDetail = {
   sector: { id: number; name: string } | null
   user: { id: string; full_name: string } | null
   template: { id: number; name: string; category: string | null } | null
+  // Propriedade corrigida para resolver o erro no build
+  debug_log?: Array<{ ts: string; action: string; field?: number; detail?: string }> | null
 }
 
 type ResponseRow = {
@@ -576,7 +578,7 @@ export default function ChecklistViewPage() {
                                     <div key={field.id} className="p-3 bg-surface rounded-xl">
                                       <ReadOnlyFieldRenderer field={field} value={value} />
                                       {gpsVal?.latitude && gpsVal?.longitude && (
-                                        <a href={`https://www.google.com/maps?q=${gpsVal.latitude},${gpsVal.longitude}`} target="_blank" rel="noopener noreferrer" className="text-xs text-primary hover:underline mt-2 inline-block">Ver no Google Maps</a>
+                                        <a href={`https://maps.google.com/?q=${gpsVal.latitude},${gpsVal.longitude}`} target="_blank" rel="noopener noreferrer" className="text-xs text-primary hover:underline mt-2 inline-block">Ver no Google Maps</a>
                                       )}
                                       {justifications[field.id] && (
                                         <div className="mt-2 p-2 bg-warning/10 border border-warning/20 rounded-lg">
@@ -646,7 +648,7 @@ export default function ChecklistViewPage() {
                               <div key={field.id} className="p-3 bg-surface rounded-xl">
                                 <ReadOnlyFieldRenderer field={field} value={value} />
                                 {gpsVal?.latitude && gpsVal?.longitude && (
-                                  <a href={`https://www.google.com/maps?q=${gpsVal.latitude},${gpsVal.longitude}`} target="_blank" rel="noopener noreferrer" className="text-xs text-primary hover:underline mt-2 inline-block">Ver no Google Maps</a>
+                                  <a href={`https://maps.google.com/?q=${gpsVal.latitude},${gpsVal.longitude}`} target="_blank" rel="noopener noreferrer" className="text-xs text-primary hover:underline mt-2 inline-block">Ver no Google Maps</a>
                                 )}
                                 {justifications[field.id] && (
                                   <div className="mt-2 p-2 bg-warning/10 border border-warning/20 rounded-lg">
@@ -682,7 +684,7 @@ export default function ChecklistViewPage() {
                           <ReadOnlyFieldRenderer field={field} value={value} />
                           {gpsVal?.latitude && gpsVal?.longitude && (
                             <a
-                              href={`https://www.google.com/maps?q=${gpsVal.latitude},${gpsVal.longitude}`}
+                              href={`https://maps.google.com/?q=${gpsVal.latitude},${gpsVal.longitude}`}
                               target="_blank"
                               rel="noopener noreferrer"
                               className="text-xs text-primary hover:underline mt-2 inline-block"
@@ -715,7 +717,7 @@ export default function ChecklistViewPage() {
                     <ReadOnlyFieldRenderer field={field} value={value} />
                     {gpsVal?.latitude && gpsVal?.longitude && (
                       <a
-                        href={`https://www.google.com/maps?q=${gpsVal.latitude},${gpsVal.longitude}`}
+                        href={`https://maps.google.com/?q=${gpsVal.latitude},${gpsVal.longitude}`}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="text-xs text-primary hover:underline mt-2 inline-block"
@@ -751,14 +753,14 @@ export default function ChecklistViewPage() {
               <div className="flex items-center gap-2">
                 <FiTerminal className="w-4 h-4 text-emerald-400" />
                 <span className="text-sm font-mono font-bold text-emerald-400">Debug Console</span>
-                <span className="text-xs text-white/40">{(checklist.debug_log as unknown[]).length} entradas</span>
+                <span className="text-xs text-white/40">{checklist.debug_log?.length || 0} entradas</span>
               </div>
               <button onClick={() => setShowDebugLog(false)} className="p-1 text-white/40 hover:text-white">
                 <FiX className="w-4 h-4" />
               </button>
             </div>
             <div className="flex-1 overflow-y-auto p-4 font-mono text-xs leading-relaxed">
-              {(checklist.debug_log as Array<{ ts: string; action: string; field?: number; detail?: string }>).map((log, i) => {
+              {checklist.debug_log.map((log, i) => {
                 const time = new Date(log.ts).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
                 const actionColor = log.action.includes('error') || log.action.includes('fail')
                   ? 'text-red-400'

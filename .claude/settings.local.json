@@ -20,7 +20,10 @@
       "Bash(curl:*)",
       "Bash(git:*)",
       "Bash(npm install:*)",
-      "Bash(ls \"C:\\\\Users\\\\ENZO TI\\\\nocheck-app\\\\node_modules\\\\react-icons\\\\gi\\\\\" | grep -i goat 2>/dev/null || find \"C:/Users/ENZO TI/nocheck-app/node_modules/react-icons/gi\" -name \"index.js\" | head -1 | xargs grep -i \"goat\" | head -20)"
+      "Bash(ls \"C:\\\\Users\\\\ENZO TI\\\\nocheck-app\\\\node_modules\\\\react-icons\\\\gi\\\\\" | grep -i goat 2>/dev/null || find \"C:/Users/ENZO TI/nocheck-app/node_modules/react-icons/gi\" -name \"index.js\" | head -1 | xargs grep -i \"goat\" | head -20)",
+      "Bash(npx tsc:*)",
+      "mcp__claude_ai_Supabase__list_projects",
+      "mcp__claude_ai_Supabase__apply_migration"
     ]
   }
 }
