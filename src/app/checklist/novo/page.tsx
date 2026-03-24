@@ -2805,9 +2805,24 @@ function ChecklistForm() {
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const headerSubtitle = parentName ? `${parentName} — ${template.name}` : template.name
 
+    // Nome da etapa/sub-etapa atual para exibir no topo
+    const sectionLabel = isGeneralSection
+      ? 'Campos Gerais'
+      : parentName
+        ? `${parentName} — ${section?.name || ''}`
+        : section?.name || ''
+
     return (
       <div className="min-h-screen bg-page">
         <main className="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+            {/* Header fixo com nome da etapa atual */}
+            {sectionLabel && (
+              <div className="sticky top-0 z-10 -mx-4 sm:-mx-6 lg:-mx-8 px-4 sm:px-6 lg:px-8 py-3 mb-4 bg-page/95 backdrop-blur-sm border-b border-subtle">
+                <p className="text-xs font-bold text-primary uppercase tracking-wide truncate">{sectionLabel}</p>
+                <p className="text-[10px] text-muted">{filledCount} de {sectionFields.length} campo{sectionFields.length !== 1 ? 's' : ''} preenchido{filledCount !== 1 ? 's' : ''}</p>
+              </div>
+            )}
+
             <div className="space-y-6">
               {isDone && (
                 <div className="p-2.5 sm:p-3 bg-success/10 border border-success/30 rounded-xl flex items-center gap-2 text-xs sm:text-sm text-success">
