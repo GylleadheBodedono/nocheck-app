@@ -68,7 +68,7 @@ describe('clientLogger', () => {
 
   describe('logInfo', () => {
     it('chama sendLog com level=info', async () => {
-      const { client, from, insert } = makeMockClient()
+      const { client, insert } = makeMockClient()
       vi.mocked(createClient).mockReturnValue(client as ReturnType<typeof createClient>)
 
       const { logInfo } = await import('../clientLogger')

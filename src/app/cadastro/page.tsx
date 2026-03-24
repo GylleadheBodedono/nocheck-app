@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { APP_CONFIG } from '@/lib/config'
 import { ThemeToggle, LoadingInline } from '@/components/ui'
-import { FiLock, FiMail, FiUser, FiPhone, FiCheckCircle, FiArrowLeft, FiEye, FiEyeOff } from 'react-icons/fi'
+import { FiLock, FiMail, FiUser, FiPhone, FiArrowLeft, FiEye, FiEyeOff } from 'react-icons/fi'
 import { WelcomeModal } from '@/components/billing/WelcomeModal'
 import { CheckoutFlow } from '@/components/billing/CheckoutModal'
 

@@ -11,7 +11,6 @@ type Message = {
   content: string
 }
 
-const WELCOME_MESSAGE = 'Opa! Eu sou o Flux, seu assistente do OpereCheck! Pode me perguntar qualquer coisa sobre o sistema — como preencher checklists, interpretar relatorios, gerenciar planos de acao... Estou aqui pra ajudar! 😄'
 
 /**
  * Widget de chat flutuante com o assistente Flux (IA integrada via `/api/flux`).
