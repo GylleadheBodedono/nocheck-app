@@ -2584,6 +2584,8 @@ function ChecklistForm() {
               const progress = sectionProgress.find(sp => sp.section_id === sub.id)
               const isDone = progress?.status === 'concluido'
               const subFields = getFieldsForSection(sub.id)
+              const filledCount = subFields.filter(f => { const v = responses[f.id]; return v !== undefined && v !== null && v !== '' && !(Array.isArray(v) && v.length === 0) }).length
+              const isInProgress = !isDone && filledCount > 0
 
               return (
                 <button
@@ -2593,17 +2595,19 @@ function ChecklistForm() {
                   className={`w-full text-left card p-3 sm:p-5 transition-all hover:shadow-theme-md cursor-pointer ${
                     isDone
                       ? 'border-success/30 hover:border-success/50'
-                      : 'border-subtle hover:border-primary/30'
+                      : isInProgress
+                        ? 'border-warning/30 hover:border-warning/50'
+                        : 'border-subtle hover:border-primary/30'
                   }`}
                 >
                   <div className="flex items-center gap-3 sm:gap-4">
                     <div className={`w-9 h-9 sm:w-10 sm:h-10 rounded-xl flex items-center justify-center text-sm font-bold shrink-0 ${
-                      isDone ? 'bg-success/20 text-success' : 'bg-primary/10 text-primary'
+                      isDone ? 'bg-success/20 text-success' : isInProgress ? 'bg-warning/20 text-warning' : 'bg-primary/10 text-primary'
                     }`}>
                       {isDone ? <FiCheckCircle className="w-4 h-4 sm:w-5 sm:h-5" /> : idx + 1}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <h3 className={`font-semibold text-sm sm:text-base ${isDone ? 'text-success' : 'text-main'}`}>
+                      <h3 className={`font-semibold text-sm sm:text-base ${isDone ? 'text-success' : isInProgress ? 'text-warning' : 'text-main'}`}>
                         {sub.name}
                       </h3>
                       <p className="text-[10px] sm:text-xs text-muted">
@@ -2611,9 +2615,10 @@ function ChecklistForm() {
                         {isDone && progress?.completed_at && (
                           <> &middot; {new Date(progress.completed_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</>
                         )}
+                        {isInProgress && <> &middot; <span className="text-warning">{filledCount}/{subFields.length} concluindo</span></>}
                       </p>
                     </div>
-                    <FiChevronRight className={`w-4 h-4 sm:w-5 sm:h-5 shrink-0 ${isDone ? 'text-success' : 'text-muted'}`} />
+                    <FiChevronRight className={`w-4 h-4 sm:w-5 sm:h-5 shrink-0 ${isDone ? 'text-success' : isInProgress ? 'text-warning' : 'text-muted'}`} />
                   </div>
                 </button>
               )
@@ -2670,6 +2675,16 @@ function ChecklistForm() {
                 const isDoneDirect = hasDirectFieldsOnly && directProgress?.status === 'concluido'
                 const sectionDone = hasDirectFieldsOnly ? isDoneDirect : allDone
 
+                // Status intermediario "concluindo" (amarelo)
+                const directFilledCount = hasDirectFieldsOnly
+                  ? allFields.filter(f => { const v = responses[f.id]; return v !== undefined && v !== null && v !== '' && !(Array.isArray(v) && v.length === 0) }).length
+                  : 0
+                const isInProgress = !sectionDone && (
+                  hasDirectFieldsOnly
+                    ? directFilledCount > 0
+                    : completedSubs > 0 || allFields.some(f => { const v = responses[f.id]; return v !== undefined && v !== null && v !== '' && !(Array.isArray(v) && v.length === 0) })
+                )
+
                 return (
                   <button
                     key={section.id}
@@ -2685,17 +2700,19 @@ function ChecklistForm() {
                     className={`w-full text-left card p-3 sm:p-5 transition-all hover:shadow-theme-md cursor-pointer ${
                       sectionDone
                         ? 'border-success/30 hover:border-success/50'
-                        : 'border-subtle hover:border-primary/30'
+                        : isInProgress
+                          ? 'border-warning/30 hover:border-warning/50'
+                          : 'border-subtle hover:border-primary/30'
                     }`}
                   >
                     <div className="flex items-center gap-3 sm:gap-4">
                       <div className={`w-9 h-9 sm:w-10 sm:h-10 rounded-xl flex items-center justify-center text-sm font-bold shrink-0 ${
-                        sectionDone ? 'bg-success/20 text-success' : 'bg-primary/10 text-primary'
+                        sectionDone ? 'bg-success/20 text-success' : isInProgress ? 'bg-warning/20 text-warning' : 'bg-primary/10 text-primary'
                       }`}>
                         {sectionDone ? <FiCheckCircle className="w-4 h-4 sm:w-5 sm:h-5" /> : idx + 1}
                       </div>
                       <div className="flex-1 min-w-0">
-                        <h3 className={`font-semibold text-sm sm:text-base ${sectionDone ? 'text-success' : 'text-main'}`}>
+                        <h3 className={`font-semibold text-sm sm:text-base ${sectionDone ? 'text-success' : isInProgress ? 'text-warning' : 'text-main'}`}>
                           {section.name}
                         </h3>
                         <p className="text-[10px] sm:text-xs text-muted">
@@ -2704,10 +2721,12 @@ function ChecklistForm() {
                             : <>{subSections.length} sub-etapa{subSections.length !== 1 ? 's' : ''} &middot; {allFields.length} campo{allFields.length !== 1 ? 's' : ''}</>
                           }
                           {sectionDone && <> &middot; <span className="text-success">Concluida</span></>}
-                          {!sectionDone && !hasDirectFieldsOnly && completedSubs > 0 && <> &middot; {completedSubs}/{subSections.length} concluida{completedSubs !== 1 ? 's' : ''}</>}
+                          {isInProgress && hasDirectFieldsOnly && <> &middot; <span className="text-warning">{directFilledCount}/{allFields.length} concluindo</span></>}
+                          {isInProgress && !hasDirectFieldsOnly && completedSubs > 0 && <> &middot; <span className="text-warning">{completedSubs}/{subSections.length} concluindo</span></>}
+                          {isInProgress && !hasDirectFieldsOnly && completedSubs === 0 && <> &middot; <span className="text-warning">concluindo</span></>}
                         </p>
                       </div>
-                      <FiChevronRight className={`w-4 h-4 sm:w-5 sm:h-5 shrink-0 ${sectionDone ? 'text-success' : 'text-muted'}`} />
+                      <FiChevronRight className={`w-4 h-4 sm:w-5 sm:h-5 shrink-0 ${sectionDone ? 'text-success' : isInProgress ? 'text-warning' : 'text-muted'}`} />
                     </div>
                   </button>
                 )
@@ -2717,6 +2736,8 @@ function ChecklistForm() {
               const progress = sectionProgress.find(sp => sp.section_id === section.id)
               const isDone = progress?.status === 'concluido'
               const sectionFields = getFieldsForSection(section.id)
+              const flatFilledCount = sectionFields.filter(f => { const v = responses[f.id]; return v !== undefined && v !== null && v !== '' && !(Array.isArray(v) && v.length === 0) }).length
+              const flatInProgress = !isDone && flatFilledCount > 0
 
               return (
                 <button
@@ -2726,17 +2747,19 @@ function ChecklistForm() {
                   className={`w-full text-left card p-3 sm:p-5 transition-all hover:shadow-theme-md cursor-pointer ${
                     isDone
                       ? 'border-success/30 hover:border-success/50'
-                      : 'border-subtle hover:border-primary/30'
+                      : flatInProgress
+                        ? 'border-warning/30 hover:border-warning/50'
+                        : 'border-subtle hover:border-primary/30'
                   }`}
                 >
                   <div className="flex items-center gap-3 sm:gap-4">
                     <div className={`w-9 h-9 sm:w-10 sm:h-10 rounded-xl flex items-center justify-center text-sm font-bold shrink-0 ${
-                      isDone ? 'bg-success/20 text-success' : 'bg-primary/10 text-primary'
+                      isDone ? 'bg-success/20 text-success' : flatInProgress ? 'bg-warning/20 text-warning' : 'bg-primary/10 text-primary'
                     }`}>
                       {isDone ? <FiCheckCircle className="w-4 h-4 sm:w-5 sm:h-5" /> : idx + 1}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <h3 className={`font-semibold text-sm sm:text-base ${isDone ? 'text-success' : 'text-main'}`}>
+                      <h3 className={`font-semibold text-sm sm:text-base ${isDone ? 'text-success' : flatInProgress ? 'text-warning' : 'text-main'}`}>
                         {section.name}
                       </h3>
                       <p className="text-[10px] sm:text-xs text-muted">
@@ -2744,9 +2767,10 @@ function ChecklistForm() {
                         {isDone && progress?.completed_at && (
                           <> &middot; {new Date(progress.completed_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</>
                         )}
+                        {flatInProgress && <> &middot; <span className="text-warning">{flatFilledCount}/{sectionFields.length} concluindo</span></>}
                       </p>
                     </div>
-                    <FiChevronRight className={`w-4 h-4 sm:w-5 sm:h-5 shrink-0 ${isDone ? 'text-success' : 'text-muted'}`} />
+                    <FiChevronRight className={`w-4 h-4 sm:w-5 sm:h-5 shrink-0 ${isDone ? 'text-success' : flatInProgress ? 'text-warning' : 'text-muted'}`} />
                   </div>
                 </button>
               )
