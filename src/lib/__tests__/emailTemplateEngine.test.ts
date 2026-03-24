@@ -173,7 +173,7 @@ describe('buildEmailFromTemplate', () => {
     const result = buildEmailFromTemplate('<div>{{store_name}}</div>', null, vars)
     expect(result.html).toBe('<div>Loja Centro</div>')
     // Subject should use the default template pattern
-    expect(result.subject).toContain('[NoCheck]')
+    expect(result.subject).toContain('[OpereCheck]')
     expect(result.subject).toContain('Higienizar maos')
   })
 
@@ -183,7 +183,7 @@ describe('buildEmailFromTemplate', () => {
     expect(result.html).toContain('<!DOCTYPE html>')
     expect(result.html).toContain('Higienizar maos')
     // Subject should come from default
-    expect(result.subject).toContain('[NoCheck]')
+    expect(result.subject).toContain('[OpereCheck]')
     expect(result.subject).toContain('Plano de Acao')
   })
 
