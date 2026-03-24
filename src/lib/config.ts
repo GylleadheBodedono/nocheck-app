@@ -5,11 +5,11 @@
 
 export const APP_CONFIG = {
   // Informacoes do App
-  name: 'NoCheck',
-  fullName: 'NoCheck - Sistema de Checklists',
-  description: 'Sistema de checklists do Grupo Do No',
-  version: '2.0.0',
-  company: 'Grupo Do No',
+  name: 'OpereCheck',
+  fullName: 'OpereCheck - Gestao Operacional e Checklists',
+  description: 'Plataforma SaaS de gestao operacional e checklists',
+  version: '2.1.0',
+  company: 'OpereCheck',
   year: new Date().getFullYear(),
 
   // Rotas

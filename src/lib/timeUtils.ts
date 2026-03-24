@@ -21,8 +21,7 @@ export function isWithinTimeRange(startTime: string, endTime: string, now?: Date
   const startMinutes = parseTimeToMinutes(startTime)
   const endMinutes = parseTimeToMinutes(endTime)
 
-  const pad = (n: number) => String(n).padStart(2, '0')
-  const currentTimeStr = `${pad(d.getHours())}:${pad(d.getMinutes())}`
+  // Range overnight ocorre quando horario de inicio e maior que o de fim (ex: 21:00 → 02:00)
   const isOvernight = startMinutes > endMinutes
 
   let result: boolean
@@ -30,18 +29,9 @@ export function isWithinTimeRange(startTime: string, endTime: string, now?: Date
     // Mesmo dia: ex 08:00 → 18:00
     result = currentMinutes >= startMinutes && currentMinutes <= endMinutes
   } else {
-    // Overnight: ex 21:00 → 02:00
+    // Overnight: ex 21:00 → 02:00 (cruza meia-noite)
     result = currentMinutes >= startMinutes || currentMinutes <= endMinutes
   }
-
-  const tzOffset = d.getTimezoneOffset()
-  console.log(
-    `[TimeCheck] Dispositivo: ${currentTimeStr} (${currentMinutes}min) | ` +
-    `Range: ${startTime}→${endTime} (${startMinutes}-${endMinutes}min) | ` +
-    `Tipo: ${isOvernight ? 'OVERNIGHT' : 'NORMAL'} | ` +
-    `Resultado: ${result ? 'PERMITIDO' : 'BLOQUEADO'} | ` +
-    `TZ offset: UTC${tzOffset > 0 ? '-' : '+'}${Math.abs(tzOffset / 60)}`
-  )
 
   return result
 }

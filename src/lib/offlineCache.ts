@@ -143,14 +143,10 @@ export async function initOfflineCache(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
     const request = indexedDB.open(DB_NAME, DB_VERSION)
 
-    request.onerror = () => {
-      console.error('[OfflineCache] Erro ao abrir banco:', request.error)
-      reject(request.error)
-    }
+    request.onerror = () => { reject(request.error) }
 
     request.onsuccess = () => {
       db = request.result
-      console.log('[OfflineCache] Banco aberto com sucesso')
       resolve(db)
     }
 
@@ -253,7 +249,6 @@ export async function initOfflineCache(): Promise<IDBDatabase> {
         database.createObjectStore(STORES.SYNC_META, { keyPath: 'id' })
       }
 
-      console.log('[OfflineCache] Stores criados/atualizados')
     }
   })
 }
@@ -276,10 +271,7 @@ export async function saveAuthCache(auth: Omit<CachedAuth, 'id' | 'cachedAt'>): 
     }
 
     const request = store.put(data)
-    request.onsuccess = () => {
-      console.log('[OfflineCache] Auth salvo')
-      resolve()
-    }
+    request.onsuccess = () => resolve()
     request.onerror = () => reject(request.error)
   })
 }
@@ -307,10 +299,7 @@ export async function clearAuthCache(): Promise<void> {
     const store = transaction.objectStore(STORES.AUTH)
     const request = store.delete('current')
 
-    request.onsuccess = () => {
-      console.log('[OfflineCache] Auth removido')
-      resolve()
-    }
+    request.onsuccess = () => resolve()
     request.onerror = () => reject(request.error)
   })
 }
@@ -1003,10 +992,7 @@ export async function clearAllCache(): Promise<void> {
 
       request.onsuccess = () => {
         completed++
-        if (completed === storeNames.length) {
-          console.log('[OfflineCache] Todo cache limpo')
-          resolve()
-        }
+        if (completed === storeNames.length) resolve()
       }
 
       request.onerror = () => reject(request.error)
@@ -1038,8 +1024,6 @@ import { createClient } from './supabase'
  * Deve ser chamado após login bem-sucedido
  */
 export async function cacheAllDataForOffline(userId: string): Promise<void> {
-  console.log('[OfflineCache] Iniciando cache de dados para offline...')
-
   try {
     const supabase = createClient()
 
@@ -1053,7 +1037,6 @@ export async function cacheAllDataForOffline(userId: string): Promise<void> {
         refreshToken: session.refresh_token || '',
         expiresAt: session.expires_at || 0,
       })
-      console.log('[OfflineCache] Auth salvo')
     }
 
     // 2. Busca e salva perfil do usuário
@@ -1066,7 +1049,6 @@ export async function cacheAllDataForOffline(userId: string): Promise<void> {
 
     if (userData) {
       await saveUserCache(userData as User)
-      console.log('[OfflineCache] Usuário salvo')
     }
 
     // 3. Busca e salva TODAS as lojas (não só ativas, para admin)
@@ -1078,7 +1060,6 @@ export async function cacheAllDataForOffline(userId: string): Promise<void> {
 
     if (storesData && storesData.length > 0) {
       await saveStoresCache(storesData as Store[])
-      console.log('[OfflineCache] Lojas salvas:', storesData.length)
     }
 
     // 4. Busca e salva templates ativos
@@ -1091,7 +1072,6 @@ export async function cacheAllDataForOffline(userId: string): Promise<void> {
 
     if (templatesData && templatesData.length > 0) {
       await saveTemplatesCache(templatesData as ChecklistTemplate[])
-      console.log('[OfflineCache] Templates salvos:', templatesData.length)
     }
 
     // 5. Busca e salva campos dos templates
@@ -1103,7 +1083,6 @@ export async function cacheAllDataForOffline(userId: string): Promise<void> {
 
     if (fieldsData && fieldsData.length > 0) {
       await saveTemplateFieldsCache(fieldsData as TemplateField[])
-      console.log('[OfflineCache] Campos salvos:', fieldsData.length)
     }
 
     // 6. Busca e salva setores
@@ -1114,7 +1093,6 @@ export async function cacheAllDataForOffline(userId: string): Promise<void> {
 
     if (sectorsData && sectorsData.length > 0) {
       await saveSectorsCache(sectorsData as Sector[])
-      console.log('[OfflineCache] Setores salvos:', sectorsData.length)
     }
 
     // 7. Busca e salva funções
@@ -1126,7 +1104,6 @@ export async function cacheAllDataForOffline(userId: string): Promise<void> {
 
     if (functionsData && functionsData.length > 0) {
       await saveFunctionsCache(functionsData as FunctionRow[])
-      console.log('[OfflineCache] Funções salvas:', functionsData.length)
     }
 
     // 8. Se for admin, busca e salva TODOS os usuários
@@ -1138,11 +1115,9 @@ export async function cacheAllDataForOffline(userId: string): Promise<void> {
         .order('full_name')
 
       if (allUsersData && allUsersData.length > 0) {
-        // Salva cada usuário no cache
         for (const user of allUsersData) {
           await saveUserCache(user as User)
         }
-        console.log('[OfflineCache] Todos os usuários salvos:', allUsersData.length)
       }
     }
 
@@ -1154,7 +1129,6 @@ export async function cacheAllDataForOffline(userId: string): Promise<void> {
 
     if (visibilityData && visibilityData.length > 0) {
       await saveTemplateVisibilityCache(visibilityData as TemplateVisibility[])
-      console.log('[OfflineCache] Visibilidade salva:', visibilityData.length)
     }
 
     // 10. Busca e salva secoes dos templates
@@ -1166,7 +1140,6 @@ export async function cacheAllDataForOffline(userId: string): Promise<void> {
 
     if (sectionsData && sectionsData.length > 0) {
       await saveTemplateSectionsCache(sectionsData as TemplateSection[])
-      console.log('[OfflineCache] Secoes de templates salvas:', sectionsData.length)
     }
 
     // 11. Busca e salva user_stores do usuario (multi-loja)
@@ -1178,7 +1151,6 @@ export async function cacheAllDataForOffline(userId: string): Promise<void> {
 
     if (userStoresData && userStoresData.length > 0) {
       await saveUserStoresCache(userStoresData as UserStore[])
-      console.log('[OfflineCache] User stores salvos:', userStoresData.length)
     }
 
     // 12. Busca e salva checklists recentes do usuario (max 50)
@@ -1228,7 +1200,6 @@ export async function cacheAllDataForOffline(userId: string): Promise<void> {
       }))
 
       await saveChecklistsCache(checklistsToCache)
-      console.log('[OfflineCache] Checklists salvos:', checklistsToCache.length)
 
       // 13. Busca responses e sections dos checklists cacheados
       const checklistIds = checklistsToCache.map(c => c.id)
@@ -1241,7 +1212,6 @@ export async function cacheAllDataForOffline(userId: string): Promise<void> {
 
       if (responsesData && responsesData.length > 0) {
         await saveChecklistResponsesCache(responsesData as ChecklistResponse[])
-        console.log('[OfflineCache] Responses salvos:', responsesData.length)
       }
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -1252,7 +1222,6 @@ export async function cacheAllDataForOffline(userId: string): Promise<void> {
 
       if (clSectionsData && clSectionsData.length > 0) {
         await saveChecklistSectionsCache(clSectionsData as ChecklistSectionRow[])
-        console.log('[OfflineCache] Checklist sections salvos:', clSectionsData.length)
       }
     }
 
@@ -1324,15 +1293,11 @@ export async function cacheAllDataForOffline(userId: string): Promise<void> {
       }))
 
       await saveActionPlansCache(plansToCache)
-      console.log('[OfflineCache] Planos de acao salvos:', plansToCache.length)
     }
 
     // Salva metadata de sync
     await saveSyncMetadata('full_sync', 'success')
-
-    console.log('[OfflineCache] Cache completo!')
-  } catch (error) {
-    console.error('[OfflineCache] Erro ao cachear dados:', error)
+  } catch {
     await saveSyncMetadata('full_sync', 'failed')
   }
 }
