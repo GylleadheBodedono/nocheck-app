@@ -242,7 +242,8 @@ export function computeStoreAdherence(
     const templatesFilledIds = new Set(sChecklists.map((c) => c.template_id))
     const templatesNeverFilled = [...assignedTemplateIds]
       .filter((tid) => !templatesFilledIds.has(tid))
-      .map((tid) => templateMap.get(tid) || `Template #${tid}`)
+      .filter((tid) => templateMap.has(tid))
+      .map((tid) => templateMap.get(tid)!)
 
     return {
       storeId: s.id,
