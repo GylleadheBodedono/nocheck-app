@@ -25,6 +25,11 @@ type StoreAssignment = {
   is_primary: boolean
 }
 
+/**
+ * Página de edição de usuário existente (`/admin/usuarios/[id]`).
+ * Permite atualizar nome, telefone, permissões, função e vínculos de loja/setor.
+ * Usa a mesma API `PUT /api/admin/users/[id]` que salva `user_stores`.
+ */
 export default function EditarUsuarioPage() {
   const params = useParams()
   const userId = params.id as string

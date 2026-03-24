@@ -16,6 +16,11 @@ import {
   getSampleVariables,
 } from '@/lib/emailTemplateEngine'
 
+/**
+ * Página de configurações do sistema (`/admin/configuracoes`).
+ * Ajustes gerais: notificações, integração com Microsoft Teams, templates de email
+ * para planos de ação (via `emailTemplateEngine`).
+ */
 export default function ConfiguracoesPage() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)

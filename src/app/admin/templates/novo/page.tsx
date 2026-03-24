@@ -63,6 +63,11 @@ type SectorWithStore = Sector & {
 
 // SortableItem movido para SectionEditModal e SectionCard
 
+/**
+ * Página de criação de novo template (`/admin/templates/novo`).
+ * Permite configurar seções, campos (14 tipos), visibilidade por loja/setor,
+ * restrições de horário e funções autorizadas. Salva via API ao finalizar.
+ */
 export default function NovoTemplatePage() {
   const [stores, setStores] = useState<Store[]>([])
   const [sectors, setSectors] = useState<SectorWithStore[]>([])

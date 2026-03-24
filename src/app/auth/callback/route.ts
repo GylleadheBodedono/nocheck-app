@@ -5,6 +5,14 @@ import { NextResponse, type NextRequest } from 'next/server'
 
 type CookieToSet = { name: string; value: string; options: CookieOptions }
 
+/**
+ * GET /auth/callback
+ * Callback do Supabase Auth (OAuth e magic link).
+ * Troca o `code` por sessão via `exchangeCodeForSession` e seta os cookies SSR.
+ * - Em caso de `type=recovery`, redireciona para `/auth/reset-password`
+ * - Caso contrário, redireciona para `/auth/confirmed`
+ * - Em erro, redireciona para `/login?error=...`
+ */
 export async function GET(request: NextRequest) {
   const { searchParams, origin } = new URL(request.url)
   const code = searchParams.get('code')

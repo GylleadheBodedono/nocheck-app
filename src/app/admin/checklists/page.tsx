@@ -35,6 +35,11 @@ type ChecklistWithDetails = {
   user: User
 }
 
+/**
+ * Página de checklists preenchidos (`/admin/checklists`).
+ * Lista todos os checklists enviados com filtros por loja, template, usuário e período.
+ * Permite visualizar detalhes e exportar em CSV/PDF.
+ */
 export default function AdminChecklistsPage() {
   const [checklists, setChecklists] = useState<ChecklistWithDetails[]>([])
   const [stores, setStores] = useState<Store[]>([])

@@ -46,6 +46,11 @@ type UserBasic = {
   is_active: boolean
 }
 
+/**
+ * Página de gerenciamento de setores (`/admin/setores`).
+ * CRUD de departamentos (ex: Cozinha, Salão, Estoque) com cor e ícone personalizáveis.
+ * Exibe contagem de usuários e templates associados a cada setor.
+ */
 export default function SetoresPage() {
   const [sectors, setSectors] = useState<SectorWithStats[]>([])
   const [stores, setStores] = useState<Store[]>([])

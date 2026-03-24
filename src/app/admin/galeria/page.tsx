@@ -34,6 +34,11 @@ type Folder = 'uploads' | 'anexos'
 
 const ITEMS_PER_PAGE = 24
 
+/**
+ * Página da galeria de fotos (`/admin/galeria`).
+ * Exibe todas as fotos tiradas durante o preenchimento de checklists,
+ * paginadas (24 por página) e organizadas por pasta (`uploads` / `anexos`).
+ */
 export default function GaleriaPage() {
   const [loading, setLoading] = useState(true)
   const [files, setFiles] = useState<StorageFile[]>([])

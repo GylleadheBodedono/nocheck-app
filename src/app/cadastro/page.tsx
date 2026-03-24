@@ -8,6 +8,11 @@ import { APP_CONFIG } from '@/lib/config'
 import { ThemeToggle, LoadingInline } from '@/components/ui'
 import { FiLock, FiMail, FiUser, FiPhone, FiCheckCircle } from 'react-icons/fi'
 
+/**
+ * Página de cadastro de novo usuário (`/cadastro`).
+ * Registra via Supabase Auth com verificação prévia de e-mail duplicado.
+ * Após o registro, exibe instrução para confirmar o e-mail.
+ */
 export default function CadastroPage() {
   const [fullName, setFullName] = useState('')
   const [email, setEmail] = useState('')

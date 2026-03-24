@@ -84,6 +84,11 @@ const SEVERITY_BADGE: Record<string, string> = {
 // COMPONENT
 // ============================================
 
+/**
+ * Página de modelos de plano de ação (`/admin/planos-de-acao/modelos`).
+ * CRUD de presets pré-configurados que podem ser aplicados automaticamente
+ * quando um campo é marcado como não conforme.
+ */
 export default function ModelosPlanoDeAcaoPage() {
   const [loading, setLoading] = useState(true)
   const [presets, setPresets] = useState<Preset[]>([])

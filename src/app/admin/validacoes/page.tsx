@@ -59,6 +59,11 @@ type GroupedValidation = {
   linked: CrossValidation | null
 }
 
+/**
+ * Página de validações cruzadas (`/admin/validacoes`).
+ * Admin revisa checklists pendentes de validação, podendo aprovar ou reprovar.
+ * Agrupa validações por checklist e exibe histórico de aprovações.
+ */
 export default function ValidacoesPage() {
   const [validations, setValidations] = useState<CrossValidation[]>([])
   const [loading, setLoading] = useState(true)

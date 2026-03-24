@@ -92,6 +92,11 @@ const STATUS_CONFIG: Record<string, { label: string; color: string }> = {
 
 const PAGE_SIZE = 20
 
+/**
+ * Relatório de planos de ação (`/admin/relatorios/planos-de-acao`).
+ * Lista todos os planos com filtros por status, severidade, loja e período.
+ * Exporta em Excel/PDF via `exportUtils`. Paginação de 20 registros por vez.
+ */
 export default function PlanoDeAcaoReportPage() {
   const router = useRouter()
   const supabase = useMemo(() => createClient(), [])

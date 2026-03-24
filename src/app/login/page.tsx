@@ -315,6 +315,12 @@ function LoginForm() {
   )
 }
 
+/**
+ * Página de login (`/login`).
+ * Suporta autenticação por email/senha e magic link.
+ * Exibe erros retornados pelo callback OAuth via `searchParams.error`.
+ * Envolve o formulário em Suspense por usar `useSearchParams()`.
+ */
 export default function LoginPage() {
   return (
     <Suspense fallback={

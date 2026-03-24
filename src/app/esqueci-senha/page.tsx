@@ -7,6 +7,11 @@ import { APP_CONFIG } from '@/lib/config'
 import { ThemeToggle, LoadingInline } from '@/components/ui'
 import { FiMail, FiArrowLeft, FiCheckCircle } from 'react-icons/fi'
 
+/**
+ * Página de recuperação de senha (`/esqueci-senha`).
+ * Envia magic link de reset via `supabase.auth.resetPasswordForEmail`.
+ * Redireciona o usuário para `/auth/reset-password` após clicar no link.
+ */
 export default function EsqueciSenhaPage() {
   const [email, setEmail] = useState('')
   const [error, setError] = useState<string | null>(null)

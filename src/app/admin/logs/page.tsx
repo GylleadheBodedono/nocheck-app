@@ -34,6 +34,11 @@ function shortUrl(url: string | null) {
   try { return new URL(url).pathname } catch { return url }
 }
 
+/**
+ * Página de logs de cliente (`/admin/logs`).
+ * Exibe erros e warnings capturados pelo `clientLogger` em produção,
+ * com filtro por nível, pesquisa por texto e paginação.
+ */
 export default function AdminLogsPage() {
   const [logs, setLogs] = useState<ClientLog[]>([])
   const [loading, setLoading] = useState(true)

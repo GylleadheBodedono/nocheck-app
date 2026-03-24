@@ -80,6 +80,11 @@ type ChecklistSectionRow = {
   completed_at: string | null
 }
 
+/**
+ * Página de visualização de checklist preenchido (`/checklist/[id]`).
+ * Exibe respostas, fotos, assinaturas e não conformidades de um checklist concluído.
+ * Acessível por operadores (seu próprio checklist) e admins (qualquer checklist).
+ */
 export default function ChecklistViewPage() {
   const [loading, setLoading] = useState(true)
   const [checklist, setChecklist] = useState<ChecklistDetail | null>(null)

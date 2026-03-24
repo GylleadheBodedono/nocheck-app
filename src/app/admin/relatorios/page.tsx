@@ -93,6 +93,11 @@ type UserChecklist = {
   template_name: string
 }
 
+/**
+ * Página de relatórios admin (`/admin/relatorios`).
+ * 4 abas: Visão Geral (KPIs executivos), Respostas por Usuário, Conformidade e Reincidências.
+ * Permite filtrar por período (7d, 30d, 90d) e exportar os dados em CSV/Excel/PDF.
+ */
 export default function RelatoriosPage() {
   const [loading, setLoading] = useState(true)
   const [period, setPeriod] = useState<'7d' | '30d' | '90d'>('30d')

@@ -3479,6 +3479,11 @@ function ChecklistForm() {
   )
 }
 
+/**
+ * Página de preenchimento de novo checklist (`/checklist/novo`).
+ * Renderiza `ChecklistForm` dentro de um Suspense para suportar `useSearchParams()`.
+ * O formulário suporta modo offline (cache IndexedDB) e sincronização posterior.
+ */
 export default function NovoChecklistPage() {
   return (
     <Suspense fallback={<LoadingPage />}>

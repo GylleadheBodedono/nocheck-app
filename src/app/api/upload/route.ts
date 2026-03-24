@@ -13,13 +13,13 @@ const MAX_FILE_SIZE = 5 * 1024 * 1024 // 5MB
 
 /**
  * POST /api/upload
- * Faz upload de imagem para o Supabase Storage
+ * Faz upload de imagem (base64) para o Supabase Storage no bucket `checklist-photos`.
+ * Limite: 5 MB por arquivo. Requer autenticação.
+ * Retorna `{ url }` com a URL pública do arquivo salvo.
  */
 export async function POST(request: NextRequest) {
   const auth = await verifyApiAuth(request)
   if (auth.error) return auth.error
-
-  console.log('[Upload] Recebendo requisição de upload')
 
   try {
     const body = await request.json()

@@ -219,7 +219,7 @@ export async function POST(request: NextRequest) {
               body: JSON.stringify({
                 from: fromEmail,
                 to: [email],
-                subject: 'Confirme seu email - NoCheck',
+                subject: 'Confirme seu email - OpereCheck',
                 html: emailHtml,
               }),
             })
@@ -239,7 +239,7 @@ export async function POST(request: NextRequest) {
                 body: JSON.stringify({
                   from: FALLBACK_FROM,
                   to: [email],
-                  subject: 'Confirme seu email - NoCheck',
+                  subject: 'Confirme seu email - OpereCheck',
                   html: emailHtml,
                 }),
               })
@@ -346,12 +346,12 @@ function buildConfirmationEmailHtml(userName: string, confirmUrl: string): strin
   <div style="max-width: 600px; margin: 0 auto; background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
     <div style="background: #6366f1; padding: 24px; color: white; text-align: center;">
       <h1 style="margin: 0; font-size: 22px;">Confirme seu Email</h1>
-      <p style="margin: 8px 0 0; opacity: 0.9; font-size: 14px;">NoCheck - Sistema de Checklists</p>
+      <p style="margin: 8px 0 0; opacity: 0.9; font-size: 14px;">OpereCheck - Sistema de Checklists</p>
     </div>
     <div style="padding: 32px 24px; text-align: center;">
       <p style="color: #1e293b; font-size: 16px; margin: 0 0 8px;">Ola, <strong>${userName}</strong>!</p>
       <p style="color: #475569; font-size: 14px; line-height: 1.6; margin: 0 0 24px;">
-        Sua conta foi criada no NoCheck. Clique no botao abaixo para confirmar seu email e ativar sua conta.
+        Sua conta foi criada no OpereCheck. Clique no botao abaixo para confirmar seu email e ativar sua conta.
       </p>
       <a href="${confirmUrl}" style="display: inline-block; background: #6366f1; color: white; padding: 14px 32px; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 15px;">
         Confirmar Email
@@ -361,7 +361,7 @@ function buildConfirmationEmailHtml(userName: string, confirmUrl: string): strin
       </p>
     </div>
     <div style="padding: 16px 24px; background: #f8fafc; border-top: 1px solid #e2e8f0; text-align: center;">
-      <p style="margin: 0; color: #94a3b8; font-size: 12px;">NoCheck - Sistema de Checklists</p>
+      <p style="margin: 0; color: #94a3b8; font-size: 12px;">OpereCheck - Sistema de Checklists</p>
     </div>
   </div>
 </body>

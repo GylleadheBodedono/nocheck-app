@@ -3,6 +3,11 @@
 import Link from 'next/link'
 import { FiCheckCircle, FiLogIn } from 'react-icons/fi'
 
+/**
+ * Página de confirmação de email (`/auth/confirmed`).
+ * Exibida após o usuário clicar no link de confirmação do email.
+ * Apresenta mensagem de sucesso e botão para ir ao login.
+ */
 export default function EmailConfirmedPage() {
   return (
     <div className="min-h-screen bg-page flex items-center justify-center p-4">

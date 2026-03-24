@@ -85,6 +85,11 @@ const STATUS_CONFIG: Record<string, { label: string; color: string }> = {
 
 const PAGE_SIZE = 20
 
+/**
+ * Relatório de fotos de não conformidades (`/admin/relatorios/fotos-nc`).
+ * Lista registros fotográficos de campos NC com filtros por loja e período.
+ * Exporta relatório PDF com fotos via `exportNcPhotosReport`. Paginação de 20 por vez.
+ */
 export default function FotosNCPage() {
   const router = useRouter()
   const supabase = useMemo(() => createClient(), [])

@@ -3,6 +3,12 @@ export const runtime = 'edge'
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 
+/**
+ * POST /api/auth/check-email
+ * Verifica se um e-mail já está cadastrado na tabela `users`.
+ * Usado no formulário de cadastro para exibir feedback antes do submit.
+ * Não requer autenticação (público). Retorna `{ exists: boolean }`.
+ */
 export async function POST(request: NextRequest) {
   try {
     const { email } = await request.json()

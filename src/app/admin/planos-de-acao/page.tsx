@@ -44,6 +44,11 @@ type ActionPlan = {
 type FilterStore = { id: number; name: string }
 type FilterUser = { id: string; full_name: string }
 
+/**
+ * Página de listagem de planos de ação (`/admin/planos-de-acao`).
+ * Exibe todos os planos com filtros por status, severidade, responsável e loja.
+ * Suporta visualização offline via cache. Atualiza em tempo real via `useRealtimeActionPlans`.
+ */
 export default function PlanoDeAcaoPage() {
   const [loading, setLoading] = useState(true)
   const [actionPlans, setActionPlans] = useState<ActionPlan[]>([])

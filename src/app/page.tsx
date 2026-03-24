@@ -450,6 +450,11 @@ function FloatingParticles() {
 }
 
 // ─── Main Component ───
+/**
+ * Landing page pública do OpereCheck (`/`).
+ * Apresenta hero, features, planos e CTA de cadastro/login.
+ * Redireciona usuários já autenticados para `/dashboard` ou `/admin`.
+ */
 export default function LandingPage() {
   const [scrolled, setScrolled] = useState(false)
   const { scrollYProgress } = useScroll()

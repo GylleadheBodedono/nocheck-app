@@ -24,6 +24,11 @@ type FunctionWithStats = FunctionRow & {
   user_count: number
 }
 
+/**
+ * Página de gerenciamento de funções (`/admin/funcoes`).
+ * CRUD de cargos (ex: Estoquista, Supervisor, Aprendiz) que controlam
+ * quais templates cada cargo pode preencher.
+ */
 export default function FuncoesPage() {
   const [functions, setFunctions] = useState<FunctionWithStats[]>([])
   const [loading, setLoading] = useState(true)
