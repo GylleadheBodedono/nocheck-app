@@ -1314,10 +1314,10 @@ function ChecklistForm() {
 
   // Flush auto-save on ANY exit scenario (mobile + desktop)
   useEffect(() => {
-    // Desktop: beforeunload (fecha aba, reload)
-    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+    // Desktop: beforeunload (fecha aba, reload) — flush sem bloquear navegacao
+    // NAO chamar e.preventDefault() pois auto-save ja salvou tudo em tempo real
+    const handleBeforeUnload = () => {
       autoSaveField.flush()
-      e.preventDefault()
     }
     // Mobile: visibilitychange (tela bloqueou, trocou app, fechou browser)
     const handleVisibilityChange = () => {
@@ -1975,7 +1975,7 @@ function ChecklistForm() {
         window.history.pushState(null, '', window.location.href)
         setActiveParentSection(null)
       } else {
-        await new Promise(resolve => setTimeout(resolve, 300))
+        // Na tela de etapas: voltar direto ao dashboard (auto-save ja salvou tudo)
         router.push(APP_CONFIG.routes.dashboard)
       }
     }
