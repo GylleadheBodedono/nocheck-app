@@ -1639,9 +1639,9 @@ function ChecklistForm() {
   // === SECTION BACK: auto-mark section as complete if all required fields are filled ===
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const handleSectionBack = useCallback(async () => {
-    // Flush pending auto-save e esperar completar
+    // Flush pending auto-save
     autoSaveField.flush()
-    await new Promise(resolve => setTimeout(resolve, 300))
+    await new Promise(resolve => setTimeout(resolve, 50))
 
     if (activeSection === null) { setActiveSection(null); return }
 
@@ -1837,13 +1837,12 @@ function ChecklistForm() {
     addLog('switchSection', undefined, `from=${activeSection} to=${newSectionId}`)
     // 1. Flush pending debounced auto-save
     autoSaveField.flush()
-    await new Promise(resolve => setTimeout(resolve, 200))
+    await new Promise(resolve => setTimeout(resolve, 50))
 
     // 2. Bulk save current section responses (online + offline)
     if (activeSection !== null && activeSection !== -1) {
+      const sectionFields = getFieldsForSection(activeSection)
       try {
-        const sectionFields = getFieldsForSection(activeSection)
-
         if (navigator.onLine && checklistIdRef.current) {
           // Online: upsert ao Supabase (sem base64 para evitar payload grande)
           let userId: string | null = null
@@ -1901,6 +1900,59 @@ function ChecklistForm() {
       } catch (err) {
         console.error('[SwitchSection] Erro ao salvar secao:', err)
       }
+
+      // Verificar se secao que estamos saindo foi concluida (marca check verde)
+      try {
+        const currentResponses = responsesRef.current
+        const allRequiredFilled = sectionFields
+          .filter(f => f.field_type !== 'gps')
+          .every(field => {
+            const v = currentResponses[field.id]
+            if (field.is_required) {
+              if (v === undefined || v === null || v === '' || (Array.isArray(v) && v.length === 0)) return false
+              if (field.field_type === 'text' && typeof v === 'string' && v.trim().length < 3) return false
+            }
+            if (field.field_type === 'yes_no' && v !== undefined && v !== null && v !== '') {
+              let ans: string | undefined
+              let obj: Record<string, unknown> = {}
+              if (typeof v === 'string') { ans = v } else if (typeof v === 'object') { obj = v as Record<string, unknown>; ans = obj.answer as string | undefined }
+              if (field.is_required && (!ans || ans === '')) return false
+              if (ans) {
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                const opts = field.options as any
+                if (opts?.photoRequired === true) { const photos = obj.photos as string[] | undefined; if (!photos || photos.length === 0) return false }
+                const condConfig = (ans === 'nao' ? opts?.onNo : ans === 'sim' ? opts?.onYes : undefined) as
+                  { showTextField?: boolean; textFieldRequired?: boolean; showPhotoField?: boolean; photoFieldRequired?: boolean } | undefined
+                if (condConfig) {
+                  if (condConfig.showTextField && condConfig.textFieldRequired) { const text = obj.conditionalText as string | undefined; if (!text || text.trim().length < 3) return false }
+                  if (condConfig.showPhotoField && condConfig.photoFieldRequired) { const photos = obj.conditionalPhotos as string[] | undefined; if (!photos || photos.length === 0) return false }
+                }
+              }
+            }
+            return true
+          })
+        const hasAnyResponse = sectionFields.some(f => {
+          const v = currentResponses[f.id]
+          return v !== undefined && v !== null && v !== '' && !(Array.isArray(v) && v.length === 0)
+        })
+
+        if (allRequiredFilled && hasAnyResponse) {
+          const sectionProg = sectionProgress.find(sp => sp.section_id === activeSection)
+          if (navigator.onLine && checklistIdRef.current && sectionProg?.db_id) {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            (supabase as any)
+              .from('checklist_sections')
+              .update({ status: 'concluido', completed_at: new Date().toISOString() })
+              .eq('id', sectionProg.db_id)
+              .then(() => {}).catch(() => {})
+          }
+          setSectionProgress(prev => prev.map(sp =>
+            sp.section_id === activeSection
+              ? { ...sp, status: 'concluido' as const, completed_at: new Date().toISOString() }
+              : sp
+          ))
+        }
+      } catch { /* nao bloquear navegacao por erro na checagem */ }
     }
 
     // 3. Switch to new section
