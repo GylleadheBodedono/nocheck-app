@@ -152,6 +152,11 @@ export default function RelatoriosPage() {
   const [showAllGaps, setShowAllGaps] = useState(false)
   // Filtro de loja na visao geral
   const [overviewFilterStore, setOverviewFilterStore] = useState('')
+  // Filtros avancados: ocultacao temporaria de entidades do relatorio
+  const [hiddenUserIds, setHiddenUserIds] = useState<Set<string>>(new Set())
+  const [hiddenStoreIds, setHiddenStoreIds] = useState<Set<number>>(new Set())
+  const [hiddenTemplateIds, setHiddenTemplateIds] = useState<Set<number>>(new Set())
+  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false)
   // Ordenacao das tabelas de adesao
   const [storeSort, setStoreSort] = useState<'best' | 'worst' | 'name'>('worst')
   const [templateSort, setTemplateSort] = useState<'best' | 'worst' | 'name'>('worst')
@@ -505,12 +510,16 @@ export default function RelatoriosPage() {
     setLoading(false)
   }
 
-  // === Reactive adherence: recomputes ALL data when store filter or raw data changes ===
+  // === Reactive adherence: recomputes ALL data when filters or raw data changes ===
   const filteredChecklists = useMemo(() => {
-    if (!overviewFilterStore) return rawActiveChecklists
-    const storeId = Number(overviewFilterStore)
-    return rawActiveChecklists.filter(c => c.store_id === storeId)
-  }, [rawActiveChecklists, overviewFilterStore])
+    return rawActiveChecklists.filter(c => {
+      if (overviewFilterStore && c.store_id !== Number(overviewFilterStore)) return false
+      if (hiddenStoreIds.size > 0 && hiddenStoreIds.has(c.store_id)) return false
+      if (hiddenUserIds.size > 0 && hiddenUserIds.has(c.created_by)) return false
+      if (hiddenTemplateIds.size > 0 && hiddenTemplateIds.has(c.template_id)) return false
+      return true
+    })
+  }, [rawActiveChecklists, overviewFilterStore, hiddenStoreIds, hiddenUserIds, hiddenTemplateIds])
 
   const overallMetrics = useMemo(() => {
     if (filteredChecklists.length === 0 && rawActiveChecklists.length === 0) return null
@@ -519,23 +528,30 @@ export default function RelatoriosPage() {
 
   const templateAdherence = useMemo(() => {
     const vis = overviewFilterStore ? rawVisibility.filter(v => v.store_id === Number(overviewFilterStore)) : rawVisibility
-    return computeTemplateAdherence(filteredChecklists, rawTemplates, vis)
-  }, [filteredChecklists, rawTemplates, rawVisibility, overviewFilterStore])
+    const templates = hiddenTemplateIds.size > 0 ? rawTemplates.filter(t => !hiddenTemplateIds.has(t.id)) : rawTemplates
+    return computeTemplateAdherence(filteredChecklists, templates, vis)
+  }, [filteredChecklists, rawTemplates, rawVisibility, overviewFilterStore, hiddenTemplateIds])
 
   const storeAdherence = useMemo(() => {
-    const stores = overviewFilterStore ? rawStores.filter(s => s.id === Number(overviewFilterStore)) : rawStores
+    let stores = overviewFilterStore ? rawStores.filter(s => s.id === Number(overviewFilterStore)) : rawStores
+    if (hiddenStoreIds.size > 0) stores = stores.filter(s => !hiddenStoreIds.has(s.id))
     return computeStoreAdherence(filteredChecklists, stores, rawTemplates, rawVisibility)
-  }, [filteredChecklists, rawStores, rawTemplates, rawVisibility, overviewFilterStore])
+  }, [filteredChecklists, rawStores, rawTemplates, rawVisibility, overviewFilterStore, hiddenStoreIds])
 
   const userAdherence = useMemo(() => {
-    return computeUserAdherence(filteredChecklists, rawUsers)
-  }, [filteredChecklists, rawUsers])
+    const users = hiddenUserIds.size > 0 ? rawUsers.filter(u => !hiddenUserIds.has(u.id)) : rawUsers
+    return computeUserAdherence(filteredChecklists, users)
+  }, [filteredChecklists, rawUsers, hiddenUserIds])
 
   const coverageGaps = useMemo(() => {
-    const stores = overviewFilterStore ? rawStores.filter(s => s.id === Number(overviewFilterStore)) : rawStores
-    const vis = overviewFilterStore ? rawVisibility.filter(v => v.store_id === Number(overviewFilterStore)) : rawVisibility
-    return computeCoverageGaps(filteredChecklists, rawTemplates, stores, vis)
-  }, [filteredChecklists, rawTemplates, rawStores, rawVisibility, overviewFilterStore])
+    let stores = overviewFilterStore ? rawStores.filter(s => s.id === Number(overviewFilterStore)) : rawStores
+    if (hiddenStoreIds.size > 0) stores = stores.filter(s => !hiddenStoreIds.has(s.id))
+    let vis = overviewFilterStore ? rawVisibility.filter(v => v.store_id === Number(overviewFilterStore)) : rawVisibility
+    if (hiddenStoreIds.size > 0) vis = vis.filter(v => !hiddenStoreIds.has(v.store_id))
+    if (hiddenTemplateIds.size > 0) vis = vis.filter(v => !hiddenTemplateIds.has(v.template_id))
+    const templates = hiddenTemplateIds.size > 0 ? rawTemplates.filter(t => !hiddenTemplateIds.has(t.id)) : rawTemplates
+    return computeCoverageGaps(filteredChecklists, templates, stores, vis)
+  }, [filteredChecklists, rawTemplates, rawStores, rawVisibility, overviewFilterStore, hiddenStoreIds, hiddenTemplateIds])
 
   const dailyStatusStats = useMemo(() => {
     return computeDailyStatusStats(filteredChecklists, rawChartDays)
@@ -1114,7 +1130,7 @@ export default function RelatoriosPage() {
 
         {activeTab === 'overview' && <>
         {/* Period + Store Filters */}
-        <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
+        <div className="flex items-center justify-between mb-3 flex-wrap gap-3">
           <h2 className="text-lg font-semibold text-main">Visao Geral</h2>
           <div className="flex items-center gap-2 flex-wrap">
             <select
@@ -1138,9 +1154,125 @@ export default function RelatoriosPage() {
                 {p === '7d' ? '7 dias' : p === '30d' ? '30 dias' : '90 dias'}
               </button>
             ))}
+            {/* Botao de Filtros Avancados com badge de ocultacoes ativas */}
+            <button
+              onClick={() => setShowAdvancedFilters(v => !v)}
+              className={`relative px-4 py-2 rounded-xl font-medium transition-colors text-sm ${showAdvancedFilters ? 'btn-primary' : 'btn-secondary'}`}
+            >
+              Filtros Avancados
+              {(hiddenUserIds.size + hiddenStoreIds.size + hiddenTemplateIds.size) > 0 && (
+                <span className="absolute -top-1.5 -right-1.5 bg-warning text-white text-[10px] font-bold rounded-full w-4 h-4 flex items-center justify-center">
+                  {hiddenUserIds.size + hiddenStoreIds.size + hiddenTemplateIds.size}
+                </span>
+              )}
+            </button>
             {exportDropdown}
           </div>
         </div>
+
+        {/* Painel de Filtros Avancados — ocultacao temporaria de entidades */}
+        {showAdvancedFilters && (
+          <div className="mb-6 p-4 bg-surface border border-subtle rounded-xl flex flex-col gap-4">
+            {/* Ocultar Usuarios */}
+            <div>
+              <p className="text-xs font-semibold text-muted mb-2 uppercase tracking-wide">Ocultar Usuarios do relatorio</p>
+              <div className="flex flex-wrap items-center gap-2">
+                <select
+                  value=""
+                  onChange={(e) => {
+                    if (!e.target.value) return
+                    setHiddenUserIds(prev => new Set([...prev, e.target.value]))
+                  }}
+                  className="px-3 py-1.5 rounded-lg text-sm bg-surface-hover border border-subtle text-main focus:outline-none focus:ring-2 focus:ring-primary"
+                >
+                  <option value="">Selecionar usuario...</option>
+                  {allUsers.filter(u => !hiddenUserIds.has(u.id)).map(u => (
+                    <option key={u.id} value={u.id}>{u.name || u.email}</option>
+                  ))}
+                </select>
+                {[...hiddenUserIds].map(uid => {
+                  const u = allUsers.find(x => x.id === uid)
+                  return (
+                    <span key={uid} className="inline-flex items-center gap-1 px-2.5 py-1 bg-warning/10 text-warning text-xs font-medium rounded-full border border-warning/30">
+                      {u ? (u.name || u.email) : uid}
+                      <button onClick={() => setHiddenUserIds(prev => { const s = new Set(prev); s.delete(uid); return s })} className="hover:text-error transition-colors">×</button>
+                    </span>
+                  )
+                })}
+              </div>
+            </div>
+
+            {/* Ocultar Lojas */}
+            <div>
+              <p className="text-xs font-semibold text-muted mb-2 uppercase tracking-wide">Ocultar Lojas do relatorio</p>
+              <div className="flex flex-wrap items-center gap-2">
+                <select
+                  value=""
+                  onChange={(e) => {
+                    if (!e.target.value) return
+                    setHiddenStoreIds(prev => new Set([...prev, Number(e.target.value)]))
+                  }}
+                  className="px-3 py-1.5 rounded-lg text-sm bg-surface-hover border border-subtle text-main focus:outline-none focus:ring-2 focus:ring-primary"
+                >
+                  <option value="">Selecionar loja...</option>
+                  {allStoresSimple.filter(s => !hiddenStoreIds.has(s.id)).map(s => (
+                    <option key={s.id} value={String(s.id)}>{s.name}</option>
+                  ))}
+                </select>
+                {[...hiddenStoreIds].map(sid => {
+                  const s = allStoresSimple.find(x => x.id === sid)
+                  return (
+                    <span key={sid} className="inline-flex items-center gap-1 px-2.5 py-1 bg-warning/10 text-warning text-xs font-medium rounded-full border border-warning/30">
+                      {s ? s.name : `Loja #${sid}`}
+                      <button onClick={() => setHiddenStoreIds(prev => { const set = new Set(prev); set.delete(sid); return set })} className="hover:text-error transition-colors">×</button>
+                    </span>
+                  )
+                })}
+              </div>
+            </div>
+
+            {/* Ocultar Templates */}
+            <div>
+              <p className="text-xs font-semibold text-muted mb-2 uppercase tracking-wide">Ocultar Templates do relatorio</p>
+              <div className="flex flex-wrap items-center gap-2">
+                <select
+                  value=""
+                  onChange={(e) => {
+                    if (!e.target.value) return
+                    setHiddenTemplateIds(prev => new Set([...prev, Number(e.target.value)]))
+                  }}
+                  className="px-3 py-1.5 rounded-lg text-sm bg-surface-hover border border-subtle text-main focus:outline-none focus:ring-2 focus:ring-primary"
+                >
+                  <option value="">Selecionar template...</option>
+                  {allTemplatesSimple.filter(t => !hiddenTemplateIds.has(t.id)).map(t => (
+                    <option key={t.id} value={String(t.id)}>{t.name}</option>
+                  ))}
+                </select>
+                {[...hiddenTemplateIds].map(tid => {
+                  const t = allTemplatesSimple.find(x => x.id === tid)
+                  return (
+                    <span key={tid} className="inline-flex items-center gap-1 px-2.5 py-1 bg-warning/10 text-warning text-xs font-medium rounded-full border border-warning/30">
+                      {t ? t.name : `Template #${tid}`}
+                      <button onClick={() => setHiddenTemplateIds(prev => { const s = new Set(prev); s.delete(tid); return s })} className="hover:text-error transition-colors">×</button>
+                    </span>
+                  )
+                })}
+              </div>
+            </div>
+
+            {/* Limpar ocultacoes */}
+            {(hiddenUserIds.size + hiddenStoreIds.size + hiddenTemplateIds.size) > 0 && (
+              <div className="pt-2 border-t border-subtle">
+                <button
+                  onClick={() => { setHiddenUserIds(new Set()); setHiddenStoreIds(new Set()); setHiddenTemplateIds(new Set()) }}
+                  className="text-xs text-muted hover:text-error transition-colors underline underline-offset-2"
+                >
+                  Limpar ocultacoes ({hiddenUserIds.size + hiddenStoreIds.size + hiddenTemplateIds.size} {hiddenUserIds.size + hiddenStoreIds.size + hiddenTemplateIds.size === 1 ? 'item oculto' : 'itens ocultos'})
+                </button>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Executive Summary Card */}
         {summaryText && (
