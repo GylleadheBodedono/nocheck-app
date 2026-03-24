@@ -1,3 +1,5 @@
+export const runtime = 'edge'
+
 import { NextRequest, NextResponse } from 'next/server'
 import { getStripe, getSupabaseAdmin, updateOrgPlan } from '@/lib/stripe'
 import { PLAN_CONFIGS, type Plan } from '@/types/tenant'
