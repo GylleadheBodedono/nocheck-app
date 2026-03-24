@@ -3,8 +3,20 @@
 import { useState, useEffect, useCallback } from 'react'
 import { APP_CONFIG } from '@/lib/config'
 
+/** Valores de tema suportados pelo OpereCheck. */
 export type Theme = 'light' | 'dark'
 
+/**
+ * Hook para gerenciar o tema visual (claro/escuro) da aplicação.
+ *
+ * Comportamento:
+ * - Inicializa com o valor salvo no `localStorage` (chave definida em `APP_CONFIG`)
+ * - Se não houver preferência salva, detecta a preferência do sistema via `matchMedia`
+ * - Atualiza automaticamente quando o sistema muda de tema (apenas se o usuário não fixou um)
+ * - Persiste a escolha manual do usuário no `localStorage` e aplica via `data-theme` no `<html>`
+ *
+ * @returns `{ theme, setTheme, toggleTheme, mounted, isDark, isLight }`
+ */
 export function useTheme() {
   const [theme, setThemeState] = useState<Theme>('light')
   const [mounted, setMounted] = useState(false)

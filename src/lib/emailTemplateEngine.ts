@@ -61,7 +61,7 @@ export const TEMPLATE_VARIABLES: TemplateVariableMeta[] = [
   { key: 'is_reincidencia', label: 'Reincidencia?', description: '"Sim" ou "Nao"', example: 'Sim' },
   { key: 'reincidencia_count', label: 'Qtd Reincidencias', description: 'Numero de ocorrencias anteriores', example: '3' },
   { key: 'reincidencia_prefix', label: 'Prefixo Reincidencia', description: '"REINCIDENCIA - " ou vazio', example: 'REINCIDENCIA - ' },
-  { key: 'app_name', label: 'Nome do App', description: 'Nome do sistema', example: 'NoCheck' },
+  { key: 'app_name', label: 'Nome do App', description: 'Nome do sistema', example: 'OpereCheck' },
 ]
 
 // ============================================
@@ -79,7 +79,7 @@ export const SEVERITY_COLORS: Record<string, string> = {
 // TEMPLATES PADRAO
 // ============================================
 
-export const DEFAULT_ACTION_PLAN_EMAIL_SUBJECT = '[NoCheck] {{reincidencia_prefix}}Plano de Acao: {{field_name}}'
+export const DEFAULT_ACTION_PLAN_EMAIL_SUBJECT = '[OpereCheck] {{reincidencia_prefix}}Plano de Acao: {{field_name}}'
 
 export const DEFAULT_ACTION_PLAN_EMAIL_HTML = `<!DOCTYPE html>
 <html>
@@ -157,6 +157,13 @@ export const DEFAULT_ACTION_PLAN_EMAIL_HTML = `<!DOCTYPE html>
 // FUNCOES
 // ============================================
 
+/**
+ * Escapa caracteres HTML especiais para uso seguro em templates de email.
+ * Previne XSS ao inserir valores do usuário no corpo HTML.
+ *
+ * @param str - String a ser escapada
+ * @returns String com `&`, `<`, `>` e `"` substituídos por entidades HTML
+ */
 function escapeHtml(str: string): string {
   return str
     .replace(/&/g, '&amp;')
@@ -165,9 +172,17 @@ function escapeHtml(str: string): string {
     .replace(/"/g, '&quot;')
 }
 
-// Variaveis que contem HTML/URLs e NAO devem ser escapadas
+/** Variáveis que contêm HTML/URLs e NÃO devem ser escapadas (usadas em atributos style/href). */
 const RAW_VARIABLES = new Set<string>(['severity_color', 'plan_url', 'reincidencia_prefix'])
 
+/**
+ * Substitui todos os placeholders `{{variavel}}` no template pelos valores fornecidos.
+ * Valores são escapados por padrão; variáveis em `RAW_VARIABLES` são inseridas sem escape.
+ *
+ * @param template  - String do template com placeholders `{{chave}}`
+ * @param variables - Objeto com os valores para substituição
+ * @returns Template com todos os placeholders substituídos
+ */
 export function replaceTemplatePlaceholders(
   template: string,
   variables: EmailTemplateVariables
@@ -180,6 +195,16 @@ export function replaceTemplatePlaceholders(
   return result
 }
 
+/**
+ * Constrói o HTML e o assunto do email aplicando as variáveis ao template configurado.
+ * Usa os templates padrão (`DEFAULT_ACTION_PLAN_EMAIL_*`) quando `templateHtml` ou
+ * `subjectTemplate` são `null`.
+ *
+ * @param templateHtml    - Template HTML customizado (ou `null` para usar o padrão)
+ * @param subjectTemplate - Template do assunto (ou `null` para usar o padrão)
+ * @param variables       - Variáveis para substituição nos placeholders
+ * @returns `{ html, subject }` com os valores finais prontos para envio
+ */
 export function buildEmailFromTemplate(
   templateHtml: string | null,
   subjectTemplate: string | null,
@@ -197,7 +222,10 @@ export function buildEmailFromTemplate(
 }
 
 /**
- * Gera dados de exemplo para preview no admin
+ * Gera dados de exemplo para preview do template no painel admin.
+ * Os valores são fictícios e apenas ilustrativos.
+ *
+ * @returns Objeto `EmailTemplateVariables` com dados de demonstração
  */
 export function getSampleVariables(): EmailTemplateVariables {
   return {
@@ -220,6 +248,6 @@ export function getSampleVariables(): EmailTemplateVariables {
     is_reincidencia: 'Sim',
     reincidencia_count: '3',
     reincidencia_prefix: 'REINCIDENCIA - ',
-    app_name: 'NoCheck',
+    app_name: 'OpereCheck',
   }
 }

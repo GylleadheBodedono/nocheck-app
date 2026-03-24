@@ -1,23 +1,28 @@
+/**
+ * Cliente Supabase para uso server-side (API Routes e Server Components).
+ * NÃO importar em componentes 'use client' — use src/lib/supabase.ts para isso.
+ */
+
 import { createServerClient, type CookieOptions } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import type { Database } from '@/types/database'
 
 type CookieToSet = { name: string; value: string; options: CookieOptions }
 
-// Verificar se o Supabase está configurado
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
 const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 
-// Duração do cookie: 7 dias em segundos
+/** Duração padrão dos cookies de sessão: 7 dias em segundos. */
 const COOKIE_MAX_AGE = 60 * 60 * 24 * 7
 
-// Server-side Supabase client (for API routes and Server Components)
-// Este arquivo só pode ser importado em Server Components ou API Routes
+/**
+ * Cria um cliente Supabase server-side com gerenciamento de cookies.
+ * Retorna `null` se as variáveis de ambiente não estiverem configuradas.
+ *
+ * @returns Cliente Supabase tipado ou `null` se não configurado
+ */
 export async function createServerSupabaseClient() {
-  if (!supabaseUrl || !supabaseKey) {
-    console.warn('Supabase não configurado.')
-    return null
-  }
+  if (!supabaseUrl || !supabaseKey) return null
 
   const cookieStore = await cookies()
 

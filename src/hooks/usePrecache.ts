@@ -2,6 +2,7 @@
 
 import { useState, useCallback } from 'react'
 
+/** Estado do processo de pré-cache de páginas do Service Worker. */
 type PrecacheStatus = {
   isReady: boolean
   isCaching: boolean
@@ -10,8 +11,14 @@ type PrecacheStatus = {
 }
 
 /**
- * Hook para fazer precache de toda a aplicacao
- * Deve ser chamado apos o login para garantir funcionamento offline
+ * Hook para fazer pré-cache das páginas e assets da aplicação via Service Worker.
+ * Deve ser chamado após o login para garantir o funcionamento offline.
+ *
+ * - `precacheApp`: envia `PRECACHE_APP` ao SW e faz fetch sequencial das URLs essenciais,
+ *   atualizando o `progress` (0–100%) em cada etapa
+ * - `clearCache`: envia `CLEAR_CACHE` ao SW e reseta o estado
+ *
+ * @returns `{ isReady, isCaching, progress, error, precacheApp, clearCache }`
  */
 export function usePrecache() {
   const [status, setStatus] = useState<PrecacheStatus>({
@@ -118,9 +125,16 @@ export function usePrecache() {
 }
 
 /**
- * Faz precache COMPLETO da aplicacao
- * Esta funcao aguarda o SW cachear todos os assets antes de retornar
- * Chame essa funcao apos o login bem-sucedido
+ * Dispara o pré-cache completo da aplicação e aguarda a resposta do Service Worker.
+ * Deve ser chamada logo após o login bem-sucedido.
+ *
+ * Fluxo:
+ * 1. Aguarda o SW estar pronto (`navigator.serviceWorker.ready`)
+ * 2. Envia mensagem `PRECACHE_APP` ao SW
+ * 3. Aguarda resposta `PRECACHE_COMPLETE` (timeout de 30s como segurança)
+ * 4. Faz fetch adicional das páginas principais para garantir que os assets JS/CSS sejam cacheados
+ *
+ * Silencia erros para não bloquear o fluxo de login se o SW não estiver disponível.
  */
 export async function triggerPrecache(): Promise<void> {
   if (!('serviceWorker' in navigator)) {

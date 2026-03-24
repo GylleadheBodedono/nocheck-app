@@ -24,6 +24,7 @@ import type {
   FunctionRow,
 } from '@/types/database'
 
+/** Estado dos dados carregados com suporte offline. */
 export type OfflineDataState = {
   stores: Store[]
   templates: ChecklistTemplate[]
@@ -35,6 +36,7 @@ export type OfflineDataState = {
   error: string | null
 }
 
+/** Ações para carregar e sincronizar dados com suporte offline. */
 export type OfflineDataActions = {
   loadStores: () => Promise<Store[]>
   loadTemplates: (storeId?: number) => Promise<ChecklistTemplate[]>
@@ -46,9 +48,17 @@ export type OfflineDataActions = {
 }
 
 /**
- * Hook para carregar dados com suporte offline
- * - Quando online: busca do Supabase e atualiza cache
- * - Quando offline: usa dados do IndexedDB
+ * Hook para carregar dados de referência com suporte offline.
+ *
+ * Padrão de cada função de carregamento:
+ * - **Online**: busca do Supabase, atualiza o cache do IndexedDB e retorna os dados frescos
+ * - **Offline**: retorna diretamente do IndexedDB sem tentativa de rede
+ * - **Fallback**: em caso de erro online, tenta o cache antes de retornar array vazio
+ *
+ * Dados carregados: lojas, templates, campos de template, setores e funções.
+ * `syncAllData(userId)` recarrega todos em uma única operação (usado ao voltar online).
+ *
+ * @returns `OfflineDataState & OfflineDataActions`
  */
 export function useOfflineData(): OfflineDataState & OfflineDataActions {
   const [state, setState] = useState<OfflineDataState>({

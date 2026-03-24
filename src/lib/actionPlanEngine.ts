@@ -1,16 +1,21 @@
 /**
- * Engine de processamento de nao-conformidades e planos de acao.
- * Chamado apos submissao de checklist (similar a crossValidation.ts).
+ * Engine de processamento de não-conformidades e planos de ação.
+ * Chamado após a submissão de um checklist (similar a `crossValidation.ts`).
  *
- * Pipeline:
- * 1. Busca field_conditions do template
- * 2. Avalia cada resposta contra as condicoes
- * 3. Para cada nao-conformidade:
- *    a. Verifica reincidencia (mesmo campo+loja nos ultimos 90 dias)
- *    b. Cria action_plan
- *    c. Cria notificacao in-app
- *    d. Envia email de notificacao (template configuravel)
- *    e. Se reincidencia, notifica admins
+ * Pipeline de `processarNaoConformidades`:
+ * 1. Busca `field_conditions` ativos para os campos do template
+ * 2. Avalia cada resposta contra as condições via `evaluateCondition`
+ * 3. Para cada não-conformidade detectada:
+ *    a. Verifica reincidência (mesmo campo+loja+template nos últimos 90 dias)
+ *    b. Cria `action_plan` no banco
+ *    c. Cria notificação in-app para o responsável
+ *    d. Envia email via template configurável (`emailTemplateEngine`)
+ *    e. Se reincidência, notifica admins com alerta adicional
+ *    f. Envia alerta Teams se webhook configurado
+ *
+ * Funções exportadas:
+ * - `processarNaoConformidades` — pipeline principal (chamado após submit de checklist)
+ * - `checkOverduePlans`         — verifica e atualiza planos vencidos (chamado no login admin)
  */
 
 import { createNotification, sendActionPlanEmail, sendActionPlanTeamsAlert } from './notificationService'
@@ -38,8 +43,15 @@ type ProcessResult = {
 }
 
 /**
- * Avalia se uma resposta viola a condicao de nao-conformidade.
- * Retorna true se a resposta E nao-conforme.
+ * Avalia se uma resposta viola uma condição de não-conformidade.
+ *
+ * Suporta os tipos de campo: `yes_no`, `number`, `rating`, `dropdown`,
+ * `checkbox_multiple` e `text`. Tipos desconhecidos retornam `false`.
+ *
+ * @param field     - Dados do campo (tipo e nome)
+ * @param response  - Resposta do usuário para o campo
+ * @param condition - Condição configurada pelo admin (`field_conditions`)
+ * @returns `true` se a resposta é não-conforme, `false` caso contrário
  */
 function evaluateCondition(
   field: FieldData,
@@ -144,7 +156,15 @@ function evaluateCondition(
 }
 
 /**
- * Verifica reincidencia: mesmo campo + loja + template nos ultimos N dias
+ * Verifica se há reincidência de não-conformidade para a combinação campo+loja+template.
+ * Consulta `action_plans` nos últimos `lookbackDays` dias.
+ *
+ * @param supabase     - Cliente Supabase
+ * @param fieldId      - ID do campo que gerou a NC
+ * @param storeId      - ID da loja
+ * @param templateId   - ID do template
+ * @param lookbackDays - Janela de busca em dias (padrão: 90)
+ * @returns `{ isReincidencia, count, parentPlanId }` — parentPlanId aponta para o plano mais antigo
  */
 async function checkReincidencia(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -184,7 +204,12 @@ async function checkReincidencia(
 }
 
 /**
- * Obtem o valor nao-conforme como string para exibicao
+ * Obtém o valor não-conforme como string legível para exibição.
+ * Normaliza os diferentes formatos de valor (JSON, text, number) de cada tipo de campo.
+ *
+ * @param field    - Dados do campo (tipo usado para selecionar a lógica de extração)
+ * @param response - Resposta do usuário
+ * @returns String do valor não-conforme (ex: "Não", "3", "Produto A")
  */
 function getNonConformityValueStr(field: FieldData, response: ResponseData): string {
   switch (field.field_type) {
@@ -214,7 +239,26 @@ function getNonConformityValueStr(field: FieldData, response: ResponseData): str
 }
 
 /**
- * Funcao principal: processa nao-conformidades apos submissao de checklist.
+ * Processa não-conformidades após a submissão de um checklist.
+ *
+ * Para cada campo com condição violada:
+ * - Verifica reincidência nos últimos 90 dias
+ * - Cria `action_plan` atribuído ao responsável configurado
+ * - Envia notificação in-app e email ao responsável
+ * - Se reincidência: notifica admins e inclui prefixo "REINCIDÊNCIA" no email
+ * - Se webhook Teams configurado: envia alerta de plano de ação
+ *
+ * Falhas em notificações não interrompem a criação do plano.
+ *
+ * @param supabase    - Cliente Supabase com permissão de escrita
+ * @param checklistId - ID do checklist recém-submetido
+ * @param templateId  - ID do template usado
+ * @param storeId     - ID da loja
+ * @param sectorId    - ID do setor (ou `null`)
+ * @param userId      - UUID do usuário que submeteu o checklist
+ * @param responses   - Respostas do checklist
+ * @param fields      - Campos do template (para lookup de tipo e nome)
+ * @returns `{ success, plansCreated }` ou `{ success: false, error }`
  */
 export async function processarNaoConformidades(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -797,8 +841,17 @@ export async function processarNaoConformidades(
 }
 
 /**
- * Verifica planos de acao vencidos e atualiza status.
- * Chamado no login do admin (piggyback).
+ * Verifica planos de ação vencidos e atualiza seu status para `vencido`.
+ * Chamado no login do admin (piggyback) para manter o banco atualizado.
+ *
+ * Para cada plano vencido:
+ * - Atualiza `status` → `vencido` em `action_plans`
+ * - Cria notificação in-app para o responsável e para todos os admins
+ * - Se `accessToken` fornecido: envia email de aviso ao responsável
+ *
+ * @param supabase     - Cliente Supabase com permissão de leitura/escrita
+ * @param accessToken  - Token JWT para autenticação nas APIs de email (opcional)
+ * @returns Número de planos marcados como vencidos
  */
 export async function checkOverduePlans(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

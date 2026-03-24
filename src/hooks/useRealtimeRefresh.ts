@@ -4,16 +4,22 @@ import { useEffect, useRef, useState } from 'react'
 import { createClient } from '@/lib/supabase'
 
 /**
- * Hook generico de Realtime: se inscreve em mudancas de uma ou mais tabelas
- * e retorna um refreshKey que incrementa a cada mudanca detectada.
+ * Hook genérico de Realtime do Supabase: se inscreve em mudanças de uma ou mais
+ * tabelas e retorna um `refreshKey` que incrementa a cada mudança detectada.
  *
- * Uso em qualquer pagina:
- *   const { refreshKey } = useRealtimeRefresh(['action_plans', 'notifications'])
- *   useEffect(() => { if (refreshKey > 0) loadData() }, [refreshKey])
+ * Uso em qualquer página:
+ * ```tsx
+ * const { refreshKey } = useRealtimeRefresh(['action_plans', 'notifications'])
+ * useEffect(() => { if (refreshKey > 0) loadData() }, [refreshKey])
+ * ```
  *
- * - So ativo quando online
- * - Cleanup automatico no unmount
- * - Nao afeta funcionalidade offline
+ * - Cria um canal Supabase por tabela (com sufixo aleatório para evitar colisão)
+ * - Só ativo quando `navigator.onLine === true`
+ * - Cleanup automático no unmount e ao trocar a lista de tabelas
+ * - Não afeta funcionalidade offline
+ *
+ * @param tables - Lista de nomes de tabelas para monitorar (ex: `['checklists', 'action_plans']`)
+ * @returns `{ refreshKey }` — número que incrementa a cada evento recebido
  */
 export function useRealtimeRefresh(tables: string[]) {
   const [refreshKey, setRefreshKey] = useState(0)

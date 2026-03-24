@@ -1,11 +1,20 @@
 /**
- * Queries para o Relatorio Fotografico de Nao-Conformidades.
- * Busca action_plans com fotos do problema e evidencias da resolucao.
+ * Queries para o Relatório Fotográfico de Não-Conformidades.
+ * Busca `action_plans` com fotos do problema (campo do checklist) e
+ * evidências de resolução (`action_plan_evidence`).
+ *
+ * Estratégia de fetching:
+ * - Query principal em `action_plans` com joins de campo, loja e template
+ * - Batch-fetch de `checklist_responses` para extrair fotos do campo
+ * - Batch-fetch de `action_plan_evidence` para fotos de resolução
+ * - Batch-fetch de nomes de usuários (assignees)
  */
 
+/** Alias genérico para qualquer cliente Supabase (server ou browser). */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type SupabaseClient = any
 
+/** Filtros aplicáveis ao relatório fotográfico de NCs. */
 export type NCPhotoReportFilters = {
   dateFrom: string
   dateTo: string
@@ -42,7 +51,11 @@ export type NCPhotoSummary = {
 }
 
 /**
- * Busca dados do relatorio fotografico NC
+ * Busca os dados completos do relatório fotográfico de não-conformidades.
+ *
+ * @param supabase - Cliente Supabase com acesso às tabelas necessárias
+ * @param filters  - Filtros de data, loja, template e severidade
+ * @returns `{ items, summary }` — itens detalhados e totalizadores
  */
 export async function fetchNCPhotoReport(
   supabase: SupabaseClient,
@@ -213,7 +226,11 @@ export async function fetchNCPhotoReport(
 }
 
 /**
- * Agrupa itens por semana ISO
+ * Agrupa itens do relatório fotográfico por semana ISO.
+ * Cada grupo contém um label formatado ("Semana N — DD/MM a DD/MM") e os itens da semana.
+ *
+ * @param items - Itens do relatório a agrupar
+ * @returns Map com chave "YYYY-WNN" e valor `{ label, items }`
  */
 export function groupByWeek(items: NCPhotoItem[]): Map<string, { label: string; items: NCPhotoItem[] }> {
   const groups = new Map<string, { label: string; items: NCPhotoItem[] }>()
@@ -236,12 +253,17 @@ export function groupByWeek(items: NCPhotoItem[]): Map<string, { label: string; 
   return groups
 }
 
-// === Helpers ===
+// === Helpers internos ===
 
+/** Verifica se uma string é uma URL de foto válida (não vazia). */
 function isValidPhotoUrl(url: string): boolean {
   return typeof url === 'string' && url.length > 0
 }
 
+/**
+ * Divide um array em blocos de tamanho `size`.
+ * Usado para batch-fetch via `.in()` do Supabase (limite de ~200 IDs por query).
+ */
 function chunkArray<T>(arr: T[], size: number): T[][] {
   const chunks: T[][] = []
   for (let i = 0; i < arr.length; i += size) {

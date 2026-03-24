@@ -1,6 +1,21 @@
 /**
- * Utilitarios de exportacao client-side para relatorios.
- * Compativel com Cloudflare Pages (sem Node.js APIs).
+ * Utilitários de exportação client-side para todos os relatórios do OpereCheck.
+ * Compatível com Cloudflare Pages (sem Node.js APIs).
+ *
+ * Formatos suportados: CSV, TXT, Excel (SheetJS) e PDF (jsPDF).
+ * SheetJS e jsPDF são carregados via dynamic import para reduzir o bundle inicial (~600 KB total).
+ *
+ * Grupos de exportação:
+ * - NC com Fotos: `exportToCSV/TXT/Excel/PDF`
+ * - Planos de Ação: `exportActionPlanToCSV/TXT/Excel/PDF`
+ * - Visão Geral: `exportOverviewToCSV/TXT/Excel/PDF`
+ * - Adesão por Template: `exportTemplateAdherenceTo*`
+ * - Adesão por Loja: `exportStoreAdherenceTo*`
+ * - Adesão por Usuário: `exportUserAdherenceTo*`
+ * - Respostas por Usuário: `exportResponsesTo*`
+ * - Conformidade: `exportComplianceTo*`
+ * - Reincidências: `exportReincidenciasTo*`
+ * - Detalhe de Checklist: `exportChecklistDetailToPDF`
  */
 
 import type { NCPhotoItem } from './ncPhotoReportQueries'
@@ -13,6 +28,7 @@ import { formatMinutes } from './adherenceCalculations'
 // TIPOS PARA EXPORTACAO DAS TABS DE RELATORIOS
 // ═══════════════════════════════════════════════════════════════════════════════
 
+/** Dados da aba Visão Geral para exportação, incluindo métricas de adesão opcionais. */
 export type OverviewExportData = {
   summary: { totalChecklists: number; completedToday: number; avgPerDay: number; activeUsers: number; activeStores: number; activeTemplates: number }
   storeStats: { store_name: string; total_checklists: number; completed_today: number; completion_rate: number }[]
@@ -28,6 +44,7 @@ export type OverviewExportData = {
   avgCompletionTimeMinutes?: number | null
 }
 
+/** Linha de checklist para o relatório de Respostas por Usuário. */
 export type UserChecklistExport = {
   id: number
   status: string
@@ -39,18 +56,21 @@ export type UserChecklistExport = {
   template_name: string
 }
 
+/** Dados completos da aba Conformidade para exportação. */
 export type ComplianceExportData = {
   summary: ComplianceSummary
   byField: FieldComplianceRow[]
   byStore: StoreComplianceRow[]
 }
 
+/** Dados completos da aba Reincidências para exportação. */
 export type ReincidenciaExportData = {
   summary: ReincidenciaSummary
   rows: ReincidenciaRow[]
   assigneeStats: AssigneeStats[]
 }
 
+/** Cria um Blob e dispara o download no navegador via link temporário. */
 function downloadFile(content: string | ArrayBuffer, filename: string, mimeType: string) {
   const blob = new Blob([content], { type: mimeType })
   const url = URL.createObjectURL(blob)
@@ -88,7 +108,9 @@ function evidenceUrls(item: NCPhotoItem): string {
 }
 
 /**
- * Exporta dados NC em formato CSV
+ * Exporta o relatório fotográfico de não-conformidades em CSV (UTF-8 BOM para Excel).
+ * Colunas: data, loja, template, campo, severidade, valor NC, texto resposta,
+ * reincidência, status, responsável, URLs das fotos NC e fotos evidência.
  */
 export function exportToCSV(items: NCPhotoItem[], filename: string) {
   const headers = [
@@ -121,7 +143,8 @@ export function exportToCSV(items: NCPhotoItem[], filename: string) {
 }
 
 /**
- * Exporta dados NC em formato TXT legivel
+ * Exporta o relatório fotográfico de não-conformidades em texto puro legível por humanos.
+ * Inclui todas as URLs de fotos NC e evidências como lista numerada por item.
  */
 export function exportToTXT(items: NCPhotoItem[], filename: string) {
   const lines: string[] = [
@@ -173,11 +196,11 @@ export function exportToTXT(items: NCPhotoItem[], filename: string) {
 
 // ─── PDF helpers ────────────────────────────────────────────────────────────
 
-/** Remove diacritics so jsPDF (no UTF-8 font) renders text correctly */
+/** Remove acentos e diacríticos para que o jsPDF (sem fonte UTF-8) renderize o texto corretamente. */
 const n = (s: string) =>
   s.normalize('NFD').replace(/[\u0300-\u036f]/g, '')
 
-/** Fetch a remote URL and return it as a base64 data URL, or null on failure */
+/** Baixa uma URL remota e retorna como data URL base64, ou `null` em caso de falha. */
 async function fetchAsBase64(url: string): Promise<string | null> {
   try {
     const blob = await fetch(url).then(r => r.blob())
@@ -200,6 +223,7 @@ const IMG_GAP = 4
 const PHOTOS_PER_ROW = 3
 const PAGE_BOTTOM = 270
 
+/** Metadados de cabeçalho para o PDF de NC com fotos. */
 type PdfMeta = {
   dateFrom: string
   dateTo: string
@@ -398,8 +422,9 @@ export async function exportToPDF(items: NCPhotoItem[], meta: PdfMeta): Promise<
 }
 
 /**
- * Exporta dados NC em formato Excel (xlsx)
- * Usa dynamic import para lazy-load do SheetJS (~300KB)
+ * Exporta o relatório fotográfico de não-conformidades em Excel (.xlsx).
+ * Usa dynamic import para lazy-load do SheetJS (~300 KB).
+ * Calcula largura automática de colunas baseada no conteúdo (até 50 linhas amostradas).
  */
 export async function exportToExcel(items: NCPhotoItem[], filename: string) {
   const XLSX = await import('xlsx')
@@ -455,7 +480,10 @@ function fmtDateBR(iso: string | null): string {
 }
 
 /**
- * Exporta planos de acao em formato CSV
+ * Exporta o relatório de planos de ação em CSV (UTF-8 BOM para Excel).
+ * Colunas: data criação, título, loja(s), template, campo, severidade,
+ * status, responsável, prazo, início, conclusão, texto conclusão,
+ * reincidência, valor NC e URLs das fotos evidência.
  */
 export function exportActionPlanToCSV(items: ActionPlanReportItem[], filename: string) {
   const headers = [
@@ -489,7 +517,8 @@ export function exportActionPlanToCSV(items: ActionPlanReportItem[], filename: s
 }
 
 /**
- * Exporta planos de acao em formato TXT legivel
+ * Exporta o relatório de planos de ação em texto puro legível por humanos.
+ * Inclui URLs de fotos evidência como lista por item.
  */
 export function exportActionPlanToTXT(items: ActionPlanReportItem[], filename: string) {
   const lines: string[] = [
@@ -530,7 +559,8 @@ export function exportActionPlanToTXT(items: ActionPlanReportItem[], filename: s
 }
 
 /**
- * Exporta planos de acao em formato Excel
+ * Exporta o relatório de planos de ação em Excel (.xlsx).
+ * Usa dynamic import para lazy-load do SheetJS (~300 KB).
  */
 export async function exportActionPlanToExcel(items: ActionPlanReportItem[], filename: string) {
   const XLSX = await import('xlsx')
@@ -570,6 +600,7 @@ export async function exportActionPlanToExcel(items: ActionPlanReportItem[], fil
   downloadFile(xlsxBuffer, filename, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
 }
 
+/** Metadados de cabeçalho para o PDF de Planos de Ação. */
 type ActionPlanPdfMeta = {
   dateFrom: string
   dateTo: string
@@ -581,7 +612,9 @@ type ActionPlanPdfMeta = {
 }
 
 /**
- * Exporta planos de acao em formato PDF com fotos de evidencia embutidas.
+ * Exporta o relatório de planos de ação em PDF com fotos de evidência embutidas.
+ * Imagens são buscadas em paralelo e convertidas para base64 antes da renderização.
+ * Usa dynamic import para lazy-load do jsPDF (~300 KB).
  */
 export async function exportActionPlanToPDF(items: ActionPlanReportItem[], meta: ActionPlanPdfMeta): Promise<void> {
   const { jsPDF } = await import('jspdf')
@@ -779,8 +812,14 @@ const periodLabel: Record<string, string> = { '7d': '7 dias', '30d': '30 dias', 
 
 // ─── PDF table helper ────────────────────────────────────────────────────────
 
+/** Definição de coluna para a tabela genérica de PDF. */
 type PdfCol = { header: string; width: number; align?: 'right' }
 
+/**
+ * Desenha uma tabela com cabeçalho e linhas alternadas no documento jsPDF.
+ * Insere nova página automaticamente quando o conteúdo ultrapassa `PAGE_BOTTOM`.
+ * @returns A posição Y após a última linha da tabela.
+ */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function drawPdfTable(doc: any, columns: PdfCol[], rows: string[][], startY: number): number {
   let y = startY
@@ -827,6 +866,7 @@ function drawPdfTable(doc: any, columns: PdfCol[], rows: string[][], startY: num
   return y
 }
 
+/** Adiciona rodapé "Página X de Y" em todas as páginas do documento jsPDF. */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function addPdfFooters(doc: any) {
   const totalPages = doc.getNumberOfPages()
@@ -839,6 +879,10 @@ function addPdfFooters(doc: any) {
   }
 }
 
+/**
+ * Adiciona cabeçalho padrão (título + linhas de metadados + linha divisória) ao documento jsPDF.
+ * @returns A posição Y após o cabeçalho, pronta para o início do conteúdo.
+ */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function addPdfHeader(doc: any, title: string, meta: string[]): number {
   let y = MARGIN
@@ -863,6 +907,11 @@ function addPdfHeader(doc: any, title: string, meta: string[]): number {
 
 // ─── VISAO GERAL ─────────────────────────────────────────────────────────────
 
+/**
+ * Exporta o relatório Visão Geral em CSV multi-seção.
+ * Inclui resumo, distribuição de status, adesão por template/loja/usuário,
+ * lacunas de cobertura e dados diários, quando disponíveis.
+ */
 export function exportOverviewToCSV(data: OverviewExportData, filename: string) {
   const esc = (v: string) => `"${String(v).replace(/"/g, '""')}"`
   const lines: string[] = []
@@ -942,6 +991,7 @@ export function exportOverviewToCSV(data: OverviewExportData, filename: string) 
   downloadFile('\uFEFF' + lines.join('\n'), filename, 'text/csv;charset=utf-8')
 }
 
+/** Exporta o relatório Visão Geral em texto puro com barras ASCII para visualizar dados diários. */
 export function exportOverviewToTXT(data: OverviewExportData, filename: string) {
   const s = data.summary
   const lines: string[] = [
@@ -1029,6 +1079,11 @@ export function exportOverviewToTXT(data: OverviewExportData, filename: string) 
   downloadFile(lines.join('\n'), filename, 'text/plain;charset=utf-8')
 }
 
+/**
+ * Exporta o relatório Visão Geral em Excel com múltiplas abas.
+ * Abas: Adesão por Template, Adesão por Loja, Adesão por Usuário,
+ * Lacunas de Cobertura e Dados Diários.
+ */
 export async function exportOverviewToExcel(data: OverviewExportData, filename: string) {
   const XLSX = await import('xlsx')
   const wb = XLSX.utils.book_new()
@@ -1124,6 +1179,10 @@ export async function exportOverviewToExcel(data: OverviewExportData, filename: 
   downloadFile(buf, filename, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
 }
 
+/**
+ * Exporta o relatório Visão Geral em PDF orientação paisagem.
+ * Inclui tabelas de adesão por template, loja, usuário e lacunas de cobertura.
+ */
 export async function exportOverviewToPDF(data: OverviewExportData): Promise<void> {
   const { jsPDF } = await import('jspdf')
   const doc = new jsPDF({ orientation: 'l', unit: 'mm', format: 'a4' })
@@ -1266,6 +1325,7 @@ export async function exportOverviewToPDF(data: OverviewExportData): Promise<voi
 
 // ─── EXPORT INDIVIDUAL: ADESAO POR TEMPLATE ─────────────────────────────────
 
+/** Exporta a tabela de Adesão por Template em CSV. */
 export function exportTemplateAdherenceToCSV(items: TemplateAdherence[], period: string, filename: string) {
   const esc = (v: string) => `"${String(v).replace(/"/g, '""')}"`
   const lines: string[] = []
@@ -1277,6 +1337,7 @@ export function exportTemplateAdherenceToCSV(items: TemplateAdherence[], period:
   downloadFile('\uFEFF' + lines.join('\n'), filename, 'text/csv;charset=utf-8')
 }
 
+/** Exporta a tabela de Adesão por Template em texto puro. */
 export function exportTemplateAdherenceToTXT(items: TemplateAdherence[], period: string, filename: string) {
   const lines: string[] = [
     '═'.repeat(80),
@@ -1293,6 +1354,7 @@ export function exportTemplateAdherenceToTXT(items: TemplateAdherence[], period:
   downloadFile(lines.join('\n'), filename, 'text/plain;charset=utf-8')
 }
 
+/** Exporta a tabela de Adesão por Template em Excel (.xlsx). */
 export async function exportTemplateAdherenceToExcel(items: TemplateAdherence[], period: string, filename: string) {
   const XLSX = await import('xlsx')
   const wb = XLSX.utils.book_new()
@@ -1315,6 +1377,7 @@ export async function exportTemplateAdherenceToExcel(items: TemplateAdherence[],
   downloadFile(buf, filename, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
 }
 
+/** Exporta a tabela de Adesão por Template em PDF orientação paisagem. */
 export async function exportTemplateAdherenceToPDF(items: TemplateAdherence[], period: string) {
   const { jsPDF } = await import('jspdf')
   const doc = new jsPDF({ orientation: 'l', unit: 'mm', format: 'a4' })
@@ -1348,6 +1411,7 @@ export async function exportTemplateAdherenceToPDF(items: TemplateAdherence[], p
 
 // ─── EXPORT INDIVIDUAL: ADESAO POR LOJA ─────────────────────────────────────
 
+/** Exporta a tabela de Adesão por Loja em CSV. */
 export function exportStoreAdherenceToCSV(items: StoreAdherence[], period: string, filename: string) {
   const esc = (v: string) => `"${String(v).replace(/"/g, '""')}"`
   const lines: string[] = []
@@ -1359,6 +1423,7 @@ export function exportStoreAdherenceToCSV(items: StoreAdherence[], period: strin
   downloadFile('\uFEFF' + lines.join('\n'), filename, 'text/csv;charset=utf-8')
 }
 
+/** Exporta a tabela de Adesão por Loja em texto puro. Inclui templates faltando por loja. */
 export function exportStoreAdherenceToTXT(items: StoreAdherence[], period: string, filename: string) {
   const lines: string[] = [
     '═'.repeat(80),
@@ -1378,6 +1443,7 @@ export function exportStoreAdherenceToTXT(items: StoreAdherence[], period: strin
   downloadFile(lines.join('\n'), filename, 'text/plain;charset=utf-8')
 }
 
+/** Exporta a tabela de Adesão por Loja em Excel (.xlsx). */
 export async function exportStoreAdherenceToExcel(items: StoreAdherence[], period: string, filename: string) {
   const XLSX = await import('xlsx')
   const wb = XLSX.utils.book_new()
@@ -1399,6 +1465,7 @@ export async function exportStoreAdherenceToExcel(items: StoreAdherence[], perio
   downloadFile(buf, filename, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
 }
 
+/** Exporta a tabela de Adesão por Loja em PDF orientação paisagem. */
 export async function exportStoreAdherenceToPDF(items: StoreAdherence[], period: string) {
   const { jsPDF } = await import('jspdf')
   const doc = new jsPDF({ orientation: 'l', unit: 'mm', format: 'a4' })
@@ -1431,6 +1498,7 @@ export async function exportStoreAdherenceToPDF(items: StoreAdherence[], period:
 
 // ─── EXPORT INDIVIDUAL: ADESAO POR USUARIO ──────────────────────────────────
 
+/** Exporta a tabela de Adesão por Usuário em CSV. */
 export function exportUserAdherenceToCSV(items: UserAdherence[], period: string, filename: string) {
   const esc = (v: string) => `"${String(v).replace(/"/g, '""')}"`
   const lines: string[] = []
@@ -1442,6 +1510,7 @@ export function exportUserAdherenceToCSV(items: UserAdherence[], period: string,
   downloadFile('\uFEFF' + lines.join('\n'), filename, 'text/csv;charset=utf-8')
 }
 
+/** Exporta a tabela de Adesão por Usuário em texto puro. */
 export function exportUserAdherenceToTXT(items: UserAdherence[], period: string, filename: string) {
   const lines: string[] = [
     '═'.repeat(80),
@@ -1458,6 +1527,7 @@ export function exportUserAdherenceToTXT(items: UserAdherence[], period: string,
   downloadFile(lines.join('\n'), filename, 'text/plain;charset=utf-8')
 }
 
+/** Exporta a tabela de Adesão por Usuário em Excel (.xlsx). */
 export async function exportUserAdherenceToExcel(items: UserAdherence[], period: string, filename: string) {
   const XLSX = await import('xlsx')
   const wb = XLSX.utils.book_new()
@@ -1479,6 +1549,7 @@ export async function exportUserAdherenceToExcel(items: UserAdherence[], period:
   downloadFile(buf, filename, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
 }
 
+/** Exporta a tabela de Adesão por Usuário em PDF orientação paisagem. */
 export async function exportUserAdherenceToPDF(items: UserAdherence[], period: string) {
   const { jsPDF } = await import('jspdf')
   const doc = new jsPDF({ orientation: 'l', unit: 'mm', format: 'a4' })
@@ -1511,6 +1582,7 @@ export async function exportUserAdherenceToPDF(items: UserAdherence[], period: s
 
 // ─── RESPOSTAS POR USUARIO ──────────────────────────────────────────────────
 
+/** Exporta o relatório de Respostas por Usuário em CSV. */
 export function exportResponsesToCSV(items: UserChecklistExport[], filename: string) {
   const esc = (v: string) => `"${String(v).replace(/"/g, '""')}"`
   const headers = ['Usuario', 'Email', 'Checklist', 'Loja', 'Status', 'Data Criacao', 'Data Conclusao']
@@ -1523,6 +1595,7 @@ export function exportResponsesToCSV(items: UserChecklistExport[], filename: str
   downloadFile('\uFEFF' + [headers.join(','), ...rows].join('\n'), filename, 'text/csv;charset=utf-8')
 }
 
+/** Exporta o relatório de Respostas por Usuário em texto puro. */
 export function exportResponsesToTXT(items: UserChecklistExport[], filename: string) {
   const lines: string[] = [
     '═'.repeat(80),
@@ -1546,6 +1619,7 @@ export function exportResponsesToTXT(items: UserChecklistExport[], filename: str
   downloadFile(lines.join('\n'), filename, 'text/plain;charset=utf-8')
 }
 
+/** Exporta o relatório de Respostas por Usuário em Excel (.xlsx). */
 export async function exportResponsesToExcel(items: UserChecklistExport[], filename: string) {
   const XLSX = await import('xlsx')
   const data = items.map(i => ({
@@ -1567,6 +1641,7 @@ export async function exportResponsesToExcel(items: UserChecklistExport[], filen
   downloadFile(buf, filename, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
 }
 
+/** Exporta o relatório de Respostas por Usuário em PDF (tabela simplificada, sem fotos). */
 export async function exportResponsesToPDF(items: UserChecklistExport[]): Promise<void> {
   const { jsPDF } = await import('jspdf')
   const doc = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4' })
@@ -1597,6 +1672,7 @@ export async function exportResponsesToPDF(items: UserChecklistExport[]): Promis
 
 // ─── CONFORMIDADE ────────────────────────────────────────────────────────────
 
+/** Exporta o relatório de Conformidade em CSV com resumo, conformidade por campo e ranking por loja. */
 export function exportComplianceToCSV(data: ComplianceExportData, filename: string) {
   const esc = (v: string | number) => `"${String(v).replace(/"/g, '""')}"`
   const lines: string[] = []
@@ -1622,6 +1698,7 @@ export function exportComplianceToCSV(data: ComplianceExportData, filename: stri
   downloadFile('\uFEFF' + lines.join('\n'), filename, 'text/csv;charset=utf-8')
 }
 
+/** Exporta o relatório de Conformidade em texto puro. */
 export function exportComplianceToTXT(data: ComplianceExportData, filename: string) {
   const sm = data.summary
   const lines: string[] = [
@@ -1651,6 +1728,7 @@ export function exportComplianceToTXT(data: ComplianceExportData, filename: stri
   downloadFile(lines.join('\n'), filename, 'text/plain;charset=utf-8')
 }
 
+/** Exporta o relatório de Conformidade em Excel com abas "Por Campo" e "Por Loja". */
 export async function exportComplianceToExcel(data: ComplianceExportData, filename: string) {
   const XLSX = await import('xlsx')
   const wb = XLSX.utils.book_new()
@@ -1681,6 +1759,7 @@ export async function exportComplianceToExcel(data: ComplianceExportData, filena
   downloadFile(buf, filename, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
 }
 
+/** Exporta o relatório de Conformidade em PDF com tabelas "por campo" e "ranking por loja". */
 export async function exportComplianceToPDF(data: ComplianceExportData): Promise<void> {
   const { jsPDF } = await import('jspdf')
   const doc = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4' })
@@ -1729,6 +1808,7 @@ export async function exportComplianceToPDF(data: ComplianceExportData): Promise
 
 // ─── REINCIDENCIAS ───────────────────────────────────────────────────────────
 
+/** Exporta o relatório de Reincidências em CSV com resumo, campos e desempenho por responsável. */
 export function exportReincidenciasToCSV(data: ReincidenciaExportData, filename: string) {
   const esc = (v: string | number) => `"${String(v).replace(/"/g, '""')}"`
   const lines: string[] = []
@@ -1754,6 +1834,7 @@ export function exportReincidenciasToCSV(data: ReincidenciaExportData, filename:
   downloadFile('\uFEFF' + lines.join('\n'), filename, 'text/csv;charset=utf-8')
 }
 
+/** Exporta o relatório de Reincidências em texto puro. */
 export function exportReincidenciasToTXT(data: ReincidenciaExportData, filename: string) {
   const sm = data.summary
   const lines: string[] = [
@@ -1783,6 +1864,7 @@ export function exportReincidenciasToTXT(data: ReincidenciaExportData, filename:
   downloadFile(lines.join('\n'), filename, 'text/plain;charset=utf-8')
 }
 
+/** Exporta o relatório de Reincidências em Excel com abas "Reincidencias" e "Desempenho Responsaveis". */
 export async function exportReincidenciasToExcel(data: ReincidenciaExportData, filename: string) {
   const XLSX = await import('xlsx')
   const wb = XLSX.utils.book_new()
@@ -1813,6 +1895,7 @@ export async function exportReincidenciasToExcel(data: ReincidenciaExportData, f
   downloadFile(buf, filename, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
 }
 
+/** Exporta o relatório de Reincidências em PDF com tabelas por campo e por responsável. */
 export async function exportReincidenciasToPDF(data: ReincidenciaExportData): Promise<void> {
   const { jsPDF } = await import('jspdf')
   const doc = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4' })
@@ -1864,6 +1947,7 @@ export async function exportReincidenciasToPDF(data: ReincidenciaExportData): Pr
 
 // ─── EXPORTACAO DETALHADA DE CHECKLIST INDIVIDUAL (com fotos embutidas) ──────
 
+/** Resposta de um campo individual para o relatório detalhado de checklist. */
 export type ChecklistFieldResponse = {
   fieldName: string
   fieldType: string
@@ -1871,6 +1955,11 @@ export type ChecklistFieldResponse = {
   photos: string[]
 }
 
+/**
+ * Exporta o detalhe completo de um checklist individual em PDF.
+ * Renderiza cada campo com sua resposta e fotos embutidas (até 3 por linha).
+ * Imagens são buscadas em paralelo antes da renderização para evitar await por item.
+ */
 export async function exportChecklistDetailToPDF(
   meta: { userName: string; userEmail: string; storeName: string; templateName: string; status: string; createdAt: string; completedAt: string | null },
   fields: ChecklistFieldResponse[]

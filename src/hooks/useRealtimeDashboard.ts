@@ -3,12 +3,24 @@
 import { useEffect, useState, useMemo, useRef, useCallback } from 'react'
 import { createClient } from '@/lib/supabase'
 
+/** Parâmetros de filtro para as assinaturas Realtime do dashboard. */
 type UseRealtimeDashboardParams = {
   userId: string | null
   userFunctionId: number | null
   storeIds: number[]
 }
 
+/**
+ * Hook de Realtime específico para o dashboard.
+ * Cria até N+3 canais Supabase (1 para notificações, 1 para planos do usuário,
+ * 1 opcional por função e 1 por loja) e retorna um `refreshTrigger` que
+ * incrementa quando qualquer evento é recebido em qualquer canal.
+ *
+ * - Inativo enquanto `userId` for `null` ou o dispositivo estiver offline
+ * - Cleanup automático no unmount
+ *
+ * @returns `{ refreshTrigger }` — número que incrementa a cada evento Realtime
+ */
 export function useRealtimeDashboard({ userId, userFunctionId, storeIds }: UseRealtimeDashboardParams) {
   const [refreshTrigger, setRefreshTrigger] = useState(0)
   const supabase = useMemo(() => createClient(), [])

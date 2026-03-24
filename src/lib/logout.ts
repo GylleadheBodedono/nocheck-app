@@ -1,3 +1,10 @@
+/**
+ * Utilitário de logout completo.
+ * Limpa todos os caches (IndexedDB, localStorage, Service Worker)
+ * antes de encerrar a sessão Supabase e redirecionar para a landing.
+ */
+
+/** Contrato mínimo do cliente Supabase necessário para o logout. */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnySupabaseClient = { auth: { signOut: () => Promise<any> } }
 import { clearAllCache } from './offlineCache'

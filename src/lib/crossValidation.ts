@@ -1,3 +1,15 @@
+/**
+ * Motor de validação cruzada para checklists de recebimento de mercadorias.
+ *
+ * Compara o valor informado pelo estoquista com o do aprendiz para a mesma nota fiscal.
+ * Suporta:
+ * - Match exato (mesmo número de nota) → status `sucesso` ou `falhou`
+ * - Match por "notas irmãs" (prefixo igual ou tempo próximo) → status `notas_diferentes`
+ * - Expiração automática de validações pendentes (configurável via `app_settings`)
+ * - Notificação via Teams quando há divergência
+ */
+
+/** Resposta de um campo do checklist. */
 type ChecklistResponse = {
   field_id: number
   value_text: string | null
@@ -5,6 +17,7 @@ type ChecklistResponse = {
   value_json: unknown
 }
 
+/** Campo de um template com tipo e opções de configuração. */
 type TemplateField = {
   id: number
   name: string
@@ -13,7 +26,8 @@ type TemplateField = {
 }
 
 /**
- * Envia notificação para Teams quando há divergência
+ * Envia notificação de divergência para o canal do Teams via API route `/api/integrations/notify`.
+ * Falhas são silenciosas — a validação não deve ser bloqueada por erros de notificação.
  */
 async function notificarIntegracoes(data: {
   id: number
@@ -47,11 +61,17 @@ async function notificarIntegracoes(data: {
 }
 
 /**
- * Verifica se duas notas são potencialmente "irmãs"
- * Critérios:
- * 1. Mesma loja
- * 2. Diferença de tempo <= 30 minutos
- * 3. Primeiros 3 dígitos do número da nota são iguais
+ * Verifica se duas notas são potencialmente "irmãs" (possível erro de digitação ou divisão de NF).
+ *
+ * Critérios de match (OR):
+ * - Prefixo (primeiros 3 dígitos) igual + diferença de tempo ≤ 30 min → match forte
+ * - Diferença de tempo ≤ 10 min (mesmo sem prefixo igual) → match fraco
+ *
+ * @param nota1 - Número da nota do primeiro checklist
+ * @param nota2 - Número da nota do segundo checklist
+ * @param data1 - Data/hora do primeiro preenchimento
+ * @param data2 - Data/hora do segundo preenchimento
+ * @returns `{ match: boolean; reason: string }` — reason descreve o critério aplicado
  */
 function verificarNotasIrmas(
   nota1: string,
@@ -94,8 +114,13 @@ function verificarNotasIrmas(
 }
 
 /**
- * Busca o sector_id do usuario na loja especifica
- * Prioriza user_stores.sector_id, fallback para users.sector_id
+ * Busca o `sector_id` do usuário na loja especificada.
+ * Prioriza `user_stores.sector_id` (setor por loja); faz fallback para `users.sector_id`.
+ *
+ * @param supabase - Cliente Supabase com acesso às tabelas `user_stores` e `users`
+ * @param userId   - UUID do usuário
+ * @param storeId  - ID da loja
+ * @returns ID do setor ou `null` se não configurado
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function getUserSectorId(supabase: any, userId: string, storeId: number): Promise<number | null> {
@@ -124,8 +149,11 @@ async function getUserSectorId(supabase: any, userId: string, storeId: number): 
 }
 
 /**
- * Busca o tempo de expiracao configurado no app_settings
- * Fallback: 60 minutos
+ * Busca o tempo de expiração configurado em `app_settings`.
+ * Chave: `validation_expiration_minutes`. Fallback: 60 minutos.
+ *
+ * @param supabase - Cliente Supabase com acesso à tabela `app_settings`
+ * @returns Tempo de expiração em milissegundos
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function getExpirationMs(supabase: any): Promise<number> {
@@ -144,14 +172,15 @@ async function getExpirationMs(supabase: any): Promise<number> {
       }
     }
   } catch {
-    console.warn('[CrossValidation] Erro ao buscar config de expiracao, usando padrao de 60min')
+    // Usa o padrão de 60 minutos silenciosamente
   }
   return 60 * 60 * 1000 // Fallback: 60 minutos
 }
 
 /**
- * Verifica validacoes pendentes expiradas e marca como expiradas
- * O tempo de expiracao e configuravel via app_settings
+ * Verifica validações pendentes expiradas e as marca como `expirado`.
+ * O tempo de expiração é configurável via `app_settings.validation_expiration_minutes`.
+ * Chamado em "piggyback" ao final de `processarValidacaoCruzada`.
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function verificarValidacoesExpiradas(supabase: any): Promise<void> {
@@ -196,9 +225,25 @@ async function verificarValidacoesExpiradas(supabase: any): Promise<void> {
 }
 
 /**
- * Processa validacao cruzada apos um checklist ser concluido
- * Funciona para qualquer setor - compara Aprendiz vs funcionario do mesmo setor
- * Também detecta notas "irmãs" quando os números são diferentes
+ * Processa a validação cruzada após um checklist ser concluído.
+ *
+ * Fluxo principal:
+ * 1. Identifica campos de "número da nota" e "valor" (por `validationRole` ou nome)
+ * 2. Determina se o usuário é Aprendiz ou Estoquista pelo `function_ref.name`
+ * 3. Busca validação pendente com match exato do número da nota
+ *    - Se encontrar: atualiza com o segundo valor e calcula divergência
+ *    - Se não encontrar: busca notas "irmãs" nos últimos 30 minutos
+ *    - Se não encontrar irmã: cria nova validação pendente
+ * 4. Executa limpeza de validações expiradas (piggyback)
+ *
+ * @param supabase    - Cliente Supabase com acesso às tabelas necessárias
+ * @param checklistId - ID do checklist recém-concluído
+ * @param templateId  - ID do template do checklist
+ * @param storeId     - ID da loja
+ * @param userId      - UUID do usuário que preencheu o checklist
+ * @param responses   - Respostas do checklist
+ * @param fields      - Campos do template (para identificar nota e valor)
+ * @returns `{ success: true }` ou `{ success: false, error: mensagem }`
  */
 export async function processarValidacaoCruzada(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

@@ -1,8 +1,22 @@
+/**
+ * Configuração centralizada do aplicativo OpereCheck.
+ *
+ * Todas as constantes de identidade, rotas, mensagens e categorias do app
+ * estão definidas aqui. Altere neste arquivo para refletir em todo o projeto.
+ *
+ * Uso:
+ * ```ts
+ * import { APP_CONFIG } from '@/lib/config'
+ * console.log(APP_CONFIG.name) // 'OpereCheck'
+ * ```
+ */
+
 // ============================================
 // CONFIGURACAO CENTRALIZADA DO APP
 // Altere aqui para mudar em todo o projeto
 // ============================================
 
+/** Objeto de configuração global do app. Imutável em runtime (`as const`). */
 export const APP_CONFIG = {
   // Informacoes do App
   name: 'OpereCheck',
@@ -83,5 +97,5 @@ export const APP_CONFIG = {
   ],
 } as const
 
-// Tipos para autocomplete
+/** Tipo inferido de `APP_CONFIG` — útil para funções que recebem partes da config. */
 export type AppConfig = typeof APP_CONFIG

@@ -1,8 +1,14 @@
 /**
- * Queries de analytics para conformidade e reincidencias.
- * Alimentam as tabs de relatorios (Fase 3).
+ * Queries de analytics para conformidade e reincidências.
+ * Alimentam as abas "Conformidade", "Reincidências" e "Heatmap" do módulo de relatórios.
+ *
+ * Funções exportadas:
+ * - `fetchComplianceData`   — taxa de conformidade, planos criados/resolvidos/vencidos
+ * - `fetchReincidenciaData` — campos e lojas com mais repetições de não-conformidade
+ * - `fetchStoreHeatmap`     — matriz loja × campo para visualização de intensidade
  */
 
+/** Alias genérico para qualquer cliente Supabase (server ou browser). */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type SupabaseClient = any
 
@@ -65,7 +71,13 @@ export type AssigneeStats = {
 }
 
 /**
- * Busca dados de conformidade para o periodo especificado
+ * Busca dados de conformidade para o período especificado.
+ * Calcula taxa de conformidade = (total checklists - NCs) / total checklists.
+ * Agrupa NCs por campo e por loja, ordenados por maior volume de planos.
+ *
+ * @param supabase - Cliente Supabase com acesso a `action_plans` e `checklists`
+ * @param days     - Número de dias no lookback (ex: 30, 90)
+ * @returns `{ summary, byField, byStore }` com dados de conformidade
  */
 export async function fetchComplianceData(
   supabase: SupabaseClient,
@@ -186,7 +198,13 @@ export async function fetchComplianceData(
 }
 
 /**
- * Busca dados de reincidencia
+ * Busca dados de reincidências no período especificado.
+ * Identifica campos e lojas com mais repetições de não-conformidade.
+ * Também retorna estatísticas por responsável (tempo médio de resolução, vencidos).
+ *
+ * @param supabase - Cliente Supabase com acesso a `action_plans` e `users`
+ * @param days     - Número de dias no lookback (ex: 30, 90)
+ * @returns `{ summary, rows, byAssignee }` com dados de reincidência
  */
 export async function fetchReincidenciaData(
   supabase: SupabaseClient,
@@ -326,6 +344,14 @@ export async function fetchReincidenciaData(
   return { summary, rows, byAssignee }
 }
 
+/**
+ * Agrega estatísticas de planos de ação por responsável (assignee).
+ * Calcula total, concluídos, vencidos e tempo médio de resolução em dias.
+ * Resultado ordenado por total de planos decrescente.
+ *
+ * @param plans - Planos de ação com dados de status, datas e assignee
+ * @returns Array de `AssigneeStats` ordenado por volume
+ */
 function buildAssigneeStats(plans: Array<{
   id: number
   assigned_to: string
@@ -383,7 +409,13 @@ function buildAssigneeStats(plans: Array<{
 }
 
 /**
- * Busca dados para heatmap loja x campo
+ * Busca dados para o heatmap de não-conformidades (loja × campo).
+ * Cada célula representa a contagem de NCs para um par loja+campo no período.
+ * Retorna também as listas de lojas e campos para construção da matriz.
+ *
+ * @param supabase - Cliente Supabase com acesso a `action_plans`
+ * @param days     - Número de dias no lookback (ex: 30, 90)
+ * @returns `{ cells, stores, fields }` para renderização do heatmap
  */
 export async function fetchStoreHeatmap(
   supabase: SupabaseClient,

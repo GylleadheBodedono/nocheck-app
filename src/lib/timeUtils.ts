@@ -1,7 +1,13 @@
 /**
- * Utilitarios de horario — suporte a ranges overnight (ex: 21:00 → 02:00)
+ * Utilitários de horário — suporte a ranges overnight (ex: 21:00 → 02:00)
  */
 
+/**
+ * Converte uma string de horário no formato "HH:MM" ou "HH:MM:SS" para minutos absolutos.
+ *
+ * @param timeStr - Horário no formato "HH:MM" ou "HH:MM:SS"
+ * @returns Total de minutos desde meia-noite (ex: "08:30" → 510)
+ */
 export function parseTimeToMinutes(timeStr: string): number {
   const parts = timeStr.split(':')
   return parseInt(parts[0], 10) * 60 + parseInt(parts[1], 10)
