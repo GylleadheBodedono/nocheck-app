@@ -240,12 +240,12 @@ function ChecklistForm() {
     return sortedSections.filter((s: any) => s.parent_id === parentId).sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0))
   }, [sortedSections])
 
-  // For hierarchical templates: get all fields for a parent section (across all its sub-sections)
+  // For hierarchical templates: get all fields for a parent section (across all its sub-sections + direct fields)
   const getFieldsForParentSection = useCallback((parentId: number): FieldWithSection[] => {
     const subSections = getSubSections(parentId)
     const subSectionIds = subSections.map(s => s.id)
     if (!template) return []
-    return template.fields.filter(f => f.section_id != null && subSectionIds.includes(f.section_id))
+    return template.fields.filter(f => f.section_id != null && (subSectionIds.includes(f.section_id) || f.section_id === parentId))
   }, [template, getSubSections])
 
   // Flat sections (sections that are NOT parents in hierarchical mode) — used for section list in flat mode
@@ -1814,15 +1814,22 @@ function ChecklistForm() {
       }
     }
 
-    // In hierarchical mode, go back to parent section list instead of main list
+    // In hierarchical mode, go back to parent section list or main list
     if (hasSubSections && activeParentSection !== null) {
-      setActiveSection(null) // back to sub-etapa list for this parent
+      const parentHasSubs = getSubSections(activeParentSection).length > 0
+      if (parentHasSubs) {
+        setActiveSection(null) // back to sub-etapa list for this parent
+      } else {
+        // Parent section sem sub-etapas: voltar direto para lista de etapas
+        setActiveSection(null)
+        setActiveParentSection(null)
+      }
     } else {
       setActiveSection(null)
       setActiveParentSection(null)
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [autoSaveField, activeSection, getFieldsForSection, buildSingleResponseRow, supabase, checklistId, offlineChecklistId, sectionProgress, hasSubSections, activeParentSection])
+  }, [autoSaveField, activeSection, getFieldsForSection, getSubSections, buildSingleResponseRow, supabase, checklistId, offlineChecklistId, sectionProgress, hasSubSections, activeParentSection])
 
   // === SWITCH SECTION: flush + bulk save ANTES de trocar de secao ===
   // Previne perda de respostas quando o usuario clica direto em outra secao
@@ -2582,34 +2589,50 @@ function ChecklistForm() {
                 }).length
                 const allDone = completedSubs === subSections.length && subSections.length > 0
 
+                // Secoes sem sub-etapas: ir direto para os campos
+                const hasDirectFieldsOnly = subSections.length === 0 && allFields.length > 0
+                const directProgress = sectionProgress.find(sp => sp.section_id === section.id)
+                const isDoneDirect = hasDirectFieldsOnly && directProgress?.status === 'concluido'
+                const sectionDone = hasDirectFieldsOnly ? isDoneDirect : allDone
+
                 return (
                   <button
                     key={section.id}
                     type="button"
-                    onClick={() => setActiveParentSection(section.id)}
+                    onClick={() => {
+                      if (hasDirectFieldsOnly) {
+                        setActiveParentSection(section.id)
+                        switchSection(section.id)
+                      } else {
+                        setActiveParentSection(section.id)
+                      }
+                    }}
                     className={`w-full text-left card p-3 sm:p-5 transition-all hover:shadow-theme-md cursor-pointer ${
-                      allDone
+                      sectionDone
                         ? 'border-success/30 hover:border-success/50'
                         : 'border-subtle hover:border-primary/30'
                     }`}
                   >
                     <div className="flex items-center gap-3 sm:gap-4">
                       <div className={`w-9 h-9 sm:w-10 sm:h-10 rounded-xl flex items-center justify-center text-sm font-bold shrink-0 ${
-                        allDone ? 'bg-success/20 text-success' : 'bg-primary/10 text-primary'
+                        sectionDone ? 'bg-success/20 text-success' : 'bg-primary/10 text-primary'
                       }`}>
-                        {allDone ? <FiCheckCircle className="w-4 h-4 sm:w-5 sm:h-5" /> : idx + 1}
+                        {sectionDone ? <FiCheckCircle className="w-4 h-4 sm:w-5 sm:h-5" /> : idx + 1}
                       </div>
                       <div className="flex-1 min-w-0">
-                        <h3 className={`font-semibold text-sm sm:text-base ${allDone ? 'text-success' : 'text-main'}`}>
+                        <h3 className={`font-semibold text-sm sm:text-base ${sectionDone ? 'text-success' : 'text-main'}`}>
                           {section.name}
                         </h3>
                         <p className="text-[10px] sm:text-xs text-muted">
-                          {subSections.length} sub-etapa{subSections.length !== 1 ? 's' : ''} &middot; {allFields.length} campo{allFields.length !== 1 ? 's' : ''}
-                          {allDone && <> &middot; <span className="text-success">Concluida</span></>}
-                          {!allDone && completedSubs > 0 && <> &middot; {completedSubs}/{subSections.length} concluida{completedSubs !== 1 ? 's' : ''}</>}
+                          {hasDirectFieldsOnly
+                            ? <>{allFields.length} campo{allFields.length !== 1 ? 's' : ''}</>
+                            : <>{subSections.length} sub-etapa{subSections.length !== 1 ? 's' : ''} &middot; {allFields.length} campo{allFields.length !== 1 ? 's' : ''}</>
+                          }
+                          {sectionDone && <> &middot; <span className="text-success">Concluida</span></>}
+                          {!sectionDone && !hasDirectFieldsOnly && completedSubs > 0 && <> &middot; {completedSubs}/{subSections.length} concluida{completedSubs !== 1 ? 's' : ''}</>}
                         </p>
                       </div>
-                      <FiChevronRight className={`w-4 h-4 sm:w-5 sm:h-5 shrink-0 ${allDone ? 'text-success' : 'text-muted'}`} />
+                      <FiChevronRight className={`w-4 h-4 sm:w-5 sm:h-5 shrink-0 ${sectionDone ? 'text-success' : 'text-muted'}`} />
                     </div>
                   </button>
                 )
