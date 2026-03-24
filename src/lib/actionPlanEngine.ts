@@ -1,16 +1,21 @@
 /**
- * Engine de processamento de nao-conformidades e planos de acao.
- * Chamado apos submissao de checklist (similar a crossValidation.ts).
+ * Engine de processamento de não-conformidades e planos de ação.
+ * Chamado após a submissão de um checklist (similar a `crossValidation.ts`).
  *
- * Pipeline:
- * 1. Busca field_conditions do template
- * 2. Avalia cada resposta contra as condicoes
- * 3. Para cada nao-conformidade:
- *    a. Verifica reincidencia (mesmo campo+loja nos ultimos 90 dias)
- *    b. Cria action_plan
- *    c. Cria notificacao in-app
- *    d. Envia email de notificacao (template configuravel)
- *    e. Se reincidencia, notifica admins
+ * Pipeline de `processarNaoConformidades`:
+ * 1. Busca `field_conditions` ativos para os campos do template
+ * 2. Avalia cada resposta contra as condições via `evaluateCondition`
+ * 3. Para cada não-conformidade detectada:
+ *    a. Verifica reincidência (mesmo campo+loja+template nos últimos 90 dias)
+ *    b. Cria `action_plan` no banco
+ *    c. Cria notificação in-app para o responsável
+ *    d. Envia email via template configurável (`emailTemplateEngine`)
+ *    e. Se reincidência, notifica admins com alerta adicional
+ *    f. Envia alerta Teams se webhook configurado
+ *
+ * Funções exportadas:
+ * - `processarNaoConformidades` — pipeline principal (chamado após submit de checklist)
+ * - `checkOverduePlans`         — verifica e atualiza planos vencidos (chamado no login admin)
  */
 
 import { createNotification, sendActionPlanEmail, sendActionPlanTeamsAlert } from './notificationService'
@@ -38,8 +43,15 @@ type ProcessResult = {
 }
 
 /**
- * Avalia se uma resposta viola a condicao de nao-conformidade.
- * Retorna true se a resposta E nao-conforme.
+ * Avalia se uma resposta viola uma condição de não-conformidade.
+ *
+ * Suporta os tipos de campo: `yes_no`, `number`, `rating`, `dropdown`,
+ * `checkbox_multiple` e `text`. Tipos desconhecidos retornam `false`.
+ *
+ * @param field     - Dados do campo (tipo e nome)
+ * @param response  - Resposta do usuário para o campo
+ * @param condition - Condição configurada pelo admin (`field_conditions`)
+ * @returns `true` se a resposta é não-conforme, `false` caso contrário
  */
 function evaluateCondition(
   field: FieldData,
@@ -144,7 +156,15 @@ function evaluateCondition(
 }
 
 /**
- * Verifica reincidencia: mesmo campo + loja + template nos ultimos N dias
+ * Verifica se há reincidência de não-conformidade para a combinação campo+loja+template.
+ * Consulta `action_plans` nos últimos `lookbackDays` dias.
+ *
+ * @param supabase     - Cliente Supabase
+ * @param fieldId      - ID do campo que gerou a NC
+ * @param storeId      - ID da loja
+ * @param templateId   - ID do template
+ * @param lookbackDays - Janela de busca em dias (padrão: 90)
+ * @returns `{ isReincidencia, count, parentPlanId }` — parentPlanId aponta para o plano mais antigo
  */
 async function checkReincidencia(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -184,7 +204,12 @@ async function checkReincidencia(
 }
 
 /**
- * Obtem o valor nao-conforme como string para exibicao
+ * Obtém o valor não-conforme como string legível para exibição.
+ * Normaliza os diferentes formatos de valor (JSON, text, number) de cada tipo de campo.
+ *
+ * @param field    - Dados do campo (tipo usado para selecionar a lógica de extração)
+ * @param response - Resposta do usuário
+ * @returns String do valor não-conforme (ex: "Não", "3", "Produto A")
  */
 function getNonConformityValueStr(field: FieldData, response: ResponseData): string {
   switch (field.field_type) {
@@ -214,7 +239,26 @@ function getNonConformityValueStr(field: FieldData, response: ResponseData): str
 }
 
 /**
- * Funcao principal: processa nao-conformidades apos submissao de checklist.
+ * Processa não-conformidades após a submissão de um checklist.
+ *
+ * Para cada campo com condição violada:
+ * - Verifica reincidência nos últimos 90 dias
+ * - Cria `action_plan` atribuído ao responsável configurado
+ * - Envia notificação in-app e email ao responsável
+ * - Se reincidência: notifica admins e inclui prefixo "REINCIDÊNCIA" no email
+ * - Se webhook Teams configurado: envia alerta de plano de ação
+ *
+ * Falhas em notificações não interrompem a criação do plano.
+ *
+ * @param supabase    - Cliente Supabase com permissão de escrita
+ * @param checklistId - ID do checklist recém-submetido
+ * @param templateId  - ID do template usado
+ * @param storeId     - ID da loja
+ * @param sectorId    - ID do setor (ou `null`)
+ * @param userId      - UUID do usuário que submeteu o checklist
+ * @param responses   - Respostas do checklist
+ * @param fields      - Campos do template (para lookup de tipo e nome)
+ * @returns `{ success, plansCreated }` ou `{ success: false, error }`
  */
 export async function processarNaoConformidades(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -244,27 +288,12 @@ export async function processarNaoConformidades(
       return { success: false, plansCreated: 0, error: condError.message }
     }
 
-    console.log(`[ActionPlan] ========== INICIO ==========`)
-    console.log(`[ActionPlan] Template: ${templateId}, Store: ${storeId}, User: ${userId}`)
-    console.log(`[ActionPlan] Fields: ${fields.map(f => `${f.name}(${f.id})`).join(', ')}`)
-    console.log(`[ActionPlan] Responses: ${responses.map(r => `field_${r.field_id}=${r.value_text || '(json)'}`).join(', ')}`)
-    console.log(`[ActionPlan] Conditions encontradas: ${conditions?.length || 0}`)
-
-    // Logar value_json de cada response para debug
-    for (const r of responses) {
-      const vj = r.value_json as Record<string, unknown> | null
-      if (vj) {
-        console.log(`[ActionPlan] Response field_${r.field_id} value_json keys: [${Object.keys(vj).join(', ')}] selectedFunctionId=${vj.selectedFunctionId || 'N/A'} selectedSeverity=${vj.selectedSeverity || 'N/A'}`)
-      }
-    }
-
     // Se nao ha conditions E nao ha responses com selectedFunctionId, nao ha nada a fazer
     const hasUserSelectedFunctions = responses.some(r => {
       const vj = r.value_json as Record<string, unknown> | null
       return vj?.selectedFunctionId
     })
     if ((!conditions || conditions.length === 0) && !hasUserSelectedFunctions) {
-      console.log(`[ActionPlan] Nenhuma condition e nenhum selectedFunctionId — retornando`)
       return { success: true, plansCreated: 0 }
     }
 
@@ -277,11 +306,9 @@ export async function processarNaoConformidades(
     try {
       const { data: { session } } = await supabase.auth.getSession()
       accessToken = session?.access_token || undefined
-      if (!accessToken) {
-        console.warn('[ActionPlan] access_token NAO encontrado na sessao — emails podem falhar (session:', session ? 'existe' : 'null', ')')
-      }
     } catch (tokenErr) {
-      console.warn('[ActionPlan] Erro ao obter access token:', tokenErr)
+      // Falha ao obter token — emails podem nao funcionar, mas o plano sera criado
+      void tokenErr
     }
 
     // Buscar contexto com resiliencia - falhas aqui NAO devem impedir criacao do plano
@@ -318,8 +345,8 @@ export async function processarNaoConformidades(
       }
       emailTemplateHtml = emailTemplateResult.data?.value || null
       emailSubjectTemplate = emailSubjectResult.data?.value || null
-    } catch (ctxErr) {
-      console.warn('[ActionPlan] Erro ao buscar dados de contexto (prosseguindo com defaults):', ctxErr)
+    } catch {
+      // Falha ao buscar contexto — prossegue com valores padrao
     }
 
     const appUrl = typeof window !== 'undefined'
@@ -330,28 +357,16 @@ export async function processarNaoConformidades(
     let plansCreated = 0
     const createdFieldIds = new Set<number>()
 
-    console.log(`[ActionPlan] === PRIMEIRO PASSO: ${(conditions || []).length} conditions ===`)
+    // Primeiro passo: avaliar conditions configuradas no banco
     for (const condition of (conditions || []) as FieldCondition[]) {
-      console.log(`[ActionPlan] Condition ${condition.id}: field_id=${condition.field_id}, type=${condition.condition_type}`)
       const field = fields.find(f => f.id === condition.field_id)
-      if (!field) {
-        console.warn(`[ActionPlan] Campo ID ${condition.field_id} NAO encontrado nos fields. Fields IDs: [${fields.map(f => f.id).join(', ')}]`)
-        continue
-      }
+      if (!field) continue
 
       const response = responses.find(r => r.field_id === condition.field_id)
-      if (!response) {
-        console.warn(`[ActionPlan][DEBUG] Resposta para campo "${field.name}" (ID ${field.id}) NAO encontrada. Responses field_ids: [${responses.map(r => r.field_id).join(', ')}]`)
-        continue
-      }
+      if (!response) continue
 
       const isNonConforming = evaluateCondition(field, response, condition)
-      console.log(`[ActionPlan] Campo "${field.name}" (${field.id}): value_text="${response.value_text}", isNonConforming=${isNonConforming}`)
-      if (!isNonConforming) {
-        console.log(`[ActionPlan] Campo "${field.name}" nao e nao-conforme, pulando`)
-        continue
-      }
-      console.log(`[ActionPlan] >>> NAO-CONFORMIDADE detectada: "${field.name}" — criando plano...`)
+      if (!isNonConforming) continue
 
       // 4. Nao-conformidade detectada! Verificar reincidencia
       const reincidencia = await checkReincidencia(supabase, field.id, storeId, templateId)
@@ -371,9 +386,7 @@ export async function processarNaoConformidades(
         try {
           const { data } = await sb.from('action_plan_presets').select('*').eq('id', userSelectedPresetId).single()
           if (data) presetData = data
-        } catch (err) {
-          console.warn('[ActionPlan] Erro ao buscar modelo selecionado:', err)
-        }
+        } catch { /* modelo nao encontrado, continua com defaults */ }
       }
 
       // Determinar funcao responsavel: prioridade para a selecionada pelo preenchedor, depois preset, depois condition
@@ -383,8 +396,6 @@ export async function processarNaoConformidades(
       const assigneeId = assignedFunctionId
         ? userId
         : (legacyAssigneeId || presetData?.default_assignee_id || condition.default_assignee_id || userId)
-      console.log(`[ActionPlan] Campo "${field.name}": assignedFunctionId=${assignedFunctionId}, assigneeId=${assigneeId}, userSelected=${userSelectedFunctionId}, conditionDefault=${condition.default_function_id}`)
-
       // Calcular deadline (preset pode sobrescrever)
       const deadlineDays = presetData?.deadline_days ?? condition.deadline_days
       const deadline = new Date()
@@ -465,7 +476,6 @@ export async function processarNaoConformidades(
       if (assignedFunctionId) {
         // Buscar membros da funcao via API (server-side com service role)
         const membersUrl = `${appUrl}/api/functions/${assignedFunctionId}/members`
-        console.log(`[ActionPlan] Buscando membros: ${membersUrl} (token: ${accessToken ? 'SIM' : 'NAO'})`)
         try {
           const membersRes = await fetch(membersUrl, {
             headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {},
@@ -475,7 +485,6 @@ export async function processarNaoConformidades(
             responsibleUsers = membersData.users || []
             functionName = membersData.functionName || ''
             functionWebhookUrl = membersData.teamsWebhookUrl || null
-            console.log(`[ActionPlan] Funcao "${functionName}" (ID ${assignedFunctionId}): ${responsibleUsers.length} usuarios`, responsibleUsers.map((u: {full_name: string}) => u.full_name))
           } else {
             const errorText = await membersRes.text().catch(() => '(sem body)')
             console.error(`[ActionPlan] Erro ao buscar membros da funcao ${assignedFunctionId}: HTTP ${membersRes.status} - ${errorText}`)
@@ -486,7 +495,6 @@ export async function processarNaoConformidades(
 
         // Fallback: se API falhou, buscar direto do banco
         if (responsibleUsers.length === 0) {
-          console.warn(`[ActionPlan] API retornou 0 membros para funcao ${assignedFunctionId}, tentando query direta...`)
           try {
             const [usersResult, fnResult] = await Promise.all([
               sb.from('users').select('id, email, full_name').eq('function_id', assignedFunctionId).eq('is_active', true),
@@ -496,13 +504,8 @@ export async function processarNaoConformidades(
               responsibleUsers = usersResult.data
               functionName = fnResult.data?.name || ''
               functionWebhookUrl = fnResult.data?.teams_webhook_url || null
-              console.log(`[ActionPlan] Fallback DB: funcao "${functionName}" — ${responsibleUsers.length} usuarios`)
-            } else {
-              console.error(`[ActionPlan] Nenhum usuario ativo na funcao ${assignedFunctionId}`)
             }
-          } catch (dbErr) {
-            console.error('[ActionPlan] Erro fallback DB membros:', dbErr)
-          }
+          } catch { /* ignora erro no fallback de membros */ }
         }
       } else {
         // Fallback legado: usuario unico
@@ -527,9 +530,7 @@ export async function processarNaoConformidades(
           ? `Reincidencia #${reincidencia.count + 1}: ${field.name}`
           : `Novo plano de acao: ${field.name}`
 
-        console.log(`[ActionPlan] Notificando ${responsibleUsers.length} responsaveis:`, responsibleUsers.map(u => `${u.full_name} (${u.id})`))
         for (const responsible of responsibleUsers) {
-          console.log(`[ActionPlan] Criando notificacao para: ${responsible.full_name} (${responsible.id})`)
           await createNotification(supabase, responsible.id, {
             type: reincidencia.isReincidencia ? 'reincidencia_detected' : 'action_plan_assigned',
             title: notifTitle,
@@ -598,14 +599,8 @@ export async function processarNaoConformidades(
         )
 
         // Enviar email para CADA usuario da funcao
-        console.log(`[ActionPlan] Enviando email para ${responsibleUsers.length} responsaveis`)
         for (const responsible of responsibleUsers) {
-          console.log(`[ActionPlan] Email → ${responsible.full_name} (${responsible.id})`)
-          const emailResult = await sendActionPlanEmail(responsible.id, emailSubject, htmlBody, accessToken)
-          console.log(`[ActionPlan] Email resultado: ${emailResult.success ? 'OK' : 'FALHA'} - ${emailResult.error || ''}`)
-          if (!emailResult.success) {
-            console.error(`[ActionPlan] FALHA ao enviar email para ${responsible.email}:`, emailResult.error)
-          }
+          await sendActionPlanEmail(responsible.id, emailSubject, htmlBody, accessToken)
         }
 
         // Teams alert — uma vez por funcao
@@ -658,26 +653,17 @@ export async function processarNaoConformidades(
       }
     }
 
-    // 10. Segundo passo: campos onde usuario selecionou funcao/severidade
-    //     mas NAO tinham field_condition configurado no banco
-    console.log(`[ActionPlan] === SEGUNDO PASSO: ${responses.length} responses, createdFieldIds=[${[...createdFieldIds].join(',')}] ===`)
+    // Segundo passo: campos onde usuario selecionou funcao/severidade
+    // mas NAO tinham field_condition configurado no banco
     for (const response of responses) {
       const vJson = response.value_json as Record<string, unknown> | null
       const userFunctionId = vJson?.selectedFunctionId as number | null
 
-      if (createdFieldIds.has(response.field_id)) {
-        console.log(`[ActionPlan] 2P: field_${response.field_id} ja processado no primeiro passo, pulando`)
-        continue
-      }
-      if (!userFunctionId) {
-        console.log(`[ActionPlan] 2P: field_${response.field_id} sem selectedFunctionId (value_json keys: [${vJson ? Object.keys(vJson).join(',') : 'null'}]), pulando`)
-        continue
-      }
+      if (createdFieldIds.has(response.field_id)) continue
+      if (!userFunctionId) continue
 
       const field = fields.find(f => f.id === response.field_id)
       if (!field) continue
-
-      console.log(`[ActionPlan] 2P: >>> campo "${field.name}" (${field.id}) tem selectedFunctionId=${userFunctionId} — criando plano...`)
 
       try {
         const userSeverity = (vJson?.selectedSeverity as string) || 'media'
@@ -754,7 +740,6 @@ export async function processarNaoConformidades(
 
         plansCreated++
         createdFieldIds.add(field.id)
-        console.log(`[ActionPlan] Segundo passo: plano #${plan2.id} criado para "${field.name}" → funcao ${assignedFunctionId2}`)
 
         // Buscar membros da funcao
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -848,7 +833,6 @@ export async function processarNaoConformidades(
       }
     }
 
-    console.log(`[ActionPlan] ========== FIM: ${plansCreated} plano(s) criado(s), fields processados: [${[...createdFieldIds].join(',')}] ==========`)
     return { success: true, plansCreated }
   } catch (err) {
     console.error('[ActionPlan] ERRO FATAL no processamento:', err)
@@ -857,8 +841,17 @@ export async function processarNaoConformidades(
 }
 
 /**
- * Verifica planos de acao vencidos e atualiza status.
- * Chamado no login do admin (piggyback).
+ * Verifica planos de ação vencidos e atualiza seu status para `vencido`.
+ * Chamado no login do admin (piggyback) para manter o banco atualizado.
+ *
+ * Para cada plano vencido:
+ * - Atualiza `status` → `vencido` em `action_plans`
+ * - Cria notificação in-app para o responsável e para todos os admins
+ * - Se `accessToken` fornecido: envia email de aviso ao responsável
+ *
+ * @param supabase     - Cliente Supabase com permissão de leitura/escrita
+ * @param accessToken  - Token JWT para autenticação nas APIs de email (opcional)
+ * @returns Número de planos marcados como vencidos
  */
 export async function checkOverduePlans(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

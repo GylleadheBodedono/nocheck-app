@@ -17,6 +17,12 @@ interface ReadOnlyFieldRendererProps {
   value: unknown
 }
 
+/**
+ * Renderizador somente-leitura de resposta de campo, usado na visualização de checklists concluídos.
+ * Suporta todos os mesmos `field_type` que o `FieldRenderer`, mas sem interação de edição.
+ * Campos não preenchidos exibem "Não preenchido" em itálico.
+ * Fotos são exibidas como miniaturas com lightbox nativo. Assinaturas como imagem base64.
+ */
 export function ReadOnlyFieldRenderer({ field, value }: ReadOnlyFieldRendererProps) {
   const renderValue = () => {
     if (value === null || value === undefined || value === '') {

@@ -10,6 +10,11 @@ import { FiLock, FiMail, FiUser, FiPhone, FiCheckCircle, FiArrowLeft, FiEye, FiE
 import { WelcomeModal } from '@/components/billing/WelcomeModal'
 import { CheckoutFlow } from '@/components/billing/CheckoutModal'
 
+/**
+ * Página de cadastro de novo usuário (`/cadastro`).
+ * Registra via Supabase Auth com verificação prévia de e-mail duplicado.
+ * Após o registro, exibe instrução para confirmar o e-mail.
+ */
 export default function CadastroPage() {
   const [fullName, setFullName] = useState('')
   const [email, setEmail] = useState('')

@@ -1,24 +1,41 @@
+/**
+ * Utilitário de autenticação para API routes do Next.js.
+ *
+ * Suporta dois mecanismos de autenticação (em ordem de prioridade):
+ * 1. Bearer token via header `Authorization` (mais confiável, usado em chamadas server-to-server)
+ * 2. Cookies SSR do Supabase (padrão para requisições do navegador)
+ *
+ * Uso:
+ * ```ts
+ * const auth = await verifyApiAuth(request, true) // true = exige admin
+ * if (auth.error) return auth.error
+ * // auth.user.id e auth.isAdmin disponíveis aqui
+ * ```
+ */
+
 import { createServerClient } from '@supabase/ssr'
 import { createClient } from '@supabase/supabase-js'
 import { NextRequest, NextResponse } from 'next/server'
 
-// ── Types ──
-
+/** Resultado de autenticação bem-sucedida. */
 type AuthSuccess = {
   user: { id: string; email: string }
   isAdmin: boolean
   error: null
 }
 
+/** Resultado de autenticação com falha — inclui a `NextResponse` de erro pronta para retornar. */
 type AuthFailure = {
   user: null
   isAdmin: false
   error: NextResponse
 }
 
+/** União discriminada do resultado de `verifyApiAuth`. */
 type AuthResult = AuthSuccess | AuthFailure
 
-// ── Auth Verification ──
+/** Dados mínimos do usuário autenticado pelo Supabase. */
+type SupabaseUser = { id: string; email?: string }
 
 /**
  * Verifies authentication in API routes via Supabase cookies or Bearer token.
@@ -55,8 +72,7 @@ export async function verifyApiAuth(
   const authHeader = request.headers.get('Authorization')
   const bearerToken = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : null
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let user: any = null
+  let user: SupabaseUser | null = null
 
   if (bearerToken) {
     const serviceClient = createClient(supabaseUrl, supabaseServiceKey, {
@@ -76,8 +92,8 @@ export async function verifyApiAuth(
           return request.cookies.getAll()
         },
         // eslint-disable-next-line @typescript-eslint/no-unused-vars
-        setAll(_cookiesToSet: { name: string; value: string; options?: Record<string, unknown> }[]) {
-          // API routes are read-only for cookies
+        setAll(_cookiesToSet: { name: string; value: string }[]) {
+          // API routes não precisam setar cookies (leitura apenas)
         },
       },
     })

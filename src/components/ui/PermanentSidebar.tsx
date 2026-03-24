@@ -20,6 +20,7 @@ import {
   FiChevronDown,
   FiChevronLeft,
   FiChevronRight,
+  FiTerminal,
 } from 'react-icons/fi'
 import type { IconType } from 'react-icons'
 
@@ -86,6 +87,7 @@ const SIDEBAR_ITEMS: SidebarItem[] = [
     ],
   },
   { label: 'Galeria', href: routes.adminGallery, icon: FiImage },
+  { label: 'Logs', href: routes.adminLogs, icon: FiTerminal },
   {
     label: 'Configurações',
     href: routes.adminSettings,
@@ -110,6 +112,12 @@ type Props = {
   variant?: 'admin' | 'employee' // mantido para compat, ignorado
 }
 
+/**
+ * Sidebar de navegação permanente do painel do operador.
+ * Suporta dois estados: expandido e colapsado (somente ícones).
+ * Em mobile, exibe como drawer sobreposto controlado por `mobileOpen`.
+ * Auto-expande o grupo de links correspondente à rota atual.
+ */
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 export function PermanentSidebar({ collapsed, onToggleCollapse, mobileOpen, onMobileClose, variant }: Props) {
   const pathname = usePathname()

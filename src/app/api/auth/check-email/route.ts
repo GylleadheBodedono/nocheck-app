@@ -4,15 +4,12 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { verifyApiAuth } from '@/lib/api-auth'
 
-// ── Route Handler ──
-
 /**
- * Checks whether a given email address already exists in the `users` table.
- *
- * `POST /api/auth/check-email` with body `{ email: string }`.
- * Returns `{ exists: false }` for invalid input to prevent email enumeration.
- *
- * @requires Authentication via `verifyApiAuth`
+ * POST /api/auth/check-email
+ * Verifica se um e-mail já está cadastrado na tabela `users`.
+ * Usado no formulário de "esqueci minha senha" para validar o e-mail antes do envio.
+ * Retorna `{ exists: false }` para entradas inválidas para prevenir enumeração de emails.
+ * Requer autenticação via `verifyApiAuth`.
  */
 export async function POST(request: NextRequest) {
   const auth = await verifyApiAuth(request)

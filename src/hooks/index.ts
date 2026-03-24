@@ -1,4 +1,9 @@
-// Hooks de autenticacao
+/**
+ * Barrel de hooks do OpereCheck.
+ * Agrupa os hooks por categoria para facilitar as importações nos componentes.
+ */
+
+// Hooks de autenticação
 export { useAuth } from './useAuth'
 export { useOfflineAuth, hasOfflineAuth } from './useOfflineAuth'
 export type { OfflineAuthState, OfflineAuthActions } from './useOfflineAuth'
@@ -12,7 +17,7 @@ export { useRealtimeRefresh } from './useRealtimeRefresh'
 export { useRealtimeDashboard } from './useRealtimeDashboard'
 export { useRealtimeActionPlans } from './useRealtimeActionPlans'
 
-// Hooks utilitarios
+// Hooks utilitários
 export { useOnlineStatus } from './useOnlineStatus'
 export { useTheme } from './useTheme'
 export { usePrecache, triggerPrecache } from './usePrecache'

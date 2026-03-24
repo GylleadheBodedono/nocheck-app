@@ -1,15 +1,29 @@
+/**
+ * Configuração centralizada do aplicativo OpereCheck.
+ *
+ * Todas as constantes de identidade, rotas, mensagens e categorias do app
+ * estão definidas aqui. Altere neste arquivo para refletir em todo o projeto.
+ *
+ * Uso:
+ * ```ts
+ * import { APP_CONFIG } from '@/lib/config'
+ * console.log(APP_CONFIG.name) // 'OpereCheck'
+ * ```
+ */
+
 // ============================================
 // CONFIGURAÇÃO CENTRALIZADA DO APP
 // Altere aqui para mudar em todo o projeto
 // ============================================
 
+/** Objeto de configuração global do app. Imutável em runtime (`as const`). */
 export const APP_CONFIG = {
-  // Informações do App
-  name: 'NoCheck',
-  fullName: 'NoCheck - Sistema de Checklists',
-  description: 'Sistema de checklists do Grupo Do No',
-  version: '2.0.0',
-  company: 'Grupo Do No',
+  // Informacoes do App
+  name: 'OpereCheck',
+  fullName: 'OpereCheck - Gestao Operacional e Checklists',
+  description: 'Plataforma SaaS de gestao operacional e checklists',
+  version: '2.1.0',
+  company: 'OpereCheck',
   year: new Date().getFullYear(),
 
   // Rotas
@@ -38,6 +52,7 @@ export const APP_CONFIG = {
     platform: '/platform',
     platformClientes: '/platform/clientes',
     platformConfiguracoes: '/platform/configuracoes',
+    adminLogs: '/admin/logs',
     userReports: '/relatorios',
     checklistNew: '/checklist/novo',
     cadastro: '/cadastro',
@@ -85,7 +100,7 @@ export const APP_CONFIG = {
   ],
 } as const
 
-// Tipos para autocomplete
+/** Tipo inferido de `APP_CONFIG` — útil para funções que recebem partes da config. */
 export type AppConfig = typeof APP_CONFIG
 
 // Tenant helpers (white-label)

@@ -5,6 +5,14 @@ import { FiWifiOff, FiX } from 'react-icons/fi'
 
 const STORAGE_KEY = 'offline-indicator-dismissed'
 
+/**
+ * Banner fixo no topo da página que informa o status de conectividade.
+ *
+ * - Exibe banner amarelo quando offline, com botão para dispensar
+ * - Exibe banner verde "Conexão restaurada!" por 2 segundos ao voltar online
+ * - Persiste o estado de dispensado no `sessionStorage` para não re-exibir durante a sessão offline
+ * - Não renderiza nada quando online e sem mensagem pendente
+ */
 export function OfflineIndicator() {
   const [isOnline, setIsOnline] = useState(true)
   const [showIndicator, setShowIndicator] = useState(false)

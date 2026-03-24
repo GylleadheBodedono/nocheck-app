@@ -152,6 +152,11 @@ function getStatusLabel(status: string): string {
 // COMPONENT
 // ============================================
 
+/**
+ * Página de detalhe de plano de ação (`/admin/planos-de-acao/[id]`).
+ * Exibe descrição, responsável, prazo, severidade e histórico de atualizações.
+ * Permite avançar o status (aberto → em andamento → concluído) e adicionar comentários.
+ */
 export default function ActionPlanDetailPage() {
   const [plan, setPlan] = useState<PlanDetail | null>(null)
   const [updates, setUpdates] = useState<PlanUpdate[]>([])

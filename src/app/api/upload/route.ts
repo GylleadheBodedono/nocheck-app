@@ -15,23 +15,15 @@ const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
 // ── Route Handler ──
 
 /**
- * Uploads a base64-encoded image to Supabase Storage (`checklist-images` bucket).
- *
- * `POST /api/upload` with body:
- * ```json
- * { "image": "data:image/jpeg;base64,...", "fileName": "photo.jpg", "folder": "uploads" }
- * ```
- *
- * Validates MIME type, base64 format, and file size before uploading.
- * Returns the public URL and storage path on success.
- *
- * @requires Authentication via `verifyApiAuth`
+ * POST /api/upload
+ * Faz upload de imagem (base64) para o Supabase Storage no bucket `checklist-images`.
+ * Valida tipo MIME, formato base64 e tamanho (máx 5 MB) antes do upload.
+ * Retorna `{ success, url, path }` com a URL pública do arquivo salvo.
+ * Requer autenticação via `verifyApiAuth`.
  */
 export async function POST(request: NextRequest) {
   const auth = await verifyApiAuth(request)
   if (auth.error) return auth.error
-
-  console.log('[Upload] Recebendo requisicao de upload')
 
   try {
     const body = await request.json()

@@ -27,6 +27,11 @@ type UserWithAssignment = User & {
   user_stores?: UserStoreWithDetails[]
 }
 
+/**
+ * Página de gerenciamento de usuários (`/admin/usuarios`).
+ * Lista todos os usuários com loja, função e setor. Permite criar, editar e excluir.
+ * Sincroniza automaticamente `auth.users` → `public.users` ao carregar.
+ */
 export default function UsuariosPage() {
   const [users, setUsers] = useState<UserWithAssignment[]>([])
   const [loading, setLoading] = useState(true)

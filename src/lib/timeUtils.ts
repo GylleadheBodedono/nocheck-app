@@ -1,7 +1,13 @@
 /**
- * Utilitarios de horario — suporte a ranges overnight (ex: 21:00 → 02:00)
+ * Utilitários de horário — suporte a ranges overnight (ex: 21:00 → 02:00)
  */
 
+/**
+ * Converte uma string de horário no formato "HH:MM" ou "HH:MM:SS" para minutos absolutos.
+ *
+ * @param timeStr - Horário no formato "HH:MM" ou "HH:MM:SS"
+ * @returns Total de minutos desde meia-noite (ex: "08:30" → 510)
+ */
 export function parseTimeToMinutes(timeStr: string): number {
   const parts = timeStr.split(':')
   return parseInt(parts[0], 10) * 60 + parseInt(parts[1], 10)
@@ -21,8 +27,7 @@ export function isWithinTimeRange(startTime: string, endTime: string, now?: Date
   const startMinutes = parseTimeToMinutes(startTime)
   const endMinutes = parseTimeToMinutes(endTime)
 
-  const pad = (n: number) => String(n).padStart(2, '0')
-  const currentTimeStr = `${pad(d.getHours())}:${pad(d.getMinutes())}`
+  // Range overnight ocorre quando horario de inicio e maior que o de fim (ex: 21:00 → 02:00)
   const isOvernight = startMinutes > endMinutes
 
   let result: boolean
@@ -30,18 +35,9 @@ export function isWithinTimeRange(startTime: string, endTime: string, now?: Date
     // Mesmo dia: ex 08:00 → 18:00
     result = currentMinutes >= startMinutes && currentMinutes <= endMinutes
   } else {
-    // Overnight: ex 21:00 → 02:00
+    // Overnight: ex 21:00 → 02:00 (cruza meia-noite)
     result = currentMinutes >= startMinutes || currentMinutes <= endMinutes
   }
-
-  const tzOffset = d.getTimezoneOffset()
-  console.log(
-    `[TimeCheck] Dispositivo: ${currentTimeStr} (${currentMinutes}min) | ` +
-    `Range: ${startTime}→${endTime} (${startMinutes}-${endMinutes}min) | ` +
-    `Tipo: ${isOvernight ? 'OVERNIGHT' : 'NORMAL'} | ` +
-    `Resultado: ${result ? 'PERMITIDO' : 'BLOQUEADO'} | ` +
-    `TZ offset: UTC${tzOffset > 0 ? '-' : '+'}${Math.abs(tzOffset / 60)}`
-  )
 
   return result
 }

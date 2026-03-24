@@ -7,6 +7,7 @@ import { OfflineIndicator } from "@/components/OfflineIndicator"
 import { SyncIndicator } from "@/components/SyncIndicator"
 import { FluxChat } from "@/components/FluxChat"
 import { QueryProvider } from "@/components/providers/QueryProvider"
+import { ClientLoggerInit } from "@/components/ClientLoggerInit"
 
 const poppins = Poppins({
   subsets: ["latin"],
@@ -66,6 +67,7 @@ export default function RootLayout({
       </head>
       <body className={`${poppins.variable} font-sans antialiased`}>
         <QueryProvider>
+          <ClientLoggerInit />
           <OfflineIndicator />
           {children}
           <SyncIndicator />

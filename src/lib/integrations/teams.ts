@@ -1,10 +1,17 @@
 /**
- * Microsoft Teams Integration
- * Envia notificações via Webhook quando há divergências na validação
+ * Integração com Microsoft Teams via Incoming Webhook.
+ *
+ * Envia Adaptive Cards para o canal configurado em `TEAMS_WEBHOOK_URL`.
+ * Funções exportadas:
+ * - `enviarAlertaTeams`        — alerta de divergência individual na validação de recebimento
+ * - `enviarResumoDiarioTeams`  — resumo diário com totais e estatísticas
+ *
+ * Se `TEAMS_WEBHOOK_URL` não estiver configurado, as funções retornam `{ success: false }` silenciosamente.
  */
 
 const TEAMS_WEBHOOK_URL = process.env.TEAMS_WEBHOOK_URL || ''
 
+/** Dados de uma divergência detectada na validação de recebimento. */
 type ValidationAlert = {
   numeroNota: string
   loja: string
@@ -15,11 +22,14 @@ type ValidationAlert = {
 }
 
 /**
- * Envia alerta de divergência para o Microsoft Teams
+ * Envia alerta de divergência individual para o canal do Microsoft Teams.
+ * Formata os dados como Adaptive Card com detalhes da nota fiscal e valores divergentes.
+ *
+ * @param data - Dados da divergência detectada (nota, loja, valores, diferença)
+ * @returns `{ success: true }` ou `{ success: false, error: mensagem }`
  */
 export async function enviarAlertaTeams(data: ValidationAlert): Promise<{ success: boolean; error?: string }> {
   if (!TEAMS_WEBHOOK_URL) {
-    console.warn('[Teams] Webhook URL não configurado')
     return { success: false, error: 'Webhook não configurado' }
   }
 
@@ -111,10 +121,8 @@ export async function enviarAlertaTeams(data: ValidationAlert): Promise<{ succes
       throw new Error(`Teams respondeu com status ${response.status}`)
     }
 
-    console.log('[Teams] Alerta enviado com sucesso')
     return { success: true }
   } catch (err) {
-    console.error('[Teams] Erro ao enviar alerta:', err)
     return {
       success: false,
       error: err instanceof Error ? err.message : 'Erro desconhecido',
@@ -123,7 +131,11 @@ export async function enviarAlertaTeams(data: ValidationAlert): Promise<{ succes
 }
 
 /**
- * Envia resumo diário de validações para o Teams
+ * Envia resumo diário de validações de recebimento para o canal do Microsoft Teams.
+ * Formata como Adaptive Card com colunas de totais (OK, divergências, pendentes).
+ *
+ * @param data - Totais do dia (total, sucesso, divergências, pendentes, data formatada)
+ * @returns `{ success: true }` ou `{ success: false, error: mensagem }`
  */
 export async function enviarResumoDiarioTeams(data: {
   total: number

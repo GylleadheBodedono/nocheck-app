@@ -28,6 +28,11 @@ type Props = {
 
 // ─── Component ──────────────────────────────────────────────────────────────
 
+/**
+ * Card de nó arrastável para o editor visual de templates.
+ * Representa um grupo (ex: seção ou template) com lista de itens selecionáveis.
+ * Suporta drag-and-drop via eventos de mouse para reposicionamento no canvas.
+ */
 export function NodeCard({
   title,
   icon,

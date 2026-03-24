@@ -25,6 +25,11 @@ type LineCoords = {
 
 // ─── Component ──────────────────────────────────────────────────────────────
 
+/**
+ * Renderiza linhas SVG entre nós do editor visual de templates.
+ * Calcula as coordenadas das linhas a partir dos elementos DOM referenciados pelas conexões.
+ * Recalcula via `requestAnimationFrame` ao redimensionar o container (ResizeObserver).
+ */
 export function ConnectionLines({ connections, containerRef }: Props) {
   const [lines, setLines] = useState<LineCoords[]>([])
   const [dimensions, setDimensions] = useState({ width: 0, height: 0 })

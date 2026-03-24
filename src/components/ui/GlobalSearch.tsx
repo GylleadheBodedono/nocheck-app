@@ -93,6 +93,12 @@ type GlobalSearchProps = {
   placeholder?: string
 }
 
+/**
+ * Campo de busca global com dropdown de resultados categorizados.
+ * Busca simultaneamente em checklists, planos de ação, usuários e lojas no Supabase.
+ * Debounce de 300ms para evitar requisições excessivas durante a digitação.
+ * Suporta navegação por teclado (setas ↑↓, Enter para navegar, Escape para fechar).
+ */
 export function GlobalSearch({ placeholder = 'Buscar módulos, relatórios, usuários...' }: GlobalSearchProps) {
   const router = useRouter()
   const supabase = useMemo(() => createClient(), [])

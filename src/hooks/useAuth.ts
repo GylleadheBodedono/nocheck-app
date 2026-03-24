@@ -23,12 +23,25 @@ import {
 import { fullLogout } from '@/lib/logout'
 import type { TemplateVisibility } from '@/types/database'
 
+/** Usuário do banco com joins resolvidos para loja, função e setor. */
 export type UserWithProfile = DBUser & {
   store: Store | null
   function_ref: FunctionRow | null
   sector: Sector | null
 }
 
+/**
+ * Hook de autenticação principal do OpereCheck.
+ * Gerencia sessão Supabase, perfil do usuário e suporte offline.
+ *
+ * Comportamento:
+ * - Tenta sessão online primeiro (`supabase.auth.getSession`)
+ * - Se falhar ou não houver sessão, usa o cache do IndexedDB (`loadFromCache`)
+ * - Ouve mudanças de sessão via `onAuthStateChange` e atualiza o cache automaticamente
+ * - Monitora `online`/`offline` para expor o flag `isOffline`
+ *
+ * @returns `{ user, userProfile, session, loading, isAdmin, isOffline, signIn, signOut, getUserStores, refetchProfile }`
+ */
 export function useAuth() {
   const [user, setUser] = useState<User | null>(null)
   const [userProfile, setUserProfile] = useState<UserWithProfile | null>(null)

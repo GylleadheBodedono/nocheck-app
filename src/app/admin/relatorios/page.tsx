@@ -19,6 +19,9 @@ import {
   FiCamera,
   FiDownload,
   FiChevronDown,
+  FiFileText,
+  FiClock,
+  FiX,
 } from 'react-icons/fi'
 import Link from 'next/link'
 import { APP_CONFIG } from '@/lib/config'
@@ -39,6 +42,7 @@ import {
   exportTemplateAdherenceToCSV, exportTemplateAdherenceToTXT, exportTemplateAdherenceToExcel, exportTemplateAdherenceToPDF,
   exportStoreAdherenceToCSV, exportStoreAdherenceToTXT, exportStoreAdherenceToExcel, exportStoreAdherenceToPDF,
   exportUserAdherenceToCSV, exportUserAdherenceToTXT, exportUserAdherenceToExcel, exportUserAdherenceToPDF,
+  exportChecklistDetailToPDF, type ChecklistFieldResponse,
 } from '@/lib/exportUtils'
 
 type StoreStats = {
@@ -89,6 +93,11 @@ type UserChecklist = {
   template_name: string
 }
 
+/**
+ * Página de relatórios admin (`/admin/relatorios`).
+ * 4 abas: Visão Geral (KPIs executivos), Respostas por Usuário, Conformidade e Reincidências.
+ * Permite filtrar por período (7d, 30d, 90d) e exportar os dados em CSV/Excel/PDF.
+ */
 export default function RelatoriosPage() {
   const [loading, setLoading] = useState(true)
   const [period, setPeriod] = useState<'7d' | '30d' | '90d'>('30d')
@@ -125,6 +134,10 @@ export default function RelatoriosPage() {
   const [exportMenuOpen, setExportMenuOpen] = useState(false)
   const [exporting, setExporting] = useState(false)
   const [exportingPdf, setExportingPdf] = useState(false)
+  const [exportingChecklistId, setExportingChecklistId] = useState<number | null>(null)
+  const [logsModal, setLogsModal] = useState<{ open: boolean; label: string; logs: { id: number; action: string; created_at: string; user_id: string | null; details: Record<string, unknown> | null }[] }>({ open: false, label: '', logs: [] })
+  const [logsLoading, setLogsLoading] = useState(false)
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set())
   // Visao Geral executive panel state
   const [sectorStats, setSectorStats] = useState<SectorStats[]>([])
   const [requiredActions, setRequiredActions] = useState<RequiredAction[]>([])
@@ -732,6 +745,77 @@ export default function RelatoriosPage() {
     )
   }
 
+  const handleExportChecklistPDF = async (c: UserChecklist) => {
+    if (exportingChecklistId !== null) return
+    setExportingChecklistId(c.id)
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data: responses } = await (supabase as any)
+        .from('checklist_responses')
+        .select('field_id, value_text, value_number, value_json, template_fields(name, field_type)')
+        .eq('checklist_id', c.id)
+
+      const fields: ChecklistFieldResponse[] = (responses || []).map((r: {
+        field_id: number; value_text: string | null; value_number: number | null
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        value_json: any; template_fields: any
+      }) => {
+        const vj = r.value_json as Record<string, unknown> | null
+        let answer = '-'
+        const photos: string[] = []
+        if (r.value_text !== null && r.value_text !== '') {
+          answer = r.value_text
+        } else if (r.value_number !== null) {
+          answer = String(r.value_number)
+        } else if (vj !== null) {
+          const ans = vj.answer !== undefined ? String(vj.answer) : ''
+          const condText = vj.conditionalText ? String(vj.conditionalText) : ''
+          answer = ans + (condText ? (ans ? ` — ${condText}` : condText) : '') || '-'
+          photos.push(...((vj.photos as string[]) || []))
+          photos.push(...((vj.conditionalPhotos as string[]) || []))
+        }
+        return { fieldName: r.template_fields?.name || `Campo ${r.field_id}`, fieldType: r.template_fields?.field_type || '', answer, photos }
+      })
+
+      await exportChecklistDetailToPDF({
+        userName: c.user_name, userEmail: c.user_email, storeName: c.store_name,
+        templateName: c.template_name, status: c.status,
+        createdAt: c.created_at, completedAt: c.completed_at,
+      }, fields)
+    } catch (err) {
+      console.error('[Relatorios] Erro ao exportar checklist PDF:', err)
+    } finally {
+      setExportingChecklistId(null)
+    }
+  }
+
+  const handleViewLogs = async (c: UserChecklist) => {
+    setLogsModal({ open: true, label: `${c.template_name} — ${c.user_name}`, logs: [] })
+    setLogsLoading(true)
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data } = await (supabase as any)
+        .from('activity_log')
+        .select('id, action, created_at, user_id, details')
+        .eq('checklist_id', c.id)
+        .order('created_at', { ascending: false })
+      setLogsModal(prev => ({ ...prev, logs: data || [] }))
+    } catch (err) {
+      console.error('[Relatorios] Erro ao buscar logs:', err)
+    } finally {
+      setLogsLoading(false)
+    }
+  }
+
+  const handleExportSelectedPDF = async () => {
+    const toExport = filteredUserChecklists.filter(c => selectedIds.has(c.id))
+    for (const c of toExport) {
+      await handleExportChecklistPDF(c)
+      await new Promise(r => setTimeout(r, 600))
+    }
+    setSelectedIds(new Set())
+  }
+
   const exportDropdown = (
     <div className="relative">
       <button
@@ -761,6 +845,7 @@ export default function RelatoriosPage() {
   }
 
   return (
+    <>
       <PageContainer>
         {/* Offline Warning */}
         {isOffline && (
@@ -877,12 +962,40 @@ export default function RelatoriosPage() {
               {exportDropdown}
             </div>
 
+            {/* Bulk export banner */}
+            {selectedIds.size > 0 && (
+              <div className="flex items-center justify-between px-4 py-2.5 bg-primary/10 border border-primary/20 rounded-xl mb-3">
+                <span className="text-sm text-primary font-medium">
+                  {selectedIds.size} resposta{selectedIds.size > 1 ? 's' : ''} selecionada{selectedIds.size > 1 ? 's' : ''}
+                </span>
+                <div className="flex gap-2">
+                  <button onClick={() => setSelectedIds(new Set())} className="text-xs text-muted hover:text-main px-3 py-1.5 rounded-lg">
+                    Limpar
+                  </button>
+                  <button
+                    onClick={handleExportSelectedPDF}
+                    className="flex items-center gap-1.5 text-xs font-medium bg-primary text-primary-foreground px-3 py-1.5 rounded-lg hover:bg-primary/90"
+                  >
+                    <FiFileText className="w-3.5 h-3.5" /> Exportar PDF{selectedIds.size > 1 ? 's' : ''}
+                  </button>
+                </div>
+              </div>
+            )}
+
             {/* Table */}
             <div className="card overflow-hidden">
               <div className="overflow-x-auto">
                 <table className="w-full">
                   <thead className="bg-surface-hover">
                     <tr>
+                      <th className="px-4 py-3 w-10">
+                        <input
+                          type="checkbox"
+                          checked={filteredUserChecklists.length > 0 && filteredUserChecklists.every(c => selectedIds.has(c.id))}
+                          onChange={e => setSelectedIds(e.target.checked ? new Set(filteredUserChecklists.map(c => c.id)) : new Set())}
+                          className="rounded"
+                        />
+                      </th>
                       <th className="px-4 py-3 text-left text-sm font-medium text-muted">Usuario</th>
                       <th className="px-4 py-3 text-left text-sm font-medium text-muted">Checklist</th>
                       <th className="px-4 py-3 text-left text-sm font-medium text-muted">Loja</th>
@@ -894,7 +1007,7 @@ export default function RelatoriosPage() {
                   <tbody className="divide-y divide-subtle">
                     {paginatedUserChecklists.length === 0 ? (
                       <tr>
-                        <td colSpan={6} className="px-4 py-12 text-center text-muted">
+                        <td colSpan={7} className="px-4 py-12 text-center text-muted">
                           Nenhum checklist encontrado
                         </td>
                       </tr>
@@ -903,6 +1016,18 @@ export default function RelatoriosPage() {
                         const badge = getStatusBadge(c.status)
                         return (
                           <tr key={c.id} className="hover:bg-surface-hover/50">
+                            <td className="px-4 py-3 w-10">
+                              <input
+                                type="checkbox"
+                                checked={selectedIds.has(c.id)}
+                                onChange={e => setSelectedIds(prev => {
+                                  const n = new Set(prev)
+                                  if (e.target.checked) { n.add(c.id) } else { n.delete(c.id) }
+                                  return n
+                                })}
+                                className="rounded"
+                              />
+                            </td>
                             <td className="px-4 py-3">
                               <div>
                                 <p className="font-medium text-main text-sm">{c.user_name}</p>
@@ -924,13 +1049,32 @@ export default function RelatoriosPage() {
                               <p className="text-sm text-muted">{formatDateShort(c.created_at)}</p>
                             </td>
                             <td className="px-4 py-3 text-right">
-                              <Link
-                                href={`/checklist/${c.id}`}
-                                className="p-2 text-primary hover:bg-primary/20 rounded-lg transition-colors inline-flex"
-                                title="Ver respostas"
-                              >
-                                <FiEye className="w-4 h-4" />
-                              </Link>
+                              <div className="flex items-center justify-end gap-1">
+                                <Link
+                                  href={`/checklist/${c.id}`}
+                                  className="p-2 text-primary hover:bg-primary/20 rounded-lg transition-colors inline-flex"
+                                  title="Ver respostas"
+                                >
+                                  <FiEye className="w-4 h-4" />
+                                </Link>
+                                <button
+                                  type="button"
+                                  onClick={() => handleExportChecklistPDF(c)}
+                                  disabled={exportingChecklistId === c.id}
+                                  className="p-2 text-secondary hover:bg-primary/10 rounded-lg transition-colors inline-flex disabled:opacity-40"
+                                  title="Exportar PDF com fotos"
+                                >
+                                  <FiFileText className="w-4 h-4" />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleViewLogs(c)}
+                                  className="p-2 text-secondary hover:bg-primary/10 rounded-lg transition-colors inline-flex"
+                                  title="Ver logs"
+                                >
+                                  <FiClock className="w-4 h-4" />
+                                </button>
+                              </div>
                             </td>
                           </tr>
                         )
@@ -1671,5 +1815,51 @@ export default function RelatoriosPage() {
           </div>
         )}
       </PageContainer>
+
+      {/* Logs Modal */}
+
+      {logsModal.open && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+          <div className="bg-surface rounded-2xl shadow-2xl w-full max-w-lg max-h-[80vh] flex flex-col">
+            <div className="flex items-center justify-between p-5 border-b border-subtle">
+              <div>
+                <h2 className="font-semibold text-main flex items-center gap-2">
+                  <FiClock className="w-4 h-4 text-primary" /> Logs de Atividade
+                </h2>
+                <p className="text-xs text-muted mt-0.5">{logsModal.label}</p>
+              </div>
+              <button type="button" onClick={() => setLogsModal(prev => ({ ...prev, open: false }))} className="p-2 text-muted hover:text-main hover:bg-surface-hover rounded-lg transition-colors">
+                <FiX className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="overflow-y-auto flex-1 p-5">
+              {logsLoading ? (
+                <p className="text-center text-muted text-sm py-8">Carregando...</p>
+              ) : logsModal.logs.length === 0 ? (
+                <p className="text-center text-muted text-sm py-8">Nenhum log encontrado para este checklist.</p>
+              ) : (
+                <div className="space-y-3">
+                  {logsModal.logs.map(log => (
+                    <div key={log.id} className="card p-3 space-y-1">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-xs font-medium text-primary bg-primary/10 px-2 py-0.5 rounded-lg">{log.action.replace(/_/g, ' ')}</span>
+                        <span className="text-xs text-muted shrink-0">{new Date(log.created_at).toLocaleString('pt-BR')}</span>
+                      </div>
+                      {log.details && Object.keys(log.details).length > 0 && (
+                        <div className="text-xs text-secondary space-y-0.5 pt-1">
+                          {Object.entries(log.details).map(([k, v]) => (
+                            <p key={k}><span className="text-muted">{k}:</span> {typeof v === 'object' ? JSON.stringify(v) : String(v)}</p>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   )
 }

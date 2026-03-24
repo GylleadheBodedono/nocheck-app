@@ -22,6 +22,11 @@ type UserOption = {
   full_name: string
 }
 
+/**
+ * Página de criação manual de plano de ação (`/admin/planos-de-acao/novo`).
+ * Permite criar planos não vinculados a uma não conformidade, com título,
+ * descrição, responsável, prazo e severidade.
+ */
 export default function NovoPlanoDeAcaoPage() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)

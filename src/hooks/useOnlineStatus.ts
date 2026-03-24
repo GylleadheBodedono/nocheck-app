@@ -3,7 +3,9 @@
 import { useState, useEffect } from 'react'
 
 /**
- * Hook simples para monitorar status de conexao
+ * Hook simples para monitorar o status de conexão com a internet.
+ * Inicializa com `navigator.onLine` e atualiza via eventos `online`/`offline` da janela.
+ * @returns `true` se o dispositivo está conectado, `false` caso offline.
  */
 export function useOnlineStatus() {
   const [isOnline, setIsOnline] = useState(

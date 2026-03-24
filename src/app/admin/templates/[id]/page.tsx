@@ -68,6 +68,11 @@ type SectorWithStore = Sector & {
   store: Store
 }
 
+/**
+ * Página de edição de template existente (`/admin/templates/[id]`).
+ * Gerencia seções, campos, visibilidade por loja/setor, restrições de horário
+ * e funções autorizadas. Persiste alterações incrementalmente via API.
+ */
 export default function EditTemplatePage() {
   const params = useParams()
   const templateId = params.id as string

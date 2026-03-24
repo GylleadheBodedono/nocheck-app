@@ -29,6 +29,11 @@ type StoreWithStats = Store & {
   checklist_count: number
 }
 
+/**
+ * Página de gerenciamento de lojas (`/admin/lojas`).
+ * CRUD de unidades com nome, CNPJ, endereço, coordenadas GPS e configuração
+ * de exigência de localização para preenchimento de checklists.
+ */
 export default function LojasPage() {
   const [stores, setStores] = useState<StoreWithStats[]>([])
   const [loading, setLoading] = useState(true)

@@ -31,6 +31,19 @@ interface FieldRendererProps {
   error?: string
 }
 
+/**
+ * Renderizador de campo de checklist baseado em `field.field_type`.
+ *
+ * Tipos suportados: `text`, `number`, `select`, `multiselect`, `checkbox`,
+ * `date`, `time`, `datetime`, `photo`, `signature`, `gps`, `temperature`,
+ * `action_plan` e `conditional`.
+ *
+ * - Exibe rótulo, campo específico e mensagem de erro abaixo
+ * - Campos foto usam câmera nativa via `<input type="file" capture="environment">`
+ * - Assinatura usa canvas HTML5
+ * - GPS usa `navigator.geolocation`
+ * - Planos de ação lazy-carregam funções e presets via cache módulo-escopo
+ */
 export function FieldRenderer({ field, value, onChange, error }: FieldRendererProps) {
   const renderField = () => {
     switch (field.field_type) {

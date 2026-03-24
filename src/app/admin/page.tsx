@@ -60,6 +60,11 @@ type PreviewData = {
   recentValidations: any[]
 }
 
+/**
+ * Dashboard admin (`/admin`).
+ * Exibe KPIs gerais (usuários, templates, lojas, checklists recentes) e
+ * atalhos para as seções de administração: usuários, lojas, setores, funções, relatórios.
+ */
 export default function AdminPage() {
   const [stats, setStats] = useState<Stats>({
     totalUsers: 0,

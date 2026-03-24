@@ -18,6 +18,7 @@ import {
 } from '@/lib/offlineCache'
 import type { User } from '@/types/database'
 
+/** Estado da autenticação com suporte offline. */
 export type OfflineAuthState = {
   user: User | null
   isAuthenticated: boolean
@@ -27,6 +28,7 @@ export type OfflineAuthState = {
   error: string | null
 }
 
+/** Ações disponíveis no hook de autenticação offline. */
 export type OfflineAuthActions = {
   login: (email: string, password: string) => Promise<boolean>
   logout: () => Promise<void>
@@ -35,9 +37,16 @@ export type OfflineAuthActions = {
 }
 
 /**
- * Hook para autenticacao com suporte offline
- * - Quando online: usa Supabase normalmente e cacheia dados
- * - Quando offline: usa dados cacheados do IndexedDB
+ * Hook de autenticação com suporte offline completo.
+ *
+ * - **Online**: autentica via Supabase e cacheia sessão + perfil + loja + setores +
+ *   templates + campos + funções no IndexedDB
+ * - **Offline**: restaura sessão e dados do perfil a partir do IndexedDB
+ *
+ * Diferente de `useAuth`, este hook não ouve `onAuthStateChange` — é mais leve
+ * e indicado para fluxos onde o controle de sessão é explícito (ex: operações de campo).
+ *
+ * @returns `OfflineAuthState & OfflineAuthActions`
  */
 export function useOfflineAuth(): OfflineAuthState & OfflineAuthActions {
   const [state, setState] = useState<OfflineAuthState>({
@@ -393,7 +402,9 @@ export function useOfflineAuth(): OfflineAuthState & OfflineAuthActions {
 }
 
 /**
- * Verifica se tem autenticacao cacheada (para uso no middleware)
+ * Verifica se há autenticação cacheada no IndexedDB sem inicializar o hook.
+ * Útil para verificações rápidas no middleware ou em contextos fora de componentes React.
+ * @returns O objeto `CachedAuth` se existir, ou `null` caso contrário.
  */
 export async function hasOfflineAuth(): Promise<CachedAuth | null> {
   try {

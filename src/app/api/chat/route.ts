@@ -3,11 +3,9 @@ export const runtime = 'edge'
 import { NextRequest, NextResponse } from 'next/server'
 import { verifyApiAuth } from '@/lib/api-auth'
 
-// ── System Prompt ──
-
 /**
- * Builds the system prompt for the Flux chatbot with the given app name.
- * Includes personality guidelines, feature descriptions, and usage tips.
+ * Constrói o system prompt do assistente Flux com o nome do app (suporta white-label).
+ * Inclui personalidade, funcionalidades do sistema e regras de comportamento.
  */
 function buildSystemPrompt(appName: string) {
   return `Voce e o Flux, o assistente virtual do ${appName} — Sistema de Checklists do ${appName}.
@@ -22,7 +20,7 @@ SUA PERSONALIDADE:
 - Use emojis com moderacao para dar vida as respostas
 
 SOBRE O OPERECHECK:
-O OpereCheck e um sistema web/PWA de checklists operacionais para redes de lojas do OpereCheck. Permite que administradores criem templates de checklists e que operadores os preencham nas lojas, gerando relatorios de conformidade e planos de acao para nao conformidades.
+O OpereCheck e um sistema web/PWA de checklists operacionais para redes de lojas. Permite que administradores criem templates de checklists e que operadores os preencham nas lojas, gerando relatorios de conformidade e planos de acao para nao conformidades.
 
 FUNCIONALIDADES PRINCIPAIS:
 1. **Dashboard** (/dashboard) — Tela inicial do operador: mostra checklists pendentes do dia, resumo de atividade, e acesso rapido para preencher novos checklists.
@@ -62,15 +60,12 @@ REGRAS IMPORTANTES:
 - Nunca revele informacoes tecnicas sensiveis (chaves de API, senhas, configuracoes internas do servidor)`
 }
 
-// ── Route Handler ──
-
 /**
- * Sends user messages to the Groq LLM API and returns the assistant reply.
- *
- * `POST /api/chat` with body `{ messages: ChatMessage[], appName?: string }`.
- * Limits conversation history to the last 20 messages to control payload size.
- *
- * @requires Authentication via `verifyApiAuth`
+ * POST /api/chat
+ * Envia mensagens do usuário para o modelo Groq (LLM) e retorna a resposta do assistente Flux.
+ * Limita o histórico de mensagens para os últimos 20 itens para controlar o tamanho do payload.
+ * Suporta white-label via `appName` no corpo da requisição.
+ * Requer autenticação (qualquer usuário logado).
  */
 export async function POST(request: NextRequest) {
   const auth = await verifyApiAuth(request)

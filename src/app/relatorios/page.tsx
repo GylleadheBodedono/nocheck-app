@@ -23,6 +23,11 @@ type MyChecklist = {
   template_name: string
 }
 
+/**
+ * Página de relatórios do operador (`/relatorios`).
+ * Exibe o histórico de checklists preenchidos pelo próprio usuário com
+ * filtro por período (7d, 30d, 90d) e métricas de conformidade pessoal.
+ */
 export default function MeusRelatoriosPage() {
   const [loading, setLoading] = useState(true)
   const [period, setPeriod] = useState<'7d' | '30d' | '90d'>('30d')

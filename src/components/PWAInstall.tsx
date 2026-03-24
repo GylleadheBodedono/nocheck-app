@@ -20,6 +20,16 @@ const DAYS_TO_RESHOW = 7
 // Chave versionada - mude a versão para resetar o estado de todos os usuários
 const STORAGE_KEY = 'pwa-banner-v2-dismissed-time'
 
+/**
+ * Componente PWA multi-plataforma para instalação e atualização do app.
+ *
+ * Comportamentos:
+ * - **Android/Desktop**: captura `beforeinstallprompt` e exibe banner de instalação
+ * - **iOS/Safari**: exibe instruções manuais (Compartilhar → Adicionar à Tela Inicial)
+ * - **Atualização**: detecta SW aguardando (`waiting`) e exibe banner de "nova versão disponível"
+ * - O banner só é exibido novamente 7 dias após ser dispensado (persiste no `localStorage`)
+ * - Já instalado como PWA: não exibe nada (`display-mode: standalone`)
+ */
 export function PWAInstall() {
   const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null)
   const [showBanner, setShowBanner] = useState(false)
@@ -295,7 +305,10 @@ export function PWAInstall() {
   )
 }
 
-// Hook para verificar status online
+/**
+ * Hook local para verificar status de conectividade.
+ * @deprecated Use `useOnlineStatus` de `@/hooks/useOnlineStatus` para consistência.
+ */
 export function useOnlineStatus() {
   const [isOnline, setIsOnline] = useState(true)
 

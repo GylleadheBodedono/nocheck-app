@@ -1,9 +1,16 @@
 /**
- * Servico de notificacoes - cria notificacoes in-app e envia emails
+ * Serviço de notificações — cria notificações in-app e envia emails/alertas Teams.
+ *
+ * Funções exportadas:
+ * - `createNotification`        — persiste notificação in-app no banco
+ * - `sendEmailNotification`     — envia email via API route `/api/notifications/email`
+ * - `sendActionPlanEmail`       — email de plano de ação (assignee resolvido server-side)
+ * - `sendActionPlanTeamsAlert`  — alerta no Microsoft Teams via webhook
  */
 
 import type { NotificationType } from '@/types/database'
 
+/** Dados necessários para criar uma notificação in-app. */
 type NotificationData = {
   type: NotificationType
   title: string
@@ -13,7 +20,12 @@ type NotificationData = {
 }
 
 /**
- * Cria uma notificacao in-app no banco de dados
+ * Cria uma notificação in-app persistida na tabela `notifications`.
+ *
+ * @param supabase - Cliente Supabase com permissão de escrita em `notifications`
+ * @param userId   - UUID do usuário destinatário
+ * @param data     - Dados da notificação (tipo, título, mensagem, link, metadata)
+ * @returns `{ success: true }` ou `{ success: false, error: mensagem }`
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function createNotification(
@@ -49,8 +61,13 @@ export async function createNotification(
 }
 
 /**
- * Envia email de notificacao via API route
- * @param accessToken - Token JWT do Supabase para autenticacao (mais confiavel que cookies)
+ * Envia email de notificação via API route `/api/notifications/email`.
+ *
+ * @param to          - Endereço de email do destinatário
+ * @param subject     - Assunto do email
+ * @param htmlBody    - Corpo do email em HTML
+ * @param accessToken - Token JWT do Supabase para autenticação (mais confiável que cookies)
+ * @returns `{ success: true }` ou `{ success: false, error: mensagem }`
  */
 export async function sendEmailNotification(
   to: string,
@@ -59,9 +76,6 @@ export async function sendEmailNotification(
   accessToken?: string
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    if (!accessToken) {
-      console.warn('[Email] accessToken nao disponivel — autenticacao pode falhar')
-    }
 
     const headers: Record<string, string> = { 'Content-Type': 'application/json' }
     if (accessToken) {
@@ -96,8 +110,14 @@ export async function sendEmailNotification(
 }
 
 /**
- * Envia email de plano de acao via API route, passando assigneeId para resolucao server-side.
- * Resolve o email do assignee server-side (service role) para contornar RLS.
+ * Envia email de plano de ação via API route, resolvendo o email do assignee server-side.
+ * O email do destinatário é resolvido pelo servidor usando service role para contornar RLS.
+ *
+ * @param assigneeId  - UUID do usuário responsável pelo plano de ação
+ * @param subject     - Assunto do email
+ * @param htmlBody    - Corpo do email em HTML
+ * @param accessToken - Token JWT do Supabase para autenticação
+ * @returns `{ success: true, assigneeName? }` ou `{ success: false, error: mensagem }`
  */
 export async function sendActionPlanEmail(
   assigneeId: string,
@@ -106,9 +126,6 @@ export async function sendActionPlanEmail(
   accessToken?: string
 ): Promise<{ success: boolean; assigneeName?: string; error?: string }> {
   try {
-    if (!accessToken) {
-      console.warn('[Email] accessToken nao disponivel — autenticacao pode falhar')
-    }
 
     const headers: Record<string, string> = { 'Content-Type': 'application/json' }
     if (accessToken) {
@@ -142,7 +159,11 @@ export async function sendActionPlanEmail(
 }
 
 /**
- * Envia alerta de plano de acao para Teams
+ * Envia alerta de plano de ação para o Microsoft Teams via webhook configurado.
+ * Chama a API route `/api/integrations/notify` com action `action_plan`.
+ *
+ * @param data - Dados do alerta (título, campo, loja, severidade, prazo, etc.)
+ * @returns `{ success: true }` ou `{ success: false, error: mensagem }`
  */
 export async function sendActionPlanTeamsAlert(data: {
   title: string

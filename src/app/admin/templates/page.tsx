@@ -26,6 +26,11 @@ type TemplateWithDetails = ChecklistTemplate & {
   visibility: (TemplateVisibility & { store: Store })[]
 }
 
+/**
+ * Página de listagem de templates (`/admin/templates`).
+ * Exibe todos os templates com categoria, visibilidade por loja e contagem de campos.
+ * Permite clonar, arquivar e navegar para edição de cada template.
+ */
 export default function TemplatesPage() {
   const [templates, setTemplates] = useState<TemplateWithDetails[]>([])
   const [loading, setLoading] = useState(true)

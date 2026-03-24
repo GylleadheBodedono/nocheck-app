@@ -9,6 +9,11 @@ import { FiMail, FiArrowLeft, FiCheckCircle, FiLock, FiEye, FiEyeOff } from 'rea
 
 type Step = 'email' | 'otp' | 'password' | 'success'
 
+/**
+ * Página de recuperação de senha (`/esqueci-senha`).
+ * Envia magic link de reset via `supabase.auth.resetPasswordForEmail`.
+ * Redireciona o usuário para `/auth/reset-password` após clicar no link.
+ */
 export default function EsqueciSenhaPage() {
   const [step, setStep] = useState<Step>('email')
   const [email, setEmail] = useState('')

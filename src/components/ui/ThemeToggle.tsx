@@ -7,6 +7,11 @@ interface ThemeToggleProps {
   className?: string
 }
 
+/**
+ * Botão para alternar entre tema claro e escuro.
+ * Renderiza um placeholder desabilitado até que o tema seja carregado do localStorage
+ * (evita flash de conteúdo incorreto no SSR).
+ */
 export function ThemeToggle({ className = '' }: ThemeToggleProps) {
   const { theme, toggleTheme, mounted } = useTheme()
 

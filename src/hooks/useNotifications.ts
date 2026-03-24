@@ -4,6 +4,7 @@ import { useEffect, useState, useMemo, useCallback, useRef } from 'react'
 import { createClient } from '@/lib/supabase'
 import { getAuthCache } from '@/lib/offlineCache'
 
+/** Notificação in-app retornada pela tabela `notifications` do Supabase. */
 export type AppNotification = {
   id: number
   user_id: string
@@ -16,6 +17,16 @@ export type AppNotification = {
   created_at: string
 }
 
+/**
+ * Hook para gerenciar notificações in-app do usuário autenticado.
+ *
+ * - Inicializa buscando as últimas 20 notificações do Supabase (ou do cache em modo offline)
+ * - Assina INSERT em tempo real via canal Supabase filtrado por `user_id`
+ * - Em INSERT: exibe notificação do navegador se a permissão estiver concedida
+ *   (prefere o Service Worker; usa `new Notification` como fallback)
+ *
+ * @returns `{ notifications, unreadCount, markAsRead, markAllAsRead, deleteNotification, deleteAllNotifications }`
+ */
 export function useNotifications() {
   const [notifications, setNotifications] = useState<AppNotification[]>([])
   const [unreadCount, setUnreadCount] = useState(0)

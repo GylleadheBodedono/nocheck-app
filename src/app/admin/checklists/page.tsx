@@ -17,6 +17,7 @@ import {
   FiX,
   FiWifiOff,
   FiEye,
+  FiDownload,
 } from 'react-icons/fi'
 import Link from 'next/link'
 import type { Store, ChecklistTemplate, User } from '@/types/database'
@@ -34,6 +35,11 @@ type ChecklistWithDetails = {
   user: User
 }
 
+/**
+ * Página de checklists preenchidos (`/admin/checklists`).
+ * Lista todos os checklists enviados com filtros por loja, template, usuário e período.
+ * Permite visualizar detalhes e exportar em CSV/PDF.
+ */
 export default function AdminChecklistsPage() {
   const [checklists, setChecklists] = useState<ChecklistWithDetails[]>([])
   const [stores, setStores] = useState<Store[]>([])
@@ -182,6 +188,66 @@ export default function AdminChecklistsPage() {
     }
 
     setLoading(false)
+  }
+
+  const handleExport = async (checklistId: number) => {
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const sb = supabase as any
+
+      // Buscar dados do checklist
+      const [clRes, respRes, fieldsRes] = await Promise.all([
+        sb.from('checklists').select('*, template:checklist_templates(name), store:stores(name), user:users!checklists_created_by_fkey(full_name)').eq('id', checklistId).single(),
+        sb.from('checklist_responses').select('field_id, value_text, value_number, value_json').eq('checklist_id', checklistId),
+        sb.from('template_fields').select('id, name, field_type, section_id').eq('template_id', checklists.find(c => c.id === checklistId)?.template?.id || 0).order('sort_order'),
+      ])
+
+      if (!clRes.data || !respRes.data) { alert('Erro ao buscar dados'); return }
+
+      const cl = clRes.data
+      const responses = respRes.data as Array<{ field_id: number; value_text: string | null; value_number: number | null; value_json: unknown }>
+      const fields = fieldsRes.data as Array<{ id: number; name: string; field_type: string; section_id: number | null }>
+      const respMap = new Map(responses.map(r => [r.field_id, r]))
+
+      // Montar CSV
+      const lines: string[] = []
+      lines.push(`Checklist: ${cl.template?.name || 'N/A'}`)
+      lines.push(`Loja: ${cl.store?.name || 'N/A'}`)
+      lines.push(`Usuario: ${cl.user?.full_name || 'N/A'}`)
+      lines.push(`Status: ${cl.status}`)
+      lines.push(`Data: ${cl.created_at ? new Date(cl.created_at).toLocaleString('pt-BR') : 'N/A'}`)
+      lines.push('')
+      lines.push('Campo;Resposta')
+
+      for (const f of fields) {
+        const r = respMap.get(f.id)
+        let value = ''
+        if (r) {
+          if (r.value_text) value = r.value_text
+          else if (r.value_number !== null) value = String(r.value_number)
+          else if (r.value_json) {
+            const vj = r.value_json as Record<string, unknown>
+            if (vj.answer) value = String(vj.answer)
+            else value = JSON.stringify(vj)
+          }
+        }
+        lines.push(`${f.name};${value.replace(/;/g, ',')}`)
+      }
+
+      const csv = lines.join('\n')
+      const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `checklist_${checklistId}_${Date.now()}.csv`
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+    } catch (err) {
+      console.error('[Export] Erro:', err)
+      alert('Erro ao exportar checklist')
+    }
   }
 
   const handleDelete = async (id: number) => {
@@ -532,6 +598,13 @@ export default function AdminChecklistsPage() {
                             >
                               <FiEye className="w-4 h-4" />
                             </Link>
+                            <button
+                              onClick={() => handleExport(checklist.id)}
+                              className="p-2 text-secondary hover:bg-primary/20 hover:text-primary rounded-lg transition-colors"
+                              title="Exportar CSV"
+                            >
+                              <FiDownload className="w-4 h-4" />
+                            </button>
                             <button
                               onClick={() => handleDelete(checklist.id)}
                               disabled={deleting === checklist.id}

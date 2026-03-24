@@ -128,6 +128,11 @@ function SortableSectionRow({
 
 // ─── Component ──────────────────────────────────────────────────────────────
 
+/**
+ * Card de seções de um template no editor visual (painel admin).
+ * Exibe lista de seções com drag-and-drop para reordenação, botão de adicionar seção
+ * e alerta visual quando há campos sem seção (`looseFields`).
+ */
 export function SectionCard({
   templateName,
   sections,

@@ -1,6 +1,7 @@
-// ============================================
-// EXPORTACAO CENTRALIZADA DE COMPONENTES UI
-// ============================================
+/**
+ * Barrel de componentes UI do OpereCheck.
+ * Centraliza todas as exportações para facilitar as importações nos componentes de página.
+ */
 
 export { ThemeToggle } from './ThemeToggle'
 export { Loading, LoadingPage, LoadingInline } from './Loading'

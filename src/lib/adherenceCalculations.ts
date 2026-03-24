@@ -1,6 +1,12 @@
 /**
- * Funcoes puras de calculo de adesao para relatorios.
- * Sem React, sem Supabase — recebe arrays, retorna estruturas calculadas.
+ * Funções puras de cálculo de adesão para relatórios.
+ * Sem React, sem Supabase — recebe arrays de dados e retorna estruturas calculadas.
+ *
+ * Fluxo típico:
+ * 1. `computeStatusBreakdown` → contagens por status
+ * 2. `computeAdherenceMetrics` → taxas percentuais a partir das contagens
+ * 3. `computeTemplateAdherence` / `computeStoreAdherence` / `computeUserAdherence` → cortes por dimensão
+ * 4. `generateEnhancedAttentionPoints` → lista de alertas para o dashboard
  */
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -92,6 +98,12 @@ type UserLookup = { id: string; full_name: string }
 // FUNCOES DE CALCULO
 // ═══════════════════════════════════════════════════════════════════════════════
 
+/**
+ * Conta checklists por status e retorna o resumo com o total geral.
+ *
+ * @param checklists - Array de objetos com campo `status`
+ * @returns `StatusBreakdown` com contagens por status e total
+ */
 export function computeStatusBreakdown(checklists: { status: string }[]): StatusBreakdown {
   const b: StatusBreakdown = { rascunho: 0, em_andamento: 0, concluido: 0, validado: 0, incompleto: 0, total: 0 }
   for (const c of checklists) {
@@ -105,6 +117,13 @@ export function computeStatusBreakdown(checklists: { status: string }[]): Status
   return b
 }
 
+/**
+ * Calcula as taxas percentuais de adesão a partir de um `StatusBreakdown`.
+ * Usa `total || 1` para evitar divisão por zero.
+ *
+ * @param breakdown - Contagens por status (saída de `computeStatusBreakdown`)
+ * @returns `AdherenceMetrics` com taxas de conclusão, abandono, etc.
+ */
 export function computeAdherenceMetrics(breakdown: StatusBreakdown): AdherenceMetrics {
   const t = breakdown.total || 1
   return {
@@ -116,10 +135,24 @@ export function computeAdherenceMetrics(breakdown: StatusBreakdown): AdherenceMe
   }
 }
 
+/**
+ * Atalho para calcular métricas de adesão diretamente de uma lista de checklists.
+ * Equivalente a `computeAdherenceMetrics(computeStatusBreakdown(checklists))`.
+ *
+ * @param checklists - Array de objetos com campo `status`
+ * @returns `AdherenceMetrics` calculadas
+ */
 export function computeOverallAdherence(checklists: { status: string }[]): AdherenceMetrics {
   return computeAdherenceMetrics(computeStatusBreakdown(checklists))
 }
 
+/**
+ * Calcula o tempo médio de conclusão em minutos a partir de pares `started_at`/`completed_at`.
+ * Ignora itens sem ambos os timestamps ou com diferença negativa.
+ *
+ * @param items - Array com timestamps de início e conclusão
+ * @returns Média em minutos (arredondada) ou `null` se nenhum item for concluído
+ */
 function calcAvgCompletionMinutes(items: { started_at: string | null; completed_at: string | null }[]): number | null {
   const times: number[] = []
   for (const c of items) {
@@ -132,10 +165,26 @@ function calcAvgCompletionMinutes(items: { started_at: string | null; completed_
   return Math.round(times.reduce((a, b) => a + b, 0) / times.length)
 }
 
+/**
+ * Calcula o tempo médio de conclusão para uma lista de checklists.
+ *
+ * @param checklists - Checklists com `started_at` e `completed_at`
+ * @returns Tempo médio em minutos ou `null`
+ */
 export function computeAvgCompletionTime(checklists: ChecklistInput[]): number | null {
   return calcAvgCompletionMinutes(checklists)
 }
 
+/**
+ * Calcula métricas de adesão agrupadas por template.
+ * Inclui tempo médio de conclusão e contagem de lojas sem nenhum preenchimento.
+ * Resultado ordenado por `completionRate` crescente (templates problemáticos primeiro).
+ *
+ * @param checklists - Lista de checklists do período
+ * @param templates  - Templates ativos (id + name)
+ * @param visibility - Mapa de visibilidade template→loja
+ * @returns Array de `TemplateAdherence` ordenado por adesão crescente
+ */
 export function computeTemplateAdherence(
   checklists: ChecklistInput[],
   templates: SimpleEntity[],
@@ -165,6 +214,17 @@ export function computeTemplateAdherence(
   }).sort((a, b) => a.metrics.completionRate - b.metrics.completionRate)
 }
 
+/**
+ * Calcula métricas de adesão agrupadas por loja.
+ * Inclui lista de templates visíveis que nunca foram preenchidos pela loja.
+ * Resultado ordenado por `completionRate` crescente (lojas problemáticas primeiro).
+ *
+ * @param checklists - Lista de checklists do período
+ * @param stores     - Lojas ativas (id + name)
+ * @param templates  - Templates ativos (id + name)
+ * @param visibility - Mapa de visibilidade template→loja
+ * @returns Array de `StoreAdherence` ordenado por adesão crescente
+ */
 export function computeStoreAdherence(
   checklists: ChecklistInput[],
   stores: SimpleEntity[],
@@ -193,6 +253,15 @@ export function computeStoreAdherence(
   }).sort((a, b) => a.metrics.completionRate - b.metrics.completionRate)
 }
 
+/**
+ * Calcula métricas de adesão agrupadas por usuário (quem criou o checklist).
+ * Inclui tempo médio de conclusão por usuário.
+ * Resultado ordenado por `completionRate` crescente.
+ *
+ * @param checklists - Lista de checklists do período
+ * @param users      - Lookup de usuários (id + full_name)
+ * @returns Array de `UserAdherence` ordenado por adesão crescente
+ */
 export function computeUserAdherence(
   checklists: ChecklistInput[],
   users: UserLookup[],
@@ -214,6 +283,19 @@ export function computeUserAdherence(
   })).sort((a, b) => a.metrics.completionRate - b.metrics.completionRate)
 }
 
+/**
+ * Identifica lacunas de cobertura: combinações template+loja visíveis que
+ * não tiveram nenhum checklist preenchido no período analisado.
+ *
+ * Deduplica linhas de visibilidade e ignora templates/lojas fora dos arrays fornecidos.
+ * Resultado ordenado alfabeticamente por template+loja.
+ *
+ * @param checklists - Lista de checklists do período
+ * @param templates  - Templates ativos (id + name)
+ * @param stores     - Lojas ativas (id + name)
+ * @param visibility - Mapa de visibilidade template→loja
+ * @returns Array de `CoverageGap` com as combinações sem cobertura
+ */
 export function computeCoverageGaps(
   checklists: ChecklistInput[],
   templates: SimpleEntity[],
@@ -270,6 +352,15 @@ export function computeCoverageGaps(
   })
 }
 
+/**
+ * Agrega contagens de status por dia para os últimos `chartDays` dias.
+ * Cada dia inclui contagens de todos os status e o total.
+ * Datas são formatadas como "DD/MM" para exibição em gráficos.
+ *
+ * @param checklists - Lista de checklists (filtrada por período externamente)
+ * @param chartDays  - Número de dias no histórico (ex: 7, 30)
+ * @returns Array de `DailyStatusStats` do dia mais antigo ao mais recente
+ */
 export function computeDailyStatusStats(
   checklists: ChecklistInput[],
   chartDays: number,
@@ -304,6 +395,24 @@ export function computeDailyStatusStats(
   return result
 }
 
+/**
+ * Gera a lista de pontos de atenção do dashboard com base nos dados calculados.
+ *
+ * Regras aplicadas:
+ * - Lojas com adesão < 50% → severity `error`
+ * - Lojas com adesão 50–79% → severity `warning`
+ * - Lojas com ≥ 5 checklists em andamento não finalizados → `warning`
+ * - Planos de ação vencidos → `error`
+ * - Lacunas de cobertura (template+loja sem preenchimento) → `error`
+ * - Templates nunca preenchidos no período → `warning`
+ *
+ * @param storeAdherence      - Métricas por loja
+ * @param templateAdherence   - Métricas por template (não usadas atualmente, reservado)
+ * @param coverageGaps        - Lacunas de cobertura detectadas
+ * @param overduePlansCount   - Quantidade de planos de ação vencidos
+ * @param unusedTemplateNames - Nomes de templates sem preenchimento no período
+ * @returns Array de `AttentionPoint` ordenado por prioridade de inserção
+ */
 export function generateEnhancedAttentionPoints(
   storeAdherence: StoreAdherence[],
   templateAdherence: TemplateAdherence[],
@@ -382,6 +491,12 @@ export function generateEnhancedAttentionPoints(
   return points
 }
 
+/**
+ * Formata uma duração em minutos para exibição legível (ex: `90` → `"1h 30min"`).
+ *
+ * @param minutes - Duração em minutos ou `null`
+ * @returns String formatada: `"--"` se null, `"Xmin"` se < 60, `"Xh Ymin"` ou `"Xh"` se ≥ 60
+ */
 export function formatMinutes(minutes: number | null): string {
   if (minutes === null) return '--'
   if (minutes < 60) return `${minutes}min`

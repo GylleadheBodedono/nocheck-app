@@ -159,6 +159,17 @@ function SortableFieldItem({
 
 // ─── Component ──────────────────────────────────────────────────────────────
 
+/**
+ * Modal de edição de seção de template para o painel admin.
+ *
+ * Funcionalidades:
+ * - Renomear a seção e definir ícone via `IconPicker`
+ * - Adicionar, renomear, reordenar (dnd-kit) e excluir subseções
+ * - Listar e reordenar campos da seção com drag-and-drop
+ * - Navegar para edição individual de campo via `onFieldEdit`
+ *
+ * Renderizado via `createPortal` no `document.body`.
+ */
 export function SectionEditModal({
   isOpen,
   onClose,

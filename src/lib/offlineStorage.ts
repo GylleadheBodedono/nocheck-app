@@ -1,11 +1,16 @@
 /**
- * IndexedDB helper for offline storage
+ * Armazenamento offline via IndexedDB (`nocheck-offline`).
+ *
+ * Gerencia a fila de checklists pendentes de sincronização com o servidor.
+ * Cada checklist salvo offline recebe um UUID local e um `syncStatus` que
+ * avança de `draft` → `pending` → `syncing` → (removido após sync bem-sucedido).
  */
 
 const DB_NAME = 'operecheck-offline'
 const DB_VERSION = 1
 const STORE_NAME = 'pending_checklists'
 
+/** Dados de uma seção de checklist com etapas salva offline. */
 type PendingChecklistSection = {
   sectionId: number
   status: 'pendente' | 'concluido'
@@ -18,6 +23,7 @@ type PendingChecklistSection = {
   }>
 }
 
+/** Checklist salvo localmente aguardando sincronização com o servidor. */
 type PendingChecklist = {
   id: string // UUID local
   templateId: number
@@ -38,10 +44,14 @@ type PendingChecklist = {
   sections?: PendingChecklistSection[]
 }
 
+/** Instância singleton do banco IndexedDB. Criada na primeira chamada a `initDB`. */
 let db: IDBDatabase | null = null
 
 /**
- * Initialize IndexedDB
+ * Abre (ou reutiliza) a conexão com o IndexedDB `nocheck-offline`.
+ * Cria a object store `pending_checklists` se ainda não existir.
+ *
+ * @returns Instância do banco de dados pronta para uso
  */
 export async function initDB(): Promise<IDBDatabase> {
   if (db) return db
@@ -49,10 +59,7 @@ export async function initDB(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
     const request = indexedDB.open(DB_NAME, DB_VERSION)
 
-    request.onerror = () => {
-      console.error('[OfflineDB] Error opening database:', request.error)
-      reject(request.error)
-    }
+    request.onerror = () => reject(request.error)
 
     request.onsuccess = () => {
       db = request.result
@@ -62,7 +69,7 @@ export async function initDB(): Promise<IDBDatabase> {
     request.onupgradeneeded = (event) => {
       const database = (event.target as IDBOpenDBRequest).result
 
-      // Create object store for pending checklists
+      // Cria a object store para checklists pendentes (somente na primeira abertura)
       if (!database.objectStoreNames.contains(STORE_NAME)) {
         const store = database.createObjectStore(STORE_NAME, { keyPath: 'id' })
         store.createIndex('syncStatus', 'syncStatus', { unique: false })
@@ -73,7 +80,11 @@ export async function initDB(): Promise<IDBDatabase> {
 }
 
 /**
- * Save a checklist to the offline queue
+ * Salva um checklist na fila offline com status `draft`.
+ * Gera um UUID local como identificador temporário.
+ *
+ * @param checklist - Dados do checklist sem `id`, `createdAt` e `syncStatus` (gerados automaticamente)
+ * @returns UUID local do checklist salvo
  */
 export async function saveOfflineChecklist(checklist: Omit<PendingChecklist, 'id' | 'createdAt' | 'syncStatus'>): Promise<string> {
   const database = await initDB()
@@ -95,15 +106,14 @@ export async function saveOfflineChecklist(checklist: Omit<PendingChecklist, 'id
       resolve(id)
     }
 
-    request.onerror = () => {
-      console.error('[OfflineDB] Error saving checklist:', request.error)
-      reject(request.error)
-    }
+    request.onerror = () => reject(request.error)
   })
 }
 
 /**
- * Get all pending checklists
+ * Retorna todos os checklists offline armazenados (qualquer status).
+ *
+ * @returns Lista de checklists pendentes em ordem de inserção
  */
 export async function getPendingChecklists(): Promise<PendingChecklist[]> {
   const database = await initDB()
@@ -117,15 +127,14 @@ export async function getPendingChecklists(): Promise<PendingChecklist[]> {
       resolve(request.result as PendingChecklist[])
     }
 
-    request.onerror = () => {
-      console.error('[OfflineDB] Error getting checklists:', request.error)
-      reject(request.error)
-    }
+    request.onerror = () => reject(request.error)
   })
 }
 
 /**
- * Get count of pending checklists
+ * Retorna a contagem de checklists com status `pending` (prontos para sincronizar).
+ *
+ * @returns Número de checklists aguardando envio
  */
 export async function getPendingCount(): Promise<number> {
   const database = await initDB()
@@ -147,7 +156,12 @@ export async function getPendingCount(): Promise<number> {
 }
 
 /**
- * Update checklist sync status
+ * Atualiza o `syncStatus` de um checklist offline.
+ * Opcionalmente registra uma mensagem de erro em caso de falha.
+ *
+ * @param id           - UUID local do checklist
+ * @param status       - Novo status de sincronização
+ * @param errorMessage - Mensagem de erro (somente para status `failed`)
  */
 export async function updateChecklistStatus(
   id: string,
@@ -180,7 +194,10 @@ export async function updateChecklistStatus(
 }
 
 /**
- * Delete a checklist from offline storage
+ * Remove um checklist da fila offline pelo UUID local.
+ * Chamado após sincronização bem-sucedida.
+ *
+ * @param id - UUID local do checklist a remover
  */
 export async function deleteOfflineChecklist(id: string): Promise<void> {
   const database = await initDB()
@@ -194,15 +211,13 @@ export async function deleteOfflineChecklist(id: string): Promise<void> {
       resolve()
     }
 
-    request.onerror = () => {
-      console.error('[OfflineDB] Error deleting checklist:', request.error)
-      reject(request.error)
-    }
+    request.onerror = () => reject(request.error)
   })
 }
 
 /**
- * Clear all offline data
+ * Remove todos os checklists offline do IndexedDB.
+ * Chamado durante o logout para limpar dados do usuário.
  */
 export async function clearOfflineData(): Promise<void> {
   const database = await initDB()
@@ -221,7 +236,10 @@ export async function clearOfflineData(): Promise<void> {
 }
 
 /**
- * Get a single offline checklist by ID
+ * Busca um único checklist offline pelo UUID local.
+ *
+ * @param id - UUID local do checklist
+ * @returns O checklist encontrado ou `null` se não existir
  */
 export async function getOfflineChecklist(id: string): Promise<PendingChecklist | null> {
   const database = await initDB()
@@ -239,7 +257,13 @@ export async function getOfflineChecklist(id: string): Promise<PendingChecklist 
 }
 
 /**
- * Update a section in an offline sectioned checklist
+ * Atualiza as respostas de uma seção em um checklist offline com etapas.
+ * Quando todas as seções ficam com status `concluido`, consolida as respostas
+ * no campo principal e marca o checklist como `pending` para sincronização.
+ *
+ * @param checklistId - UUID local do checklist pai
+ * @param sectionId   - ID da seção a atualizar
+ * @param responses   - Novas respostas da seção
  */
 export async function updateOfflineChecklistSection(
   checklistId: string,
@@ -287,8 +311,14 @@ export async function updateOfflineChecklistSection(
 }
 
 /**
- * Update a single field response in an offline checklist (for auto-save).
- * Works for both sectioned and non-sectioned checklists.
+ * Atualiza a resposta de um campo individual em um checklist offline (auto-save).
+ * Funciona tanto para checklists com etapas quanto sem.
+ * Se a resposta do campo já existe, substitui; caso contrário, adiciona.
+ *
+ * @param checklistId  - UUID local do checklist
+ * @param sectionId    - ID da seção (ou `null` para checklists sem etapas)
+ * @param fieldId      - ID do campo a atualizar
+ * @param responseData - Novos valores da resposta
  */
 export async function updateOfflineFieldResponse(
   checklistId: string,
@@ -349,8 +379,10 @@ export async function updateOfflineFieldResponse(
 }
 
 /**
- * Put/update an offline checklist directly in IndexedDB.
- * Used to update section statuses during auto-save flow.
+ * Sobrescreve um checklist offline diretamente no IndexedDB (upsert).
+ * Usado para atualizar status de seções durante o fluxo de auto-save.
+ *
+ * @param checklist - Objeto completo do checklist com os dados atualizados
  */
 export async function putOfflineChecklist(checklist: PendingChecklist): Promise<void> {
   const database = await initDB()

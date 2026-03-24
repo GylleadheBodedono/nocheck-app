@@ -56,6 +56,14 @@ type HeaderProps = {
   children?: React.ReactNode
 }
 
+/**
+ * Cabeçalho universal para páginas do operador.
+ * Composição flexível: suporta botão de voltar ou menu hambúrguer, título/ícone/logo,
+ * busca global, notificações, link admin, dados do usuário (auto-buscados se omitidos)
+ * e botões de ação customizados (`actions` ou `rightSlot`).
+ *
+ * Se `title` e `icon` forem omitidos, exibe o logo do OpereCheck centralizado.
+ */
 export function Header({
   backHref,
   onBack,

@@ -11,6 +11,17 @@ type Message = {
   content: string
 }
 
+const WELCOME_MESSAGE = 'Opa! Eu sou o Flux, seu assistente do OpereCheck! Pode me perguntar qualquer coisa sobre o sistema — como preencher checklists, interpretar relatorios, gerenciar planos de acao... Estou aqui pra ajudar! 😄'
+
+/**
+ * Widget de chat flutuante com o assistente Flux (IA integrada via `/api/flux`).
+ * Exibe um botão FAB no canto inferior direito. Ao abrir, mostra o histórico de mensagens
+ * e permite envio de perguntas sobre o uso do sistema.
+ *
+ * - Rola automaticamente para a última mensagem
+ * - Foca o input ao abrir o chat
+ * - Exibe animação de "digitando..." durante o carregamento
+ */
 export function FluxChat() {
   const tenant = useTenant()
   const tenantAppName = getTenantAppName(tenant.organization)

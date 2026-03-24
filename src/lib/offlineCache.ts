@@ -1,6 +1,18 @@
 /**
- * Sistema de Cache Offline Completo
- * Armazena todos os dados necessarios para funcionamento 100% offline
+ * Sistema de cache offline completo via IndexedDB (`nocheck-cache`).
+ * Armazena todos os dados necessários para funcionamento 100% offline.
+ *
+ * Entidades cacheadas: auth, usuário, lojas, templates, campos, setores,
+ * funções, visibilidade, seções, checklists, respostas, user_stores, planos de ação.
+ *
+ * Uso típico:
+ * ```ts
+ * await cacheAllDataForOffline(userId) // precache completo no login
+ * const templates = await getTemplatesCache() // leitura offline
+ * await clearAllCache() // limpeza no logout
+ * ```
+ *
+ * Todos os tipos exportados têm o campo `cachedAt: string` para controle de validade.
  */
 
 import type {
@@ -135,7 +147,11 @@ export type SyncMetadata = {
 let db: IDBDatabase | null = null
 
 /**
- * Inicializa o banco de dados IndexedDB
+ * Abre (ou reutiliza) a conexão com o IndexedDB `nocheck-cache` (versão 5).
+ * Cria todas as object stores necessárias se ainda não existirem.
+ * Usa padrão singleton — múltiplas chamadas retornam a mesma instância.
+ *
+ * @returns Instância do banco de dados pronta para uso
  */
 export async function initOfflineCache(): Promise<IDBDatabase> {
   if (db) return db
@@ -143,14 +159,10 @@ export async function initOfflineCache(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
     const request = indexedDB.open(DB_NAME, DB_VERSION)
 
-    request.onerror = () => {
-      console.error('[OfflineCache] Erro ao abrir banco:', request.error)
-      reject(request.error)
-    }
+    request.onerror = () => { reject(request.error) }
 
     request.onsuccess = () => {
       db = request.result
-      console.log('[OfflineCache] Banco aberto com sucesso')
       resolve(db)
     }
 
@@ -253,7 +265,6 @@ export async function initOfflineCache(): Promise<IDBDatabase> {
         database.createObjectStore(STORES.SYNC_META, { keyPath: 'id' })
       }
 
-      console.log('[OfflineCache] Stores criados/atualizados')
     }
   })
 }
@@ -262,6 +273,7 @@ export async function initOfflineCache(): Promise<IDBDatabase> {
 // AUTH CACHE
 // ============================================
 
+/** Salva os tokens de sessão do Supabase no cache offline. Substitui qualquer sessão anterior. */
 export async function saveAuthCache(auth: Omit<CachedAuth, 'id' | 'cachedAt'>): Promise<void> {
   const database = await initOfflineCache()
 
@@ -276,14 +288,12 @@ export async function saveAuthCache(auth: Omit<CachedAuth, 'id' | 'cachedAt'>): 
     }
 
     const request = store.put(data)
-    request.onsuccess = () => {
-      console.log('[OfflineCache] Auth salvo')
-      resolve()
-    }
+    request.onsuccess = () => resolve()
     request.onerror = () => reject(request.error)
   })
 }
 
+/** Retorna a sessão cacheada offline ou `null` se não houver. */
 export async function getAuthCache(): Promise<CachedAuth | null> {
   const database = await initOfflineCache()
 
@@ -299,6 +309,7 @@ export async function getAuthCache(): Promise<CachedAuth | null> {
   })
 }
 
+/** Remove a sessão cacheada offline. Chamado após logout. */
 export async function clearAuthCache(): Promise<void> {
   const database = await initOfflineCache()
 
@@ -307,10 +318,7 @@ export async function clearAuthCache(): Promise<void> {
     const store = transaction.objectStore(STORES.AUTH)
     const request = store.delete('current')
 
-    request.onsuccess = () => {
-      console.log('[OfflineCache] Auth removido')
-      resolve()
-    }
+    request.onsuccess = () => resolve()
     request.onerror = () => reject(request.error)
   })
 }
@@ -319,6 +327,7 @@ export async function clearAuthCache(): Promise<void> {
 // USER CACHE
 // ============================================
 
+/** Salva o perfil do usuário no cache offline. */
 export async function saveUserCache(user: User): Promise<void> {
   const database = await initOfflineCache()
 
@@ -337,6 +346,7 @@ export async function saveUserCache(user: User): Promise<void> {
   })
 }
 
+/** Busca o perfil de um usuário específico no cache offline. */
 export async function getUserCache(userId: string): Promise<CachedUser | null> {
   const database = await initOfflineCache()
 
@@ -350,6 +360,7 @@ export async function getUserCache(userId: string): Promise<CachedUser | null> {
   })
 }
 
+/** Retorna todos os usuários cacheados offline (usado pelo admin offline). */
 export async function getAllUsersCache(): Promise<CachedUser[]> {
   const database = await initOfflineCache()
 
@@ -367,6 +378,7 @@ export async function getAllUsersCache(): Promise<CachedUser[]> {
 // STORES CACHE
 // ============================================
 
+/** Sobrescreve todo o cache de lojas (clear + insert). */
 export async function saveStoresCache(stores: Store[]): Promise<void> {
   const database = await initOfflineCache()
 
@@ -402,6 +414,7 @@ export async function saveStoresCache(stores: Store[]): Promise<void> {
   })
 }
 
+/** Retorna todas as lojas cacheadas offline. */
 export async function getStoresCache(): Promise<CachedStore[]> {
   const database = await initOfflineCache()
 
@@ -419,6 +432,7 @@ export async function getStoresCache(): Promise<CachedStore[]> {
 // TEMPLATES CACHE
 // ============================================
 
+/** Sobrescreve todo o cache de templates de checklist (clear + insert). */
 export async function saveTemplatesCache(templates: ChecklistTemplate[]): Promise<void> {
   const database = await initOfflineCache()
 
@@ -453,6 +467,7 @@ export async function saveTemplatesCache(templates: ChecklistTemplate[]): Promis
   })
 }
 
+/** Retorna todos os templates de checklist cacheados offline. */
 export async function getTemplatesCache(): Promise<CachedTemplate[]> {
   const database = await initOfflineCache()
 
@@ -470,6 +485,7 @@ export async function getTemplatesCache(): Promise<CachedTemplate[]> {
 // TEMPLATE FIELDS CACHE
 // ============================================
 
+/** Sobrescreve todo o cache de campos de template (clear + insert). */
 export async function saveTemplateFieldsCache(fields: TemplateField[]): Promise<void> {
   const database = await initOfflineCache()
 
@@ -504,6 +520,7 @@ export async function saveTemplateFieldsCache(fields: TemplateField[]): Promise<
   })
 }
 
+/** Retorna os campos cacheados de um template específico, indexados por `template_id`. */
 export async function getTemplateFieldsCache(templateId: number): Promise<CachedTemplateField[]> {
   const database = await initOfflineCache()
 
@@ -522,6 +539,7 @@ export async function getTemplateFieldsCache(templateId: number): Promise<Cached
 // SECTORS CACHE
 // ============================================
 
+/** Sobrescreve todo o cache de setores (clear + insert). */
 export async function saveSectorsCache(sectors: Sector[]): Promise<void> {
   const database = await initOfflineCache()
 
@@ -556,6 +574,10 @@ export async function saveSectorsCache(sectors: Sector[]): Promise<void> {
   })
 }
 
+/**
+ * Retorna setores cacheados offline.
+ * Se `storeId` fornecido, filtra pelo índice `store_id`; caso contrário retorna todos.
+ */
 export async function getSectorsCache(storeId?: number): Promise<CachedSector[]> {
   const database = await initOfflineCache()
 
@@ -580,6 +602,7 @@ export async function getSectorsCache(storeId?: number): Promise<CachedSector[]>
 // FUNCTIONS CACHE
 // ============================================
 
+/** Sobrescreve todo o cache de funções de cargo (clear + insert). */
 export async function saveFunctionsCache(functions: FunctionRow[]): Promise<void> {
   const database = await initOfflineCache()
 
@@ -614,6 +637,7 @@ export async function saveFunctionsCache(functions: FunctionRow[]): Promise<void
   })
 }
 
+/** Retorna todas as funções de cargo cacheadas offline. */
 export async function getFunctionsCache(): Promise<CachedFunction[]> {
   const database = await initOfflineCache()
 
@@ -631,6 +655,7 @@ export async function getFunctionsCache(): Promise<CachedFunction[]> {
 // TEMPLATE VISIBILITY CACHE
 // ============================================
 
+/** Sobrescreve todo o cache de visibilidade de templates por loja (clear + insert). */
 export async function saveTemplateVisibilityCache(rows: TemplateVisibility[]): Promise<void> {
   const database = await initOfflineCache()
 
@@ -655,6 +680,7 @@ export async function saveTemplateVisibilityCache(rows: TemplateVisibility[]): P
   })
 }
 
+/** Retorna todo o mapa de visibilidade template→loja cacheado offline. */
 export async function getTemplateVisibilityCache(): Promise<CachedTemplateVisibility[]> {
   const database = await initOfflineCache()
 
@@ -671,6 +697,7 @@ export async function getTemplateVisibilityCache(): Promise<CachedTemplateVisibi
 // TEMPLATE SECTIONS CACHE
 // ============================================
 
+/** Sobrescreve todo o cache de seções de templates (clear + insert). */
 export async function saveTemplateSectionsCache(sections: TemplateSection[]): Promise<void> {
   const database = await initOfflineCache()
 
@@ -695,6 +722,10 @@ export async function saveTemplateSectionsCache(sections: TemplateSection[]): Pr
   })
 }
 
+/**
+ * Retorna seções de templates cacheadas offline.
+ * Se `templateId` fornecido, filtra pelo índice `template_id`; caso contrário retorna todas.
+ */
 export async function getTemplateSectionsCache(templateId?: number): Promise<CachedTemplateSection[]> {
   const database = await initOfflineCache()
 
@@ -719,6 +750,7 @@ export async function getTemplateSectionsCache(templateId?: number): Promise<Cac
 // CHECKLISTS CACHE
 // ============================================
 
+/** Sobrescreve o cache de checklists com dados denormalizados (template_name, store_name, etc.). */
 export async function saveChecklistsCache(checklists: CachedChecklist[]): Promise<void> {
   const database = await initOfflineCache()
 
@@ -743,6 +775,7 @@ export async function saveChecklistsCache(checklists: CachedChecklist[]): Promis
   })
 }
 
+/** Retorna todos os checklists cacheados offline (inclui dados denormalizados). */
 export async function getChecklistsCache(): Promise<CachedChecklist[]> {
   const database = await initOfflineCache()
 
@@ -759,6 +792,7 @@ export async function getChecklistsCache(): Promise<CachedChecklist[]> {
 // CHECKLIST RESPONSES CACHE
 // ============================================
 
+/** Sobrescreve o cache de respostas de checklists (clear + insert). */
 export async function saveChecklistResponsesCache(responses: ChecklistResponse[]): Promise<void> {
   const database = await initOfflineCache()
 
@@ -783,6 +817,10 @@ export async function saveChecklistResponsesCache(responses: ChecklistResponse[]
   })
 }
 
+/**
+ * Retorna respostas de checklists cacheadas offline.
+ * Se `checklistId` fornecido, filtra pelo índice `checklist_id`; caso contrário retorna todas.
+ */
 export async function getChecklistResponsesCache(checklistId?: number): Promise<CachedChecklistResponse[]> {
   const database = await initOfflineCache()
 
@@ -807,6 +845,7 @@ export async function getChecklistResponsesCache(checklistId?: number): Promise<
 // CHECKLIST SECTIONS CACHE
 // ============================================
 
+/** Sobrescreve o cache de seções de checklists preenchidos (clear + insert). */
 export async function saveChecklistSectionsCache(sections: ChecklistSectionRow[]): Promise<void> {
   const database = await initOfflineCache()
 
@@ -831,6 +870,10 @@ export async function saveChecklistSectionsCache(sections: ChecklistSectionRow[]
   })
 }
 
+/**
+ * Retorna seções de checklists cacheadas offline.
+ * Se `checklistId` fornecido, filtra pelo índice `checklist_id`; caso contrário retorna todas.
+ */
 export async function getChecklistSectionsCache(checklistId?: number): Promise<CachedChecklistSection[]> {
   const database = await initOfflineCache()
 
@@ -855,6 +898,7 @@ export async function getChecklistSectionsCache(checklistId?: number): Promise<C
 // USER STORES CACHE (multi-loja)
 // ============================================
 
+/** Sobrescreve o cache de vínculos usuário↔loja (clear + insert). */
 export async function saveUserStoresCache(userStores: UserStore[]): Promise<void> {
   const database = await initOfflineCache()
 
@@ -879,6 +923,10 @@ export async function saveUserStoresCache(userStores: UserStore[]): Promise<void
   })
 }
 
+/**
+ * Retorna vínculos usuário↔loja cacheados offline.
+ * Se `userId` fornecido, filtra pelo índice `user_id`; caso contrário retorna todos.
+ */
 export async function getUserStoresCache(userId?: string): Promise<CachedUserStore[]> {
   const database = await initOfflineCache()
 
@@ -903,6 +951,7 @@ export async function getUserStoresCache(userId?: string): Promise<CachedUserSto
 // ACTION PLANS CACHE
 // ============================================
 
+/** Sobrescreve o cache de planos de ação com dados denormalizados (clear + insert). */
 export async function saveActionPlansCache(plans: CachedActionPlan[]): Promise<void> {
   const database = await initOfflineCache()
 
@@ -927,6 +976,10 @@ export async function saveActionPlansCache(plans: CachedActionPlan[]): Promise<v
   })
 }
 
+/**
+ * Retorna planos de ação cacheados offline.
+ * Se `userId` fornecido, filtra pelo índice `assigned_to`; caso contrário retorna todos.
+ */
 export async function getActionPlansCache(userId?: string): Promise<CachedActionPlan[]> {
   const database = await initOfflineCache()
 
@@ -951,6 +1004,7 @@ export async function getActionPlansCache(userId?: string): Promise<CachedAction
 // SYNC METADATA
 // ============================================
 
+/** Salva ou atualiza metadados de sincronização para uma chave específica (ex: `'full_sync'`). */
 export async function saveSyncMetadata(key: string, status: SyncMetadata['syncStatus']): Promise<void> {
   const database = await initOfflineCache()
 
@@ -970,6 +1024,7 @@ export async function saveSyncMetadata(key: string, status: SyncMetadata['syncSt
   })
 }
 
+/** Retorna os metadados de sincronização para uma chave, ou `null` se inexistente. */
 export async function getSyncMetadata(key: string): Promise<SyncMetadata | null> {
   const database = await initOfflineCache()
 
@@ -987,6 +1042,11 @@ export async function getSyncMetadata(key: string): Promise<SyncMetadata | null>
 // CLEAR ALL CACHE
 // ============================================
 
+/**
+ * Limpa todos os 16 object stores do IndexedDB em uma única transação.
+ * Chamado durante o logout para garantir que nenhum dado do usuário
+ * permaneça no dispositivo após o encerramento da sessão.
+ */
 export async function clearAllCache(): Promise<void> {
   const database = await initOfflineCache()
 
@@ -1003,10 +1063,7 @@ export async function clearAllCache(): Promise<void> {
 
       request.onsuccess = () => {
         completed++
-        if (completed === storeNames.length) {
-          console.log('[OfflineCache] Todo cache limpo')
-          resolve()
-        }
+        if (completed === storeNames.length) resolve()
       }
 
       request.onerror = () => reject(request.error)
@@ -1018,6 +1075,11 @@ export async function clearAllCache(): Promise<void> {
 // CHECK IF HAS CACHED DATA
 // ============================================
 
+/**
+ * Verifica se existe cache de autenticação no IndexedDB.
+ * Usado para decidir se o modo offline pode ser ativado sem conectividade.
+ * @returns `true` se houver sessão cacheada, `false` caso contrário ou em caso de erro.
+ */
 export async function hasCachedData(): Promise<boolean> {
   try {
     const auth = await getAuthCache()
@@ -1034,12 +1096,30 @@ export async function hasCachedData(): Promise<boolean> {
 import { createClient } from './supabase'
 
 /**
- * Cacheia todos os dados necessários para funcionamento offline
- * Deve ser chamado após login bem-sucedido
+ * Cacheia todos os dados necessários para funcionamento offline.
+ * Deve ser chamado logo após o login bem-sucedido.
+ *
+ * Pipeline de 14 etapas (na ordem de execução):
+ * 1. Sessão de autenticação (access_token, refresh_token)
+ * 2. Perfil do usuário logado
+ * 3. Todas as lojas (`stores`)
+ * 4. Templates ativos (`checklist_templates`)
+ * 5. Campos de todos os templates (`template_fields`)
+ * 6. Setores (`sectors`)
+ * 7. Funções ativas (`functions`)
+ * 8. Todos os usuários — somente se `is_admin = true`
+ * 9. Visibilidade de templates (`template_visibility`)
+ * 10. Seções de templates (`template_sections`)
+ * 11. Lojas do usuário atual (`user_stores`)
+ * 12. Últimos 50 checklists (admin vê todos; operador vê apenas os próprios)
+ * 13. Respostas e seções dos checklists cacheados
+ * 14. Planos de ação (admin: últimos 200; operador: apenas atribuídos)
+ *
+ * Em caso de falha em qualquer etapa, registra `syncStatus = 'failed'` e encerra silenciosamente.
+ *
+ * @param userId - ID do usuário autenticado (usado para filtrar dados por permissão)
  */
 export async function cacheAllDataForOffline(userId: string): Promise<void> {
-  console.log('[OfflineCache] Iniciando cache de dados para offline...')
-
   try {
     const supabase = createClient()
 
@@ -1053,7 +1133,6 @@ export async function cacheAllDataForOffline(userId: string): Promise<void> {
         refreshToken: session.refresh_token || '',
         expiresAt: session.expires_at || 0,
       })
-      console.log('[OfflineCache] Auth salvo')
     }
 
     // 2. Busca e salva perfil do usuário
@@ -1066,7 +1145,6 @@ export async function cacheAllDataForOffline(userId: string): Promise<void> {
 
     if (userData) {
       await saveUserCache(userData as User)
-      console.log('[OfflineCache] Usuário salvo')
     }
 
     // 3. Busca e salva TODAS as lojas (não só ativas, para admin)
@@ -1078,7 +1156,6 @@ export async function cacheAllDataForOffline(userId: string): Promise<void> {
 
     if (storesData && storesData.length > 0) {
       await saveStoresCache(storesData as Store[])
-      console.log('[OfflineCache] Lojas salvas:', storesData.length)
     }
 
     // 4. Busca e salva templates ativos
@@ -1091,7 +1168,6 @@ export async function cacheAllDataForOffline(userId: string): Promise<void> {
 
     if (templatesData && templatesData.length > 0) {
       await saveTemplatesCache(templatesData as ChecklistTemplate[])
-      console.log('[OfflineCache] Templates salvos:', templatesData.length)
     }
 
     // 5. Busca e salva campos dos templates
@@ -1103,7 +1179,6 @@ export async function cacheAllDataForOffline(userId: string): Promise<void> {
 
     if (fieldsData && fieldsData.length > 0) {
       await saveTemplateFieldsCache(fieldsData as TemplateField[])
-      console.log('[OfflineCache] Campos salvos:', fieldsData.length)
     }
 
     // 6. Busca e salva setores
@@ -1114,7 +1189,6 @@ export async function cacheAllDataForOffline(userId: string): Promise<void> {
 
     if (sectorsData && sectorsData.length > 0) {
       await saveSectorsCache(sectorsData as Sector[])
-      console.log('[OfflineCache] Setores salvos:', sectorsData.length)
     }
 
     // 7. Busca e salva funções
@@ -1126,7 +1200,6 @@ export async function cacheAllDataForOffline(userId: string): Promise<void> {
 
     if (functionsData && functionsData.length > 0) {
       await saveFunctionsCache(functionsData as FunctionRow[])
-      console.log('[OfflineCache] Funções salvas:', functionsData.length)
     }
 
     // 8. Se for admin, busca e salva TODOS os usuários
@@ -1138,11 +1211,9 @@ export async function cacheAllDataForOffline(userId: string): Promise<void> {
         .order('full_name')
 
       if (allUsersData && allUsersData.length > 0) {
-        // Salva cada usuário no cache
         for (const user of allUsersData) {
           await saveUserCache(user as User)
         }
-        console.log('[OfflineCache] Todos os usuários salvos:', allUsersData.length)
       }
     }
 
@@ -1154,7 +1225,6 @@ export async function cacheAllDataForOffline(userId: string): Promise<void> {
 
     if (visibilityData && visibilityData.length > 0) {
       await saveTemplateVisibilityCache(visibilityData as TemplateVisibility[])
-      console.log('[OfflineCache] Visibilidade salva:', visibilityData.length)
     }
 
     // 10. Busca e salva secoes dos templates
@@ -1166,7 +1236,6 @@ export async function cacheAllDataForOffline(userId: string): Promise<void> {
 
     if (sectionsData && sectionsData.length > 0) {
       await saveTemplateSectionsCache(sectionsData as TemplateSection[])
-      console.log('[OfflineCache] Secoes de templates salvas:', sectionsData.length)
     }
 
     // 11. Busca e salva user_stores do usuario (multi-loja)
@@ -1178,7 +1247,6 @@ export async function cacheAllDataForOffline(userId: string): Promise<void> {
 
     if (userStoresData && userStoresData.length > 0) {
       await saveUserStoresCache(userStoresData as UserStore[])
-      console.log('[OfflineCache] User stores salvos:', userStoresData.length)
     }
 
     // 12. Busca e salva checklists recentes do usuario (max 50)
@@ -1228,7 +1296,6 @@ export async function cacheAllDataForOffline(userId: string): Promise<void> {
       }))
 
       await saveChecklistsCache(checklistsToCache)
-      console.log('[OfflineCache] Checklists salvos:', checklistsToCache.length)
 
       // 13. Busca responses e sections dos checklists cacheados
       const checklistIds = checklistsToCache.map(c => c.id)
@@ -1241,7 +1308,6 @@ export async function cacheAllDataForOffline(userId: string): Promise<void> {
 
       if (responsesData && responsesData.length > 0) {
         await saveChecklistResponsesCache(responsesData as ChecklistResponse[])
-        console.log('[OfflineCache] Responses salvos:', responsesData.length)
       }
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -1252,7 +1318,6 @@ export async function cacheAllDataForOffline(userId: string): Promise<void> {
 
       if (clSectionsData && clSectionsData.length > 0) {
         await saveChecklistSectionsCache(clSectionsData as ChecklistSectionRow[])
-        console.log('[OfflineCache] Checklist sections salvos:', clSectionsData.length)
       }
     }
 
@@ -1324,15 +1389,11 @@ export async function cacheAllDataForOffline(userId: string): Promise<void> {
       }))
 
       await saveActionPlansCache(plansToCache)
-      console.log('[OfflineCache] Planos de acao salvos:', plansToCache.length)
     }
 
     // Salva metadata de sync
     await saveSyncMetadata('full_sync', 'success')
-
-    console.log('[OfflineCache] Cache completo!')
-  } catch (error) {
-    console.error('[OfflineCache] Erro ao cachear dados:', error)
+  } catch {
     await saveSyncMetadata('full_sync', 'failed')
   }
 }

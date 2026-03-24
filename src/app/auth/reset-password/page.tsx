@@ -7,6 +7,11 @@ import { APP_CONFIG } from '@/lib/config'
 import { ThemeToggle, LoadingInline } from '@/components/ui'
 import { FiLock, FiCheckCircle, FiAlertCircle, FiEye, FiEyeOff } from 'react-icons/fi'
 
+/**
+ * Página de redefinição de senha (`/auth/reset-password`).
+ * Acessada via magic link de recovery. Valida que as senhas coincidem
+ * e chama `supabase.auth.updateUser` para salvar a nova senha.
+ */
 export default function ResetPasswordPage() {
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')

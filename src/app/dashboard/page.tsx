@@ -130,6 +130,12 @@ function isTemplateWithinAllowedTime(template: { allowed_start_time?: string | n
   return result
 }
 
+/**
+ * Tela inicial do operador (`/dashboard`).
+ * Exibe checklists pendentes do dia, resumo de atividade recente e acesso rápido
+ * para iniciar novos checklists. Filtra templates pelo horário permitido via `isTemplateWithinAllowedTime`.
+ * Suporta dados offline via `useOfflineData`.
+ */
 export default function DashboardPage() {
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [_user, setUser] = useState<User | null>(null)

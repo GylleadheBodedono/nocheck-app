@@ -1,11 +1,20 @@
 /**
- * Queries para o Relatorio de Planos de Acao.
- * Busca action_plans com filtros, evidencias de conclusao e dados de contexto.
+ * Queries para o Relatório de Planos de Ação.
+ * Busca `action_plans` com filtros, evidências de conclusão e dados de contexto.
+ *
+ * Estratégia de fetching:
+ * - Query principal em `action_plans` com joins de campo, loja, template e template_fields
+ * - Batch-fetch de `action_plan_stores` (suporte a planos multi-loja)
+ * - Batch-fetch de `action_plan_evidence` para fotos de resolução
+ * - Batch-fetch de nomes de usuários (assignees)
+ * - Filtro de loja client-side para suporte a multi-store via `action_plan_stores`
  */
 
+/** Alias genérico para qualquer cliente Supabase (server ou browser). */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type SupabaseClient = any
 
+/** Filtros aplicáveis ao relatório de planos de ação. */
 export type ActionPlanReportFilters = {
   dateFrom: string
   dateTo: string
@@ -46,7 +55,12 @@ export type ActionPlanReportSummary = {
 }
 
 /**
- * Busca dados do relatorio de planos de acao
+ * Busca os dados completos do relatório de planos de ação com filtros.
+ * Aplica filtro de loja client-side para suportar planos multi-store.
+ *
+ * @param supabase - Cliente Supabase com acesso às tabelas necessárias
+ * @param filters  - Filtros de data, loja, template, severidade, status e responsável
+ * @returns `{ items, summary }` — itens detalhados e totalizadores (concluídos, vencidos, em andamento)
  */
 export async function fetchActionPlanReport(
   supabase: SupabaseClient,
@@ -255,8 +269,12 @@ export async function fetchActionPlanReport(
   }
 }
 
-// === Helpers ===
+// === Helpers internos ===
 
+/**
+ * Divide um array em blocos de tamanho `size`.
+ * Usado para batch-fetch via `.in()` do Supabase (limite de ~200 IDs por query).
+ */
 function chunkArray<T>(arr: T[], size: number): T[][] {
   const chunks: T[][] = []
   for (let i = 0; i < arr.length; i += size) {

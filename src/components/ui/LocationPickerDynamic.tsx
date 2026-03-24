@@ -2,6 +2,11 @@
 
 import dynamic from 'next/dynamic'
 
+/**
+ * Wrapper de importação dinâmica do `LocationPicker` com `ssr: false`.
+ * Necessário porque o Leaflet acessa `window` diretamente e não funciona em SSR.
+ * Exibe um placeholder "Carregando mapa..." enquanto o componente é carregado.
+ */
 const LocationPicker = dynamic(
   () => import('./LocationPicker').then(mod => ({ default: mod.LocationPicker })),
   {

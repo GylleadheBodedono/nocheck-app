@@ -6,6 +6,12 @@ import { FiWifiOff, FiRefreshCw, FiCheckCircle, FiHome } from 'react-icons/fi'
 import { hasCachedData } from '@/lib/offlineCache'
 import { APP_CONFIG } from '@/lib/config'
 
+/**
+ * Página de fallback offline (`/offline`).
+ * Exibida pelo Service Worker quando o usuário está sem internet e
+ * a página solicitada não está em cache. Verifica se há dados cacheados
+ * via `hasCachedData` para guiar o usuário ao dashboard offline.
+ */
 export default function OfflinePage() {
   const [hasCached, setHasCached] = useState<boolean | null>(null)
   const [isOnline, setIsOnline] = useState(false)

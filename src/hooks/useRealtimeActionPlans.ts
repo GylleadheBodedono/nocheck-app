@@ -3,6 +3,21 @@
 import { useEffect, useState, useMemo, useRef, useCallback } from 'react'
 import { createClient } from '@/lib/supabase'
 
+/**
+ * Hook de Realtime para planos de ação atribuídos ao usuário.
+ * Mantém a lista local de planos atualizada com INSERT/UPDATE em tempo real.
+ *
+ * Canais criados:
+ * 1. `assigned_to = userId` — planos diretamente atribuídos ao usuário
+ * 2. `assigned_function_id = userFunctionId` — planos atribuídos à função do usuário (opcional)
+ *
+ * Em INSERT, dispara notificação do navegador se a permissão estiver concedida
+ * (via Service Worker ou `new Notification` como fallback).
+ *
+ * @param userId - ID do usuário autenticado
+ * @param userFunctionId - ID da função do usuário, ou `null` se não configurado
+ * @returns `{ newPlanCount, clearNewCount }`
+ */
 export function useRealtimeActionPlans(userId: string | null, userFunctionId: number | null) {
   const [newPlanCount, setNewPlanCount] = useState(0)
   const supabase = useMemo(() => createClient(), [])

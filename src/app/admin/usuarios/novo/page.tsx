@@ -8,6 +8,11 @@ import type { Store, Sector, FunctionRow } from '@/types/database'
 import { APP_CONFIG } from '@/lib/config'
 import { Select, PageContainer } from '@/components/ui'
 
+/**
+ * Página de criação de novo usuário (`/admin/usuarios/novo`).
+ * Formulário com nome, email, senha, permissão admin, loja e função.
+ * Suporta `autoConfirm` (API admin) ou envio de email de confirmação via Resend.
+ */
 export default function NovoUsuarioPage() {
   const [stores, setStores] = useState<Store[]>([])
   const [functions, setFunctions] = useState<FunctionRow[]>([])

@@ -14,6 +14,14 @@ import { createNotification, sendActionPlanEmail } from '@/lib/notificationServi
 
 export const runtime = 'edge'
 
+/**
+ * POST /api/cron/daily-reminders
+ * Envia lembretes diários (in-app + email) para responsáveis de planos de ação
+ * que ainda estão com status `aberto` ou `em_andamento`.
+ * Disparado por cron externo (Upstash, cron-job.org ou Cloudflare Worker) a cada 24h.
+ * Autenticado via header `Authorization: Bearer {CRON_SECRET}`.
+ * Retorna `{ sent, total, errors? }`.
+ */
 export async function POST(req: NextRequest) {
   // Verificar autenticacao do cron
   const authHeader = req.headers.get('authorization')

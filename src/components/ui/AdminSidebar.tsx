@@ -94,6 +94,11 @@ type AdminSidebarProps = {
   onClose: () => void
 }
 
+/**
+ * Sidebar de navegação do painel administrativo (drawer mobile).
+ * Auto-expande o grupo de links que corresponde à rota atual.
+ * Fecha ao navegar para uma rota folha (sem filhos).
+ */
 export function AdminSidebar({ isOpen, onClose }: AdminSidebarProps) {
   const pathname = usePathname()
   const [expanded, setExpanded] = useState<Set<string>>(new Set())

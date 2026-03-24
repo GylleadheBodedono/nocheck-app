@@ -1,5 +1,19 @@
 'use client'
 
+/**
+ * Serviço de sincronização offline→online.
+ *
+ * Responsabilidades:
+ * - Sincronizar checklists pendentes no IndexedDB com o Supabase
+ * - Fazer upload de fotos base64 antes de sincronizar (com retry)
+ * - Atualizar/inserir registros em `checklists`, `checklist_responses`, `checklist_sections`
+ * - Disparar validação cruzada e planos de ação após sync bem-sucedido
+ * - Notificar listeners sobre o status de sincronização em tempo real
+ *
+ * Uso: `initSyncService()` no componente raiz — retorna função de cleanup.
+ * Para sync manual: `syncAll()`.
+ */
+
 import { createClient } from './supabase'
 import {
   getPendingChecklists,
@@ -11,15 +25,21 @@ import { processarValidacaoCruzada } from './crossValidation'
 import { processarNaoConformidades } from './actionPlanEngine'
 
 /**
- * Aguarda um tempo antes de continuar
+ * Aguarda `ms` milissegundos antes de continuar.
+ *
+ * @param ms - Tempo de espera em milissegundos
  */
 function delay(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms))
 }
 
 /**
- * Faz upload de uma imagem base64 para o Supabase Storage
- * Tenta até 3 vezes com intervalo de 2s entre tentativas
+ * Faz upload de uma imagem base64 para o Supabase Storage via `/api/upload`.
+ * Tenta até 3 vezes com intervalo de 2s entre tentativas.
+ *
+ * @param base64Image - Imagem em formato base64 (data:image/... ou string longa)
+ * @param fileName    - Nome do arquivo a ser salvo no storage
+ * @returns URL pública da imagem ou `null` se todas as tentativas falharem
  */
 async function uploadImageToStorage(base64Image: string, fileName: string): Promise<string | null> {
   const MAX_RETRIES = 3
@@ -57,17 +77,19 @@ async function uploadImageToStorage(base64Image: string, fileName: string): Prom
   return null
 }
 
-/**
- * Resultado do processamento de imagens
- */
+/** Resultado do processamento de imagens nas respostas. */
 type ProcessedResult = {
   responses: PendingChecklist['responses']
   allImagesUploaded: boolean
 }
 
 /**
- * Processa as respostas do checklist, fazendo upload das imagens base64
- * Retorna as respostas processadas e um flag indicando se TODAS as imagens foram enviadas
+ * Processa as respostas de um checklist fazendo upload das fotos base64 para o Storage.
+ * Suporta formato `{ photos: [...] }` e o formato legado de array direto.
+ * Também processa `conditionalPhotos` se presentes.
+ *
+ * @param responses - Respostas do checklist (pode conter fotos base64 em `valueJson`)
+ * @returns Respostas processadas (fotos substituídas por URLs) e flag `allImagesUploaded`
  */
 async function processResponsesWithImages(
   responses: PendingChecklist['responses']
@@ -218,7 +240,11 @@ let currentStatus: SyncStatus = {
 }
 
 /**
- * Subscribe to sync status changes
+ * Inscreve um listener para mudanças no status de sincronização.
+ * O listener é chamado imediatamente com o status atual.
+ *
+ * @param listener - Função chamada a cada mudança de status
+ * @returns Função de unsubscribe
  */
 export function subscribeSyncStatus(listener: (status: SyncStatus) => void): () => void {
   syncListeners.push(listener)
@@ -229,15 +255,15 @@ export function subscribeSyncStatus(listener: (status: SyncStatus) => void): () 
   }
 }
 
-/**
- * Notify all listeners of status change
- */
+/** Notifica todos os listeners com o status atual. */
 function notifyListeners() {
   syncListeners.forEach(listener => listener(currentStatus))
 }
 
 /**
- * Update sync status
+ * Atualiza o status atual e notifica todos os listeners.
+ *
+ * @param updates - Campos parciais a mesclar no status atual
  */
 function updateStatus(updates: Partial<SyncStatus>) {
   currentStatus = { ...currentStatus, ...updates }
@@ -245,7 +271,19 @@ function updateStatus(updates: Partial<SyncStatus>) {
 }
 
 /**
- * Sync a single checklist to the server
+ * Sincroniza um único checklist offline com o Supabase.
+ *
+ * Fluxo:
+ * 1. Faz upload das fotos base64
+ * 2. UPDATE ou INSERT no `checklists` (dedup por `dbChecklistId` ou busca em_andamento de hoje)
+ * 3. UPSERT em `checklist_responses`
+ * 4. Sync de `checklist_sections` (delete + re-insert)
+ * 5. Log em `activity_log`
+ * 6. Validação cruzada e planos de ação
+ * 7. Remove o registro do IndexedDB
+ *
+ * @param checklist - Checklist pendente do IndexedDB
+ * @returns `true` se sincronizado com sucesso, `false` em caso de erro
  */
 async function syncChecklist(checklist: PendingChecklist): Promise<boolean> {
   const supabase = createClient()
@@ -254,11 +292,8 @@ async function syncChecklist(checklist: PendingChecklist): Promise<boolean> {
     await updateChecklistStatus(checklist.id, 'syncing')
 
     // 0. Processa as respostas fazendo upload das imagens ANTES de criar o checklist
-    const { responses: processedResponses, allImagesUploaded } = await processResponsesWithImages(checklist.responses)
-
-    if (!allImagesUploaded) {
-      console.warn('[Sync] Algumas imagens falharam no upload, mas o checklist será sincronizado mesmo assim.')
-    }
+    // Se alguma imagem falhar, `allImagesUploaded` será false mas a sync prossegue normalmente
+    const { responses: processedResponses } = await processResponsesWithImages(checklist.responses)
 
     // 1. Determine target checklist (dedup: UPDATE existing or INSERT new)
     const isComplete = !checklist.sections || checklist.sections.length === 0 ||
@@ -438,7 +473,11 @@ async function syncChecklist(checklist: PendingChecklist): Promise<boolean> {
 }
 
 /**
- * Sync all pending checklists
+ * Sincroniza todos os checklists com status `pending` ou `failed`.
+ * Checklists presos em `syncing` por mais de 1 minuto são recolocados em `pending`.
+ * Idempotente: retorna `{ synced: 0, failed: 0 }` se já estiver sincronizando ou sem conexão.
+ *
+ * @returns Contagens de checklists sincronizados e com falha
  */
 export async function syncAll(): Promise<{ synced: number; failed: number }> {
   if (isSyncing) {
@@ -497,7 +536,13 @@ export async function syncAll(): Promise<{ synced: number; failed: number }> {
 }
 
 /**
- * Initialize sync service - sets up online listener
+ * Inicializa o serviço de sincronização offline→online.
+ * Registra listener no evento `online` para disparar sync automático ao reconectar.
+ * Se já estiver online e houver pendentes, dispara sync imediatamente.
+ *
+ * Deve ser chamado uma única vez no componente raiz (ex: `SyncIndicator`).
+ *
+ * @returns Função de cleanup que remove o listener e cancela timeouts pendentes
  */
 export function initSyncService(): () => void {
   let syncTimeout: ReturnType<typeof setTimeout> | null = null
@@ -546,7 +591,10 @@ export function initSyncService(): () => void {
 }
 
 /**
- * Get current sync status
+ * Retorna o status de sincronização atual de forma síncrona.
+ * Para receber atualizações em tempo real, use `subscribeSyncStatus`.
+ *
+ * @returns Snapshot do status atual
  */
 export function getSyncStatus(): SyncStatus {
   return currentStatus
