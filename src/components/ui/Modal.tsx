@@ -4,6 +4,7 @@ import { useEffect, ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { FiX } from 'react-icons/fi'
 
+/** Props do modal genérico com portal, overlay e suporte a Escape. */
 type ModalProps = {
   isOpen: boolean
   onClose: () => void
@@ -18,6 +19,12 @@ const sizeClasses = {
   lg: 'max-w-2xl',
 }
 
+/**
+ * Modal genérico renderizado via `createPortal` no `document.body`.
+ * - Fecha ao pressionar Escape ou clicar no overlay
+ * - Scroll interno no conteúdo (max-height 90vh)
+ * - Suporte a três tamanhos: `sm` (384px), `md` (512px), `lg` (672px)
+ */
 export function Modal({ isOpen, onClose, title, children, size = 'md' }: ModalProps) {
   useEffect(() => {
     if (!isOpen) return

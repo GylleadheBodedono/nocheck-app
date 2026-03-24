@@ -48,6 +48,12 @@ type IconPickerProps = {
   fallback: React.ReactNode
 }
 
+/**
+ * Seletor de ícones com buscas em tempo real.
+ * Exibe um dropdown com todos os ícones mapeados em `ICON_MAP`.
+ * Detecta automaticamente se o dropdown deve abrir para cima (evita overflow na borda inferior da tela).
+ * Fecha ao clicar fora.
+ */
 export function IconPicker({ value, onChange, fallback }: IconPickerProps) {
   const [open, setOpen] = useState(false)
   const [search, setSearch] = useState('')

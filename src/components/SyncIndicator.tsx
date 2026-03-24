@@ -4,6 +4,14 @@ import { useEffect, useState } from 'react'
 import { FiCloud, FiCloudOff, FiRefreshCw, FiCheck, FiAlertCircle } from 'react-icons/fi'
 import { subscribeSyncStatus, syncAll, initSyncService, type SyncStatus } from '@/lib/syncService'
 
+/**
+ * Indicador de sincronização de checklists offline pendentes.
+ *
+ * - Invisível quando online e sem pendentes/erros
+ * - Exibe contagem de checklists aguardando sync e botão de disparo manual
+ * - Assina o `syncService` para atualização em tempo real do status
+ * - Inicializa o `initSyncService` que monitora o `IndexedDB` e dispara sync automático ao voltar online
+ */
 export function SyncIndicator() {
   const [status, setStatus] = useState<SyncStatus>({
     isSyncing: false,

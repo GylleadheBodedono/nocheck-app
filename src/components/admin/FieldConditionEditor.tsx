@@ -71,6 +71,17 @@ const DEFAULT_CONDITION: ConditionConfig = {
   completionMaxChars: 800,
 }
 
+/**
+ * Editor de condição de não-conformidade e configuração de plano de ação para campos de template.
+ *
+ * Permite configurar:
+ * - Operador e valor que disparam a condição (ex: `<`, `>`, `contains`, `equals`)
+ * - Severidade do plano de ação gerado automaticamente
+ * - Responsável (por função ou usuário específico)
+ * - Prazo em dias
+ * - Requerimento de texto de conclusão, com limite de caracteres configurável
+ * - Salvar/carregar configurações como preset reutilizável
+ */
 export function FieldConditionEditor({
   fieldType,
   fieldName,

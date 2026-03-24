@@ -14,6 +14,10 @@ const sizeClasses = {
   lg: 'h-12 w-12 border-[3px]',
 }
 
+/**
+ * Spinner de carregamento reutilizável.
+ * Com `fullScreen=true`, ocupa a tela toda centralizado. Com `text`, exibe legenda abaixo do spinner.
+ */
 export function Loading({ size = 'md', fullScreen = false, text }: LoadingProps) {
   const spinner = (
     <div className="flex flex-col items-center justify-center gap-3">
@@ -35,6 +39,7 @@ export function Loading({ size = 'md', fullScreen = false, text }: LoadingProps)
   return spinner
 }
 
+/** Tela de carregamento full-screen com logo e spinner — usada durante a inicialização da app. */
 export function LoadingPage() {
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-page">
@@ -71,6 +76,7 @@ export function LoadingPage() {
   )
 }
 
+/** Spinner inline tamanho `sm` — para usar dentro de botões ou tabelas. */
 export function LoadingInline() {
   return <Loading size="sm" />
 }

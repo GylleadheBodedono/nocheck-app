@@ -40,6 +40,12 @@ async function searchAddress(query: string): Promise<{ lat: number; lng: number;
   }
 }
 
+/**
+ * Seletor de localização geográfica com mapa Leaflet interativo.
+ * Carrega o Leaflet via CDN (evita conflitos de CSS com o bundler).
+ * Permite posicionamento por clique no mapa, busca por endereço (Nominatim/OpenStreetMap)
+ * e detecção automática via GPS (`navigator.geolocation`).
+ */
 export function LocationPicker({ value, onChange }: LocationPickerProps) {
   const mapRef = useRef<HTMLDivElement>(null)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

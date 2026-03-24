@@ -87,6 +87,11 @@ type Props = {
   children?: React.ReactNode
 }
 
+/**
+ * Cabeçalho fixo do painel administrativo.
+ * Exibe o título da página atual (mapeado por rota), busca global, sino de notificações
+ * com badge de não lidas, menu do usuário e botão de logout.
+ */
 export function AdminHeader({ children }: Props) {
   const pathname = usePathname()
   const router = useRouter()

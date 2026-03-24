@@ -7,6 +7,7 @@ import { FiChevronDown, FiCheck } from 'react-icons/fi'
 // TYPES
 // ============================================
 
+/** Par valor/rótulo para as opções do `Select`. */
 export type SelectOption = {
   value: string
   label: string
@@ -28,6 +29,13 @@ export type SelectProps = {
 // COMPONENT
 // ============================================
 
+/**
+ * Select customizado com dropdown acessível via teclado.
+ * Substitui o `<select>` nativo para manter consistência visual com o design system.
+ *
+ * Suporta navegação por teclado (setas ↑↓, Enter para selecionar, Escape para fechar)
+ * e fecha automaticamente ao clicar fora do componente.
+ */
 export function Select({
   value,
   onChange,
