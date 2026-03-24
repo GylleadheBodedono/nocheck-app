@@ -1967,95 +1967,104 @@ function ChecklistForm() {
       return
     }
 
+    // Timeout de seguranca: se finalizacao travar, avisa o usuario
+    const finalizeTimeout = setTimeout(() => {
+      setErrors({ 0: 'Finalizacao demorando mais que o esperado. Suas respostas foram salvas automaticamente pelo auto-save.' })
+      setSubmitting(false)
+    }, 60000)
+
     try {
       // === ONLINE ===
       if (checklistId) {
-        // Finalize checklist status
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        await (supabase as any)
-          .from('checklists')
-          .update({ status: 'concluido', completed_at: new Date().toISOString() })
-          .eq('id', checklistId)
+        const sb = supabase as any
 
-        // Process cross validation + non-conformity
         if (template) {
           const allFieldIds = template.fields.map(f => f.id)
           console.log(`[Checklist] Finalizando: ${allFieldIds.length} campos, template=${template.name}`)
-          // attemptUpload: true — uploads base64 photos from React state to Storage
-          const allResponseData = await buildResponseRows(allFieldIds, true)
 
-          // Log detalhado de cada response antes de salvar
-          for (const row of allResponseData) {
-            const vj = row.valueJson as Record<string, unknown> | null
-            const field = template.fields.find(f => f.id === row.fieldId)
-            const hasPhotos = vj && Array.isArray(vj.photos) ? (vj.photos as string[]).length : 0
-            const hasCondPhotos = vj && Array.isArray(vj.conditionalPhotos) ? (vj.conditionalPhotos as string[]).length : 0
-            const selFunc = vj?.selectedFunctionId || null
-            console.log(`[Checklist] Response field_${row.fieldId} "${field?.name}": text="${row.valueText}", photos=${hasPhotos}, condPhotos=${hasCondPhotos}, selectedFunctionId=${selFunc}`)
+          // 1. Build response data SEM upload de fotos (auto-save ja fez upload)
+          const allResponseData = await buildResponseRows(allFieldIds, false)
+
+          // 2. Batch upsert respostas (como switchSection faz) — em chunks de 100
+          const upsertRows = allResponseData.map(row => ({
+            checklist_id: checklistId,
+            field_id: row.fieldId,
+            value_text: row.valueText,
+            value_number: row.valueNumber,
+            value_json: stripBase64ForUpsert(row.valueJson),
+            answered_by: userId,
+          }))
+
+          const BATCH_SIZE = 100
+          for (let i = 0; i < upsertRows.length; i += BATCH_SIZE) {
+            const batch = upsertRows.slice(i, i + BATCH_SIZE)
+            const { error: upsertErr } = await sb
+              .from('checklist_responses')
+              .upsert(batch, { onConflict: 'checklist_id,field_id' })
+            if (upsertErr) throw new Error(`Falha ao salvar respostas (batch ${i}): ${upsertErr.message}`)
           }
 
-          // Salvar respostas com URLs uploadadas no DB (base64 mantido como fallback se upload falhou)
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const sb = supabase as any
-          for (const row of allResponseData) {
-            await sb.from('checklist_responses')
-              .update({
-                value_text: row.valueText,
-                value_number: row.valueNumber,
-                value_json: row.valueJson,
-              })
-              .eq('checklist_id', checklistId)
-              .eq('field_id', row.fieldId)
-          }
+          // 3. SO AGORA marcar como concluido (respostas ja estao salvas)
+          await sb
+            .from('checklists')
+            .update({ status: 'concluido', completed_at: new Date().toISOString() })
+            .eq('id', checklistId)
 
+          // 4. Sucesso — redirecionar IMEDIATAMENTE
+          clearTimeout(finalizeTimeout)
+          addLog('finalize', undefined, `responses=${Object.keys(responsesRef.current).length}`)
+          setSuccess(true)
+          setTimeout(() => router.push(APP_CONFIG.routes.dashboard), 2000)
+
+          // 5. Fire-and-forget: cross-validation + NCs + logs em background
           const allResponseMapped = allResponseData.map(r => ({
             field_id: r.fieldId,
             value_text: r.valueText,
             value_number: r.valueNumber,
             value_json: r.valueJson,
           }))
-          await processarValidacaoCruzada(
-            supabase,
-            checklistId,
-            Number(templateId),
-            Number(storeId),
-            userId,
-            allResponseMapped,
-            template.fields
-          )
-          await processarNaoConformidades(
-            supabase,
-            checklistId,
-            Number(templateId),
-            Number(storeId),
-            null,
-            userId,
-            allResponseMapped,
-            template.fields.map(f => ({ id: f.id, name: f.name, field_type: f.field_type, options: f.options }))
-          )
+
+          Promise.all([
+            processarValidacaoCruzada(
+              supabase, checklistId, Number(templateId), Number(storeId),
+              userId, allResponseMapped, template.fields
+            ).catch(err => console.error('[BG] processarValidacaoCruzada:', err)),
+            processarNaoConformidades(
+              supabase, checklistId, Number(templateId), Number(storeId), null, userId,
+              allResponseMapped,
+              template.fields.map(f => ({ id: f.id, name: f.name, field_type: f.field_type, options: f.options }))
+            ).catch(err => console.error('[BG] processarNaoConformidades:', err)),
+            sb.from('checklists').update({ debug_log: debugLogRef.current }).eq('id', checklistId).then(() => {}).catch(() => {}),
+            sb.from('activity_log').insert({
+              store_id: Number(storeId), user_id: userId, checklist_id: checklistId,
+              action: 'checklist_concluido', details: { template_name: template?.name },
+            }).then(() => {}).catch(() => {}),
+          ]).catch(() => {})
+
+          // 6. Fire-and-forget: upload fotos base64 restantes em background
+          for (const row of allResponseData) {
+            if (!row.valueJson || typeof row.valueJson !== 'object') continue
+            const json = row.valueJson as Record<string, unknown>
+            const hasBase64 = (arr: unknown) =>
+              Array.isArray(arr) && arr.some((p: string) => typeof p === 'string' && p.startsWith('data:'))
+            if (hasBase64(json.photos) || hasBase64(json.conditionalPhotos)) {
+              uploadAndReplaceBase64(checklistId, row.fieldId, json)
+            }
+          }
+        } else {
+          // Sem template (edge case): apenas marcar concluido
+          await sb
+            .from('checklists')
+            .update({ status: 'concluido', completed_at: new Date().toISOString() })
+            .eq('id', checklistId)
+          clearTimeout(finalizeTimeout)
+          setSuccess(true)
+          setTimeout(() => router.push(APP_CONFIG.routes.dashboard), 2000)
         }
-
-        // Salvar debug logs no checklist
-        addLog('finalize', undefined, `responses=${Object.keys(responsesRef.current).length}`)
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        await (supabase as any).from('checklists')
-          .update({ debug_log: debugLogRef.current })
-          .eq('id', checklistId)
-
-        // Activity log
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        await (supabase as any).from('activity_log').insert({
-          store_id: Number(storeId),
-          user_id: userId,
-          checklist_id: checklistId,
-          action: 'checklist_concluido',
-          details: { template_name: template?.name },
-        })
-
-        setSuccess(true)
-        setTimeout(() => router.push(APP_CONFIG.routes.dashboard), 2000)
       }
     } catch (err) {
+      clearTimeout(finalizeTimeout)
       console.error('[Checklist] Erro ao finalizar:', err)
       setErrors({ 0: err instanceof Error ? err.message : 'Erro ao finalizar checklist' })
       setSubmitting(false)
@@ -2090,7 +2099,16 @@ function ChecklistForm() {
       return
     }
 
+    // Timeout de seguranca
+    const finalizeTimeout = setTimeout(() => {
+      setErrors({ 0: 'Finalizacao demorando mais que o esperado. Suas respostas foram salvas automaticamente pelo auto-save.' })
+      setSubmitting(false)
+    }, 60000)
+
     try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const sb = supabase as any
+
       // Insert justifications
       const justificationRows = emptyRequiredFields.map(field => ({
         checklist_id: checklistId,
@@ -2098,87 +2116,92 @@ function ChecklistForm() {
         justification_text: justifications[field.id].trim(),
         justified_by: userId,
       }))
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      await (supabase as any).from('checklist_justifications').insert(justificationRows)
+      await sb.from('checklist_justifications').insert(justificationRows)
 
-      // Mark checklist as incompleto
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      await (supabase as any)
-        .from('checklists')
-        .update({ status: 'incompleto', completed_at: new Date().toISOString() })
-        .eq('id', checklistId)
-
-      // Process cross-validation + non-conformities
       if (template) {
         const allFieldIds = template.fields.map(f => f.id)
-        // attemptUpload: true — uploads base64 photos from React state to Storage
-        const allResponseData = await buildResponseRows(allFieldIds, true)
 
-        // Salvar respostas com URLs uploadadas no DB (base64 mantido como fallback se upload falhou)
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const sb = supabase as any
-        for (const row of allResponseData) {
-          await sb.from('checklist_responses')
-            .update({
-              value_text: row.valueText,
-              value_number: row.valueNumber,
-              value_json: row.valueJson,
-            })
-            .eq('checklist_id', checklistId)
-            .eq('field_id', row.fieldId)
+        // 1. Build response data SEM upload de fotos
+        const allResponseData = await buildResponseRows(allFieldIds, false)
+
+        // 2. Batch upsert respostas em chunks de 100
+        const upsertRows = allResponseData.map(row => ({
+          checklist_id: checklistId,
+          field_id: row.fieldId,
+          value_text: row.valueText,
+          value_number: row.valueNumber,
+          value_json: stripBase64ForUpsert(row.valueJson),
+          answered_by: userId,
+        }))
+
+        const BATCH_SIZE = 100
+        for (let i = 0; i < upsertRows.length; i += BATCH_SIZE) {
+          const batch = upsertRows.slice(i, i + BATCH_SIZE)
+          const { error: upsertErr } = await sb
+            .from('checklist_responses')
+            .upsert(batch, { onConflict: 'checklist_id,field_id' })
+          if (upsertErr) throw new Error(`Falha ao salvar respostas (batch ${i}): ${upsertErr.message}`)
         }
 
+        // 3. SO AGORA marcar como incompleto (respostas ja salvas)
+        await sb
+          .from('checklists')
+          .update({ status: 'incompleto', completed_at: new Date().toISOString() })
+          .eq('id', checklistId)
+
+        // 4. Sucesso — redirecionar IMEDIATAMENTE
+        clearTimeout(finalizeTimeout)
+        addLog('finalize_justif', undefined, `responses=${Object.keys(responsesRef.current).length}`)
+        setSuccess(true)
+        setTimeout(() => router.push(APP_CONFIG.routes.dashboard), 2000)
+
+        // 5. Fire-and-forget: cross-validation + NCs + logs em background
         const allResponseMapped = allResponseData.map(r => ({
           field_id: r.fieldId,
           value_text: r.valueText,
           value_number: r.valueNumber,
           value_json: r.valueJson,
         }))
-        await processarValidacaoCruzada(
-          supabase,
-          checklistId,
-          Number(templateId),
-          Number(storeId),
-          userId,
-          allResponseMapped,
-          template.fields
-        )
-        await processarNaoConformidades(
-          supabase,
-          checklistId,
-          Number(templateId),
-          Number(storeId),
-          null,
-          userId,
-          allResponseMapped,
-          template.fields.map(f => ({ id: f.id, name: f.name, field_type: f.field_type, options: f.options }))
-        )
+
+        Promise.all([
+          processarValidacaoCruzada(
+            supabase, checklistId, Number(templateId), Number(storeId),
+            userId, allResponseMapped, template.fields
+          ).catch(err => console.error('[BG] processarValidacaoCruzada:', err)),
+          processarNaoConformidades(
+            supabase, checklistId, Number(templateId), Number(storeId), null, userId,
+            allResponseMapped,
+            template.fields.map(f => ({ id: f.id, name: f.name, field_type: f.field_type, options: f.options }))
+          ).catch(err => console.error('[BG] processarNaoConformidades:', err)),
+          sb.from('checklists').update({ debug_log: debugLogRef.current }).eq('id', checklistId).then(() => {}).catch(() => {}),
+          sb.from('activity_log').insert({
+            store_id: Number(storeId), user_id: userId, checklist_id: checklistId,
+            action: 'checklist_incompleto',
+            details: { template_name: template?.name, justified_fields: emptyRequiredFields.map(f => f.name), justification_count: emptyRequiredFields.length },
+          }).then(() => {}).catch(() => {}),
+        ]).catch(() => {})
+
+        // 6. Fire-and-forget: upload fotos base64 restantes
+        for (const row of allResponseData) {
+          if (!row.valueJson || typeof row.valueJson !== 'object') continue
+          const json = row.valueJson as Record<string, unknown>
+          const hasBase64 = (arr: unknown) =>
+            Array.isArray(arr) && arr.some((p: string) => typeof p === 'string' && p.startsWith('data:'))
+          if (hasBase64(json.photos) || hasBase64(json.conditionalPhotos)) {
+            uploadAndReplaceBase64(checklistId!, row.fieldId, json)
+          }
+        }
+      } else {
+        await sb
+          .from('checklists')
+          .update({ status: 'incompleto', completed_at: new Date().toISOString() })
+          .eq('id', checklistId)
+        clearTimeout(finalizeTimeout)
+        setSuccess(true)
+        setTimeout(() => router.push(APP_CONFIG.routes.dashboard), 2000)
       }
-
-      // Salvar debug logs no checklist
-      addLog('finalize_justif', undefined, `responses=${Object.keys(responsesRef.current).length}`)
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      await (supabase as any).from('checklists')
-        .update({ debug_log: debugLogRef.current })
-        .eq('id', checklistId)
-
-      // Activity log
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      await (supabase as any).from('activity_log').insert({
-        store_id: Number(storeId),
-        user_id: userId,
-        checklist_id: checklistId,
-        action: 'checklist_incompleto',
-        details: {
-          template_name: template?.name,
-          justified_fields: emptyRequiredFields.map(f => f.name),
-          justification_count: emptyRequiredFields.length,
-        },
-      })
-
-      setSuccess(true)
-      setTimeout(() => router.push(APP_CONFIG.routes.dashboard), 2000)
     } catch (err) {
+      clearTimeout(finalizeTimeout)
       console.error('[Checklist] Erro ao finalizar com justificativas:', err)
       setErrors({ 0: err instanceof Error ? err.message : 'Erro ao finalizar checklist' })
       setSubmitting(false)
