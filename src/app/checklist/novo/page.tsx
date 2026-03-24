@@ -2940,25 +2940,11 @@ function ChecklistForm() {
                 if (isGeneralSection || navSections.length === 0) return null
 
                 return (
-                  <div className="flex items-center justify-between pt-4 mt-2 border-t border-subtle">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (isFirst) {
-                          handleSectionBack()
-                        } else {
-                          handleNavSave(navSections[currentIdx - 1].id)
-                        }
-                      }}
-                      className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium bg-surface border border-subtle text-secondary hover:text-primary hover:border-primary/40 transition-colors"
-                    >
-                      <FiChevronLeft className="w-4 h-4" />
-                      {isFirst ? 'Voltar' : 'Etapa Anterior'}
-                    </button>
-
-                    <div className="flex items-center gap-2">
+                  <div className="pt-4 mt-2 border-t border-subtle">
+                    {/* Contador + auto-save centralizado */}
+                    <div className="flex items-center justify-center gap-2 mb-3">
                       <span className="text-xs text-muted">{currentIdx + 1} de {totalNav}</span>
-                      <div className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[10px] font-medium transition-all duration-300 ${
+                      <div className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-medium transition-all duration-300 ${
                         autoSaveStatus === 'saving' ? 'bg-primary/10 text-primary' :
                         autoSaveStatus === 'saved' ? 'bg-success/10 text-success' :
                         'bg-transparent text-transparent'
@@ -2967,26 +2953,43 @@ function ChecklistForm() {
                         {autoSaveStatus === 'saved' && <><FiSave className="w-3 h-3" /> Salvo</>}
                       </div>
                     </div>
+                    {/* Botoes de navegacao lado a lado */}
+                    <div className="grid grid-cols-2 gap-3">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (isFirst) {
+                            handleSectionBack()
+                          } else {
+                            handleNavSave(navSections[currentIdx - 1].id)
+                          }
+                        }}
+                        className="flex items-center justify-center gap-1.5 px-3 py-3 rounded-xl text-sm font-medium bg-surface border border-subtle text-secondary hover:text-primary hover:border-primary/40 transition-colors"
+                      >
+                        <FiChevronLeft className="w-4 h-4 shrink-0" />
+                        <span className="truncate">{isFirst ? 'Voltar' : 'Anterior'}</span>
+                      </button>
 
-                    {isLast ? (
-                      <button
-                        type="button"
-                        onClick={() => handleNavSave(null).then(() => handleSectionBack())}
-                        className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
-                      >
-                        <FiCheckCircle className="w-4 h-4" />
-                        Concluir
-                      </button>
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={() => handleNavSave(navSections[currentIdx + 1].id)}
-                        className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
-                      >
-                        Proxima Etapa
-                        <FiChevronRight className="w-4 h-4" />
-                      </button>
-                    )}
+                      {isLast ? (
+                        <button
+                          type="button"
+                          onClick={() => handleNavSave(null).then(() => handleSectionBack())}
+                          className="flex items-center justify-center gap-1.5 px-3 py-3 rounded-xl text-sm font-medium bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
+                        >
+                          <FiCheckCircle className="w-4 h-4 shrink-0" />
+                          <span className="truncate">Concluir</span>
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => handleNavSave(navSections[currentIdx + 1].id)}
+                          className="flex items-center justify-center gap-1.5 px-3 py-3 rounded-xl text-sm font-medium bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
+                        >
+                          <span className="truncate">Proxima</span>
+                          <FiChevronRight className="w-4 h-4 shrink-0" />
+                        </button>
+                      )}
+                    </div>
                   </div>
                 )
               })()}
