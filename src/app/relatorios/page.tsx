@@ -10,7 +10,7 @@ import {
 } from 'react-icons/fi'
 import Link from 'next/link'
 import { APP_CONFIG } from '@/lib/config'
-import { LoadingPage, Header, PageContainer } from '@/components/ui'
+import { LoadingPage, PageContainer } from '@/components/ui'
 import { getAuthCache, getUserCache } from '@/lib/offlineCache'
 import { exportResponsesToCSV, exportResponsesToTXT, type UserChecklistExport } from '@/lib/exportUtils'
 
@@ -210,8 +210,6 @@ export default function MeusRelatoriosPage() {
 
   return (
     <div className="min-h-screen bg-page">
-      <Header title="Meus Relatorios" icon={FiBarChart2} backHref={APP_CONFIG.routes.dashboard} />
-
       <PageContainer>
         {/* Tabs + Period */}
         <div className="flex flex-wrap items-center gap-2 mb-6">

@@ -1969,10 +1969,8 @@ function ChecklistForm() {
       // Sempre salvar pendencias antes de qualquer navegacao
       autoSaveField.flush()
       if (hasSections && activeSection !== null) {
-        window.history.pushState(null, '', window.location.href)
         await handleSectionBack()
       } else if (hasSubSections && activeParentSection !== null) {
-        window.history.pushState(null, '', window.location.href)
         setActiveParentSection(null)
       } else {
         // Na tela de etapas: voltar direto ao dashboard (auto-save ja salvou tudo)
@@ -1988,6 +1986,13 @@ function ChecklistForm() {
     window.addEventListener('popstate', handler)
     return () => window.removeEventListener('popstate', handler)
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Push nova entrada no historico a cada nivel de navegacao (para o botao voltar do Android funcionar em todos os niveis)
+  useEffect(() => {
+    if (activeSection !== null || activeParentSection !== null) {
+      window.history.pushState(null, '', window.location.href)
+    }
+  }, [activeSection, activeParentSection])
 
   // === FINALIZE CHECKLIST (both sectioned and non-sectioned) ===
   const handleFinalizeChecklist = async () => {
