@@ -1314,10 +1314,10 @@ function ChecklistForm() {
 
   // Flush auto-save on ANY exit scenario (mobile + desktop)
   useEffect(() => {
-    // Desktop: beforeunload (fecha aba, reload)
-    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+    // Desktop: beforeunload (fecha aba, reload) — flush sem bloquear navegacao
+    // NAO chamar e.preventDefault() pois auto-save ja salvou tudo em tempo real
+    const handleBeforeUnload = () => {
       autoSaveField.flush()
-      e.preventDefault()
     }
     // Mobile: visibilitychange (tela bloqueou, trocou app, fechou browser)
     const handleVisibilityChange = () => {
@@ -1639,9 +1639,9 @@ function ChecklistForm() {
   // === SECTION BACK: auto-mark section as complete if all required fields are filled ===
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const handleSectionBack = useCallback(async () => {
-    // Flush pending auto-save e esperar completar
+    // Flush pending auto-save
     autoSaveField.flush()
-    await new Promise(resolve => setTimeout(resolve, 300))
+    await new Promise(resolve => setTimeout(resolve, 50))
 
     if (activeSection === null) { setActiveSection(null); return }
 
@@ -1837,13 +1837,12 @@ function ChecklistForm() {
     addLog('switchSection', undefined, `from=${activeSection} to=${newSectionId}`)
     // 1. Flush pending debounced auto-save
     autoSaveField.flush()
-    await new Promise(resolve => setTimeout(resolve, 200))
+    await new Promise(resolve => setTimeout(resolve, 50))
 
     // 2. Bulk save current section responses (online + offline)
     if (activeSection !== null && activeSection !== -1) {
+      const sectionFields = getFieldsForSection(activeSection)
       try {
-        const sectionFields = getFieldsForSection(activeSection)
-
         if (navigator.onLine && checklistIdRef.current) {
           // Online: upsert ao Supabase (sem base64 para evitar payload grande)
           let userId: string | null = null
@@ -1901,6 +1900,59 @@ function ChecklistForm() {
       } catch (err) {
         console.error('[SwitchSection] Erro ao salvar secao:', err)
       }
+
+      // Verificar se secao que estamos saindo foi concluida (marca check verde)
+      try {
+        const currentResponses = responsesRef.current
+        const allRequiredFilled = sectionFields
+          .filter(f => f.field_type !== 'gps')
+          .every(field => {
+            const v = currentResponses[field.id]
+            if (field.is_required) {
+              if (v === undefined || v === null || v === '' || (Array.isArray(v) && v.length === 0)) return false
+              if (field.field_type === 'text' && typeof v === 'string' && v.trim().length < 3) return false
+            }
+            if (field.field_type === 'yes_no' && v !== undefined && v !== null && v !== '') {
+              let ans: string | undefined
+              let obj: Record<string, unknown> = {}
+              if (typeof v === 'string') { ans = v } else if (typeof v === 'object') { obj = v as Record<string, unknown>; ans = obj.answer as string | undefined }
+              if (field.is_required && (!ans || ans === '')) return false
+              if (ans) {
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                const opts = field.options as any
+                if (opts?.photoRequired === true) { const photos = obj.photos as string[] | undefined; if (!photos || photos.length === 0) return false }
+                const condConfig = (ans === 'nao' ? opts?.onNo : ans === 'sim' ? opts?.onYes : undefined) as
+                  { showTextField?: boolean; textFieldRequired?: boolean; showPhotoField?: boolean; photoFieldRequired?: boolean } | undefined
+                if (condConfig) {
+                  if (condConfig.showTextField && condConfig.textFieldRequired) { const text = obj.conditionalText as string | undefined; if (!text || text.trim().length < 3) return false }
+                  if (condConfig.showPhotoField && condConfig.photoFieldRequired) { const photos = obj.conditionalPhotos as string[] | undefined; if (!photos || photos.length === 0) return false }
+                }
+              }
+            }
+            return true
+          })
+        const hasAnyResponse = sectionFields.some(f => {
+          const v = currentResponses[f.id]
+          return v !== undefined && v !== null && v !== '' && !(Array.isArray(v) && v.length === 0)
+        })
+
+        if (allRequiredFilled && hasAnyResponse) {
+          const sectionProg = sectionProgress.find(sp => sp.section_id === activeSection)
+          if (navigator.onLine && checklistIdRef.current && sectionProg?.db_id) {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            (supabase as any)
+              .from('checklist_sections')
+              .update({ status: 'concluido', completed_at: new Date().toISOString() })
+              .eq('id', sectionProg.db_id)
+              .then(() => {}).catch(() => {})
+          }
+          setSectionProgress(prev => prev.map(sp =>
+            sp.section_id === activeSection
+              ? { ...sp, status: 'concluido' as const, completed_at: new Date().toISOString() }
+              : sp
+          ))
+        }
+      } catch { /* nao bloquear navegacao por erro na checagem */ }
     }
 
     // 3. Switch to new section
@@ -1917,13 +1969,11 @@ function ChecklistForm() {
       // Sempre salvar pendencias antes de qualquer navegacao
       autoSaveField.flush()
       if (hasSections && activeSection !== null) {
-        window.history.pushState(null, '', window.location.href)
         await handleSectionBack()
       } else if (hasSubSections && activeParentSection !== null) {
-        window.history.pushState(null, '', window.location.href)
         setActiveParentSection(null)
       } else {
-        await new Promise(resolve => setTimeout(resolve, 300))
+        // Na tela de etapas: voltar direto ao dashboard (auto-save ja salvou tudo)
         router.push(APP_CONFIG.routes.dashboard)
       }
     }
@@ -1936,6 +1986,13 @@ function ChecklistForm() {
     window.addEventListener('popstate', handler)
     return () => window.removeEventListener('popstate', handler)
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Push nova entrada no historico a cada nivel de navegacao (para o botao voltar do Android funcionar em todos os niveis)
+  useEffect(() => {
+    if (activeSection !== null || activeParentSection !== null) {
+      window.history.pushState(null, '', window.location.href)
+    }
+  }, [activeSection, activeParentSection])
 
   // === FINALIZE CHECKLIST (both sectioned and non-sectioned) ===
   const handleFinalizeChecklist = async () => {
@@ -1967,95 +2024,104 @@ function ChecklistForm() {
       return
     }
 
+    // Timeout de seguranca: se finalizacao travar, avisa o usuario
+    const finalizeTimeout = setTimeout(() => {
+      setErrors({ 0: 'Finalizacao demorando mais que o esperado. Suas respostas foram salvas automaticamente pelo auto-save.' })
+      setSubmitting(false)
+    }, 60000)
+
     try {
       // === ONLINE ===
       if (checklistId) {
-        // Finalize checklist status
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        await (supabase as any)
-          .from('checklists')
-          .update({ status: 'concluido', completed_at: new Date().toISOString() })
-          .eq('id', checklistId)
+        const sb = supabase as any
 
-        // Process cross validation + non-conformity
         if (template) {
           const allFieldIds = template.fields.map(f => f.id)
           console.log(`[Checklist] Finalizando: ${allFieldIds.length} campos, template=${template.name}`)
-          // attemptUpload: true — uploads base64 photos from React state to Storage
-          const allResponseData = await buildResponseRows(allFieldIds, true)
 
-          // Log detalhado de cada response antes de salvar
-          for (const row of allResponseData) {
-            const vj = row.valueJson as Record<string, unknown> | null
-            const field = template.fields.find(f => f.id === row.fieldId)
-            const hasPhotos = vj && Array.isArray(vj.photos) ? (vj.photos as string[]).length : 0
-            const hasCondPhotos = vj && Array.isArray(vj.conditionalPhotos) ? (vj.conditionalPhotos as string[]).length : 0
-            const selFunc = vj?.selectedFunctionId || null
-            console.log(`[Checklist] Response field_${row.fieldId} "${field?.name}": text="${row.valueText}", photos=${hasPhotos}, condPhotos=${hasCondPhotos}, selectedFunctionId=${selFunc}`)
+          // 1. Build response data SEM upload de fotos (auto-save ja fez upload)
+          const allResponseData = await buildResponseRows(allFieldIds, false)
+
+          // 2. Batch upsert respostas (como switchSection faz) — em chunks de 100
+          const upsertRows = allResponseData.map(row => ({
+            checklist_id: checklistId,
+            field_id: row.fieldId,
+            value_text: row.valueText,
+            value_number: row.valueNumber,
+            value_json: stripBase64ForUpsert(row.valueJson),
+            answered_by: userId,
+          }))
+
+          const BATCH_SIZE = 100
+          for (let i = 0; i < upsertRows.length; i += BATCH_SIZE) {
+            const batch = upsertRows.slice(i, i + BATCH_SIZE)
+            const { error: upsertErr } = await sb
+              .from('checklist_responses')
+              .upsert(batch, { onConflict: 'checklist_id,field_id' })
+            if (upsertErr) throw new Error(`Falha ao salvar respostas (batch ${i}): ${upsertErr.message}`)
           }
 
-          // Salvar respostas com URLs uploadadas no DB (base64 mantido como fallback se upload falhou)
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const sb = supabase as any
-          for (const row of allResponseData) {
-            await sb.from('checklist_responses')
-              .update({
-                value_text: row.valueText,
-                value_number: row.valueNumber,
-                value_json: row.valueJson,
-              })
-              .eq('checklist_id', checklistId)
-              .eq('field_id', row.fieldId)
-          }
+          // 3. SO AGORA marcar como concluido (respostas ja estao salvas)
+          await sb
+            .from('checklists')
+            .update({ status: 'concluido', completed_at: new Date().toISOString() })
+            .eq('id', checklistId)
 
+          // 4. Sucesso — redirecionar IMEDIATAMENTE
+          clearTimeout(finalizeTimeout)
+          addLog('finalize', undefined, `responses=${Object.keys(responsesRef.current).length}`)
+          setSuccess(true)
+          setTimeout(() => router.push(APP_CONFIG.routes.dashboard), 2000)
+
+          // 5. Fire-and-forget: cross-validation + NCs + logs em background
           const allResponseMapped = allResponseData.map(r => ({
             field_id: r.fieldId,
             value_text: r.valueText,
             value_number: r.valueNumber,
             value_json: r.valueJson,
           }))
-          await processarValidacaoCruzada(
-            supabase,
-            checklistId,
-            Number(templateId),
-            Number(storeId),
-            userId,
-            allResponseMapped,
-            template.fields
-          )
-          await processarNaoConformidades(
-            supabase,
-            checklistId,
-            Number(templateId),
-            Number(storeId),
-            null,
-            userId,
-            allResponseMapped,
-            template.fields.map(f => ({ id: f.id, name: f.name, field_type: f.field_type, options: f.options }))
-          )
+
+          Promise.all([
+            processarValidacaoCruzada(
+              supabase, checklistId, Number(templateId), Number(storeId),
+              userId, allResponseMapped, template.fields
+            ).catch(err => console.error('[BG] processarValidacaoCruzada:', err)),
+            processarNaoConformidades(
+              supabase, checklistId, Number(templateId), Number(storeId), null, userId,
+              allResponseMapped,
+              template.fields.map(f => ({ id: f.id, name: f.name, field_type: f.field_type, options: f.options }))
+            ).catch(err => console.error('[BG] processarNaoConformidades:', err)),
+            sb.from('checklists').update({ debug_log: debugLogRef.current }).eq('id', checklistId).then(() => {}).catch(() => {}),
+            sb.from('activity_log').insert({
+              store_id: Number(storeId), user_id: userId, checklist_id: checklistId,
+              action: 'checklist_concluido', details: { template_name: template?.name },
+            }).then(() => {}).catch(() => {}),
+          ]).catch(() => {})
+
+          // 6. Fire-and-forget: upload fotos base64 restantes em background
+          for (const row of allResponseData) {
+            if (!row.valueJson || typeof row.valueJson !== 'object') continue
+            const json = row.valueJson as Record<string, unknown>
+            const hasBase64 = (arr: unknown) =>
+              Array.isArray(arr) && arr.some((p: string) => typeof p === 'string' && p.startsWith('data:'))
+            if (hasBase64(json.photos) || hasBase64(json.conditionalPhotos)) {
+              uploadAndReplaceBase64(checklistId, row.fieldId, json)
+            }
+          }
+        } else {
+          // Sem template (edge case): apenas marcar concluido
+          await sb
+            .from('checklists')
+            .update({ status: 'concluido', completed_at: new Date().toISOString() })
+            .eq('id', checklistId)
+          clearTimeout(finalizeTimeout)
+          setSuccess(true)
+          setTimeout(() => router.push(APP_CONFIG.routes.dashboard), 2000)
         }
-
-        // Salvar debug logs no checklist
-        addLog('finalize', undefined, `responses=${Object.keys(responsesRef.current).length}`)
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        await (supabase as any).from('checklists')
-          .update({ debug_log: debugLogRef.current })
-          .eq('id', checklistId)
-
-        // Activity log
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        await (supabase as any).from('activity_log').insert({
-          store_id: Number(storeId),
-          user_id: userId,
-          checklist_id: checklistId,
-          action: 'checklist_concluido',
-          details: { template_name: template?.name },
-        })
-
-        setSuccess(true)
-        setTimeout(() => router.push(APP_CONFIG.routes.dashboard), 2000)
       }
     } catch (err) {
+      clearTimeout(finalizeTimeout)
       console.error('[Checklist] Erro ao finalizar:', err)
       setErrors({ 0: err instanceof Error ? err.message : 'Erro ao finalizar checklist' })
       setSubmitting(false)
@@ -2090,7 +2156,16 @@ function ChecklistForm() {
       return
     }
 
+    // Timeout de seguranca
+    const finalizeTimeout = setTimeout(() => {
+      setErrors({ 0: 'Finalizacao demorando mais que o esperado. Suas respostas foram salvas automaticamente pelo auto-save.' })
+      setSubmitting(false)
+    }, 60000)
+
     try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const sb = supabase as any
+
       // Insert justifications
       const justificationRows = emptyRequiredFields.map(field => ({
         checklist_id: checklistId,
@@ -2098,87 +2173,92 @@ function ChecklistForm() {
         justification_text: justifications[field.id].trim(),
         justified_by: userId,
       }))
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      await (supabase as any).from('checklist_justifications').insert(justificationRows)
+      await sb.from('checklist_justifications').insert(justificationRows)
 
-      // Mark checklist as incompleto
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      await (supabase as any)
-        .from('checklists')
-        .update({ status: 'incompleto', completed_at: new Date().toISOString() })
-        .eq('id', checklistId)
-
-      // Process cross-validation + non-conformities
       if (template) {
         const allFieldIds = template.fields.map(f => f.id)
-        // attemptUpload: true — uploads base64 photos from React state to Storage
-        const allResponseData = await buildResponseRows(allFieldIds, true)
 
-        // Salvar respostas com URLs uploadadas no DB (base64 mantido como fallback se upload falhou)
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const sb = supabase as any
-        for (const row of allResponseData) {
-          await sb.from('checklist_responses')
-            .update({
-              value_text: row.valueText,
-              value_number: row.valueNumber,
-              value_json: row.valueJson,
-            })
-            .eq('checklist_id', checklistId)
-            .eq('field_id', row.fieldId)
+        // 1. Build response data SEM upload de fotos
+        const allResponseData = await buildResponseRows(allFieldIds, false)
+
+        // 2. Batch upsert respostas em chunks de 100
+        const upsertRows = allResponseData.map(row => ({
+          checklist_id: checklistId,
+          field_id: row.fieldId,
+          value_text: row.valueText,
+          value_number: row.valueNumber,
+          value_json: stripBase64ForUpsert(row.valueJson),
+          answered_by: userId,
+        }))
+
+        const BATCH_SIZE = 100
+        for (let i = 0; i < upsertRows.length; i += BATCH_SIZE) {
+          const batch = upsertRows.slice(i, i + BATCH_SIZE)
+          const { error: upsertErr } = await sb
+            .from('checklist_responses')
+            .upsert(batch, { onConflict: 'checklist_id,field_id' })
+          if (upsertErr) throw new Error(`Falha ao salvar respostas (batch ${i}): ${upsertErr.message}`)
         }
 
+        // 3. SO AGORA marcar como incompleto (respostas ja salvas)
+        await sb
+          .from('checklists')
+          .update({ status: 'incompleto', completed_at: new Date().toISOString() })
+          .eq('id', checklistId)
+
+        // 4. Sucesso — redirecionar IMEDIATAMENTE
+        clearTimeout(finalizeTimeout)
+        addLog('finalize_justif', undefined, `responses=${Object.keys(responsesRef.current).length}`)
+        setSuccess(true)
+        setTimeout(() => router.push(APP_CONFIG.routes.dashboard), 2000)
+
+        // 5. Fire-and-forget: cross-validation + NCs + logs em background
         const allResponseMapped = allResponseData.map(r => ({
           field_id: r.fieldId,
           value_text: r.valueText,
           value_number: r.valueNumber,
           value_json: r.valueJson,
         }))
-        await processarValidacaoCruzada(
-          supabase,
-          checklistId,
-          Number(templateId),
-          Number(storeId),
-          userId,
-          allResponseMapped,
-          template.fields
-        )
-        await processarNaoConformidades(
-          supabase,
-          checklistId,
-          Number(templateId),
-          Number(storeId),
-          null,
-          userId,
-          allResponseMapped,
-          template.fields.map(f => ({ id: f.id, name: f.name, field_type: f.field_type, options: f.options }))
-        )
+
+        Promise.all([
+          processarValidacaoCruzada(
+            supabase, checklistId, Number(templateId), Number(storeId),
+            userId, allResponseMapped, template.fields
+          ).catch(err => console.error('[BG] processarValidacaoCruzada:', err)),
+          processarNaoConformidades(
+            supabase, checklistId, Number(templateId), Number(storeId), null, userId,
+            allResponseMapped,
+            template.fields.map(f => ({ id: f.id, name: f.name, field_type: f.field_type, options: f.options }))
+          ).catch(err => console.error('[BG] processarNaoConformidades:', err)),
+          sb.from('checklists').update({ debug_log: debugLogRef.current }).eq('id', checklistId).then(() => {}).catch(() => {}),
+          sb.from('activity_log').insert({
+            store_id: Number(storeId), user_id: userId, checklist_id: checklistId,
+            action: 'checklist_incompleto',
+            details: { template_name: template?.name, justified_fields: emptyRequiredFields.map(f => f.name), justification_count: emptyRequiredFields.length },
+          }).then(() => {}).catch(() => {}),
+        ]).catch(() => {})
+
+        // 6. Fire-and-forget: upload fotos base64 restantes
+        for (const row of allResponseData) {
+          if (!row.valueJson || typeof row.valueJson !== 'object') continue
+          const json = row.valueJson as Record<string, unknown>
+          const hasBase64 = (arr: unknown) =>
+            Array.isArray(arr) && arr.some((p: string) => typeof p === 'string' && p.startsWith('data:'))
+          if (hasBase64(json.photos) || hasBase64(json.conditionalPhotos)) {
+            uploadAndReplaceBase64(checklistId!, row.fieldId, json)
+          }
+        }
+      } else {
+        await sb
+          .from('checklists')
+          .update({ status: 'incompleto', completed_at: new Date().toISOString() })
+          .eq('id', checklistId)
+        clearTimeout(finalizeTimeout)
+        setSuccess(true)
+        setTimeout(() => router.push(APP_CONFIG.routes.dashboard), 2000)
       }
-
-      // Salvar debug logs no checklist
-      addLog('finalize_justif', undefined, `responses=${Object.keys(responsesRef.current).length}`)
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      await (supabase as any).from('checklists')
-        .update({ debug_log: debugLogRef.current })
-        .eq('id', checklistId)
-
-      // Activity log
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      await (supabase as any).from('activity_log').insert({
-        store_id: Number(storeId),
-        user_id: userId,
-        checklist_id: checklistId,
-        action: 'checklist_incompleto',
-        details: {
-          template_name: template?.name,
-          justified_fields: emptyRequiredFields.map(f => f.name),
-          justification_count: emptyRequiredFields.length,
-        },
-      })
-
-      setSuccess(true)
-      setTimeout(() => router.push(APP_CONFIG.routes.dashboard), 2000)
     } catch (err) {
+      clearTimeout(finalizeTimeout)
       console.error('[Checklist] Erro ao finalizar com justificativas:', err)
       setErrors({ 0: err instanceof Error ? err.message : 'Erro ao finalizar checklist' })
       setSubmitting(false)
@@ -2509,6 +2589,8 @@ function ChecklistForm() {
               const progress = sectionProgress.find(sp => sp.section_id === sub.id)
               const isDone = progress?.status === 'concluido'
               const subFields = getFieldsForSection(sub.id)
+              const filledCount = subFields.filter(f => { const v = responses[f.id]; return v !== undefined && v !== null && v !== '' && !(Array.isArray(v) && v.length === 0) }).length
+              const isInProgress = !isDone && filledCount > 0
 
               return (
                 <button
@@ -2518,17 +2600,19 @@ function ChecklistForm() {
                   className={`w-full text-left card p-3 sm:p-5 transition-all hover:shadow-theme-md cursor-pointer ${
                     isDone
                       ? 'border-success/30 hover:border-success/50'
-                      : 'border-subtle hover:border-primary/30'
+                      : isInProgress
+                        ? 'border-warning/30 hover:border-warning/50'
+                        : 'border-subtle hover:border-primary/30'
                   }`}
                 >
                   <div className="flex items-center gap-3 sm:gap-4">
                     <div className={`w-9 h-9 sm:w-10 sm:h-10 rounded-xl flex items-center justify-center text-sm font-bold shrink-0 ${
-                      isDone ? 'bg-success/20 text-success' : 'bg-primary/10 text-primary'
+                      isDone ? 'bg-success/20 text-success' : isInProgress ? 'bg-warning/20 text-warning' : 'bg-primary/10 text-primary'
                     }`}>
                       {isDone ? <FiCheckCircle className="w-4 h-4 sm:w-5 sm:h-5" /> : idx + 1}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <h3 className={`font-semibold text-sm sm:text-base ${isDone ? 'text-success' : 'text-main'}`}>
+                      <h3 className={`font-semibold text-sm sm:text-base ${isDone ? 'text-success' : isInProgress ? 'text-warning' : 'text-main'}`}>
                         {sub.name}
                       </h3>
                       <p className="text-[10px] sm:text-xs text-muted">
@@ -2536,9 +2620,10 @@ function ChecklistForm() {
                         {isDone && progress?.completed_at && (
                           <> &middot; {new Date(progress.completed_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</>
                         )}
+                        {isInProgress && <> &middot; <span className="text-warning">{filledCount}/{subFields.length} concluindo</span></>}
                       </p>
                     </div>
-                    <FiChevronRight className={`w-4 h-4 sm:w-5 sm:h-5 shrink-0 ${isDone ? 'text-success' : 'text-muted'}`} />
+                    <FiChevronRight className={`w-4 h-4 sm:w-5 sm:h-5 shrink-0 ${isDone ? 'text-success' : isInProgress ? 'text-warning' : 'text-muted'}`} />
                   </div>
                 </button>
               )
@@ -2595,6 +2680,16 @@ function ChecklistForm() {
                 const isDoneDirect = hasDirectFieldsOnly && directProgress?.status === 'concluido'
                 const sectionDone = hasDirectFieldsOnly ? isDoneDirect : allDone
 
+                // Status intermediario "concluindo" (amarelo)
+                const directFilledCount = hasDirectFieldsOnly
+                  ? allFields.filter(f => { const v = responses[f.id]; return v !== undefined && v !== null && v !== '' && !(Array.isArray(v) && v.length === 0) }).length
+                  : 0
+                const isInProgress = !sectionDone && (
+                  hasDirectFieldsOnly
+                    ? directFilledCount > 0
+                    : completedSubs > 0 || allFields.some(f => { const v = responses[f.id]; return v !== undefined && v !== null && v !== '' && !(Array.isArray(v) && v.length === 0) })
+                )
+
                 return (
                   <button
                     key={section.id}
@@ -2610,17 +2705,19 @@ function ChecklistForm() {
                     className={`w-full text-left card p-3 sm:p-5 transition-all hover:shadow-theme-md cursor-pointer ${
                       sectionDone
                         ? 'border-success/30 hover:border-success/50'
-                        : 'border-subtle hover:border-primary/30'
+                        : isInProgress
+                          ? 'border-warning/30 hover:border-warning/50'
+                          : 'border-subtle hover:border-primary/30'
                     }`}
                   >
                     <div className="flex items-center gap-3 sm:gap-4">
                       <div className={`w-9 h-9 sm:w-10 sm:h-10 rounded-xl flex items-center justify-center text-sm font-bold shrink-0 ${
-                        sectionDone ? 'bg-success/20 text-success' : 'bg-primary/10 text-primary'
+                        sectionDone ? 'bg-success/20 text-success' : isInProgress ? 'bg-warning/20 text-warning' : 'bg-primary/10 text-primary'
                       }`}>
                         {sectionDone ? <FiCheckCircle className="w-4 h-4 sm:w-5 sm:h-5" /> : idx + 1}
                       </div>
                       <div className="flex-1 min-w-0">
-                        <h3 className={`font-semibold text-sm sm:text-base ${sectionDone ? 'text-success' : 'text-main'}`}>
+                        <h3 className={`font-semibold text-sm sm:text-base ${sectionDone ? 'text-success' : isInProgress ? 'text-warning' : 'text-main'}`}>
                           {section.name}
                         </h3>
                         <p className="text-[10px] sm:text-xs text-muted">
@@ -2629,10 +2726,12 @@ function ChecklistForm() {
                             : <>{subSections.length} sub-etapa{subSections.length !== 1 ? 's' : ''} &middot; {allFields.length} campo{allFields.length !== 1 ? 's' : ''}</>
                           }
                           {sectionDone && <> &middot; <span className="text-success">Concluida</span></>}
-                          {!sectionDone && !hasDirectFieldsOnly && completedSubs > 0 && <> &middot; {completedSubs}/{subSections.length} concluida{completedSubs !== 1 ? 's' : ''}</>}
+                          {isInProgress && hasDirectFieldsOnly && <> &middot; <span className="text-warning">{directFilledCount}/{allFields.length} concluindo</span></>}
+                          {isInProgress && !hasDirectFieldsOnly && completedSubs > 0 && <> &middot; <span className="text-warning">{completedSubs}/{subSections.length} concluindo</span></>}
+                          {isInProgress && !hasDirectFieldsOnly && completedSubs === 0 && <> &middot; <span className="text-warning">concluindo</span></>}
                         </p>
                       </div>
-                      <FiChevronRight className={`w-4 h-4 sm:w-5 sm:h-5 shrink-0 ${sectionDone ? 'text-success' : 'text-muted'}`} />
+                      <FiChevronRight className={`w-4 h-4 sm:w-5 sm:h-5 shrink-0 ${sectionDone ? 'text-success' : isInProgress ? 'text-warning' : 'text-muted'}`} />
                     </div>
                   </button>
                 )
@@ -2642,6 +2741,8 @@ function ChecklistForm() {
               const progress = sectionProgress.find(sp => sp.section_id === section.id)
               const isDone = progress?.status === 'concluido'
               const sectionFields = getFieldsForSection(section.id)
+              const flatFilledCount = sectionFields.filter(f => { const v = responses[f.id]; return v !== undefined && v !== null && v !== '' && !(Array.isArray(v) && v.length === 0) }).length
+              const flatInProgress = !isDone && flatFilledCount > 0
 
               return (
                 <button
@@ -2651,17 +2752,19 @@ function ChecklistForm() {
                   className={`w-full text-left card p-3 sm:p-5 transition-all hover:shadow-theme-md cursor-pointer ${
                     isDone
                       ? 'border-success/30 hover:border-success/50'
-                      : 'border-subtle hover:border-primary/30'
+                      : flatInProgress
+                        ? 'border-warning/30 hover:border-warning/50'
+                        : 'border-subtle hover:border-primary/30'
                   }`}
                 >
                   <div className="flex items-center gap-3 sm:gap-4">
                     <div className={`w-9 h-9 sm:w-10 sm:h-10 rounded-xl flex items-center justify-center text-sm font-bold shrink-0 ${
-                      isDone ? 'bg-success/20 text-success' : 'bg-primary/10 text-primary'
+                      isDone ? 'bg-success/20 text-success' : flatInProgress ? 'bg-warning/20 text-warning' : 'bg-primary/10 text-primary'
                     }`}>
                       {isDone ? <FiCheckCircle className="w-4 h-4 sm:w-5 sm:h-5" /> : idx + 1}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <h3 className={`font-semibold text-sm sm:text-base ${isDone ? 'text-success' : 'text-main'}`}>
+                      <h3 className={`font-semibold text-sm sm:text-base ${isDone ? 'text-success' : flatInProgress ? 'text-warning' : 'text-main'}`}>
                         {section.name}
                       </h3>
                       <p className="text-[10px] sm:text-xs text-muted">
@@ -2669,9 +2772,10 @@ function ChecklistForm() {
                         {isDone && progress?.completed_at && (
                           <> &middot; {new Date(progress.completed_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</>
                         )}
+                        {flatInProgress && <> &middot; <span className="text-warning">{flatFilledCount}/{sectionFields.length} concluindo</span></>}
                       </p>
                     </div>
-                    <FiChevronRight className={`w-4 h-4 sm:w-5 sm:h-5 shrink-0 ${isDone ? 'text-success' : 'text-muted'}`} />
+                    <FiChevronRight className={`w-4 h-4 sm:w-5 sm:h-5 shrink-0 ${isDone ? 'text-success' : flatInProgress ? 'text-warning' : 'text-muted'}`} />
                   </div>
                 </button>
               )
