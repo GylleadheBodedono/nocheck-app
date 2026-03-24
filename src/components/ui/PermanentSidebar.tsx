@@ -20,6 +20,7 @@ import {
   FiChevronDown,
   FiChevronLeft,
   FiChevronRight,
+  FiTerminal,
 } from 'react-icons/fi'
 import type { IconType } from 'react-icons'
 
@@ -86,6 +87,7 @@ const SIDEBAR_ITEMS: SidebarItem[] = [
     ],
   },
   { label: 'Galeria', href: routes.adminGallery, icon: FiImage },
+  { label: 'Logs', href: routes.adminLogs, icon: FiTerminal },
   {
     label: 'Configuracoes',
     href: routes.adminSettings,

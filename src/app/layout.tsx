@@ -6,6 +6,7 @@ import { PWAInstall } from "@/components/PWAInstall"
 import { OfflineIndicator } from "@/components/OfflineIndicator"
 import { SyncIndicator } from "@/components/SyncIndicator"
 import { FluxChat } from "@/components/FluxChat"
+import { ClientLoggerInit } from "@/components/ClientLoggerInit"
 
 const inter = Inter({
   subsets: ["latin"],
@@ -62,6 +63,7 @@ export default function RootLayout({
         <meta name="mobile-web-app-capable" content="yes" />
       </head>
       <body className={`${inter.variable} font-sans antialiased`}>
+        <ClientLoggerInit />
         <OfflineIndicator />
         {children}
         <SyncIndicator />

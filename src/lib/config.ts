@@ -35,6 +35,7 @@ export const APP_CONFIG = {
     adminActionPlanNew: '/admin/planos-de-acao/novo',
     adminActionPlanPresets: '/admin/planos-de-acao/modelos',
     adminSettings: '/admin/configuracoes',
+    adminLogs: '/admin/logs',
     userReports: '/relatorios',
     checklistNew: '/checklist/novo',
     cadastro: '/cadastro',
