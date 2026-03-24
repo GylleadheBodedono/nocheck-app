@@ -132,6 +132,7 @@ export default function RelatoriosPage() {
   const [exportingChecklistId, setExportingChecklistId] = useState<number | null>(null)
   const [logsModal, setLogsModal] = useState<{ open: boolean; label: string; logs: { id: number; action: string; created_at: string; user_id: string | null; details: Record<string, unknown> | null }[] }>({ open: false, label: '', logs: [] })
   const [logsLoading, setLogsLoading] = useState(false)
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set())
   // Visao Geral executive panel state
   const [sectorStats, setSectorStats] = useState<SectorStats[]>([])
   const [requiredActions, setRequiredActions] = useState<RequiredAction[]>([])
@@ -801,6 +802,15 @@ export default function RelatoriosPage() {
     }
   }
 
+  const handleExportSelectedPDF = async () => {
+    const toExport = filteredUserChecklists.filter(c => selectedIds.has(c.id))
+    for (const c of toExport) {
+      await handleExportChecklistPDF(c)
+      await new Promise(r => setTimeout(r, 600))
+    }
+    setSelectedIds(new Set())
+  }
+
   const exportDropdown = (
     <div className="relative">
       <button
@@ -947,12 +957,40 @@ export default function RelatoriosPage() {
               {exportDropdown}
             </div>
 
+            {/* Bulk export banner */}
+            {selectedIds.size > 0 && (
+              <div className="flex items-center justify-between px-4 py-2.5 bg-primary/10 border border-primary/20 rounded-xl mb-3">
+                <span className="text-sm text-primary font-medium">
+                  {selectedIds.size} resposta{selectedIds.size > 1 ? 's' : ''} selecionada{selectedIds.size > 1 ? 's' : ''}
+                </span>
+                <div className="flex gap-2">
+                  <button onClick={() => setSelectedIds(new Set())} className="text-xs text-muted hover:text-main px-3 py-1.5 rounded-lg">
+                    Limpar
+                  </button>
+                  <button
+                    onClick={handleExportSelectedPDF}
+                    className="flex items-center gap-1.5 text-xs font-medium bg-primary text-primary-foreground px-3 py-1.5 rounded-lg hover:bg-primary/90"
+                  >
+                    <FiFileText className="w-3.5 h-3.5" /> Exportar PDF{selectedIds.size > 1 ? 's' : ''}
+                  </button>
+                </div>
+              </div>
+            )}
+
             {/* Table */}
             <div className="card overflow-hidden">
               <div className="overflow-x-auto">
                 <table className="w-full">
                   <thead className="bg-surface-hover">
                     <tr>
+                      <th className="px-4 py-3 w-10">
+                        <input
+                          type="checkbox"
+                          checked={filteredUserChecklists.length > 0 && filteredUserChecklists.every(c => selectedIds.has(c.id))}
+                          onChange={e => setSelectedIds(e.target.checked ? new Set(filteredUserChecklists.map(c => c.id)) : new Set())}
+                          className="rounded"
+                        />
+                      </th>
                       <th className="px-4 py-3 text-left text-sm font-medium text-muted">Usuario</th>
                       <th className="px-4 py-3 text-left text-sm font-medium text-muted">Checklist</th>
                       <th className="px-4 py-3 text-left text-sm font-medium text-muted">Loja</th>
@@ -964,7 +1002,7 @@ export default function RelatoriosPage() {
                   <tbody className="divide-y divide-subtle">
                     {paginatedUserChecklists.length === 0 ? (
                       <tr>
-                        <td colSpan={6} className="px-4 py-12 text-center text-muted">
+                        <td colSpan={7} className="px-4 py-12 text-center text-muted">
                           Nenhum checklist encontrado
                         </td>
                       </tr>
@@ -973,6 +1011,18 @@ export default function RelatoriosPage() {
                         const badge = getStatusBadge(c.status)
                         return (
                           <tr key={c.id} className="hover:bg-surface-hover/50">
+                            <td className="px-4 py-3 w-10">
+                              <input
+                                type="checkbox"
+                                checked={selectedIds.has(c.id)}
+                                onChange={e => setSelectedIds(prev => {
+                                  const n = new Set(prev)
+                                  if (e.target.checked) { n.add(c.id) } else { n.delete(c.id) }
+                                  return n
+                                })}
+                                className="rounded"
+                              />
+                            </td>
                             <td className="px-4 py-3">
                               <div>
                                 <p className="font-medium text-main text-sm">{c.user_name}</p>

@@ -2829,7 +2829,13 @@ function ChecklistForm() {
 
               {/* Section navigation buttons */}
               {(() => {
-                const navSections = isGeneralSection ? [] : flatSections
+                const currentSec = !isGeneralSection
+                  ? sortedSections.find(s => s.id === activeSection)
+                  : null
+                const navSections = isGeneralSection ? [] :
+                  currentSec?.parent_id
+                    ? sortedSections.filter(s => s.parent_id === currentSec.parent_id)
+                    : sortedSections.filter(s => s.parent_id == null)
                 const currentIdx = navSections.findIndex(s => s.id === activeSection)
                 const isFirst = currentIdx <= 0
                 const isLast = currentIdx >= navSections.length - 1
