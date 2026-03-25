@@ -3,6 +3,7 @@
 import { useEffect, useState, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient, isSupabaseConfigured } from '@/lib/supabase'
+import { useFeature } from '@/hooks/useFeature'
 import {
   FiBarChart2,
   FiUsers,
@@ -99,6 +100,9 @@ type UserChecklist = {
  * Permite filtrar por período (7d, 30d, 90d) e exportar os dados em CSV/Excel/PDF.
  */
 export default function RelatoriosPage() {
+  const { hasFeature } = useFeature()
+  const canExportPdf = hasFeature('export_pdf')
+  const canExportExcel = hasFeature('export_excel')
   const [loading, setLoading] = useState(true)
   const [period, setPeriod] = useState<'7d' | '30d' | '90d'>('30d')
   const [storeStats, setStoreStats] = useState<StoreStats[]>([])
@@ -752,9 +756,17 @@ export default function RelatoriosPage() {
         {isOpen && (
           <div className="absolute right-0 top-full mt-1 bg-surface border border-subtle rounded-lg shadow-lg z-20 min-w-[120px]">
             <button onClick={() => handleCardExport(cardType, 'csv')} className="w-full px-4 py-2 text-sm text-left text-main hover:bg-surface-hover rounded-t-lg">CSV</button>
-            <button onClick={() => handleCardExport(cardType, 'xlsx')} className="w-full px-4 py-2 text-sm text-left text-main hover:bg-surface-hover">Excel</button>
+            {canExportExcel ? (
+              <button onClick={() => handleCardExport(cardType, 'xlsx')} className="w-full px-4 py-2 text-sm text-left text-main hover:bg-surface-hover">Excel</button>
+            ) : (
+              <span className="w-full px-4 py-2 text-sm text-left text-muted block cursor-not-allowed" title="Disponivel no plano Professional">Excel (Pro)</span>
+            )}
             <button onClick={() => handleCardExport(cardType, 'txt')} className="w-full px-4 py-2 text-sm text-left text-main hover:bg-surface-hover">TXT</button>
-            <button onClick={() => handleCardExport(cardType, 'pdf')} className="w-full px-4 py-2 text-sm text-left text-main hover:bg-surface-hover rounded-b-lg">PDF</button>
+            {canExportPdf ? (
+              <button onClick={() => handleCardExport(cardType, 'pdf')} className="w-full px-4 py-2 text-sm text-left text-main hover:bg-surface-hover rounded-b-lg">PDF</button>
+            ) : (
+              <span className="w-full px-4 py-2 text-sm text-left text-muted block cursor-not-allowed rounded-b-lg" title="Disponivel no plano Professional">PDF (Pro)</span>
+            )}
           </div>
         )}
       </div>

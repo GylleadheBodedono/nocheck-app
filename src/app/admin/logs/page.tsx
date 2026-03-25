@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { createClient, isSupabaseConfigured } from '@/lib/supabase'
 import { PageContainer } from '@/components/ui/PageContainer'
+import { TenantGuard } from '@/components/tenant/TenantGuard'
 import { FiAlertCircle, FiAlertTriangle, FiInfo, FiTrash2, FiChevronDown, FiChevronUp, FiRefreshCw } from 'react-icons/fi'
 
 interface ClientLog {
@@ -120,6 +121,7 @@ export default function AdminLogsPage() {
   }
 
   return (
+    <TenantGuard requiredFeature="audit_logs">
     <PageContainer>
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-main">Logs do Cliente</h1>
@@ -247,5 +249,6 @@ export default function AdminLogsPage() {
         )}
       </div>
     </PageContainer>
+    </TenantGuard>
   )
 }
