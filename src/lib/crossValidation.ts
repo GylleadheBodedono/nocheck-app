@@ -29,6 +29,8 @@ type TemplateField = {
  * Envia notificação de divergência para o canal do Teams via API route `/api/integrations/notify`.
  * Falhas são silenciosas — a validação não deve ser bloqueada por erros de notificação.
  */
+import { serverLogger } from '@/lib/serverLogger'
+
 async function notificarIntegracoes(data: {
   id: number
   numeroNota: string
@@ -53,10 +55,10 @@ async function notificarIntegracoes(data: {
     })
 
     if (!response.ok) {
-      console.error('[CrossValidation] Erro ao notificar integrações:', await response.text())
+      serverLogger.error('Erro ao notificar integracoes na validacao cruzada', { statusCode: response.status })
     }
   } catch (err) {
-    console.error('[CrossValidation] Erro ao chamar API de integrações:', err)
+    serverLogger.error('Erro ao chamar API de integracoes na validacao cruzada', {}, err)
   }
 }
 
@@ -220,7 +222,7 @@ async function verificarValidacoesExpiradas(supabase: any): Promise<void> {
 
     }
   } catch (err) {
-    console.error('[CrossValidation] Erro ao verificar validacoes expiradas:', err)
+    serverLogger.error('Erro ao verificar validacoes expiradas', {}, err)
   }
 }
 
@@ -581,7 +583,7 @@ export async function processarValidacaoCruzada(
 
     return { success: true }
   } catch (err) {
-    console.error('Erro ao processar validacao cruzada:', err)
+    serverLogger.error('Erro ao processar validacao cruzada', { checklistId, templateId, storeId, userId }, err)
     return {
       success: false,
       error: err instanceof Error ? err.message : 'Erro desconhecido'

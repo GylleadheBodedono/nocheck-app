@@ -2,6 +2,7 @@ export const runtime = 'edge'
 
 import { createServerClient, type CookieOptions } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
+import { serverLogger } from '@/lib/serverLogger'
 
 type CookieToSet = { name: string; value: string; options: CookieOptions }
 
@@ -56,7 +57,7 @@ export async function GET(request: NextRequest) {
   })
 
   if (verifyError) {
-    console.error('[Auth Confirm] Erro na verificação:', verifyError)
+    serverLogger.error('Erro na verificação de OTP', { route: '/auth/confirm' }, verifyError)
     const redirectUrl = new URL('/login', origin)
     redirectUrl.searchParams.set('error', 'Link expirado ou inválido. Solicite um novo.')
     return NextResponse.redirect(redirectUrl)

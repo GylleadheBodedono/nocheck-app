@@ -3,6 +3,7 @@ export const runtime = 'edge'
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { verifyApiAuth } from '@/lib/api-auth'
+import { createRequestLogger } from '@/lib/serverLogger'
 
 const RESEND_API_KEY = process.env.RESEND_API_KEY
 const FROM_EMAIL = process.env.RESEND_FROM_EMAIL || 'onboarding@resend.dev'
@@ -18,6 +19,7 @@ const FROM_EMAIL = process.env.RESEND_FROM_EMAIL || 'onboarding@resend.dev'
  * server-side usando service role (bypassa RLS).
  */
 export async function POST(request: NextRequest) {
+  const log = createRequestLogger(request)
   const auth = await verifyApiAuth(request)
   if (auth.error) return auth.error
 
@@ -57,7 +59,7 @@ export async function POST(request: NextRequest) {
         .single()
 
       if (userError || !user?.email) {
-        console.error('[Email] Erro ao buscar email do assignee:', userError || 'email nao encontrado')
+        log.error('Erro ao buscar email do assignee', { assigneeId })
         return NextResponse.json(
           { success: false, error: `Assignee ${assigneeId} nao encontrado ou sem email` },
           { status: 404 }
@@ -66,7 +68,7 @@ export async function POST(request: NextRequest) {
 
       to = user.email
       assigneeName = user.full_name || null
-      console.log(`[Email] Assignee resolvido: ${assigneeName} <${to}>`)
+      log.debug('Assignee resolvido', { assigneeId, assigneeName })
     }
 
     if (!to) {
@@ -77,7 +79,7 @@ export async function POST(request: NextRequest) {
     }
 
     if (!RESEND_API_KEY) {
-      console.warn('[Email] RESEND_API_KEY nao configurada')
+      log.warn('RESEND_API_KEY nao configurada')
       return NextResponse.json(
         { success: false, error: 'RESEND_API_KEY nao configurada' },
         { status: 503 }
@@ -101,7 +103,7 @@ export async function POST(request: NextRequest) {
 
     if (response.ok) {
       const result = await response.json()
-      console.log(`[Email] Enviado via Resend para ${to}, from: ${FROM_EMAIL}, id: ${(result as { id?: string }).id}`)
+      log.info('Email enviado via Resend', { to, from: FROM_EMAIL, emailId: (result as { id?: string }).id })
       return NextResponse.json({ success: true, emailId: (result as { id?: string }).id, assigneeName })
     }
 
@@ -110,7 +112,7 @@ export async function POST(request: NextRequest) {
     const FALLBACK_FROM = 'onboarding@resend.dev'
 
     if (FROM_EMAIL !== FALLBACK_FROM) {
-      console.warn(`[Email] Falha com ${FROM_EMAIL} (${response.status}), tentando fallback ${FALLBACK_FROM}...`)
+      log.warn('Falha com dominio customizado, tentando fallback', { from: FROM_EMAIL, statusCode: response.status, fallback: FALLBACK_FROM })
 
       const fallbackRes = await fetch('https://api.resend.com/emails', {
         method: 'POST',
@@ -128,21 +130,21 @@ export async function POST(request: NextRequest) {
 
       if (fallbackRes.ok) {
         const fallbackResult = await fallbackRes.json()
-        console.log(`[Email] Enviado via fallback para ${to}, id: ${(fallbackResult as { id?: string }).id}`)
+        log.info('Email enviado via fallback Resend', { to, emailId: (fallbackResult as { id?: string }).id })
         return NextResponse.json({ success: true, emailId: (fallbackResult as { id?: string }).id, fallback: true, assigneeName })
       }
 
       const fallbackError = await fallbackRes.json().catch(() => ({}))
-      console.error('[Email] Fallback tambem falhou:', fallbackRes.status, fallbackError)
+      log.error('Fallback Resend tambem falhou', { to, statusCode: fallbackRes.status, resendError: JSON.stringify(fallbackError) })
     }
 
-    console.error('[Email] Resend erro:', response.status, errorData)
+    log.error('Resend erro no envio de email', { to, statusCode: response.status, resendError: JSON.stringify(errorData) })
     return NextResponse.json(
       { success: false, error: (errorData as { message?: string }).message || `Resend erro ${response.status}` },
       { status: 502 }
     )
   } catch (error) {
-    console.error('[Email] Erro:', error)
+    log.error('Erro inesperado em POST /api/notifications/email', {}, error)
     return NextResponse.json(
       { success: false, error: error instanceof Error ? error.message : 'Erro desconhecido' },
       { status: 500 }

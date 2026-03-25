@@ -3,6 +3,7 @@ export const runtime = 'edge'
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { verifyApiAuth } from '@/lib/api-auth'
+import { createRequestLogger } from '@/lib/serverLogger'
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || ''
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || ''
@@ -13,6 +14,7 @@ const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || ''
  * Usa service role para bypass de RLS (usuarios podem estar em outras lojas).
  */
 export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
+  const log = createRequestLogger(request)
   const auth = await verifyApiAuth(request)
   if (auth.error) return auth.error
 
@@ -35,6 +37,7 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
       .order('full_name')
 
     if (error) {
+      log.error('Erro ao buscar membros da funcao', { functionId }, error)
       return NextResponse.json({ error: error.message }, { status: 500 })
     }
 
@@ -51,6 +54,7 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
       teamsWebhookUrl: fnData?.teams_webhook_url || null,
     })
   } catch (err) {
+    log.error('Erro inesperado em GET /api/functions/[id]/members', { functionId }, err)
     return NextResponse.json(
       { error: err instanceof Error ? err.message : 'Erro desconhecido' },
       { status: 500 }

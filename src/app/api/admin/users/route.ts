@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { verifyApiAuth } from '@/lib/api-auth'
 import { getSupabaseAdmin } from '@/lib/stripe'
 import { escapeHtml } from '@/lib/validation'
+import { createRequestLogger } from '@/lib/serverLogger'
 
 // ── Route Handlers ──
 
@@ -18,6 +19,7 @@ import { escapeHtml } from '@/lib/validation'
  * @requires Admin authentication via `verifyApiAuth`
  */
 export async function GET(request: NextRequest) {
+  const log = createRequestLogger(request)
   const auth = await verifyApiAuth(request, true)
   if (auth.error) return auth.error
 
@@ -28,7 +30,7 @@ export async function GET(request: NextRequest) {
     const { data: authList, error: authError } = await supabase.auth.admin.listUsers()
 
     if (authError) {
-      console.error('[API Users] Erro ao listar auth users:', authError)
+      log.error('Erro ao listar auth users', {}, authError)
       return NextResponse.json({ error: authError.message }, { status: 500 })
     }
 
@@ -55,9 +57,9 @@ export async function GET(request: NextRequest) {
         })
 
       if (insertError) {
-        console.error('[API Users] Erro ao sincronizar usuario:', authUser.email, insertError)
+        log.error('Erro ao sincronizar usuario', { email: authUser.email }, insertError)
       } else {
-        console.log('[API Users] Usuario sincronizado:', authUser.email)
+        log.info('Usuario sincronizado', { email: authUser.email })
       }
     }
 
@@ -90,7 +92,7 @@ export async function GET(request: NextRequest) {
       { headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate' } }
     )
   } catch (error) {
-    console.error('[API Users] Erro:', error)
+    log.error('Erro inesperado em GET /api/admin/users', {}, error)
     return NextResponse.json(
       { error: error instanceof Error ? error.message : 'Erro desconhecido' },
       { status: 500, headers: { 'Cache-Control': 'no-store' } }
@@ -114,6 +116,7 @@ export async function GET(request: NextRequest) {
  * @requires Admin authentication via `verifyApiAuth`
  */
 export async function POST(request: NextRequest) {
+  const log = createRequestLogger(request)
   const auth = await verifyApiAuth(request, true)
   if (auth.error) return auth.error
 
@@ -188,7 +191,7 @@ export async function POST(request: NextRequest) {
       })
 
       if (adminError) {
-        console.error('[API Users] Erro no admin.createUser:', adminError)
+        log.error('Erro no admin.createUser (auto-confirm)', { email }, adminError)
         return NextResponse.json({ error: adminError.message }, { status: 400 })
       }
 
@@ -207,7 +210,7 @@ export async function POST(request: NextRequest) {
       })
 
       if (createError) {
-        console.error('[API Users] Erro no admin.createUser (sem confirm):', createError)
+        log.error('Erro no admin.createUser (sem confirm)', { email }, createError)
         return NextResponse.json({ error: createError.message }, { status: 400 })
       }
 
@@ -227,12 +230,12 @@ export async function POST(request: NextRequest) {
         })
 
         if (linkError) {
-          console.warn('[API Users] Erro ao gerar link de confirmacao:', linkError)
+          log.warn('Erro ao gerar link de confirmacao', { email })
         } else if (linkData?.properties?.action_link) {
           await sendConfirmationEmail(email, fullName, linkData.properties.action_link)
         }
-      } catch (linkErr) {
-        console.warn('[API Users] Erro no fluxo de email de confirmacao:', linkErr)
+      } catch {
+        log.warn('Erro no fluxo de email de confirmacao', { email })
       }
     }
 
@@ -264,7 +267,7 @@ export async function POST(request: NextRequest) {
       .eq('id', userId)
 
     if (profileError) {
-      console.error('[API Users] Erro ao atualizar perfil:', profileError)
+      log.error('Erro ao atualizar perfil', { userId }, profileError)
     }
 
     if (assignments.length > 0 && !isAdmin) {
@@ -280,7 +283,7 @@ export async function POST(request: NextRequest) {
         .insert(rows)
 
       if (storesError) {
-        console.error('[API Users] Erro ao inserir user_stores:', storesError)
+        log.error('Erro ao inserir user_stores', { userId }, storesError)
       }
     }
 
@@ -290,7 +293,7 @@ export async function POST(request: NextRequest) {
       user: { id: userId, email },
     })
   } catch (error) {
-    console.error('[API Users] Erro:', error)
+    log.error('Erro inesperado em POST /api/admin/users', {}, error)
     return NextResponse.json(
       { error: error instanceof Error ? error.message : 'Erro desconhecido' },
       { status: 500 }

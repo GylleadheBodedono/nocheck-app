@@ -9,6 +9,7 @@
  */
 
 import type { NotificationType } from '@/types/database'
+import { serverLogger } from '@/lib/serverLogger'
 
 /** Dados necessários para criar uma notificação in-app. */
 type NotificationData = {
@@ -49,13 +50,13 @@ export async function createNotification(
       })
 
     if (error) {
-      console.error('[Notification] Erro ao criar notificacao:', error)
+      serverLogger.error('Erro ao criar notificacao in-app', { userId }, error)
       return { success: false, error: error.message }
     }
 
     return { success: true }
   } catch (err) {
-    console.error('[Notification] Erro inesperado:', err)
+    serverLogger.error('Erro inesperado ao criar notificacao', { userId }, err)
     return { success: false, error: err instanceof Error ? err.message : 'Erro desconhecido' }
   }
 }
@@ -97,14 +98,14 @@ export async function sendEmailNotification(
 
     if (!response.ok) {
       const text = await response.text()
-      console.error(`[Email] FALHA ao enviar para ${to}: status=${response.status}, body=${text}`)
+      serverLogger.error('Falha ao enviar email via API route', { to, statusCode: response.status, body: text })
       return { success: false, error: `${response.status}: ${text}` }
     }
 
     await response.json()
     return { success: true }
   } catch (err) {
-    console.error('[Email] ERRO ao chamar API de email:', err)
+    serverLogger.error('Erro ao chamar API de email', { to }, err)
     return { success: false, error: err instanceof Error ? err.message : 'Erro' }
   }
 }
@@ -146,14 +147,14 @@ export async function sendActionPlanEmail(
 
     if (!response.ok) {
       const text = await response.text()
-      console.error(`[Email] FALHA ao enviar para assignee ${assigneeId}: status=${response.status}, body=${text}`)
+      serverLogger.error('Falha ao enviar email de plano de acao', { assigneeId, statusCode: response.status, body: text })
       return { success: false, error: `${response.status}: ${text}` }
     }
 
     const result = await response.json() as { success: boolean; assigneeName?: string }
     return { success: true, assigneeName: result.assigneeName || undefined }
   } catch (err) {
-    console.error('[Email] ERRO ao chamar API de email:', err)
+    serverLogger.error('Erro ao chamar API de email para plano de acao', { assigneeId }, err)
     return { success: false, error: err instanceof Error ? err.message : 'Erro' }
   }
 }
@@ -191,13 +192,13 @@ export async function sendActionPlanTeamsAlert(data: {
     })
 
     if (!response.ok) {
-      console.error('[Teams] Erro ao enviar alerta de plano de acao:', await response.text())
+      serverLogger.error('Erro ao enviar alerta de plano de acao ao Teams', { statusCode: response.status })
       return { success: false }
     }
 
     return { success: true }
   } catch (err) {
-    console.error('[Teams] Erro ao chamar API:', err)
+    serverLogger.error('Erro ao chamar API de Teams para plano de acao', {}, err)
     return { success: false, error: err instanceof Error ? err.message : 'Erro' }
   }
 }

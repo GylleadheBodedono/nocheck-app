@@ -2,6 +2,7 @@ export const runtime = 'edge'
 
 import { NextRequest, NextResponse } from 'next/server'
 import { verifyApiAuth } from '@/lib/api-auth'
+import { createRequestLogger, serverLogger } from '@/lib/serverLogger'
 
 const TEAMS_WEBHOOK_URL = process.env.TEAMS_WEBHOOK_URL || ''
 
@@ -40,6 +41,7 @@ type ActionPlanData = {
  * Envia alertas para o Teams quando há divergência na validação ou plano de ação
  */
 export async function POST(request: NextRequest) {
+  const log = createRequestLogger(request)
   const auth = await verifyApiAuth(request)
   if (auth.error) return auth.error
 
@@ -50,7 +52,7 @@ export async function POST(request: NextRequest) {
     // Plano de acao
     if (action === 'action_plan') {
       const result = await enviarPlanoAcaoParaTeams(data as ActionPlanData)
-      console.log('[Notify] Teams action_plan result:', result)
+      log.info('Teams action_plan dispatched', { teamsSuccess: result.success })
       return NextResponse.json({ success: true, teams: result })
     }
 
@@ -58,13 +60,13 @@ export async function POST(request: NextRequest) {
     const validationData = data as ValidationData
     if (validationData.status === 'falhou' || validationData.status === 'notas_diferentes' || validationData.status === 'expirado') {
       const result = await enviarParaTeams(validationData)
-      console.log('[Notify] Teams result:', result)
+      log.info('Teams validation alert dispatched', { teamsSuccess: result.success, status: validationData.status })
       return NextResponse.json({ success: true, teams: result })
     }
 
     return NextResponse.json({ success: true, message: 'Sem divergência, alerta não enviado' })
   } catch (error) {
-    console.error('[API] Erro nas integrações:', error)
+    log.error('Erro inesperado em POST /api/integrations/notify', {}, error)
     return NextResponse.json(
       { success: false, error: error instanceof Error ? error.message : 'Erro desconhecido' },
       { status: 500 }
@@ -74,7 +76,7 @@ export async function POST(request: NextRequest) {
 
 async function enviarParaTeams(data: ValidationData): Promise<{ success: boolean; error?: string }> {
   if (!TEAMS_WEBHOOK_URL) {
-    console.warn('[Teams] Webhook URL não configurado')
+    serverLogger.warn('Webhook URL não configurado', { route: '/api/integrations/notify' })
     return { success: false, error: 'TEAMS_WEBHOOK_URL não configurado' }
   }
 
@@ -192,7 +194,7 @@ async function enviarParaTeams(data: ValidationData): Promise<{ success: boolean
   }
 
   try {
-    console.log('[Teams] Enviando alerta para:', TEAMS_WEBHOOK_URL.substring(0, 50) + '...')
+    serverLogger.debug('Enviando alerta de validacao para Teams', { route: '/api/integrations/notify' })
 
     const response = await fetch(TEAMS_WEBHOOK_URL, {
       method: 'POST',
@@ -203,14 +205,14 @@ async function enviarParaTeams(data: ValidationData): Promise<{ success: boolean
     const responseText = await response.text()
 
     if (!response.ok) {
-      console.error('[Teams] Erro:', response.status, responseText)
+      serverLogger.error('Teams retornou erro na validacao', { statusCode: response.status, teamsResponse: responseText })
       throw new Error(`Teams: ${response.status} - ${responseText}`)
     }
 
-    console.log('[Teams] Alerta enviado com sucesso')
+    serverLogger.info('Alerta de validacao enviado ao Teams com sucesso')
     return { success: true }
   } catch (err) {
-    console.error('[Teams] Erro:', err)
+    serverLogger.error('Falha ao enviar alerta de validacao ao Teams', {}, err)
     return { success: false, error: err instanceof Error ? err.message : 'Erro' }
   }
 }
@@ -218,7 +220,7 @@ async function enviarParaTeams(data: ValidationData): Promise<{ success: boolean
 async function enviarPlanoAcaoParaTeams(data: ActionPlanData): Promise<{ success: boolean; error?: string }> {
   const webhookUrl = data.webhookUrl || TEAMS_WEBHOOK_URL
   if (!webhookUrl) {
-    console.warn('[Teams] Webhook URL nao configurado (nem por funcao nem global)')
+    serverLogger.warn('Webhook URL nao configurado para plano de acao (nem por funcao nem global)', { route: '/api/integrations/notify' })
     return { success: false, error: 'Webhook nao configurado' }
   }
 
@@ -308,7 +310,7 @@ async function enviarPlanoAcaoParaTeams(data: ActionPlanData): Promise<{ success
   }
 
   try {
-    console.log('[Teams] Enviando alerta plano de acao para:', webhookUrl.substring(0, 50) + '...')
+    serverLogger.debug('Enviando alerta de plano de acao para Teams', { route: '/api/integrations/notify' })
 
     const response = await fetch(webhookUrl, {
       method: 'POST',
@@ -318,14 +320,14 @@ async function enviarPlanoAcaoParaTeams(data: ActionPlanData): Promise<{ success
 
     if (!response.ok) {
       const text = await response.text()
-      console.error('[Teams] Erro plano de ação:', response.status, text)
+      serverLogger.error('Teams retornou erro no plano de acao', { statusCode: response.status, teamsResponse: text })
       return { success: false, error: `Teams: ${response.status}` }
     }
 
-    console.log('[Teams] Alerta de plano de ação enviado')
+    serverLogger.info('Alerta de plano de acao enviado ao Teams com sucesso')
     return { success: true }
   } catch (err) {
-    console.error('[Teams] Erro:', err)
+    serverLogger.error('Falha ao enviar alerta de plano de acao ao Teams', {}, err)
     return { success: false, error: err instanceof Error ? err.message : 'Erro' }
   }
 }

@@ -3,6 +3,7 @@ export const runtime = 'edge'
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { verifyApiAuth } from '@/lib/api-auth'
+import { createRequestLogger } from '@/lib/serverLogger'
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || ''
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || ''
@@ -13,6 +14,7 @@ const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || ''
  * Cada funcao pode ter multiplos usuarios vinculados.
  */
 export async function GET(request: NextRequest) {
+  const log = createRequestLogger(request)
   const auth = await verifyApiAuth(request)
   if (auth.error) return auth.error
 
@@ -28,6 +30,7 @@ export async function GET(request: NextRequest) {
       .order('name')
 
     if (error) {
+      log.error('Erro ao buscar funcoes assignaveis', {}, error)
       return NextResponse.json({ error: error.message }, { status: 500 })
     }
 
@@ -36,6 +39,7 @@ export async function GET(request: NextRequest) {
       { headers: { 'Cache-Control': 'private, max-age=60' } }
     )
   } catch (err) {
+    log.error('Erro inesperado em GET /api/users/assignable', {}, err)
     return NextResponse.json(
       { error: err instanceof Error ? err.message : 'Erro desconhecido' },
       { status: 500 }

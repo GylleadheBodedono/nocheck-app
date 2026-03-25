@@ -3,6 +3,7 @@ export const runtime = 'edge'
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { verifyApiAuth } from '@/lib/api-auth'
+import { createRequestLogger } from '@/lib/serverLogger'
 
 // ── Supabase Service Client ──
 
@@ -25,6 +26,7 @@ function getServiceClient() {
  * @requires Authentication via `verifyApiAuth`
  */
 export async function GET(request: NextRequest) {
+  const log = createRequestLogger(request)
   const auth = await verifyApiAuth(request)
   if (auth.error) return auth.error
 
@@ -44,6 +46,7 @@ export async function GET(request: NextRequest) {
         .in('key', keysArray)
 
       if (error) {
+        log.error('Erro ao buscar configuracoes (multi-key)', { keys: keysArray }, error)
         return NextResponse.json({ error: error.message }, { status: 500 })
       }
       return NextResponse.json(data || [])
@@ -62,11 +65,13 @@ export async function GET(request: NextRequest) {
       .single()
 
     if (error) {
+      log.warn('Configuracao nao encontrada', { key })
       return NextResponse.json({ error: error.message }, { status: 404 })
     }
 
     return NextResponse.json({ key: data.key, value: data.value })
   } catch (error) {
+    log.error('Erro inesperado em GET /api/settings', {}, error)
     return NextResponse.json(
       { error: error instanceof Error ? error.message : 'Erro desconhecido' },
       { status: 500 }
@@ -82,6 +87,7 @@ export async function GET(request: NextRequest) {
  * @requires Admin authentication via `verifyApiAuth`
  */
 export async function PUT(request: NextRequest) {
+  const log = createRequestLogger(request)
   const auth = await verifyApiAuth(request, true)
   if (auth.error) return auth.error
 
@@ -100,11 +106,13 @@ export async function PUT(request: NextRequest) {
       .upsert({ key, value, updated_at: new Date().toISOString() }, { onConflict: 'key' })
 
     if (error) {
+      log.error('Erro ao salvar configuracao', { key }, error)
       return NextResponse.json({ error: error.message }, { status: 500 })
     }
 
     return NextResponse.json({ success: true, key, value })
   } catch (error) {
+    log.error('Erro inesperado em PUT /api/settings', {}, error)
     return NextResponse.json(
       { error: error instanceof Error ? error.message : 'Erro desconhecido' },
       { status: 500 }

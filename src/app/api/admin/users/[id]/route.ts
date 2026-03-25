@@ -3,6 +3,7 @@ export const runtime = 'edge'
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { verifyApiAuth } from '@/lib/api-auth'
+import { createRequestLogger } from '@/lib/serverLogger'
 
 // ── Supabase Config ──
 
@@ -26,6 +27,7 @@ export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const log = createRequestLogger(request)
   const auth = await verifyApiAuth(request, true)
   if (auth.error) return auth.error
 
@@ -75,7 +77,7 @@ export async function PUT(
       .eq('id', userId)
 
     if (profileError) {
-      console.error('[API Users] Erro ao atualizar perfil:', profileError)
+      log.error('Erro ao atualizar perfil', { userId }, profileError)
       return NextResponse.json({ error: profileError.message }, { status: 400 })
     }
 
@@ -86,7 +88,7 @@ export async function PUT(
       .eq('user_id', userId)
 
     if (deleteError) {
-      console.error('[API Users] Erro ao limpar user_stores:', deleteError)
+      log.error('Erro ao limpar user_stores', { userId }, deleteError)
     }
 
     if (assignments.length > 0) {
@@ -102,14 +104,14 @@ export async function PUT(
         .insert(rows)
 
       if (insertError) {
-        console.error('[API Users] Erro ao inserir user_stores:', insertError)
+        log.error('Erro ao inserir user_stores', { userId }, insertError)
         return NextResponse.json({ error: insertError.message }, { status: 400 })
       }
     }
 
     return NextResponse.json({ success: true })
   } catch (error) {
-    console.error('[API Users] Erro:', error)
+    log.error('Erro inesperado em PUT /api/admin/users/[id]', {}, error)
     return NextResponse.json(
       { error: error instanceof Error ? error.message : 'Erro desconhecido' },
       { status: 500 }
@@ -132,6 +134,7 @@ export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const log = createRequestLogger(request)
   const auth = await verifyApiAuth(request, true)
   if (auth.error) return auth.error
 
@@ -187,7 +190,7 @@ export async function DELETE(
     const { error } = await supabase.auth.admin.deleteUser(userId)
 
     if (error) {
-      console.error('[API Users] Erro ao deletar usuario:', error)
+      log.error('Erro ao deletar usuario', { userId }, error)
       return NextResponse.json(
         { error: error.message || 'Erro ao excluir usuario' },
         { status: 400 }
@@ -196,7 +199,7 @@ export async function DELETE(
 
     return NextResponse.json({ success: true })
   } catch (error) {
-    console.error('[API Users] Erro:', error)
+    log.error('Erro inesperado em DELETE /api/admin/users/[id]', {}, error)
     return NextResponse.json(
       { error: error instanceof Error ? error.message : 'Erro desconhecido' },
       { status: 500 }
