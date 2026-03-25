@@ -230,7 +230,7 @@ export default function BillingPage() {
               </p>
               <p className="text-sm text-secondary mt-1">
                 Seu plano mudará de <strong>{PLAN_LABELS[currentPlan] || currentPlan}</strong> para <strong>{PLAN_LABELS[org.pending_plan] || org.pending_plan}</strong>
-                {org.current_period_end && ` em ${new Date(org.current_period_end).toLocaleDateString('pt-BR')}`}.
+                {org.current_period_end && !isNaN(new Date(org.current_period_end).getTime()) && ` em ${new Date(org.current_period_end).toLocaleDateString('pt-BR')}`}.
                 Até lá, você manterá todas as features do plano atual.
               </p>
             </div>
