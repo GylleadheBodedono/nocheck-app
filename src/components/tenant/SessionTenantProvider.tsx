@@ -47,15 +47,16 @@ export function SessionTenantProvider({ children }: { children: React.ReactNode 
     load()
   }, [])
 
-  // Aplicar tema white-label
+  // Aplicar tema white-label (so se o tenant configurou cor diferente da padrao)
+  const DEFAULT_PRIMARY = '#0D9488'
   useEffect(() => {
     if (!org?.settings?.theme) return
     const theme = org.settings.theme
     const root = document.documentElement
 
-    if (theme.primaryColor) {
+    // So aplica CSS variables se cor e diferente da padrao (evita sobrescrever globals.css)
+    if (theme.primaryColor && theme.primaryColor.toLowerCase() !== DEFAULT_PRIMARY.toLowerCase()) {
       root.style.setProperty('--primary', theme.primaryColor)
-      // Escurecer para hover
       const r = parseInt(theme.primaryColor.slice(1, 3), 16)
       const g = parseInt(theme.primaryColor.slice(3, 5), 16)
       const b = parseInt(theme.primaryColor.slice(5, 7), 16)
@@ -64,7 +65,7 @@ export function SessionTenantProvider({ children }: { children: React.ReactNode 
       root.style.setProperty('--ring-color', `rgba(${r}, ${g}, ${b}, 0.35)`)
     }
 
-    if (theme.appName) document.title = theme.appName
+    if (theme.appName && theme.appName !== 'Sistema') document.title = theme.appName
 
     if (theme.faviconUrl) {
       let link = document.querySelector("link[rel~='icon']") as HTMLLinkElement | null

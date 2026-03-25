@@ -3,7 +3,7 @@
 import { useEffect, useState, useMemo, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient, isSupabaseConfigured } from '@/lib/supabase'
-import { FiImage, FiSave, FiUpload, FiX, FiCheck, FiLock } from 'react-icons/fi'
+import { FiImage, FiSave, FiUpload, FiX, FiCheck, FiLock, FiZap } from 'react-icons/fi'
 import { APP_CONFIG } from '@/lib/config'
 import { LoadingPage, Header, PageContainer } from '@/components/ui'
 import { getAuthCache, getUserCache } from '@/lib/offlineCache'
@@ -29,6 +29,75 @@ function BrandingContent() {
 
   const logoInputRef = useRef<HTMLInputElement>(null)
   const faviconInputRef = useRef<HTMLInputElement>(null)
+  const [suggestingColors, setSuggestingColors] = useState(false)
+  const [suggestion, setSuggestion] = useState<{ primaryColor: string; accentColor?: string; suggestedTheme?: string; reasoning?: string } | null>(null)
+
+  // Extrair cores dominantes da logo via canvas e enviar para IA
+  const handleSuggestColors = useCallback(async () => {
+    if (!logoUrl) return
+    setSuggestingColors(true)
+    setSuggestion(null)
+    try {
+      // Carregar imagem num canvas para extrair cores dominantes
+      const img = new Image()
+      img.crossOrigin = 'anonymous'
+      await new Promise<void>((resolve, reject) => {
+        img.onload = () => resolve()
+        img.onerror = () => reject(new Error('Falha ao carregar logo'))
+        img.src = logoUrl
+      })
+
+      const canvas = document.createElement('canvas')
+      const ctx = canvas.getContext('2d')!
+      canvas.width = Math.min(img.width, 100)
+      canvas.height = Math.min(img.height, 100)
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height)
+      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height).data
+
+      // Pixel sampling para cores dominantes (ignorar branco/preto/transparente)
+      const colorCounts = new Map<string, number>()
+      for (let i = 0; i < imageData.length; i += 16) { // Sample every 4th pixel
+        const r = imageData[i], g = imageData[i + 1], b = imageData[i + 2], a = imageData[i + 3]
+        if (a < 128) continue // Transparente
+        if (r > 240 && g > 240 && b > 240) continue // Branco
+        if (r < 15 && g < 15 && b < 15) continue // Preto
+        // Quantizar para reduzir variações
+        const qr = Math.round(r / 32) * 32, qg = Math.round(g / 32) * 32, qb = Math.round(b / 32) * 32
+        const hex = `#${qr.toString(16).padStart(2, '0')}${qg.toString(16).padStart(2, '0')}${qb.toString(16).padStart(2, '0')}`
+        colorCounts.set(hex, (colorCounts.get(hex) || 0) + 1)
+      }
+
+      const dominantColors = [...colorCounts.entries()]
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 5)
+        .map(([hex]) => hex)
+
+      if (dominantColors.length === 0) {
+        setError('Nao foi possivel extrair cores da logo. Tente outra imagem.')
+        setSuggestingColors(false)
+        return
+      }
+
+      // Enviar para IA
+      const res = await fetch('/api/branding/suggest', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ dominantColors }),
+      })
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        throw new Error((data as { error?: string }).error || 'Erro na sugestao')
+      }
+
+      const result = await res.json()
+      setSuggestion(result)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Erro ao sugerir cores')
+    } finally {
+      setSuggestingColors(false)
+    }
+  }, [logoUrl])
 
   // Load current settings
   useEffect(() => {
@@ -371,6 +440,84 @@ function BrandingContent() {
             )}
           </button>
         </div>
+
+        {/* Sugerir cores com IA */}
+        {logoUrl && (
+          <div className="card p-5">
+            <h2 className="text-base font-semibold text-main mb-1 flex items-center gap-2">
+              <FiZap className="w-4 h-4 text-primary" />
+              Sugerir Cores com IA
+            </h2>
+            <p className="text-sm text-muted mb-4">
+              A IA analisa as cores da sua logo e sugere uma paleta completa para o app.
+            </p>
+
+            <button
+              onClick={handleSuggestColors}
+              disabled={suggestingColors}
+              className="btn-secondary flex items-center gap-2"
+            >
+              {suggestingColors ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-current/30 border-t-current rounded-full animate-spin" />
+                  Analisando logo...
+                </>
+              ) : (
+                <>
+                  <FiZap className="w-4 h-4" />
+                  Sugerir cores a partir da logo
+                </>
+              )}
+            </button>
+
+            {/* Preview da sugestao */}
+            {suggestion && (
+              <div className="mt-4 p-4 bg-surface-hover rounded-xl space-y-3">
+                <p className="text-xs font-semibold text-main uppercase tracking-wide">Sugestao da IA</p>
+                <div className="flex items-center gap-3 flex-wrap">
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-lg border border-subtle" style={{ backgroundColor: suggestion.primaryColor }} />
+                    <div>
+                      <p className="text-[10px] text-muted">Primaria</p>
+                      <p className="text-xs font-mono text-main">{suggestion.primaryColor}</p>
+                    </div>
+                  </div>
+                  {suggestion.accentColor && (
+                    <div className="flex items-center gap-2">
+                      <div className="w-8 h-8 rounded-lg border border-subtle" style={{ backgroundColor: suggestion.accentColor }} />
+                      <div>
+                        <p className="text-[10px] text-muted">Destaque</p>
+                        <p className="text-xs font-mono text-main">{suggestion.accentColor}</p>
+                      </div>
+                    </div>
+                  )}
+                  {suggestion.suggestedTheme && (
+                    <span className={`px-2 py-1 rounded-full text-[10px] font-semibold ${
+                      suggestion.suggestedTheme === 'dark' ? 'bg-slate-800 text-white' : 'bg-white text-slate-800 border'
+                    }`}>
+                      Tema: {suggestion.suggestedTheme}
+                    </span>
+                  )}
+                </div>
+                {suggestion.reasoning && (
+                  <p className="text-xs text-muted italic">{suggestion.reasoning}</p>
+                )}
+                <button
+                  onClick={() => {
+                    setPrimaryColor(suggestion.primaryColor)
+                    setSuggestion(null)
+                    setSuccess('Cores aplicadas! Clique em "Salvar" para confirmar.')
+                    setTimeout(() => setSuccess(null), 3000)
+                  }}
+                  className="btn-primary text-sm flex items-center gap-2"
+                >
+                  <FiCheck className="w-4 h-4" />
+                  Aplicar sugestao
+                </button>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Upload Favicon */}
         <div className="card p-5">
