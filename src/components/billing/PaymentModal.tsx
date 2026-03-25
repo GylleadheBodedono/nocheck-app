@@ -11,7 +11,8 @@ import {
   useElements,
 } from '@stripe/react-stripe-js'
 import { FiCheck, FiLock } from 'react-icons/fi'
-import { PLAN_CONFIGS, type Plan } from '@/types/tenant'
+import { PLAN_CONFIGS, type Plan, type PlanConfig } from '@/types/tenant'
+import { fetchPlanConfigs } from '@/lib/plans'
 import { Modal } from '@/components/ui'
 
 const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!)
@@ -146,8 +147,10 @@ function PaymentForm({ plan, orgId, onSuccess, onClose }: Omit<Props, 'isOpen' |
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState(false)
   const [holderName, setHolderName] = useState('')
+  const [dynConfigs, setDynConfigs] = useState<Record<string, PlanConfig>>(PLAN_CONFIGS)
+  useEffect(() => { fetchPlanConfigs().then(setDynConfigs) }, [])
 
-  const config = PLAN_CONFIGS[plan]
+  const config = dynConfigs[plan] || PLAN_CONFIGS[plan]
   const BrandIcon = BRAND_ICONS[cardBrand] || BRAND_ICONS.unknown
 
   // Stripe Elements loading state
@@ -390,8 +393,10 @@ function PaymentForm({ plan, orgId, onSuccess, onClose }: Omit<Props, 'isOpen' |
 }
 
 export function PaymentModal({ isOpen, onClose, plan, orgId, currentPlan, onSuccess }: Props) {
-  const config = PLAN_CONFIGS[plan]
-  const currentConfig = PLAN_CONFIGS[currentPlan]
+  const [pc, setPc] = useState<Record<string, PlanConfig>>(PLAN_CONFIGS)
+  useEffect(() => { fetchPlanConfigs().then(setPc) }, [])
+  const config = pc[plan] || PLAN_CONFIGS[plan]
+  const currentConfig = pc[currentPlan] || PLAN_CONFIGS[currentPlan]
 
   // Features gained with upgrade
   const newFeatures = config.features.filter(f => !currentConfig.features.includes(f))

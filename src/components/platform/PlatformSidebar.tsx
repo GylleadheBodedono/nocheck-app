@@ -2,12 +2,13 @@
 
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
-import { FiHome, FiUsers, FiSettings, FiX, FiLogOut, FiHelpCircle, FiZap } from 'react-icons/fi'
+import { FiHome, FiUsers, FiSettings, FiX, FiLogOut, FiHelpCircle, FiZap, FiDollarSign } from 'react-icons/fi'
 import { createClient } from '@/lib/supabase'
 
 const MAIN_MENU = [
   { href: '/platform', label: 'Overview', icon: FiHome },
   { href: '/platform/clientes', label: 'Clientes', icon: FiUsers },
+  { href: '/platform/pricing', label: 'Pricing', icon: FiDollarSign },
 ]
 
 const GENERAL_MENU = [

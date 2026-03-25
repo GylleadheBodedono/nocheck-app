@@ -1,11 +1,11 @@
 'use client'
 
-import { useRef, useState } from 'react'
+import { useRef, useState, useEffect } from 'react'
 import { motion, useInView } from 'framer-motion'
 import Link from 'next/link'
 import { FiCheck } from 'react-icons/fi'
-import { PLAN_CONFIGS } from '@/types/tenant'
-import { TRIAL_DAYS } from '@/lib/plans'
+import { PLAN_CONFIGS, type PlanConfig } from '@/types/tenant'
+import { TRIAL_DAYS, fetchPlanConfigs } from '@/lib/plans'
 import { AnimatedTitle, TitleWord } from './AnimatedTitle'
 import { easeOut } from './animations'
 
@@ -32,12 +32,6 @@ const PLAN_DESCRIPTIONS: Record<string, string> = {
   enterprise: 'Controle total com personalização completa',
 }
 
-const PLAN_LIMITS: Record<string, string> = {
-  starter: 'Até 5 usuários · 3 lojas',
-  professional: 'Até 15 usuários · 10 lojas',
-  enterprise: 'Usuários e lojas ilimitados',
-}
-
 const plans = [
   { key: 'starter' as const, popular: false },
   { key: 'professional' as const, popular: true },
@@ -48,6 +42,8 @@ export function PricingSection() {
   const ref = useRef(null)
   const isInView = useInView(ref, { once: true, margin: '-80px' })
   const [annual, setAnnual] = useState(false)
+  const [dynamicConfigs, setDynamicConfigs] = useState<Record<string, PlanConfig>>(PLAN_CONFIGS)
+  useEffect(() => { fetchPlanConfigs().then(setDynamicConfigs) }, [])
 
   return (
     <section id="precos" ref={ref} className="py-32 px-6 relative">
@@ -71,8 +67,9 @@ export function PricingSection() {
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 lg:gap-8 ">
           {plans.map(({ key, popular }, i) => {
-            const config = PLAN_CONFIGS[key]
+            const config = dynamicConfigs[key] || PLAN_CONFIGS[key]
             const price = annual ? Math.round(config.price * 0.8) : config.price
+            const limitsLabel = config.maxUsers >= 999 ? 'Usuarios e lojas ilimitados' : `Ate ${config.maxUsers} usuarios · ${config.maxStores} lojas`
 
             return (
               <motion.div
@@ -103,7 +100,7 @@ export function PricingSection() {
                 </div>
 
                 <p className="text-sm text-white/50 mb-6">
-                  {PLAN_LIMITS[key]}
+                  {limitsLabel}
                 </p>
 
                 <Link href="/cadastro"

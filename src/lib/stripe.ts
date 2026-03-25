@@ -46,54 +46,48 @@ export function getSupabaseAdmin(): SupabaseClient {
   return _supabaseAdmin
 }
 
-/**
- * Mapeia um Stripe price_id para o nome do plano correspondente.
- * Percorre PLAN_CONFIGS procurando o priceId que bate.
- *
- * @param priceId - ID do preco no Stripe (ex: "price_1TC1hW...")
- * @returns Nome do plano (ex: "starter") ou null se nao encontrar
- */
-export function getPlanFromPriceId(priceId: string): string | null {
+/** Busca config de um plano do pricing_configs (DB), com fallback para PLAN_CONFIGS. */
+async function getPricingConfig(planId: string) {
+  try {
+    const supabase = getSupabaseAdmin()
+    const { data } = await supabase.from('pricing_configs').select('*').eq('id', planId).single()
+    if (data) return { features: data.features as string[], maxUsers: data.max_users as number, maxStores: data.max_stores as number, stripePriceId: (data.stripe_price_id || '') as string }
+  } catch { /* fallback */ }
+  const fallback = PLAN_CONFIGS[planId as Plan]
+  return fallback ? { features: fallback.features, maxUsers: fallback.maxUsers, maxStores: fallback.maxStores, stripePriceId: fallback.stripePriceId } : null
+}
+
+/** Mapeia Stripe price_id → plano. Busca em pricing_configs, fallback PLAN_CONFIGS. */
+export async function getPlanFromPriceId(priceId: string): Promise<string | null> {
+  try {
+    const supabase = getSupabaseAdmin()
+    const { data } = await supabase.from('pricing_configs').select('id').eq('stripe_price_id', priceId).single()
+    if (data) return data.id
+  } catch { /* fallback */ }
   for (const [plan, config] of Object.entries(PLAN_CONFIGS)) {
     if (config.stripePriceId === priceId) return plan
   }
   return null
 }
 
-/**
- * Retorna a lista de features habilitadas para um plano.
- * Se o plano nao for encontrado, retorna as features do trial como fallback.
- *
- * @param plan - Nome do plano (ex: "professional")
- * @returns Array de features habilitadas
- */
-export function getFeaturesForPlan(plan: string): string[] {
-  const config = PLAN_CONFIGS[plan as keyof typeof PLAN_CONFIGS]
+/** Retorna features de um plano. Busca em pricing_configs, fallback PLAN_CONFIGS. */
+export async function getFeaturesForPlan(plan: string): Promise<string[]> {
+  const config = await getPricingConfig(plan)
   return config?.features || PLAN_CONFIGS.trial.features
 }
 
-/**
- * Atualiza a organizacao no banco com os dados do plano:
- * plan, features, max_users e max_stores.
- *
- * Usado no webhook do Stripe quando a subscription e criada/atualizada.
- *
- * @param orgId - UUID da organizacao
- * @param plan - Nome do plano (ex: "starter", "professional", "enterprise")
- * @param extraFields - Campos adicionais para atualizar (ex: stripe_customer_id, trial_ends_at)
- */
+/** Atualiza org no banco com dados do plano (features, limits). Busca do DB. */
 export async function updateOrgPlan(
   orgId: string,
   plan: string,
   extraFields: Record<string, unknown> = {}
 ): Promise<void> {
   const supabase = getSupabaseAdmin()
-  const features = getFeaturesForPlan(plan)
-  const config = PLAN_CONFIGS[plan as Plan]
+  const config = await getPricingConfig(plan)
 
   const { error } = await supabase.from('organizations').update({
     plan,
-    features,
+    features: config?.features || PLAN_CONFIGS.trial.features,
     max_users: config?.maxUsers || 5,
     max_stores: config?.maxStores || 3,
     ...extraFields,

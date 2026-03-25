@@ -11,7 +11,8 @@ import {
   useElements,
 } from '@stripe/react-stripe-js'
 import { FiCheck, FiLock, FiArrowLeft, FiTag } from 'react-icons/fi'
-import { PLAN_CONFIGS, type Plan } from '@/types/tenant'
+import { PLAN_CONFIGS, type Plan, type PlanConfig } from '@/types/tenant'
+import { fetchPlanConfigs } from '@/lib/plans'
 
 const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!)
 
@@ -106,8 +107,11 @@ function CheckoutFormInner({ selectedPlan, onPlanChange, orgId, onSuccess, onBac
   const [showPromo, setShowPromo] = useState(false)
   const [billingCycle, setBillingCycle] = useState<BillingCycle>('monthly')
 
+  const [dynConfigs, setDynConfigs] = useState<Record<string, PlanConfig>>(PLAN_CONFIGS)
+  useEffect(() => { fetchPlanConfigs().then(setDynConfigs) }, [])
+
   const plans: Plan[] = ['starter', 'professional', 'enterprise']
-  const config = PLAN_CONFIGS[selectedPlan]
+  const config = dynConfigs[selectedPlan] || PLAN_CONFIGS[selectedPlan]
   const BrandIcon = BRAND_ICONS[cardBrand] || BRAND_ICONS.unknown
 
   const isYearly = billingCycle === 'yearly'
@@ -298,7 +302,7 @@ function CheckoutFormInner({ selectedPlan, onPlanChange, orgId, onSuccess, onBac
               {/* Plan selector cards */}
               <div className="space-y-2 mb-6">
                 {plans.map(plan => {
-                  const pc = PLAN_CONFIGS[plan]
+                  const pc = dynConfigs[plan] || PLAN_CONFIGS[plan]
                   const isSelected = selectedPlan === plan
                   const pcPrice = isYearly ? Math.round(pc.price * 0.8) : pc.price
                   return (
@@ -343,7 +347,7 @@ function CheckoutFormInner({ selectedPlan, onPlanChange, orgId, onSuccess, onBac
               {/* Features of selected plan — incremental display */}
               <div className="flex-1">
                 {(() => {
-                  const starterFeatures = PLAN_CONFIGS.starter.features
+                  const starterFeatures = (dynConfigs.starter || PLAN_CONFIGS.starter).features
                   const baseFeatures = starterFeatures
                   const extraFeatures = config.features.filter(f => !starterFeatures.includes(f))
                   const isStarter = selectedPlan === 'starter'

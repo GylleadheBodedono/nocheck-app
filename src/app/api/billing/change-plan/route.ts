@@ -2,7 +2,7 @@ export const runtime = 'edge'
 
 import { NextRequest, NextResponse } from 'next/server'
 import { getStripe, getSupabaseAdmin, updateOrgPlan } from '@/lib/stripe'
-import { PLAN_CONFIGS, type Plan } from '@/types/tenant'
+import { PLAN_CONFIGS, type Plan, type PlanConfig } from '@/types/tenant'
 
 /**
  * POST /api/billing/change-plan
@@ -23,12 +23,17 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'orgId e newPlan são obrigatórios' }, { status: 400 })
     }
 
-    const targetConfig = PLAN_CONFIGS[newPlan as Plan]
+    const supabase = getSupabaseAdmin()
+
+    // Buscar config dinamica do pricing_configs no DB (fallback para hardcoded)
+    const { data: pricingRow } = await supabase.from('pricing_configs').select('*').eq('id', newPlan).single()
+    const targetConfig: PlanConfig | undefined = pricingRow
+      ? { id: pricingRow.id, name: pricingRow.name, price: pricingRow.price_brl, maxUsers: pricingRow.max_users, maxStores: pricingRow.max_stores, features: pricingRow.features, stripePriceId: pricingRow.stripe_price_id || '' }
+      : PLAN_CONFIGS[newPlan as Plan]
+
     if (!targetConfig) {
       return NextResponse.json({ error: `Plano '${newPlan}' inválido` }, { status: 400 })
     }
-
-    const supabase = getSupabaseAdmin()
     const stripe = getStripe()
 
     const { data: org, error: orgErr } = await supabase

@@ -10,7 +10,8 @@ import { createClient } from '@/lib/supabase'
 import { FiCheck, FiArrowLeft, FiCreditCard, FiStar, FiZap, FiShield } from 'react-icons/fi'
 import Link from 'next/link'
 import { APP_CONFIG } from '@/lib/config'
-import { PLAN_CONFIGS, type Plan } from '@/types/tenant'
+import { PLAN_CONFIGS, type Plan, type PlanConfig } from '@/types/tenant'
+import { fetchPlanConfigs } from '@/lib/plans'
 import { createPortalSession, getTrialDaysRemaining } from '@/services/billing.service'
 import { LoadingPage } from '@/components/ui'
 import { PaymentModal } from '@/components/billing/PaymentModal'
@@ -38,6 +39,7 @@ export default function BillingPage() {
   const [loading, setLoading] = useState(true)
   const [selectedPlan, setSelectedPlan] = useState<Plan | null>(null)
   const [downgradePlan, setDowngradePlan] = useState<Plan | null>(null)
+  const [planConfigs, setPlanConfigs] = useState<Record<string, PlanConfig>>(PLAN_CONFIGS)
   const router = useRouter()
   const searchParams = useSearchParams()
   const supabase = useMemo(() => createClient(), [])
@@ -80,7 +82,10 @@ export default function BillingPage() {
     setLoading(false)
   }
 
-  useEffect(() => { loadData() }, [supabase, router]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    loadData()
+    fetchPlanConfigs().then(setPlanConfigs)
+  }, [supabase, router]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const handlePortal = async () => {
     if (!org) return
@@ -180,7 +185,7 @@ export default function BillingPage() {
 
         {/* Uso atual */}
         {org && (() => {
-          const planConfig = PLAN_CONFIGS[org.plan as Plan]
+          const planConfig = planConfigs[org.plan as Plan]
           const maxUsers = planConfig?.maxUsers || org.max_users
           const maxStores = planConfig?.maxStores || org.max_stores
           return (
@@ -237,7 +242,7 @@ export default function BillingPage() {
         {/* Cards de planos */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {(['starter', 'professional', 'enterprise'] as Plan[]).map(plan => {
-            const config = PLAN_CONFIGS[plan]
+            const config = planConfigs[plan]
             const isCurrent = currentPlan === plan
             const isDowngrade = planOrder.indexOf(currentPlan) > planOrder.indexOf(plan)
 

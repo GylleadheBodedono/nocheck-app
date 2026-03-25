@@ -13,6 +13,7 @@ import { LoadingPage } from '@/components/ui'
 const TITLES: Record<string, string> = {
   '/platform': 'Dashboard',
   '/platform/clientes': 'Clientes',
+  '/platform/pricing': 'Pricing',
   '/platform/configuracoes': 'Configuracoes',
 }
 

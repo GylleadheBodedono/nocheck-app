@@ -61,7 +61,7 @@ export async function POST(req: NextRequest) {
         if (subscriptionId) {
           const sub = await stripe.subscriptions.retrieve(subscriptionId)
           const priceId = sub.items.data[0]?.price?.id
-          if (priceId) plan = getPlanFromPriceId(priceId) || 'starter'
+          if (priceId) plan = (await getPlanFromPriceId(priceId)) || 'starter'
         }
 
         try {
@@ -87,7 +87,7 @@ export async function POST(req: NextRequest) {
         if (!orgId) break
 
         const priceId = sub.items.data[0]?.price?.id
-        const plan = priceId ? getPlanFromPriceId(priceId) || 'starter' : 'starter'
+        const plan = priceId ? (await getPlanFromPriceId(priceId)) || 'starter' : 'starter'
         const supabase = getSupabaseAdmin()
 
         try {

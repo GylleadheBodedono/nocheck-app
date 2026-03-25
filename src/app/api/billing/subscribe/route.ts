@@ -72,7 +72,7 @@ export async function POST(req: NextRequest) {
         proration_behavior: 'create_prorations',
       })
 
-      const plan = getPlanFromPriceId(priceId)
+      const plan = await getPlanFromPriceId(priceId)
       if (plan) {
         await updateOrgPlan(orgId, plan, {
           stripe_subscription_id: updatedSub.id,
@@ -107,7 +107,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Pagamento OK — atualizar plano
-    const plan = getPlanFromPriceId(priceId)
+    const plan = await getPlanFromPriceId(priceId)
     if (plan) {
       await updateOrgPlan(orgId, plan, {
         stripe_customer_id: customerId,

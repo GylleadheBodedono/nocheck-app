@@ -47,7 +47,11 @@
       "Bash(cd \"/c/Users/ENZO TI/projetos/operecheck\" && npx tsc --noEmit --pretty 2>&1 | head -50)",
       "Bash(cd \"/c/Users/ENZO TI/projetos/operecheck\" && npx next lint --dir src/lib/stripe.ts src/app/api/billing src/app/api/webhooks/stripe src/app/api/admin/users 2>&1 | head -30)",
       "Bash(cd \"/c/Users/ENZO TI/projetos/operecheck\" && npx next lint --dir src/lib/stripe.ts src/app/api/billing src/app/api/webhooks/stripe src/app/api/admin/users 2>&1 | head -20)",
-      "Bash(cd \"/c/Users/ENZO TI/projetos/operecheck\" && ./node_modules/.bin/tsc --noEmit --pretty 2>&1 | head -60)"
+      "Bash(cd \"/c/Users/ENZO TI/projetos/operecheck\" && ./node_modules/.bin/tsc --noEmit --pretty 2>&1 | head -60)",
+      "mcp__claude_ai_ClickUp__clickup_filter_tasks",
+      "Bash(ls -la supabase/migrations/*.sql)",
+      "Bash(xargs -I {} grep -l \"organization\\\\|org\\\\|tenant\" {})",
+      "Bash(npm ls:*)"
     ]
   }
 }

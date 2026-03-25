@@ -1,8 +1,9 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { FiAlertTriangle, FiArrowDown, FiCalendar, FiX } from 'react-icons/fi'
-import { PLAN_CONFIGS, type Plan } from '@/types/tenant'
+import { PLAN_CONFIGS, type Plan, type PlanConfig } from '@/types/tenant'
+import { fetchPlanConfigs } from '@/lib/plans'
 import { Modal } from '@/components/ui/Modal'
 
 type Props = {
@@ -29,9 +30,11 @@ export function DowngradeModal({
 }: Props) {
   const [processing, setProcessing] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [pc, setPc] = useState<Record<string, PlanConfig>>(PLAN_CONFIGS)
+  useEffect(() => { fetchPlanConfigs().then(setPc) }, [])
 
-  const currentConfig = PLAN_CONFIGS[currentPlan]
-  const targetConfig = PLAN_CONFIGS[targetPlan]
+  const currentConfig = pc[currentPlan] || PLAN_CONFIGS[currentPlan]
+  const targetConfig = pc[targetPlan] || PLAN_CONFIGS[targetPlan]
 
   const storesBlocked = Math.max(0, currentStoreCount - (targetConfig?.maxStores || 0))
   const usersExceeded = Math.max(0, currentUserCount - (targetConfig?.maxUsers || 0))
