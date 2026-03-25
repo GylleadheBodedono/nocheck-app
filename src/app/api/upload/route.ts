@@ -3,6 +3,7 @@ export const runtime = 'edge'
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { verifyApiAuth } from '@/lib/api-auth'
+import { createRequestLogger } from '@/lib/serverLogger'
 
 export const dynamic = 'force-dynamic'
 
@@ -18,6 +19,7 @@ const MAX_FILE_SIZE = 5 * 1024 * 1024 // 5MB
  * Retorna `{ url }` com a URL pública do arquivo salvo.
  */
 export async function POST(request: NextRequest) {
+  const log = createRequestLogger(request)
   const auth = await verifyApiAuth(request)
   if (auth.error) return auth.error
 
@@ -41,7 +43,7 @@ export async function POST(request: NextRequest) {
 
     // Check file size (base64 is ~33% larger than binary)
     const estimatedSize = (base64Data.length * 3) / 4
-    console.log('[Upload] Tamanho estimado:', Math.round(estimatedSize / 1024), 'KB')
+    log.debug('Tamanho estimado do upload', { sizeKB: Math.round(estimatedSize / 1024) })
 
     if (estimatedSize > MAX_FILE_SIZE) {
       return NextResponse.json(
@@ -62,7 +64,7 @@ export async function POST(request: NextRequest) {
     const filePath = `${folder || 'uploads'}/${uniqueFileName}`
 
     // Upload to Supabase Storage
-    console.log('[Upload] Tentando upload para bucket checklist-images, path:', filePath)
+    log.debug('Iniciando upload para bucket checklist-images', { filePath })
     const { data, error } = await supabase.storage
       .from('checklist-images')
       .upload(filePath, buffer, {
@@ -71,10 +73,9 @@ export async function POST(request: NextRequest) {
       })
 
     if (error) {
-      console.error('[Upload] Erro Supabase Storage:', error.message, error)
-      // Tenta verificar se o bucket existe
+      // Tenta verificar se o bucket existe para melhor diagnóstico
       const { data: buckets } = await supabase.storage.listBuckets()
-      console.log('[Upload] Buckets disponíveis:', buckets?.map(b => b.name))
+      log.error('Erro no Supabase Storage', { filePath, availableBuckets: buckets?.map(b => b.name) }, error)
       throw new Error(error.message)
     }
 
@@ -83,7 +84,7 @@ export async function POST(request: NextRequest) {
       .from('checklist-images')
       .getPublicUrl(filePath)
 
-    console.log('[Upload] Sucesso:', urlData.publicUrl)
+    log.info('Upload concluido com sucesso', { filePath, publicUrl: urlData.publicUrl })
 
     return NextResponse.json({
       success: true,
@@ -91,7 +92,7 @@ export async function POST(request: NextRequest) {
       path: data.path,
     })
   } catch (error) {
-    console.error('[Upload] Erro:', error)
+    log.error('Erro inesperado em POST /api/upload', {}, error)
     return NextResponse.json(
       {
         success: false,

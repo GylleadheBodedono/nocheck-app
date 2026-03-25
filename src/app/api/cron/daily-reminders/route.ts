@@ -11,6 +11,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { createNotification, sendActionPlanEmail } from '@/lib/notificationService'
+import { serverLogger } from '@/lib/serverLogger'
 
 export const runtime = 'edge'
 
@@ -124,7 +125,7 @@ export async function POST(req: NextRequest) {
       errors: errors.length > 0 ? errors : undefined,
     })
   } catch (err) {
-    console.error('[DailyReminders] Erro:', err)
+    serverLogger.error('Erro no cron daily-reminders', { route: '/api/cron/daily-reminders' }, err)
     return NextResponse.json(
       { error: err instanceof Error ? err.message : 'Erro interno' },
       { status: 500 }

@@ -2,6 +2,7 @@ export const runtime = 'edge'
 
 import { createServerClient, type CookieOptions } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
+import { serverLogger } from '@/lib/serverLogger'
 
 type CookieToSet = { name: string; value: string; options: CookieOptions }
 
@@ -59,7 +60,7 @@ export async function GET(request: NextRequest) {
     const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code)
 
     if (exchangeError) {
-      console.error('[Auth Callback] Erro na troca de código:', exchangeError)
+      serverLogger.error('Erro na troca de código OAuth', { route: '/auth/callback' }, exchangeError)
       const redirectUrl = new URL('/login', origin)
       redirectUrl.searchParams.set('error', 'Erro ao confirmar email. Tente novamente.')
       return NextResponse.redirect(redirectUrl)

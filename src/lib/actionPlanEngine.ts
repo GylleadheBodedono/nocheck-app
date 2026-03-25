@@ -19,6 +19,7 @@
  */
 
 import { createNotification, sendActionPlanEmail, sendActionPlanTeamsAlert } from './notificationService'
+import { serverLogger } from '@/lib/serverLogger'
 import { buildEmailFromTemplate, SEVERITY_COLORS, type EmailTemplateVariables } from './emailTemplateEngine'
 import type { FieldCondition } from '@/types/database'
 
@@ -198,7 +199,7 @@ async function checkReincidencia(
       parentPlanId: previousPlans[previousPlans.length - 1].id,
     }
   } catch (err) {
-    console.error('[ActionPlan] Erro ao verificar reincidencia:', err)
+    serverLogger.error('Erro ao verificar reincidencia', {}, err)
     return { isReincidencia: false, count: 0, parentPlanId: null }
   }
 }
@@ -284,7 +285,7 @@ export async function processarNaoConformidades(
       .eq('is_active', true)
 
     if (condError) {
-      console.error('[ActionPlan] Erro ao buscar condicoes:', condError)
+      serverLogger.error('Erro ao buscar condicoes do template', { checklistId }, condError)
       return { success: false, plansCreated: 0, error: condError.message }
     }
 
@@ -460,7 +461,7 @@ export async function processarNaoConformidades(
         .single()
 
       if (planError) {
-        console.error('[ActionPlan] Erro ao criar plano:', planError)
+        serverLogger.error('Erro ao criar plano de acao', { checklistId, storeId }, planError)
         continue
       }
 
@@ -487,10 +488,10 @@ export async function processarNaoConformidades(
             functionWebhookUrl = membersData.teamsWebhookUrl || null
           } else {
             const errorText = await membersRes.text().catch(() => '(sem body)')
-            console.error(`[ActionPlan] Erro ao buscar membros da funcao ${assignedFunctionId}: HTTP ${membersRes.status} - ${errorText}`)
+            serverLogger.error('Erro ao buscar membros da funcao', { functionId: assignedFunctionId, statusCode: membersRes.status, body: errorText })
           }
         } catch (fetchErr) {
-          console.error('[ActionPlan] Erro fetch membros da funcao:', fetchErr)
+          serverLogger.error('Erro no fetch de membros da funcao', { functionId: assignedFunctionId }, fetchErr)
         }
 
         // Fallback: se API falhou, buscar direto do banco
@@ -563,7 +564,7 @@ export async function processarNaoConformidades(
           })
         }
       } catch (notifErr) {
-        console.error(`[ActionPlan] Erro ao criar notificacoes in-app para campo "${field.name}":`, notifErr)
+        serverLogger.error('Erro ao criar notificacoes in-app', { fieldName: field.name, checklistId }, notifErr)
       }
 
       // 8. Enviar email para CADA usuario responsavel + Teams
@@ -620,7 +621,7 @@ export async function processarNaoConformidades(
           webhookUrl: functionWebhookUrl,
         })
       } catch (notifErr) {
-        console.error('[ActionPlan] Erro ao enviar notificacoes:', notifErr)
+        serverLogger.error('Erro ao enviar notificacoes de plano de acao', { checklistId }, notifErr)
       }
 
       // 9. Se reincidencia, notificar tambem os admins
@@ -648,7 +649,7 @@ export async function processarNaoConformidades(
             })
           }
         } catch (adminErr) {
-          console.error('[ActionPlan] Erro ao notificar admins:', adminErr)
+          serverLogger.error('Erro ao notificar admins sobre reincidencia', { checklistId }, adminErr)
         }
       }
     }
@@ -734,7 +735,7 @@ export async function processarNaoConformidades(
           .single()
 
         if (planError2) {
-          console.error(`[ActionPlan] Segundo passo: erro ao criar plano para "${field.name}":`, planError2)
+          serverLogger.error('Segundo passo: erro ao criar plano de acao', { fieldName: field.name, checklistId, storeId }, planError2)
           continue
         }
 
@@ -758,7 +759,7 @@ export async function processarNaoConformidades(
             functionWebhookUrl2 = fnResult.data?.teams_webhook_url || null
           }
         } catch (fetchErr2) {
-          console.error('[ActionPlan] Segundo passo: erro ao buscar membros:', fetchErr2)
+          serverLogger.error('Segundo passo: erro ao buscar membros da funcao', { checklistId }, fetchErr2)
         }
 
         // Notificacoes
@@ -784,7 +785,7 @@ export async function processarNaoConformidades(
             })
           }
         } catch (notifErr2) {
-          console.error(`[ActionPlan] Segundo passo: erro notificacoes "${field.name}":`, notifErr2)
+          serverLogger.error('Segundo passo: erro ao enviar notificacoes', { fieldName: field.name, checklistId }, notifErr2)
         }
 
         // Emails
@@ -826,16 +827,16 @@ export async function processarNaoConformidades(
             webhookUrl: functionWebhookUrl2,
           })
         } catch (emailErr2) {
-          console.error(`[ActionPlan] Segundo passo: erro email/Teams "${field.name}":`, emailErr2)
+          serverLogger.error('Segundo passo: erro ao enviar email/Teams', { fieldName: field.name, checklistId }, emailErr2)
         }
       } catch (err2) {
-        console.error(`[ActionPlan] Segundo passo: erro geral campo "${field.name}":`, err2)
+        serverLogger.error('Segundo passo: erro geral ao processar campo', { fieldName: field.name, checklistId }, err2)
       }
     }
 
     return { success: true, plansCreated }
   } catch (err) {
-    console.error('[ActionPlan] ERRO FATAL no processamento:', err)
+    serverLogger.error('ERRO FATAL no processamento de nao-conformidades', { checklistId, storeId }, err)
     return { success: false, plansCreated: 0, error: err instanceof Error ? err.message : 'Erro desconhecido' }
   }
 }
@@ -940,14 +941,14 @@ export async function checkOverduePlans(
             accessToken
           )
         } catch (emailErr) {
-          console.error(`[ActionPlan] Erro ao enviar email de vencimento para plano #${plan.id}:`, emailErr)
+          serverLogger.error('Erro ao enviar email de vencimento', { planId: plan.id }, emailErr)
         }
       }
     }
 
     return overduePlans.length
   } catch (err) {
-    console.error('[ActionPlan] Erro ao verificar planos vencidos:', err)
+    serverLogger.error('Erro ao verificar planos vencidos', {}, err)
     return 0
   }
 }

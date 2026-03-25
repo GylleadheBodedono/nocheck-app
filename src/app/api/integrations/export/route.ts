@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { enviarResumoDiarioTeams } from '@/lib/integrations/teams'
 import { verifyApiAuth } from '@/lib/api-auth'
+import { createRequestLogger } from '@/lib/serverLogger'
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
@@ -17,6 +18,7 @@ const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
  * - days: number (quantos dias de dados, default 7)
  */
 export async function POST(request: NextRequest) {
+  const log = createRequestLogger(request)
   const auth = await verifyApiAuth(request, true)
   if (auth.error) return auth.error
 
@@ -68,7 +70,7 @@ export async function POST(request: NextRequest) {
       ...results,
     })
   } catch (err) {
-    console.error('[API Export] Error:', err)
+    log.error('Erro em POST /api/integrations/export', {}, err)
     return NextResponse.json(
       {
         success: false,

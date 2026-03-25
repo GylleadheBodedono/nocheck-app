@@ -3,6 +3,7 @@ export const runtime = 'edge'
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { verifyApiAuth } from '@/lib/api-auth'
+import { createRequestLogger } from '@/lib/serverLogger'
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
@@ -13,6 +14,7 @@ const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
  * Usuarios que existem no auth mas nao no public sao inseridos automaticamente
  */
 export async function GET(request: NextRequest) {
+  const log = createRequestLogger(request)
   const auth = await verifyApiAuth(request, true)
   if (auth.error) return auth.error
 
@@ -25,7 +27,7 @@ export async function GET(request: NextRequest) {
     const { data: authList, error: authError } = await supabase.auth.admin.listUsers()
 
     if (authError) {
-      console.error('[API Users] Erro ao listar auth users:', authError)
+      log.error('Erro ao listar auth users', {}, authError)
       return NextResponse.json({ error: authError.message }, { status: 500 })
     }
 
@@ -52,9 +54,9 @@ export async function GET(request: NextRequest) {
         })
 
       if (insertError) {
-        console.error('[API Users] Erro ao sincronizar usuario:', authUser.email, insertError)
+        log.error('Erro ao sincronizar usuario', { email: authUser.email }, insertError)
       } else {
-        console.log('[API Users] Usuario sincronizado:', authUser.email)
+        log.info('Usuario sincronizado', { email: authUser.email })
       }
     }
 
@@ -87,7 +89,7 @@ export async function GET(request: NextRequest) {
       { headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate' } }
     )
   } catch (error) {
-    console.error('[API Users] Erro:', error)
+    log.error('Erro inesperado em GET /api/admin/users', {}, error)
     return NextResponse.json(
       { error: error instanceof Error ? error.message : 'Erro desconhecido' },
       { status: 500, headers: { 'Cache-Control': 'no-store' } }
@@ -101,6 +103,7 @@ export async function GET(request: NextRequest) {
  * Depois atualiza o perfil e insere os roles
  */
 export async function POST(request: NextRequest) {
+  const log = createRequestLogger(request)
   const auth = await verifyApiAuth(request, true)
   if (auth.error) return auth.error
 
@@ -145,7 +148,7 @@ export async function POST(request: NextRequest) {
       })
 
       if (adminError) {
-        console.error('[API Users] Erro no admin.createUser:', adminError)
+        log.error('Erro no admin.createUser (auto-confirm)', { email }, adminError)
         return NextResponse.json(
           { error: adminError.message },
           { status: 400 }
@@ -174,7 +177,7 @@ export async function POST(request: NextRequest) {
       })
 
       if (createError) {
-        console.error('[API Users] Erro no admin.createUser (sem confirm):', createError)
+        log.error('Erro no admin.createUser (sem confirm)', { email }, createError)
         return NextResponse.json(
           { error: createError.message },
           { status: 400 }
@@ -200,7 +203,7 @@ export async function POST(request: NextRequest) {
         })
 
         if (linkError) {
-          console.warn('[API Users] Erro ao gerar link de confirmacao:', linkError)
+          log.warn('Erro ao gerar link de confirmacao', { email })
         } else if (linkData?.properties?.action_link) {
           // Enviar email de confirmacao diretamente via Resend API
           const confirmUrl = linkData.properties.action_link
@@ -226,10 +229,10 @@ export async function POST(request: NextRequest) {
 
             if (emailRes.ok) {
               const result = await emailRes.json()
-              console.log('[API Users] Email de confirmacao enviado para:', email, 'from:', fromEmail, 'id:', (result as { id?: string }).id)
+              log.info('Email de confirmacao enviado', { email, from: fromEmail, emailId: (result as { id?: string }).id })
             } else if (fromEmail !== FALLBACK_FROM) {
               // Fallback: dominio customizado falhou, tenta com onboarding@resend.dev
-              console.warn(`[API Users] Falha com ${fromEmail}, tentando fallback ${FALLBACK_FROM}...`)
+              log.warn('Falha com dominio customizado, tentando fallback', { email, from: fromEmail, fallback: FALLBACK_FROM })
               const fallbackRes = await fetch('https://api.resend.com/emails', {
                 method: 'POST',
                 headers: {
@@ -246,21 +249,21 @@ export async function POST(request: NextRequest) {
 
               if (fallbackRes.ok) {
                 const result = await fallbackRes.json()
-                console.log('[API Users] Email enviado via fallback para:', email, 'id:', (result as { id?: string }).id)
+                log.info('Email enviado via fallback', { email, emailId: (result as { id?: string }).id })
               } else {
                 const errData = await fallbackRes.json().catch(() => ({}))
-                console.warn('[API Users] Fallback tambem falhou:', errData)
+                log.warn('Fallback tambem falhou ao enviar email', { email, error: JSON.stringify(errData) })
               }
             } else {
               const errData = await emailRes.json().catch(() => ({}))
-              console.warn('[API Users] Falha ao enviar email via Resend:', errData)
+              log.warn('Falha ao enviar email via Resend', { email, error: JSON.stringify(errData) })
             }
           } else {
-            console.warn('[API Users] RESEND_API_KEY nao configurada, email nao enviado')
+            log.warn('RESEND_API_KEY nao configurada, email de confirmacao nao enviado', { email })
           }
         }
       } catch (linkErr) {
-        console.warn('[API Users] Erro no fluxo de email de confirmacao:', linkErr)
+        log.warn('Erro no fluxo de email de confirmacao', { email })
       }
     }
 
@@ -295,7 +298,7 @@ export async function POST(request: NextRequest) {
       .eq('id', userId)
 
     if (profileError) {
-      console.error('[API Users] Erro ao atualizar perfil:', profileError)
+      log.error('Erro ao atualizar perfil', { userId }, profileError)
     }
 
     // Insere vínculos em user_stores
@@ -312,7 +315,7 @@ export async function POST(request: NextRequest) {
         .insert(rows)
 
       if (storesError) {
-        console.error('[API Users] Erro ao inserir user_stores:', storesError)
+        log.error('Erro ao inserir user_stores', { userId }, storesError)
       }
     }
 
@@ -325,7 +328,7 @@ export async function POST(request: NextRequest) {
       },
     })
   } catch (error) {
-    console.error('[API Users] Erro:', error)
+    log.error('Erro inesperado em POST /api/admin/users', {}, error)
     return NextResponse.json(
       { error: error instanceof Error ? error.message : 'Erro desconhecido' },
       { status: 500 }
