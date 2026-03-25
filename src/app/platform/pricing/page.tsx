@@ -47,7 +47,7 @@ export default function PlatformPricingPage() {
     const load = async () => {
       const supabase = createClient()
       const { data: { user } } = await supabase.auth.getUser()
-      if (!user?.app_metadata?.is_platform_admin) {
+      if (!user?.user_metadata?.is_platform_admin && !user?.app_metadata?.is_platform_admin) {
         router.push('/login')
         return
       }

@@ -54,9 +54,7 @@ export default function BillingPage() {
     const sb = supabase as any
     // Usar RPC com SECURITY DEFINER para garantir acesso ao tenant_id real
     const tenantRes = await sb.rpc('get_my_tenant_id')
-    console.log('[Billing] get_my_tenant_id result:', tenantRes)
     const orgId = tenantRes.data || user.app_metadata?.org_id
-    console.log('[Billing] orgId resolved:', orgId, '| app_metadata:', user.app_metadata)
     if (!orgId) { setLoading(false); return }
 
     const [orgRes, usersRes, storesRes] = await Promise.all([
