@@ -77,6 +77,7 @@ export async function POST(req: NextRequest) {
       })
       await supabase.from('organizations').update({
         pending_plan: 'trial',
+        previous_plan: currentPlan,
         current_period_end: periodEnd,
         cancel_at_period_end: true,
       }).eq('id', orgId)
@@ -84,6 +85,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({
         success: true,
         pendingPlan: 'trial',
+        previousPlan: currentPlan,
         effectiveDate: periodEnd,
         message: `Sua assinatura será cancelada em ${new Date(periodEnd).toLocaleDateString('pt-BR')}. Até lá, você mantém o plano ${currentPlan}.`,
       })
@@ -129,12 +131,14 @@ export async function POST(req: NextRequest) {
 
     await supabase.from('organizations').update({
       pending_plan: newPlan,
+      previous_plan: currentPlan,
       current_period_end: periodEnd,
     }).eq('id', orgId)
 
     return NextResponse.json({
       success: true,
       pendingPlan: newPlan,
+      previousPlan: currentPlan,
       effectiveDate: periodEnd,
       message: `Downgrade agendado para ${new Date(periodEnd).toLocaleDateString('pt-BR')}. Você mantém o plano ${currentPlan} até lá.`,
     })

@@ -21,7 +21,7 @@ type OrgBilling = {
   id: string; name: string; plan: Plan; stripe_customer_id: string | null
   stripe_subscription_id: string | null; trial_ends_at: string | null; features: string[]
   max_users: number; max_stores: number
-  pending_plan: string | null; current_period_end: string | null; cancel_at_period_end: boolean
+  pending_plan: string | null; previous_plan: string | null; current_period_end: string | null; cancel_at_period_end: boolean
 }
 
 type UsageStats = {
@@ -69,6 +69,7 @@ export default function BillingPage() {
       setOrg({
         ...raw,
         pending_plan: raw.pending_plan ?? null,
+        previous_plan: raw.previous_plan ?? null,
         current_period_end: raw.current_period_end ?? null,
         cancel_at_period_end: raw.cancel_at_period_end ?? false,
       } as OrgBilling)
@@ -223,6 +224,7 @@ export default function BillingPage() {
         {/* Banner de mudança pendente com countdown */}
         {org?.pending_plan && (() => {
           const pendingLabel = PLAN_LABELS[org.pending_plan] || org.pending_plan
+          const fromPlanLabel = PLAN_LABELS[org.previous_plan || currentPlan] || org.previous_plan || currentPlan
           const hasValidDate = org.current_period_end && !isNaN(new Date(org.current_period_end).getTime())
           const daysLeft = hasValidDate ? Math.ceil((new Date(org.current_period_end!).getTime() - Date.now()) / (1000 * 60 * 60 * 24)) : null
           const alreadyActive = daysLeft !== null && daysLeft <= 0
@@ -236,10 +238,10 @@ export default function BillingPage() {
                 </p>
                 <p className="text-sm text-secondary mt-1">
                   {alreadyActive
-                    ? <>O plano <strong>{pendingLabel}</strong> ja esta ativo.</>
+                    ? <>O plano <strong>{pendingLabel}</strong> ja esta ativo. O plano anterior era <strong>{fromPlanLabel}</strong>.</>
                     : daysLeft !== null
-                      ? <>Faltam <strong>{daysLeft} dia{daysLeft !== 1 ? 's' : ''}</strong> para o plano <strong>{pendingLabel}</strong> entrar em vigor. Ate la, voce mantem todas as features do plano <strong>{PLAN_LABELS[currentPlan] || currentPlan}</strong>.</>
-                      : <>Seu plano mudara para <strong>{pendingLabel}</strong>. Ate la, voce mantem todas as features do plano atual.</>
+                      ? <>Faltam <strong>{daysLeft} dia{daysLeft !== 1 ? 's' : ''}</strong> para o plano <strong>{pendingLabel}</strong> entrar em vigor. Ate la, voce mantem todas as features do plano <strong>{fromPlanLabel}</strong>.</>
+                      : <>Seu plano mudara de <strong>{fromPlanLabel}</strong> para <strong>{pendingLabel}</strong>. Ate la, voce mantem todas as features do plano atual.</>
                   }
                 </p>
               </div>
@@ -354,7 +356,7 @@ export default function BillingPage() {
           currentStoreCount={usage.currentStores}
           currentUserCount={usage.currentUsers}
           onSuccess={(pendingPlan, effectiveDate) => {
-            setOrg(prev => prev ? { ...prev, pending_plan: pendingPlan, current_period_end: effectiveDate, cancel_at_period_end: true } : prev)
+            setOrg(prev => prev ? { ...prev, pending_plan: pendingPlan, previous_plan: currentPlan, current_period_end: effectiveDate, cancel_at_period_end: true } : prev)
             setDowngradePlan(null)
           }}
         />
