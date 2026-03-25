@@ -26,6 +26,18 @@ export async function GET(request: NextRequest) {
   try {
     const supabase = getSupabaseAdmin()
 
+    // Obter tenant_id do admin logado para isolamento
+    const { data: adminProfile } = await supabase
+      .from('users')
+      .select('tenant_id')
+      .eq('id', auth.user.id)
+      .single()
+
+    const tenantId = adminProfile?.tenant_id
+    if (!tenantId) {
+      return NextResponse.json({ error: 'Usuario sem organizacao' }, { status: 403 })
+    }
+
     // Fetch all auth users
     const { data: authList, error: authError } = await supabase.auth.admin.listUsers()
 
@@ -34,15 +46,19 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: authError.message }, { status: 500 })
     }
 
-    // Fetch existing public.users IDs
+    // Fetch existing public.users IDs (filtrado por tenant)
     const { data: publicUsers } = await supabase
       .from('users')
       .select('id')
+      .eq('tenant_id', tenantId)
 
     const publicIds = new Set((publicUsers || []).map(u => u.id))
 
-    // Insert missing users (exist in auth but not in public)
-    const missing = authList.users.filter(u => !publicIds.has(u.id))
+    // Insert missing users (exist in auth but not in public — apenas os do mesmo tenant)
+    const tenantAuthIds = new Set(
+      (await supabase.from('organization_members').select('user_id').eq('organization_id', tenantId)).data?.map(m => m.user_id) || []
+    )
+    const missing = authList.users.filter(u => tenantAuthIds.has(u.id) && !publicIds.has(u.id))
 
     for (const authUser of missing) {
       const name = authUser.user_metadata?.full_name || authUser.email?.split('@')[0] || 'Usuario'
@@ -54,6 +70,7 @@ export async function GET(request: NextRequest) {
           full_name: name,
           is_active: true,
           is_admin: false,
+          tenant_id: tenantId,
         })
 
       if (insertError) {
@@ -63,7 +80,7 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // Return full list with relations
+    // Return full list with relations (FILTRADO por tenant_id)
     const { data: users, error: usersError } = await supabase
       .from('users')
       .select(`
@@ -81,6 +98,7 @@ export async function GET(request: NextRequest) {
           sector:sectors(*)
         )
       `)
+      .eq('tenant_id', tenantId)
       .order('created_at', { ascending: false })
 
     if (usersError) {

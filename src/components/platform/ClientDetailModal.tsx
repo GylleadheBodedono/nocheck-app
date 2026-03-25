@@ -5,7 +5,7 @@ import { createClient } from '@/lib/supabase'
 import {
   FiUsers, FiHome, FiClipboard, FiShield, FiDollarSign, FiCalendar,
   FiToggleLeft, FiToggleRight, FiEye, FiTrash2,
-  FiChevronLeft, FiChevronRight,
+  FiChevronLeft, FiChevronRight, FiAlertCircle,
 } from 'react-icons/fi'
 import { type Plan, type Feature } from '@/types/tenant'
 import { Modal } from '@/components/ui'
@@ -16,6 +16,8 @@ type OrgDetail = {
   id: string; name: string; slug: string; plan: string; is_active: boolean
   max_users: number; max_stores: number; features: string[]
   trial_ends_at: string | null; created_at: string
+  pending_plan: string | null; previous_plan: string | null
+  current_period_end: string | null; cancel_at_period_end: boolean
 }
 type Member = { id: string; user_id: string; role: string; accepted_at: string | null; email?: string; full_name?: string }
 type Store = { id: string; name: string; address: string | null; created_at: string }
@@ -366,6 +368,26 @@ export function ClientDetailModal({ orgId, onClose, onOrgUpdate }: Props) {
                   })}
                 </div>
               </div>
+
+              {/* Pending Plan Change Banner */}
+              {modalOrg.pending_plan && (() => {
+                const LABELS: Record<string, string> = { trial: 'Trial', starter: 'Starter', professional: 'Professional', enterprise: 'Enterprise' }
+                const pendingLabel = LABELS[modalOrg.pending_plan] || modalOrg.pending_plan
+                const fromLabel = modalOrg.previous_plan ? (LABELS[modalOrg.previous_plan] || modalOrg.previous_plan) : (LABELS[modalOrg.plan] || modalOrg.plan)
+                const hasDate = modalOrg.current_period_end && !isNaN(new Date(modalOrg.current_period_end).getTime())
+                const daysLeft = hasDate ? Math.ceil((new Date(modalOrg.current_period_end!).getTime() - Date.now()) / (1000 * 60 * 60 * 24)) : null
+                return (
+                  <div className="p-4 bg-warning/10 border border-warning/20 rounded-xl">
+                    <h3 className="text-xs font-semibold text-warning mb-1 flex items-center gap-2"><FiAlertCircle className="w-3.5 h-3.5" /> Mudanca de plano agendada</h3>
+                    <p className="text-[10px] text-muted">
+                      {daysLeft !== null && daysLeft > 0
+                        ? <>Faltam <strong className="text-warning">{daysLeft} dia{daysLeft !== 1 ? 's' : ''}</strong> para o plano <strong>{pendingLabel}</strong> entrar em vigor. Cliente cancelou o plano <strong>{fromLabel}</strong>.</>
+                        : <>Plano <strong>{pendingLabel}</strong> ja deveria estar ativo. Plano anterior: <strong>{fromLabel}</strong>.</>
+                      }
+                    </p>
+                  </div>
+                )
+              })()}
 
               {/* Extend Trial */}
               {modalOrg.plan === 'trial' && (

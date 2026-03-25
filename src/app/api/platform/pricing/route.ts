@@ -2,6 +2,7 @@ export const runtime = 'edge'
 
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
+import { createClient } from '@supabase/supabase-js'
 import { cookies } from 'next/headers'
 
 /**
@@ -34,10 +35,10 @@ export async function PUT(req: NextRequest) {
       return NextResponse.json({ error: 'Payload invalido — esperado array de planos' }, { status: 400 })
     }
 
-    const supabaseAdmin = createServerClient(
+    const supabaseAdmin = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.SUPABASE_SERVICE_ROLE_KEY!,
-      { cookies: { getAll: () => cookieStore.getAll() } },
+      { auth: { autoRefreshToken: false, persistSession: false } },
     )
 
     const rows = plans.map((p: Record<string, unknown>) => ({
@@ -62,7 +63,8 @@ export async function PUT(req: NextRequest) {
 
     return NextResponse.json(data)
   } catch (err) {
-    console.error('[API /platform/pricing] Erro:', err)
-    return NextResponse.json({ error: 'Falha ao atualizar pricing' }, { status: 500 })
+    const errMsg = err instanceof Error ? err.message : JSON.stringify(err)
+    console.error('[API /platform/pricing] Erro:', errMsg, err)
+    return NextResponse.json({ error: `Falha ao atualizar pricing: ${errMsg}` }, { status: 500 })
   }
 }

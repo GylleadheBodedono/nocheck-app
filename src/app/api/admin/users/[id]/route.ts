@@ -41,6 +41,18 @@ export async function PUT(
       )
     }
 
+    // Verificar que o user alvo pertence a mesma org do admin
+    const supabaseCheck = createClient(supabaseUrl, supabaseServiceKey, {
+      auth: { autoRefreshToken: false, persistSession: false }
+    })
+    const [adminRes, targetRes] = await Promise.all([
+      supabaseCheck.from('users').select('tenant_id').eq('id', auth.user.id).single(),
+      supabaseCheck.from('users').select('tenant_id').eq('id', userId).single(),
+    ])
+    if (!adminRes.data?.tenant_id || adminRes.data.tenant_id !== targetRes.data?.tenant_id) {
+      return NextResponse.json({ error: 'Voce nao tem permissao para editar este usuario' }, { status: 403 })
+    }
+
     const body = await request.json()
 
     const { fullName, phone, isAdmin, isTech, isActive, functionId, storeAssignments } = body as {
