@@ -230,7 +230,7 @@ export function PermanentSidebar({ collapsed, onToggleCollapse, mobileOpen, onMo
             {hasChildren && isExpanded && showText && (
               <div className="ml-7 mt-0.5 space-y-0.5 border-l-2 border-subtle pl-3">
                 {item.children!.map((child) => {
-                  const childActive = pathname === child.href || pathname.startsWith(child.href + '/')
+                  const childActive = pathname === child.href
                   return (
                     <Link
                       key={child.href}

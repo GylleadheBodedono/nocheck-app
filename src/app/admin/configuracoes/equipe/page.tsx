@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { createClient, isSupabaseConfigured } from '@/lib/supabase'
 import { FiUser, FiMail, FiTrash2, FiPlus, FiShield, FiClock } from 'react-icons/fi'
 import { APP_CONFIG } from '@/lib/config'
-import { LoadingPage, Header, PageContainer } from '@/components/ui'
+import { LoadingPage, PageContainer } from '@/components/ui'
 import {
   getMembers,
   updateMemberRole,
@@ -336,13 +336,6 @@ export default function EquipePage() {
 
   return (
     <div className="min-h-screen bg-page">
-      <Header
-        title="Equipe"
-        subtitle={`${members.length} membro${members.length !== 1 ? 's' : ''}`}
-        icon={FiUser}
-        backHref="/admin/configuracoes"
-      />
-
       <PageContainer size="md" className="space-y-6">
         {/* Toast */}
         {toast && (
