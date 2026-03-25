@@ -64,13 +64,17 @@ export async function POST(req: NextRequest) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const subscription = await stripe.subscriptions.retrieve(org.stripe_subscription_id) as any
 
+    // Calcular data de fim do periodo (fallback 30 dias se Stripe nao retornar)
+    const periodEndTs = subscription.current_period_end
+    const periodEnd = periodEndTs
+      ? new Date(periodEndTs * 1000).toISOString()
+      : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
+
     // === CANCELAR → TRIAL ===
     if (isCancelToTrial) {
       await stripe.subscriptions.update(org.stripe_subscription_id, {
         cancel_at_period_end: true,
       })
-
-      const periodEnd = new Date(subscription.current_period_end * 1000).toISOString()
       await supabase.from('organizations').update({
         pending_plan: 'trial',
         current_period_end: periodEnd,
@@ -123,7 +127,6 @@ export async function POST(req: NextRequest) {
       proration_behavior: 'none',
     })
 
-    const periodEnd = new Date(subscription.current_period_end * 1000).toISOString()
     await supabase.from('organizations').update({
       pending_plan: newPlan,
       current_period_end: periodEnd,

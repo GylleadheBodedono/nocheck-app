@@ -220,22 +220,32 @@ export default function BillingPage() {
           )
         })()}
 
-        {/* Banner de mudança pendente */}
-        {org?.pending_plan && (
-          <div className="mb-6 p-4 bg-warning/10 border border-warning/20 rounded-xl flex items-start gap-3">
-            <FiStar className="w-5 h-5 text-warning shrink-0 mt-0.5" />
-            <div className="flex-1">
-              <p className="text-sm font-medium text-warning">
-                Mudança de plano agendada
-              </p>
-              <p className="text-sm text-secondary mt-1">
-                Seu plano mudará de <strong>{PLAN_LABELS[currentPlan] || currentPlan}</strong> para <strong>{PLAN_LABELS[org.pending_plan] || org.pending_plan}</strong>
-                {org.current_period_end && !isNaN(new Date(org.current_period_end).getTime()) && ` em ${new Date(org.current_period_end).toLocaleDateString('pt-BR')}`}.
-                Até lá, você manterá todas as features do plano atual.
-              </p>
+        {/* Banner de mudança pendente com countdown */}
+        {org?.pending_plan && (() => {
+          const pendingLabel = PLAN_LABELS[org.pending_plan] || org.pending_plan
+          const hasValidDate = org.current_period_end && !isNaN(new Date(org.current_period_end).getTime())
+          const daysLeft = hasValidDate ? Math.ceil((new Date(org.current_period_end!).getTime() - Date.now()) / (1000 * 60 * 60 * 24)) : null
+          const alreadyActive = daysLeft !== null && daysLeft <= 0
+
+          return (
+            <div className="mb-6 p-4 bg-warning/10 border border-warning/20 rounded-xl flex items-start gap-3">
+              <FiStar className="w-5 h-5 text-warning shrink-0 mt-0.5" />
+              <div className="flex-1">
+                <p className="text-sm font-medium text-warning">
+                  {alreadyActive ? 'Mudanca de plano em vigor' : 'Mudanca de plano agendada'}
+                </p>
+                <p className="text-sm text-secondary mt-1">
+                  {alreadyActive
+                    ? <>O plano <strong>{pendingLabel}</strong> ja esta ativo.</>
+                    : daysLeft !== null
+                      ? <>Faltam <strong>{daysLeft} dia{daysLeft !== 1 ? 's' : ''}</strong> para o plano <strong>{pendingLabel}</strong> entrar em vigor. Ate la, voce mantem todas as features do plano <strong>{PLAN_LABELS[currentPlan] || currentPlan}</strong>.</>
+                      : <>Seu plano mudara para <strong>{pendingLabel}</strong>. Ate la, voce mantem todas as features do plano atual.</>
+                  }
+                </p>
+              </div>
             </div>
-          </div>
-        )}
+          )
+        })()}
 
         {/* Cards de planos */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
