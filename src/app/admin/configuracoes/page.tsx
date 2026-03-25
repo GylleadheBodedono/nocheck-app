@@ -62,6 +62,7 @@ export default function ConfiguracoesPage() {
           isAdmin = profile && 'is_admin' in profile ? (profile as { is_admin: boolean }).is_admin : false
           if (profile && 'email' in profile) setUserEmail((profile as { email: string }).email || user.email || '')
         }
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       } catch(err: any) {
         // Fallback cache
         setError(err instanceof Error ? err.message : 'Erro ao obter usuário do supabase')
@@ -76,6 +77,7 @@ export default function ConfiguracoesPage() {
             isAdmin = cachedUser?.is_admin || false
             if (cachedUser?.email) setUserEmail(cachedUser.email)
           }
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         } catch (err: any) {
           setError(err instanceof Error ? err.message : 'Erro ao obter auth do cache')
         }

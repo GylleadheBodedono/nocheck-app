@@ -125,6 +125,7 @@ async function persistToSupabase(entry: LogEntry): Promise<void> {
       : null
 
     // Separa campos de contexto "especiais" que já têm coluna própria
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { route, method, requestId, userId, ...extraContext } = entry.context
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any

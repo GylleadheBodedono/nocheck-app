@@ -262,7 +262,7 @@ export async function POST(request: NextRequest) {
             log.warn('RESEND_API_KEY nao configurada, email de confirmacao nao enviado', { email })
           }
         }
-      } catch (linkErr) {
+      } catch {
         log.warn('Erro no fluxo de email de confirmacao', { email })
       }
     }
