@@ -2,6 +2,7 @@ export const runtime = 'edge'
 
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { createRequestLogger } from '@/lib/serverLogger'
 
 /**
  * POST /api/auth/check-email
@@ -10,6 +11,8 @@ import { createClient } from '@supabase/supabase-js'
  * Não requer autenticação (público). Retorna `{ exists: boolean }`.
  */
 export async function POST(request: NextRequest) {
+  const log = createRequestLogger(request)
+
   try {
     const { email } = await request.json()
 
@@ -29,7 +32,8 @@ export async function POST(request: NextRequest) {
       .ilike('email', email)
 
     return NextResponse.json({ exists: (count ?? 0) > 0 })
-  } catch {
+  } catch (err) {
+    log.error('Erro ao verificar email', {}, err)
     return NextResponse.json({ exists: false })
   }
 }

@@ -2,6 +2,7 @@ export const runtime = 'edge'
 
 import { NextRequest, NextResponse } from 'next/server'
 import { verifyApiAuth } from '@/lib/api-auth'
+import { createRequestLogger } from '@/lib/serverLogger'
 
 const SYSTEM_PROMPT = `Voce e o Flux, o assistente virtual do OpereCheck — Sistema de Checklists do Grupo Do No.
 
@@ -61,6 +62,7 @@ REGRAS IMPORTANTES:
  * Requer autenticação (qualquer usuário logado).
  */
 export async function POST(request: NextRequest) {
+  const log = createRequestLogger(request)
   const auth = await verifyApiAuth(request)
   if (auth.error) return auth.error
 
@@ -93,7 +95,7 @@ export async function POST(request: NextRequest) {
 
     if (!groqRes.ok) {
       const errorText = await groqRes.text()
-      console.error('[Chat API] Groq error:', groqRes.status, errorText)
+      log.error('Groq API error', { statusCode: groqRes.status, groqError: errorText })
       return NextResponse.json({ error: 'Erro ao consultar IA' }, { status: 502 })
     }
 
@@ -102,7 +104,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ message: reply })
   } catch (error) {
-    console.error('[Chat API] Erro:', error)
+    log.error('Erro inesperado em POST /api/chat', {}, error)
     return NextResponse.json(
       { error: 'Erro ao processar mensagem' },
       { status: 500 }

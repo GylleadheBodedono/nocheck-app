@@ -1,5 +1,6 @@
 import { createServerClient, type CookieOptions } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
+import { serverLogger } from '@/lib/serverLogger'
 
 type CookieToSet = { name: string; value: string; options: CookieOptions }
 
@@ -110,7 +111,7 @@ export async function middleware(request: NextRequest) {
     return supabaseResponse
 
   } catch (err) {
-    console.error('[Middleware] Erro ao verificar sessão:', err)
+    serverLogger.error('Erro ao verificar sessão', { route: pathname }, err)
 
     // Em caso de erro de rede (offline)
     const hasSessionCookie = request.cookies.getAll().some(

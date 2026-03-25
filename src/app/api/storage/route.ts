@@ -3,6 +3,7 @@ export const runtime = 'edge'
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { verifyApiAuth } from '@/lib/api-auth'
+import { createRequestLogger } from '@/lib/serverLogger'
 
 export const dynamic = 'force-dynamic'
 
@@ -59,6 +60,7 @@ async function listRecursive(supabase: any, folder: string, maxDepth = 4): Promi
  * Lista arquivos de uma pasta no bucket (recursivo)
  */
 export async function GET(request: NextRequest) {
+  const log = createRequestLogger(request)
   const auth = await verifyApiAuth(request, true)
   if (auth.error) return auth.error
 
@@ -74,7 +76,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ success: true, files: items, folder })
   } catch (error) {
-    console.error('[Storage] Erro ao listar:', error)
+    log.error('Erro ao listar storage', { folder: request.nextUrl.searchParams.get('folder') ?? undefined }, error)
     return NextResponse.json(
       { success: false, error: error instanceof Error ? error.message : 'Erro desconhecido' },
       { status: 500 }
@@ -88,6 +90,7 @@ export async function GET(request: NextRequest) {
  * Body: { paths: ['uploads/file1.jpg'] }
  */
 export async function DELETE(request: NextRequest) {
+  const log = createRequestLogger(request)
   const auth = await verifyApiAuth(request, true)
   if (auth.error) return auth.error
 
@@ -116,7 +119,7 @@ export async function DELETE(request: NextRequest) {
 
     return NextResponse.json({ success: true, deleted: paths.length })
   } catch (error) {
-    console.error('[Storage] Erro ao deletar:', error)
+    log.error('Erro ao deletar arquivos do storage', {}, error)
     return NextResponse.json(
       { success: false, error: error instanceof Error ? error.message : 'Erro desconhecido' },
       { status: 500 }
