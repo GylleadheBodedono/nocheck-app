@@ -24,7 +24,7 @@ export async function PUT(req: NextRequest) {
       return NextResponse.json({ error: 'Nao autenticado' }, { status: 401 })
     }
 
-    const isPlatformAdmin = user.app_metadata?.is_platform_admin === true
+    const isPlatformAdmin = user.app_metadata?.is_platform_admin === true || user.user_metadata?.is_platform_admin === true
     if (!isPlatformAdmin) {
       return NextResponse.json({ error: 'Acesso negado — apenas superadmin' }, { status: 403 })
     }
