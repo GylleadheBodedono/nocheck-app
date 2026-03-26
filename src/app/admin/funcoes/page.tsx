@@ -265,7 +265,7 @@ export default function FuncoesPage() {
 
     if (error) {
       console.error('Error deleting function:', error)
-      alert('Erro ao excluir funcao. Verifique se nao existem usuarios vinculados.')
+      alert('Erro ao excluir função. Verifique se não existem usuários vinculados.')
       return
     }
 
@@ -300,7 +300,7 @@ export default function FuncoesPage() {
           <div className="bg-warning/10 border border-warning/30 rounded-xl p-4 mb-6 flex items-center gap-3">
             <FiWifiOff className="w-5 h-5 text-warning" />
             <p className="text-warning text-sm">
-              Voce esta offline. Os dados mostrados sao do cache local. Edicoes nao estao disponiveis.
+              Você está offline. Os dados mostrados são do cache local. Edições não estão disponíveis.
             </p>
           </div>
         )}

@@ -21,7 +21,7 @@ import type {
   ChecklistSectionRow, UserStore,
 } from '@/types/database'
 
-const DB_NAME = 'nocheck-cache'
+const DB_NAME = 'operecheck-cache'
 const DB_VERSION = 5
 
 // Stores do IndexedDB

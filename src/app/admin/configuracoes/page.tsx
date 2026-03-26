@@ -160,7 +160,7 @@ export default function ConfiguracoesPage() {
         throw new Error('Erro ao salvar configuracoes')
       }
 
-      setSuccess('Configuracoes salvas com sucesso!')
+      setSuccess('Configurações salvas com sucesso!')
       setTimeout(() => setSuccess(null), 3000)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Erro ao salvar')
@@ -328,7 +328,7 @@ export default function ConfiguracoesPage() {
                 className="w-full border-0"
                 style={{ minHeight: 500 }}
                 title="Email Preview"
-                sandbox="allow-same-origin"
+                sandbox=""
               />
             </div>
           </div>
@@ -361,7 +361,7 @@ export default function ConfiguracoesPage() {
             ) : (
               <>
                 <FiSave className="w-4 h-4" />
-                Salvar Configuracoes
+                Salvar Configurações
               </>
             )}
           </button>

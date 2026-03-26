@@ -1,5 +1,5 @@
 -- ============================================
--- NoCheck - Schema Completo (Consolidado)
+-- OpereCheck - Schema Completo (Consolidado)
 -- ============================================
 -- Este arquivo cria TODA a estrutura do banco de dados do zero.
 -- Gerado a partir da consolidacao das migrations 001-021.

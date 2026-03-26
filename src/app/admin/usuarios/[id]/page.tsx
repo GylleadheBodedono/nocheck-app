@@ -289,7 +289,7 @@ export default function EditarUsuarioPage() {
                   disabled
                   className="input opacity-60 cursor-not-allowed"
                 />
-                <p className="text-xs text-muted mt-1">O email nao pode ser alterado</p>
+                <p className="text-xs text-muted mt-1">O email não pode ser alterado</p>
               </div>
 
               <div>
@@ -344,7 +344,7 @@ export default function EditarUsuarioPage() {
             <div className="card p-6">
               <h2 className="text-lg font-semibold text-main mb-4">Atribuicao</h2>
               <p className="text-sm text-muted mb-4">
-                Selecione as lojas, setores e funcao do usuario.
+                Selecione as lojas, setores e função do usuário.
               </p>
 
               <div className="space-y-4">
@@ -414,7 +414,7 @@ export default function EditarUsuarioPage() {
                 {/* Function */}
                 <div>
                   <label className="block text-sm font-medium text-secondary mb-2">
-                    Funcao
+                    Função
                   </label>
                   <Select
                     value={String(functionId ?? '')}

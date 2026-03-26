@@ -407,7 +407,7 @@ export default function AdminChecklistsPage() {
           <div className="bg-warning/10 border border-warning/30 rounded-xl p-4 mb-6 flex items-center gap-3">
             <FiWifiOff className="w-5 h-5 text-warning" />
             <p className="text-warning text-sm">
-              Voce esta offline. Os dados de checklists nao estao disponiveis no cache local.
+              Você está offline. Os dados de checklists não estão disponíveis no cache local.
             </p>
           </div>
         )}

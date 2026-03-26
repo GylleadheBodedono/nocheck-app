@@ -68,9 +68,9 @@ const EMPTY_FORM: PresetForm = {
 
 const SEVERITY_OPTIONS: { value: Severity; label: string; color: string }[] = [
   { value: 'baixa', label: 'Baixa', color: 'text-success' },
-  { value: 'media', label: 'Media', color: 'text-warning' },
+  { value: 'media', label: 'Média', color: 'text-warning' },
   { value: 'alta', label: 'Alta', color: 'text-orange-500' },
-  { value: 'critica', label: 'Critica', color: 'text-error' },
+  { value: 'critica', label: 'Crítica', color: 'text-error' },
 ]
 
 const SEVERITY_BADGE: Record<string, string> = {
@@ -218,7 +218,7 @@ export default function ModelosPlanoDeAcaoPage() {
 
   const handleSave = async () => {
     if (!form.name.trim()) {
-      setError('Nome do modelo e obrigatorio')
+      setError('Nome do modelo é obrigatório')
       return
     }
 
@@ -284,7 +284,7 @@ export default function ModelosPlanoDeAcaoPage() {
   }
 
   const handleDelete = async (preset: Preset) => {
-    if (!confirm(`Excluir o modelo "${preset.name}"? Esta acao nao pode ser desfeita.`)) return
+    if (!confirm(`Excluir o modelo "${preset.name}"? Esta ação não pode ser desfeita.`)) return
 
     try {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -386,7 +386,7 @@ export default function ModelosPlanoDeAcaoPage() {
             </div>
 
             <div>
-              <label className="block text-xs font-medium text-secondary mb-1">Funcao responsavel</label>
+              <label className="block text-xs font-medium text-secondary mb-1">Função responsável</label>
               <Select
                 value={form.default_function_id}
                 onChange={(v) => setForm(f => ({ ...f, default_function_id: v }))}
@@ -394,7 +394,7 @@ export default function ModelosPlanoDeAcaoPage() {
                 options={functions.map(f => ({ value: String(f.id), label: f.name }))}
               />
               <p className="text-xs text-muted mt-1">
-                Se nao selecionado, o plano sera atribuido a quem preencheu o checklist.
+                Se não selecionado, o plano será atribuído a quem preencheu o checklist.
               </p>
             </div>
 
@@ -404,7 +404,7 @@ export default function ModelosPlanoDeAcaoPage() {
                 value={form.description_template}
                 onChange={(e) => setForm(f => ({ ...f, description_template: e.target.value }))}
                 className="input min-h-[80px]"
-                placeholder="Ex: Nao conformidade: {field_name} com valor {value} na {store_name}"
+                placeholder="Ex: Não conformidade: {field_name} com valor {value} na {store_name}"
                 rows={3}
               />
               <p className="text-xs text-muted mt-1">
@@ -419,7 +419,7 @@ export default function ModelosPlanoDeAcaoPage() {
                 <div className="flex items-center gap-2 text-sm text-primary">
                   <FiCamera className="w-4 h-4" />
                   <FiFileText className="w-4 h-4" />
-                  <span>Foto e texto sao obrigatorios para concluir o plano de acao.</span>
+                  <span>Foto e texto são obrigatórios para concluir o plano de ação.</span>
                 </div>
               </div>
               <div>

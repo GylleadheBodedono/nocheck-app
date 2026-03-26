@@ -3,6 +3,7 @@
 import { useEffect, useState, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient, isSupabaseConfigured } from '@/lib/supabase'
+import { PLAN_CONFIGS, type Plan } from '@/types/tenant'
 import {
   FiMapPin,
   FiEdit2,
@@ -13,6 +14,7 @@ import {
   FiPlus,
   FiUsers,
   FiWifiOff,
+  FiLock,
   FiShield,
 } from 'react-icons/fi'
 import type { Store } from '@/types/database'
@@ -41,6 +43,7 @@ export default function LojasPage() {
   const [showModal, setShowModal] = useState(false)
   const [formData, setFormData] = useState({ name: '', is_active: true, require_gps: true, latitude: null as number | null, longitude: null as number | null })
   const [saving, setSaving] = useState(false)
+  const [orgPlan, setOrgPlan] = useState<string>('enterprise')
   const [isOffline, setIsOffline] = useState(false)
   const router = useRouter()
   const supabase = useMemo(() => createClient(), [])
@@ -141,6 +144,17 @@ export default function LojasPage() {
 
       setStores(storesWithStats)
       setIsOffline(false)
+
+      // Buscar plano da org para determinar lojas bloqueadas
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const { data: tenantId } = await (supabase as any).rpc('get_my_tenant_id')
+        if (tenantId) {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const { data: orgData } = await (supabase as any).from('organizations').select('plan').eq('id', tenantId).single()
+          if (orgData?.plan) setOrgPlan(orgData.plan)
+        }
+      } catch { /* nao critico */ }
     } catch (err) {
       console.error('[Lojas] Erro ao buscar online:', err)
 
@@ -183,6 +197,12 @@ export default function LojasPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!formData.name.trim()) return
+
+    // Bloquear criação se atingiu limite do plano
+    if (!editingStore && stores.length >= maxStores) {
+      alert(`Limite de ${maxStores} loja${maxStores > 1 ? 's' : ''} atingido. Faça upgrade para criar mais.`)
+      return
+    }
 
     setSaving(true)
 
@@ -255,7 +275,7 @@ export default function LojasPage() {
 
     if (error) {
       console.error('Error deleting store:', error)
-      alert('Erro ao excluir loja. Verifique se nao existem usuarios ou checklists vinculados.')
+      alert('Erro ao excluir loja. Verifique se não existem usuários ou checklists vinculados.')
       return
     }
 
@@ -266,8 +286,8 @@ export default function LojasPage() {
 
   const toggleAllGps = async (enable: boolean) => {
     if (!confirm(enable
-      ? 'Ativar verificacao GPS para TODAS as lojas?'
-      : 'Desativar verificacao GPS para TODAS as lojas?'
+      ? 'Ativar verificação GPS para TODAS as lojas?'
+      : 'Desativar verificação GPS para TODAS as lojas?'
     )) return
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -284,6 +304,13 @@ export default function LojasPage() {
 
     fetchStores()
   }
+
+  // Determinar lojas bloqueadas pelo plano
+  const planConfig = PLAN_CONFIGS[orgPlan as Plan]
+  const maxStores = planConfig?.maxStores || 999
+  const sortedByDate = [...stores].sort((a, b) => new Date(a.created_at || 0).getTime() - new Date(b.created_at || 0).getTime())
+  const allowedStoreIds = new Set(sortedByDate.slice(0, maxStores).map(s => s.id))
+  const isStoreBlocked = (storeId: number) => stores.length > maxStores && !allowedStoreIds.has(storeId)
 
   const filteredStores = stores.filter(store => {
     const matchesSearch = store.name.toLowerCase().includes(searchTerm.toLowerCase())
@@ -302,11 +329,20 @@ export default function LojasPage() {
       <PageContainer>
         {/* Top actions */}
         {!isOffline && (
-          <div className="flex items-center justify-end mb-6">
-            <button onClick={() => openModal()} className="btn-primary flex items-center gap-2">
-              <FiPlus className="w-4 h-4" />
-              Nova Loja
-            </button>
+          <div className="flex items-center justify-between mb-6">
+            {stores.length >= maxStores && (
+              <p className="text-xs text-warning">Limite de {maxStores} loja{maxStores > 1 ? 's' : ''} atingido. Faça upgrade para criar mais.</p>
+            )}
+            <div className="ml-auto">
+              <button
+                onClick={() => openModal()}
+                disabled={stores.length >= maxStores}
+                className={`btn-primary flex items-center gap-2 ${stores.length >= maxStores ? 'opacity-50 cursor-not-allowed' : ''}`}
+              >
+                <FiPlus className="w-4 h-4" />
+                Nova Loja
+              </button>
+            </div>
           </div>
         )}
 
@@ -315,7 +351,7 @@ export default function LojasPage() {
           <div className="bg-warning/10 border border-warning/30 rounded-xl p-4 mb-6 flex items-center gap-3">
             <FiWifiOff className="w-5 h-5 text-warning" />
             <p className="text-warning text-sm">
-              Voce esta offline. Os dados mostrados sao do cache local. Edicoes nao estao disponiveis.
+              Você está offline. Os dados mostrados são do cache local. Edições não estão disponíveis.
             </p>
           </div>
         )}
@@ -327,10 +363,10 @@ export default function LojasPage() {
               <FiShield className={`w-5 h-5 ${allGpsEnabled ? 'text-success' : 'text-warning'}`} />
               <div>
                 <p className="text-sm font-medium text-main">
-                  Verificacao GPS: {allGpsEnabled ? 'Ativa em todas' : 'Desativada em algumas'}
+                  Verificação GPS: {allGpsEnabled ? 'Ativa em todas' : 'Desativada em algumas'}
                 </p>
                 <p className="text-xs text-muted">
-                  Controla se funcionarios precisam estar no local da loja para responder checklists
+                  Controla se funcionários precisam estar no local da loja para responder checklists
                 </p>
               </div>
             </div>
@@ -396,7 +432,16 @@ export default function LojasPage() {
             </div>
           ) : (
             filteredStores.map((store) => (
-              <div key={store.id} className="card p-6 hover:shadow-theme-md transition-shadow">
+              <div key={store.id} className="card p-6 hover:shadow-theme-md transition-shadow relative">
+                {isStoreBlocked(store.id) && (
+                  <div className="absolute inset-0 bg-[rgba(var(--bg-surface-rgb),0.85)] backdrop-blur-sm rounded-2xl flex items-center justify-center z-10">
+                    <div className="text-center p-4">
+                      <FiLock className="w-8 h-8 text-warning mx-auto mb-2" />
+                      <p className="text-sm font-medium text-warning">Loja bloqueada</p>
+                      <p className="text-xs text-muted mt-1">Seu plano permite {maxStores} loja{maxStores > 1 ? 's' : ''}. Faça upgrade para desbloquear.</p>
+                    </div>
+                  </div>
+                )}
                 <div className="flex items-start justify-between mb-4">
                   <div className="flex items-center gap-3">
                     <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${
@@ -422,7 +467,7 @@ export default function LojasPage() {
                 <div className="flex items-center gap-4 mb-4 text-sm text-muted">
                   <div className="flex items-center gap-1">
                     <FiUsers className="w-4 h-4" />
-                    <span>{store.user_count} usuarios</span>
+                    <span>{store.user_count} usuários</span>
                   </div>
                   <div className="flex items-center gap-1">
                     <FiCheckCircle className="w-4 h-4" />
@@ -527,10 +572,10 @@ export default function LojasPage() {
                     onChange={(e) => setFormData({ ...formData, require_gps: e.target.checked })}
                     className="w-5 h-5 rounded border-default bg-surface text-primary"
                   />
-                  <span className="text-sm text-secondary">Exigir verificacao GPS</span>
+                  <span className="text-sm text-secondary">Exigir verificação GPS</span>
                 </label>
                 <p className="text-xs text-muted mt-1 ml-7">
-                  Desative para permitir checklists sem validar a localizacao do funcionario
+                  Desative para permitir checklists sem validar a localização do funcionário
                 </p>
               </div>
 

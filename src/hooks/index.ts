@@ -13,8 +13,9 @@ export { useOfflineData } from './useOfflineData'
 export type { OfflineDataState, OfflineDataActions } from './useOfflineData'
 
 // Hooks de realtime
-export { useRealtimeActionPlans } from './useRealtimeActionPlans'
+export { useRealtimeRefresh } from './useRealtimeRefresh'
 export { useRealtimeDashboard } from './useRealtimeDashboard'
+export { useRealtimeActionPlans } from './useRealtimeActionPlans'
 
 // Hooks utilitários
 export { useOnlineStatus } from './useOnlineStatus'

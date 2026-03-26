@@ -32,16 +32,16 @@ type SearchCategory = {
 // ============================================
 
 const ADMIN_MODULES: { title: string; description: string; href: string; icon: IconType }[] = [
-  { title: 'Usuarios', description: 'Gerenciar usuarios e permissoes', href: '/admin/usuarios', icon: FiUsers },
+  { title: 'Usuários', description: 'Gerenciar usuários e permissões', href: '/admin/usuarios', icon: FiUsers },
   { title: 'Checklists', description: 'Criar e editar modelos', href: '/admin/templates', icon: FiFileText },
   { title: 'Lojas', description: 'Gerenciar unidades', href: '/admin/lojas', icon: FiHome },
-  { title: 'Setores', description: 'Cozinha, Estoque, Salao', href: '/admin/setores', icon: FiGrid },
-  { title: 'Funcoes', description: 'Cozinheiro, Zelador, Garcom', href: '/admin/funcoes', icon: FiClipboard },
-  { title: 'Validacoes', description: 'Estoquista vs Aprendiz', href: '/admin/validacoes', icon: FiLayers },
+  { title: 'Setores', description: 'Cozinha, Estoque, Salão', href: '/admin/setores', icon: FiGrid },
+  { title: 'Funções', description: 'Cozinheiro, Zelador, Garçom', href: '/admin/funcoes', icon: FiClipboard },
+  { title: 'Validações', description: 'Estoquista vs Aprendiz', href: '/admin/validacoes', icon: FiLayers },
   { title: 'Respostas', description: 'Gerenciar e excluir', href: '/admin/checklists', icon: FiCheckSquare },
-  { title: 'Planos de Acao', description: 'Nao conformidades e acoes', href: '/admin/planos-de-acao', icon: FiAlertTriangle },
-  { title: 'Relatorios', description: 'Estatisticas e analises', href: '/admin/relatorios', icon: FiLayers },
-  { title: 'Configuracoes', description: 'Email templates e ajustes', href: '/admin/configuracoes', icon: FiLayers },
+  { title: 'Planos de Ação', description: 'Não conformidades e ações', href: '/admin/planos-de-acao', icon: FiAlertTriangle },
+  { title: 'Relatórios', description: 'Estatísticas e análises', href: '/admin/relatorios', icon: FiLayers },
+  { title: 'Configurações', description: 'Email templates e ajustes', href: '/admin/configuracoes', icon: FiLayers },
   { title: 'Galeria', description: 'Fotos e anexos', href: '/admin/galeria', icon: FiLayers },
 ]
 
@@ -99,7 +99,7 @@ type GlobalSearchProps = {
  * Debounce de 300ms para evitar requisições excessivas durante a digitação.
  * Suporta navegação por teclado (setas ↑↓, Enter para navegar, Escape para fechar).
  */
-export function GlobalSearch({ placeholder = 'Buscar modulos, relatorios, usuarios...' }: GlobalSearchProps) {
+export function GlobalSearch({ placeholder = 'Buscar módulos, relatórios, usuários...' }: GlobalSearchProps) {
   const router = useRouter()
   const supabase = useMemo(() => createClient(), [])
 
@@ -206,7 +206,7 @@ export function GlobalSearch({ placeholder = 'Buscar modulos, relatorios, usuari
       if (modules.length > 0) {
         cats.push({
           key: 'modulos',
-          label: 'Modulos',
+          label: 'Módulos',
           icon: FiLayers,
           results: modules.slice(0, 3).map(m => ({
             id: m.href,
@@ -225,7 +225,7 @@ export function GlobalSearch({ placeholder = 'Buscar modulos, relatorios, usuari
       if (data && data.length > 0) {
         cats.push({
           key: 'usuarios',
-          label: 'Usuarios',
+          label: 'Usuários',
           icon: FiUsers,
           results: data.slice(0, 3).map((u: { id: string; full_name: string; email: string }) => ({
             id: u.id,
@@ -281,7 +281,7 @@ export function GlobalSearch({ placeholder = 'Buscar modulos, relatorios, usuari
       if (data && data.length > 0) {
         cats.push({
           key: 'planos',
-          label: 'Planos de Acao',
+          label: 'Planos de Ação',
           icon: FiAlertTriangle,
           results: data.slice(0, 3).map((p: { id: number; title: string; severity: string }) => ({
             id: String(p.id),
@@ -322,7 +322,7 @@ export function GlobalSearch({ placeholder = 'Buscar modulos, relatorios, usuari
       if (data && data.length > 0) {
         cats.push({
           key: 'funcoes',
-          label: 'Funcoes',
+          label: 'Funções',
           icon: FiClipboard,
           results: data.slice(0, 3).map((f: { id: number; name: string }) => ({
             id: String(f.id),

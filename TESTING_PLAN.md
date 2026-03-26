@@ -442,9 +442,9 @@ A ordem prioriza **maior retorno com menor esforço**:
 | 5 | `exportUtils.test.ts` | Unitário | Baixa | Médio | Pendente |
 | 6 | `offlineStorage.test.ts` + `offlineCache.test.ts` | Integração | Média | Alto | ✅ 28 testes (storage) |
 | 7 | `syncService.test.ts` | Integração | Alta | Alto | Pendente |
-| 8 | `FieldRenderer.test.tsx` | Componente | Alta | Alto | Pendente |
+| 8 | `FieldRenderer.test.tsx` | Componente | Alta | Alto | ✅ 73 testes |
 | 9 | Hooks (useAuth, useOnlineStatus, useOfflineData) | Integração | Média | Médio | Pendente |
-| 10 | `FieldConditionEditor.test.tsx` | Componente | Média | Médio | Pendente |
+| 10 | `FieldConditionEditor.test.tsx` | Componente | Média | Médio | ✅ 45 testes |
 
 ---
 

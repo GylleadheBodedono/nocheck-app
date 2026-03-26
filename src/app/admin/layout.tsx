@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { PermanentSidebar } from '@/components/ui/PermanentSidebar'
 import { AdminHeader } from '@/components/ui/AdminHeader'
+import { SessionTenantProvider } from '@/components/tenant/SessionTenantProvider'
 import { FiMenu } from 'react-icons/fi'
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
@@ -22,6 +23,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   }
 
   return (
+    <SessionTenantProvider>
     <div className="h-screen flex overflow-hidden bg-page">
       <PermanentSidebar
         collapsed={collapsed}
@@ -45,5 +47,6 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         </main>
       </div>
     </div>
+    </SessionTenantProvider>
   )
 }

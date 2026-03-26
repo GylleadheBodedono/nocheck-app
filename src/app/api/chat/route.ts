@@ -4,7 +4,12 @@ import { NextRequest, NextResponse } from 'next/server'
 import { verifyApiAuth } from '@/lib/api-auth'
 import { createRequestLogger } from '@/lib/serverLogger'
 
-const SYSTEM_PROMPT = `Voce e o Flux, o assistente virtual do OpereCheck — Sistema de Checklists do Grupo Do No.
+/**
+ * Constrói o system prompt do assistente Flux com o nome do app (suporta white-label).
+ * Inclui personalidade, funcionalidades do sistema e regras de comportamento.
+ */
+function buildSystemPrompt(appName: string) {
+  return `Voce e o Flux, o assistente virtual do ${appName} — Sistema de Checklists do ${appName}.
 
 SUA PERSONALIDADE:
 - Amigavel, extrovertido e engracado
@@ -15,7 +20,7 @@ SUA PERSONALIDADE:
 - Seja conciso mas completo
 - Use emojis com moderacao para dar vida as respostas
 
-SOBRE O NOCHECK:
+SOBRE O OPERECHECK:
 O OpereCheck e um sistema web/PWA de checklists operacionais para redes de lojas. Permite que administradores criem templates de checklists e que operadores os preencham nas lojas, gerando relatorios de conformidade e planos de acao para nao conformidades.
 
 FUNCIONALIDADES PRINCIPAIS:
@@ -50,15 +55,17 @@ DICAS QUE VOCE PODE DAR:
 - Sobre o sistema: funciona como PWA (pode instalar no celular), tem modo offline, sincroniza automaticamente, suporta temas claro e escuro
 
 REGRAS IMPORTANTES:
-- Se o usuario perguntar algo que voce nao sabe ou que nao faz parte do NoCheck, diga honestamente: "Hmm, essa eu nao tenho certeza! Sugiro falar com o admin do sistema ou com o suporte de TI."
+- Se o usuario perguntar algo que voce nao sabe ou que nao faz parte do OpereCheck, diga honestamente: "Hmm, essa eu nao tenho certeza! Sugiro falar com o admin do sistema ou com o suporte de TI."
 - NAO invente funcionalidades que nao existem no sistema
 - Se a pergunta for sobre algo tecnico fora do escopo do OpereCheck, ajude brevemente mas redirecione para o tema principal
 - Nunca revele informacoes tecnicas sensiveis (chaves de API, senhas, configuracoes internas do servidor)`
+}
 
 /**
  * POST /api/chat
- * Proxy para o modelo Claude via Anthropic SDK.
- * Recebe o histórico de mensagens e retorna a resposta do assistente Flux como streaming.
+ * Envia mensagens do usuário para o modelo Groq (LLM) e retorna a resposta do assistente Flux.
+ * Limita o histórico de mensagens para os últimos 20 itens para controlar o tamanho do payload.
+ * Suporta white-label via `appName` no corpo da requisição.
  * Requer autenticação (qualquer usuário logado).
  */
 export async function POST(request: NextRequest) {
@@ -67,14 +74,14 @@ export async function POST(request: NextRequest) {
   if (auth.error) return auth.error
 
   try {
-    const { messages } = await request.json()
+    const { messages, appName } = await request.json()
 
     if (!Array.isArray(messages) || messages.length === 0) {
       return NextResponse.json({ error: 'Mensagens invalidas' }, { status: 400 })
     }
 
-    // Limit history to last 20 messages to avoid large payloads
     const recentMessages = messages.slice(-20)
+    const systemPrompt = buildSystemPrompt(appName || 'OpereCheck')
 
     const groqRes = await fetch('https://api.groq.com/openai/v1/chat/completions', {
       method: 'POST',
@@ -85,7 +92,7 @@ export async function POST(request: NextRequest) {
       body: JSON.stringify({
         model: 'llama-3.3-70b-versatile',
         messages: [
-          { role: 'system', content: SYSTEM_PROMPT },
+          { role: 'system', content: systemPrompt },
           ...recentMessages,
         ],
         max_tokens: 1024,

@@ -114,10 +114,10 @@ describe('replaceTemplatePlaceholders', () => {
 
   it('does NOT escape plan_url (RAW_VARIABLE)', () => {
     const vars = makeVariables({
-      plan_url: 'https://app.nocheck.com/admin/planos?id=42&view=detail',
+      plan_url: 'https://app.operecheck.com/admin/planos?id=42&view=detail',
     })
     const result = replaceTemplatePlaceholders('<a href="{{plan_url}}">', vars)
-    expect(result).toBe('<a href="https://app.nocheck.com/admin/planos?id=42&view=detail">')
+    expect(result).toBe('<a href="https://app.operecheck.com/admin/planos?id=42&view=detail">')
   })
 
   it('does NOT escape reincidencia_prefix (RAW_VARIABLE)', () => {

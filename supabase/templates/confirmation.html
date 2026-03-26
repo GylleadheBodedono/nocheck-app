@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Confirme seu email - OpereCheck</title>
+</head>
+<body style="margin:0;padding:0;background:#f4f4f5;font-family:'Segoe UI',Roboto,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f4f4f5;padding:40px 20px;">
+    <tr>
+      <td align="center">
+        <table width="480" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.08);">
+          <!-- Header -->
+          <tr>
+            <td style="background:linear-gradient(135deg,#0D9488,#115E59);padding:32px 40px;text-align:center;">
+              <h1 style="margin:0;color:#ffffff;font-size:24px;font-weight:700;letter-spacing:-0.5px;">
+                Opere<span style="opacity:0.85;">Check</span>
+              </h1>
+            </td>
+          </tr>
+          <!-- Body -->
+          <tr>
+            <td style="padding:40px;">
+              <h2 style="margin:0 0 8px;color:#18181b;font-size:20px;font-weight:700;">
+                Confirme seu email
+              </h2>
+              <p style="margin:0 0 28px;color:#71717a;font-size:15px;line-height:1.6;">
+                Use o codigo abaixo para confirmar sua conta no OpereCheck:
+              </p>
+
+              <!-- OTP Code -->
+              <div style="background:#f4f4f5;border:2px dashed #d4d4d8;border-radius:12px;padding:24px;text-align:center;margin:0 0 28px;">
+                <span style="font-size:36px;font-weight:800;letter-spacing:8px;color:#0D9488;font-family:'Courier New',monospace;">
+                  {{ .Token }}
+                </span>
+              </div>
+
+              <p style="margin:0 0 28px;color:#a1a1aa;font-size:13px;line-height:1.5;">
+                O codigo expira em 1 hora. Se voce nao solicitou este email, ignore-o.
+              </p>
+
+              <!-- Divider -->
+              <hr style="border:none;border-top:1px solid #e4e4e7;margin:24px 0;">
+
+              <!-- Link fallback -->
+              <p style="margin:0 0 16px;color:#71717a;font-size:13px;">
+                Ou clique no botao abaixo:
+              </p>
+              <a href="{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=signup"
+                style="display:inline-block;background:#0D9488;color:#ffffff;text-decoration:none;padding:12px 32px;border-radius:10px;font-size:14px;font-weight:600;">
+                Confirmar email
+              </a>
+            </td>
+          </tr>
+          <!-- Footer -->
+          <tr>
+            <td style="padding:24px 40px;background:#fafafa;border-top:1px solid #f4f4f5;text-align:center;">
+              <p style="margin:0;color:#a1a1aa;font-size:12px;">
+                OpereCheck &mdash; Checklists digitais para sua operacao
+              </p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>

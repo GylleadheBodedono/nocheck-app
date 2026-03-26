@@ -89,16 +89,16 @@ type Props = {
 
 const FIELD_TYPES: { value: FieldType; label: string; icon: string }[] = [
   { value: 'text', label: 'Texto', icon: 'Aa' },
-  { value: 'number', label: 'Numero', icon: '#' },
+  { value: 'number', label: 'Número', icon: '#' },
   { value: 'photo', label: 'Foto', icon: '📷' },
   { value: 'dropdown', label: 'Lista', icon: '▼' },
   { value: 'signature', label: 'Assinatura', icon: '✍️' },
   { value: 'datetime', label: 'Data/Hora', icon: '📅' },
-  { value: 'checkbox_multiple', label: 'Multipla Escolha', icon: '☑️' },
-  { value: 'barcode', label: 'Codigo de Barras', icon: '▮▯▮' },
+  { value: 'checkbox_multiple', label: 'Múltipla Escolha', icon: '☑️' },
+  { value: 'barcode', label: 'Código de Barras', icon: '▮▯▮' },
   { value: 'calculated', label: 'Calculado', icon: '∑' },
-  { value: 'yes_no', label: 'Sim/Nao/N/A', icon: '?!' },
-  { value: 'rating', label: 'Avaliacao', icon: '😊' },
+  { value: 'yes_no', label: 'Sim/Não/N/A', icon: '?!' },
+  { value: 'rating', label: 'Avaliação', icon: '😊' },
 ]
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -315,7 +315,7 @@ export function SectionEditModal({
             <div className="flex items-center gap-0.5 sm:gap-1 shrink-0">
               <label
                 className="flex items-center gap-0.5 sm:gap-1 text-[10px] sm:text-xs text-secondary"
-                title="Obrigatorio"
+                title="Obrigatório"
               >
                 <input
                   type="checkbox"
@@ -404,7 +404,7 @@ export function SectionEditModal({
                     value={field.help_text}
                     onChange={(e) => onFieldUpdate(field.id, { help_text: e.target.value })}
                     className="input text-sm"
-                    placeholder="Instrucoes para o usuario..."
+                    placeholder="Instruções para o usuário..."
                   />
                 </div>
               </div>
@@ -412,10 +412,10 @@ export function SectionEditModal({
               {/* Number subtype */}
               {field.field_type === 'number' && (
                 <div>
-                  <label className="block text-xs text-muted mb-1">Tipo de numero</label>
+                  <label className="block text-xs text-muted mb-1">Tipo de número</label>
                   <div className="grid grid-cols-2 gap-2">
                     {[
-                      { value: 'monetario', label: 'Monetario (R$)' },
+                      { value: 'monetario', label: 'Monetário (R$)' },
                       { value: 'quantidade', label: 'Quantidade (un)' },
                       { value: 'decimal', label: 'Decimal' },
                       { value: 'porcentagem', label: 'Porcentagem (%)' },
@@ -448,7 +448,7 @@ export function SectionEditModal({
               {/* Dropdown / checkbox options */}
               {(field.field_type === 'dropdown' || field.field_type === 'checkbox_multiple') && (
                 <div>
-                  <label className="block text-xs text-muted mb-2">Opcoes</label>
+                  <label className="block text-xs text-muted mb-2">Opções</label>
                   <div className="space-y-2">
                     {getOptionsItems(field.options).map((opt: string, optIdx: number) => (
                       <div key={optIdx} className="flex items-center gap-2">
@@ -467,7 +467,7 @@ export function SectionEditModal({
                                 : newOpts,
                             })
                           }}
-                          placeholder={`Opcao ${optIdx + 1}`}
+                          placeholder={`Opção ${optIdx + 1}`}
                           className="input text-sm flex-1"
                         />
                         <button
@@ -501,7 +501,7 @@ export function SectionEditModal({
                     }}
                     className="mt-2 text-xs text-primary hover:text-primary/80 font-medium py-1.5 px-3 border border-primary/30 rounded-lg hover:bg-primary/5 transition-colors"
                   >
-                    + Adicionar opcao
+                    + Adicionar opção
                   </button>
                 </div>
               )}
@@ -534,7 +534,7 @@ export function SectionEditModal({
                     <Select value={(opts.photoRequired as boolean) ? 'required' : 'optional'}
                       onChange={(v) => updateOpts({ photoRequired: v === 'required' })}
                       className="text-sm"
-                      options={[{ value: 'optional', label: 'Foto opcional' }, { value: 'required', label: 'Foto obrigatoria' }]} />
+                      options={[{ value: 'optional', label: 'Foto opcional' }, { value: 'required', label: 'Foto obrigatória' }]} />
                   )}
 
                   {/* Quando resposta for "Sim" */}
@@ -551,7 +551,7 @@ export function SectionEditModal({
                         <input type="text" value={(getCondBlock('onYes').textFieldLabel as string) || ''} onChange={(e) => setCondBlock('onYes', { textFieldLabel: e.target.value })} placeholder="Label do campo (ex: Explique o motivo)" className="input text-sm" />
                         <label className="flex items-center gap-2 text-xs text-muted cursor-pointer">
                           <input type="checkbox" checked={getCondBlock('onYes').textFieldRequired === true} onChange={(e) => setCondBlock('onYes', { textFieldRequired: e.target.checked })} className="rounded border-default bg-surface text-primary focus:ring-primary w-3 h-3" />
-                          Texto obrigatorio
+                          Texto obrigatório
                         </label>
                       </div>
                     )}
@@ -566,7 +566,7 @@ export function SectionEditModal({
                         <input type="text" value={(getCondBlock('onYes').photoFieldLabel as string) || ''} onChange={(e) => setCondBlock('onYes', { photoFieldLabel: e.target.value })} placeholder="Label da foto (ex: Foto da evidencia)" className="input text-sm" />
                         <label className="flex items-center gap-2 text-xs text-muted cursor-pointer">
                           <input type="checkbox" checked={getCondBlock('onYes').photoFieldRequired === true} onChange={(e) => setCondBlock('onYes', { photoFieldRequired: e.target.checked })} className="rounded border-default bg-surface text-primary focus:ring-primary w-3 h-3" />
-                          Foto obrigatoria
+                          Foto obrigatória
                         </label>
                       </div>
                     )}
@@ -586,7 +586,7 @@ export function SectionEditModal({
                         <input type="text" value={(getCondBlock('onNo').textFieldLabel as string) || ''} onChange={(e) => setCondBlock('onNo', { textFieldLabel: e.target.value })} placeholder="Label do campo (ex: Explique o motivo)" className="input text-sm" />
                         <label className="flex items-center gap-2 text-xs text-muted cursor-pointer">
                           <input type="checkbox" checked={getCondBlock('onNo').textFieldRequired === true} onChange={(e) => setCondBlock('onNo', { textFieldRequired: e.target.checked })} className="rounded border-default bg-surface text-primary focus:ring-primary w-3 h-3" />
-                          Texto obrigatorio
+                          Texto obrigatório
                         </label>
                       </div>
                     )}
@@ -601,7 +601,7 @@ export function SectionEditModal({
                         <input type="text" value={(getCondBlock('onNo').photoFieldLabel as string) || ''} onChange={(e) => setCondBlock('onNo', { photoFieldLabel: e.target.value })} placeholder="Label da foto (ex: Foto da evidencia)" className="input text-sm" />
                         <label className="flex items-center gap-2 text-xs text-muted cursor-pointer">
                           <input type="checkbox" checked={getCondBlock('onNo').photoFieldRequired === true} onChange={(e) => setCondBlock('onNo', { photoFieldRequired: e.target.checked })} className="rounded border-default bg-surface text-primary focus:ring-primary w-3 h-3" />
-                          Foto obrigatoria
+                          Foto obrigatória
                         </label>
                       </div>
                     )}
@@ -609,7 +609,7 @@ export function SectionEditModal({
                       <input type="checkbox" checked={getCondBlock('onNo').allowUserActionPlan === true}
                         onChange={(e) => setCondBlock('onNo', { allowUserActionPlan: e.target.checked })}
                         className="rounded border-default bg-surface text-primary focus:ring-primary" />
-                      Permitir preenchedor escolher responsavel
+                      Permitir preenchedor escolher responsável
                     </label>
                   </div>
 
@@ -627,7 +627,7 @@ export function SectionEditModal({
                         <input type="text" value={(getCondBlock('onNa').textFieldLabel as string) || ''} onChange={(e) => setCondBlock('onNa', { textFieldLabel: e.target.value })} placeholder="Label do campo (ex: Motivo do N/A)" className="input text-sm" />
                         <label className="flex items-center gap-2 text-xs text-muted cursor-pointer">
                           <input type="checkbox" checked={getCondBlock('onNa').textFieldRequired === true} onChange={(e) => setCondBlock('onNa', { textFieldRequired: e.target.checked })} className="rounded border-default bg-surface text-primary focus:ring-primary w-3 h-3" />
-                          Texto obrigatorio
+                          Texto obrigatório
                         </label>
                       </div>
                     )}
@@ -642,7 +642,7 @@ export function SectionEditModal({
                         <input type="text" value={(getCondBlock('onNa').photoFieldLabel as string) || ''} onChange={(e) => setCondBlock('onNa', { photoFieldLabel: e.target.value })} placeholder="Label da foto (ex: Foto de referencia)" className="input text-sm" />
                         <label className="flex items-center gap-2 text-xs text-muted cursor-pointer">
                           <input type="checkbox" checked={getCondBlock('onNa').photoFieldRequired === true} onChange={(e) => setCondBlock('onNa', { photoFieldRequired: e.target.checked })} className="rounded border-default bg-surface text-primary focus:ring-primary w-3 h-3" />
-                          Foto obrigatoria
+                          Foto obrigatória
                         </label>
                       </div>
                     )}
@@ -654,7 +654,7 @@ export function SectionEditModal({
               {/* Cross-validation */}
               {!['dropdown', 'checkbox_multiple'].includes(field.field_type) && (
                 <div>
-                  <label className="block text-xs text-muted mb-1">Validacao cruzada</label>
+                  <label className="block text-xs text-muted mb-1">Validação cruzada</label>
                   <Select
                     value={
                       (field.options as { validationRole?: string } | null)?.validationRole || ''
@@ -670,7 +670,7 @@ export function SectionEditModal({
                     className="text-sm"
                     placeholder="Nenhum"
                     options={[
-                      { value: 'nota', label: 'Numero da nota' },
+                      { value: 'nota', label: 'Número da nota' },
                       { value: 'valor', label: 'Valor' },
                     ]}
                   />
@@ -711,7 +711,7 @@ export function SectionEditModal({
               type="text"
               value={section.description}
               onChange={(e) => onSectionUpdate(section.id, { description: e.target.value })}
-              placeholder="Descricao (opcional)"
+              placeholder="Descrição (opcional)"
               className="w-full bg-transparent border-none text-sm text-secondary placeholder:text-muted focus:outline-none mt-0.5"
             />
           </div>
@@ -781,7 +781,7 @@ export function SectionEditModal({
                       {expandedSubs[sub.id] && (
                         <div className="px-3 py-2 border-t border-subtle bg-page/50">
                           <p className="text-xs text-muted mb-2">
-                            Campos desta sub-etapa sao editados abaixo na lista principal.
+                            Campos desta sub-etapa são editados abaixo na lista principal.
                           </p>
                         </div>
                       )}
