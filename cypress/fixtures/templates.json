@@ -1,0 +1,124 @@
+[
+  {
+    "id": 1,
+    "name": "Checklist de Abertura",
+    "category": "operacional",
+    "description": "Verificações obrigatórias na abertura da loja",
+    "is_active": true,
+    "require_photo": false,
+    "require_signature": true,
+    "allowed_start_time": "06:00",
+    "allowed_end_time": "10:00",
+    "created_at": "2024-01-01T00:00:00Z",
+    "fields": [
+      {
+        "id": 1,
+        "template_id": 1,
+        "name": "Limpeza do piso",
+        "field_type": "yes_no",
+        "is_required": true,
+        "sort_order": 1,
+        "section_id": null,
+        "options": null
+      },
+      {
+        "id": 2,
+        "template_id": 1,
+        "name": "Temperatura do freezer (°C)",
+        "field_type": "number",
+        "is_required": true,
+        "sort_order": 2,
+        "section_id": null,
+        "options": null
+      },
+      {
+        "id": 3,
+        "template_id": 1,
+        "name": "Observações",
+        "field_type": "text",
+        "is_required": false,
+        "sort_order": 3,
+        "section_id": null,
+        "options": null
+      }
+    ]
+  },
+  {
+    "id": 2,
+    "name": "Checklist de Fechamento",
+    "category": "operacional",
+    "description": "Verificações obrigatórias no fechamento da loja",
+    "is_active": true,
+    "require_photo": true,
+    "require_signature": true,
+    "allowed_start_time": "18:00",
+    "allowed_end_time": "23:00",
+    "created_at": "2024-01-02T00:00:00Z",
+    "fields": [
+      {
+        "id": 4,
+        "template_id": 2,
+        "name": "Caixas fechados",
+        "field_type": "yes_no",
+        "is_required": true,
+        "sort_order": 1,
+        "section_id": null,
+        "options": null
+      },
+      {
+        "id": 5,
+        "template_id": 2,
+        "name": "Alarme ativado",
+        "field_type": "yes_no",
+        "is_required": true,
+        "sort_order": 2,
+        "section_id": null,
+        "options": null
+      }
+    ]
+  },
+  {
+    "id": 3,
+    "name": "Inspeção de Qualidade",
+    "category": "qualidade",
+    "description": "Checklist de inspeção de qualidade dos produtos",
+    "is_active": true,
+    "require_photo": true,
+    "require_signature": false,
+    "allowed_start_time": null,
+    "allowed_end_time": null,
+    "created_at": "2024-01-03T00:00:00Z",
+    "fields": [
+      {
+        "id": 6,
+        "template_id": 3,
+        "name": "Estado dos produtos",
+        "field_type": "dropdown",
+        "is_required": true,
+        "sort_order": 1,
+        "section_id": null,
+        "options": ["Bom", "Regular", "Ruim"]
+      },
+      {
+        "id": 7,
+        "template_id": 3,
+        "name": "Itens verificados",
+        "field_type": "checkbox_multiple",
+        "is_required": true,
+        "sort_order": 2,
+        "section_id": null,
+        "options": ["Validade", "Embalagem", "Temperatura", "Higiene"]
+      },
+      {
+        "id": 8,
+        "template_id": 3,
+        "name": "Nota geral",
+        "field_type": "rating",
+        "is_required": true,
+        "sort_order": 3,
+        "section_id": null,
+        "options": null
+      }
+    ]
+  }
+]
