@@ -7,7 +7,7 @@
 import { useEffect, useState, useMemo } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
-import { FiCheck, FiArrowLeft, FiCreditCard, FiStar, FiZap, FiShield } from 'react-icons/fi'
+import { FiCheck, FiArrowLeft, FiCreditCard, FiStar, FiZap, FiShield, FiFileText, FiExternalLink } from 'react-icons/fi'
 import Link from 'next/link'
 import { APP_CONFIG } from '@/lib/config'
 import { PLAN_CONFIGS, type Plan, type PlanConfig } from '@/types/tenant'
@@ -40,6 +40,10 @@ export default function BillingPage() {
   const [selectedPlan, setSelectedPlan] = useState<Plan | null>(null)
   const [downgradePlan, setDowngradePlan] = useState<Plan | null>(null)
   const [planConfigs, setPlanConfigs] = useState<Record<string, PlanConfig>>(PLAN_CONFIGS)
+  const [billingTab, setBillingTab] = useState<'plan' | 'invoices' | 'payment'>('plan')
+  const [invoices, setInvoices] = useState<Array<{ id: string; number: string | null; amount: number; currency: string; status: string | null; created: number; dueDate: number | null; paidAt: number | null; hostedUrl: string | null; pdfUrl: string | null }>>([])
+  const [paymentMethods, setPaymentMethods] = useState<Array<{ id: string; brand: string; last4: string; expMonth: number; expYear: number; isDefault: boolean }>>([])
+  const [loadingBilling, setLoadingBilling] = useState(false)
   const router = useRouter()
   const searchParams = useSearchParams()
   const supabase = useMemo(() => createClient(), [])
@@ -57,11 +61,7 @@ export default function BillingPage() {
     const orgId = tenantRes.data || user.app_metadata?.org_id
     if (!orgId) { setLoading(false); return }
 
-    const [orgRes, usersRes, storesRes] = await Promise.all([
-      sb.rpc('get_org_billing', { p_org_id: orgId }),
-      sb.from('users').select('id', { count: 'exact', head: true }).eq('tenant_id', orgId).eq('is_active', true),
-      sb.from('stores').select('id', { count: 'exact', head: true }).eq('tenant_id', orgId),
-    ])
+    const orgRes = await sb.rpc('get_org_billing', { p_org_id: orgId })
 
     if (orgRes.data && orgRes.data.length > 0) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -73,11 +73,12 @@ export default function BillingPage() {
         current_period_end: raw.current_period_end ?? null,
         cancel_at_period_end: raw.cancel_at_period_end ?? false,
       } as OrgBilling)
+      // Contagens vem do RPC (SECURITY DEFINER, bypassa RLS)
+      setUsage({
+        currentUsers: Number(raw.current_users) || 0,
+        currentStores: Number(raw.current_stores) || 0,
+      })
     }
-    setUsage({
-      currentUsers: usersRes.count || 0,
-      currentStores: storesRes.count || 0,
-    })
     setLoading(false)
   }
 
@@ -99,9 +100,46 @@ export default function BillingPage() {
   }
 
   const handlePaymentSuccess = () => {
-    // Reload data to show updated plan
-    setLoading(true)
-    loadData()
+    window.location.reload()
+  }
+
+  // Carregar faturas e cartoes quando mudar para aba de faturas/pagamento
+  const loadBillingDetails = async () => {
+    if (!org?.id || loadingBilling) return
+    setLoadingBilling(true)
+    try {
+      const res = await fetch(`/api/billing/invoices?orgId=${org.id}`)
+      if (res.ok) {
+        const data = await res.json()
+        setInvoices(data.invoices || [])
+        setPaymentMethods(data.paymentMethods || [])
+      }
+    } catch { /* silenciar */ }
+    setLoadingBilling(false)
+  }
+
+  // Upgrade via change-plan API (para quem ja tem subscription — sem pedir cartao)
+  const [upgrading, setUpgrading] = useState(false)
+  const handleUpgradeViaApi = async (newPlan: string) => {
+    if (!org) return
+    setUpgrading(true)
+    try {
+      const res = await fetch('/api/billing/change-plan', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orgId: org.id, newPlan }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        alert(data.error || 'Erro ao mudar plano')
+        setUpgrading(false)
+        return
+      }
+      window.location.reload()
+    } catch {
+      alert('Erro de conexao')
+      setUpgrading(false)
+    }
   }
 
   if (loading) return <LoadingPage />
@@ -150,6 +188,25 @@ export default function BillingPage() {
           </div>
         </div>
 
+        {/* Abas: Plano | Faturas | Pagamento */}
+        {org?.stripe_subscription_id && (
+          <div className="flex gap-1 p-1 bg-surface-hover rounded-xl w-fit mb-6">
+            {[
+              { key: 'plan' as const, label: 'Plano', icon: <FiZap className="w-3.5 h-3.5" /> },
+              { key: 'invoices' as const, label: 'Faturas', icon: <FiFileText className="w-3.5 h-3.5" /> },
+              { key: 'payment' as const, label: 'Pagamento', icon: <FiCreditCard className="w-3.5 h-3.5" /> },
+            ].map(tab => (
+              <button key={tab.key}
+                onClick={() => { setBillingTab(tab.key); if (tab.key !== 'plan' && invoices.length === 0) loadBillingDetails() }}
+                className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-semibold transition-colors ${
+                  billingTab === tab.key ? 'bg-surface text-main shadow-sm' : 'text-muted hover:text-main'
+                }`}>
+                {tab.icon} {tab.label}
+              </button>
+            ))}
+          </div>
+        )}
+
         {/* Status messages */}
         {billingStatus === 'success' && (
           <div className="p-4 bg-success/10 border border-success/30 rounded-xl mb-6 text-success text-sm">
@@ -161,6 +218,89 @@ export default function BillingPage() {
             Checkout cancelado. Nenhuma cobrança foi feita.
           </div>
         )}
+
+        {/* ==================== ABA: FATURAS ==================== */}
+        {billingTab === 'invoices' && (
+          <div className="space-y-4">
+            <h2 className="text-lg font-semibold text-main">Historico de Faturas</h2>
+            {loadingBilling ? (
+              <div className="flex justify-center py-8"><div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary" /></div>
+            ) : invoices.length === 0 ? (
+              <div className="card p-8 text-center">
+                <FiFileText className="w-10 h-10 text-muted mx-auto mb-3" />
+                <p className="text-muted">Nenhuma fatura encontrada</p>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {invoices.map(inv => (
+                  <div key={inv.id} className="card p-4 flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className={`w-2.5 h-2.5 rounded-full ${inv.status === 'paid' ? 'bg-success' : inv.status === 'open' ? 'bg-warning' : 'bg-error'}`} />
+                      <div>
+                        <p className="text-sm font-medium text-main">{inv.number || inv.id.slice(0, 16)}</p>
+                        <p className="text-xs text-muted">{new Date(inv.created * 1000).toLocaleDateString('pt-BR')}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-4">
+                      <div className="text-right">
+                        <p className="text-sm font-bold text-main">R$ {(inv.amount / 100).toFixed(2)}</p>
+                        <p className={`text-[10px] font-semibold uppercase ${inv.status === 'paid' ? 'text-success' : inv.status === 'open' ? 'text-warning' : 'text-error'}`}>
+                          {inv.status === 'paid' ? 'Pago' : inv.status === 'open' ? 'Pendente' : inv.status === 'draft' ? 'Rascunho' : inv.status || 'Desconhecido'}
+                        </p>
+                      </div>
+                      {inv.hostedUrl && (
+                        <a href={inv.hostedUrl} target="_blank" rel="noopener noreferrer" className="p-2 text-muted hover:text-primary rounded-lg" title="Ver fatura">
+                          <FiExternalLink className="w-4 h-4" />
+                        </a>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ==================== ABA: PAGAMENTO ==================== */}
+        {billingTab === 'payment' && (
+          <div className="space-y-6">
+            <h2 className="text-lg font-semibold text-main">Metodos de Pagamento</h2>
+            {loadingBilling ? (
+              <div className="flex justify-center py-8"><div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary" /></div>
+            ) : paymentMethods.length === 0 ? (
+              <div className="card p-8 text-center">
+                <FiCreditCard className="w-10 h-10 text-muted mx-auto mb-3" />
+                <p className="text-muted">Nenhum cartao cadastrado</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {paymentMethods.map(pm => (
+                  <div key={pm.id} className={`card p-4 flex items-center justify-between ${pm.isDefault ? 'border-primary/30 border-2' : ''}`}>
+                    <div className="flex items-center gap-3">
+                      <FiCreditCard className="w-5 h-5 text-muted" />
+                      <div>
+                        <p className="text-sm font-medium text-main capitalize">{pm.brand} •••• {pm.last4}</p>
+                        <p className="text-xs text-muted">Expira {String(pm.expMonth).padStart(2, '0')}/{pm.expYear}</p>
+                      </div>
+                    </div>
+                    {pm.isDefault && (
+                      <span className="px-2 py-0.5 bg-primary/10 text-primary text-[10px] font-bold rounded-full">PRINCIPAL</span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Botao para gerenciar no Stripe Portal */}
+            <button onClick={handlePortal} className="btn-secondary flex items-center gap-2 text-sm">
+              <FiCreditCard className="w-4 h-4" />
+              Adicionar ou alterar cartao
+            </button>
+          </div>
+        )}
+
+        {/* ==================== ABA: PLANO ==================== */}
+        {billingTab === 'plan' && (<>
 
         {/* Plano atual */}
         <div className="card p-6 mb-8">
@@ -300,9 +440,17 @@ export default function BillingPage() {
                     Fazer Downgrade
                   </button>
                 ) : (
-                  <button onClick={() => { console.log('[Billing] Upgrade clicked:', plan); setSelectedPlan(plan) }}
-                    className="w-full py-2.5 btn-primary rounded-xl text-sm">
-                    Fazer Upgrade
+                  <button
+                    disabled={upgrading}
+                    onClick={() => {
+                      if (org?.stripe_subscription_id) {
+                        handleUpgradeViaApi(plan)
+                      } else {
+                        setSelectedPlan(plan)
+                      }
+                    }}
+                    className="w-full py-2.5 btn-primary rounded-xl text-sm disabled:opacity-50">
+                    {upgrading ? 'Atualizando...' : 'Fazer Upgrade'}
                   </button>
                 )}
               </div>
@@ -331,6 +479,8 @@ export default function BillingPage() {
           <p className="font-semibold mb-1">Modo de Teste (Sandbox)</p>
           <p>Use o cartão <code className="bg-surface-hover px-1 rounded">4242 4242 4242 4242</code> com qualquer data futura e CVC para testar pagamentos.</p>
         </div>
+
+        </>)}
       </div>
 
       {/* Payment Modal (upgrade) */}
@@ -355,9 +505,9 @@ export default function BillingPage() {
           orgId={org.id}
           currentStoreCount={usage.currentStores}
           currentUserCount={usage.currentUsers}
-          onSuccess={(pendingPlan, effectiveDate) => {
-            setOrg(prev => prev ? { ...prev, pending_plan: pendingPlan, previous_plan: currentPlan, current_period_end: effectiveDate, cancel_at_period_end: true } : prev)
-            setDowngradePlan(null)
+          onSuccess={() => {
+            // Reload completo para atualizar sidebar, features, banner
+            window.location.reload()
           }}
         />
       )}

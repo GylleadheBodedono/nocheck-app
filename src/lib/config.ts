@@ -106,7 +106,9 @@ export type AppConfig = typeof APP_CONFIG
 // Tenant helpers (white-label)
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function getTenantAppName(org?: any): string {
-  if (org?.settings?.theme?.appName) return org.settings.theme.appName
+  const themeAppName = org?.settings?.theme?.appName
+  if (themeAppName && themeAppName !== 'Sistema') return themeAppName
+  if (org?.name) return org.name
   if (typeof window !== 'undefined') return document.title || APP_CONFIG.name
   return APP_CONFIG.name
 }

@@ -6,8 +6,7 @@ import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { APP_CONFIG } from '@/lib/config'
 import { ThemeToggle, LoadingInline } from '@/components/ui'
-import { FiLock, FiMail, FiUser, FiPhone, FiArrowLeft, FiEye, FiEyeOff } from 'react-icons/fi'
-import { WelcomeModal } from '@/components/billing/WelcomeModal'
+import { FiLock, FiMail, FiUser, FiPhone, FiArrowLeft, FiArrowRight, FiEye, FiEyeOff, FiBriefcase, FiMapPin, FiCheck, FiClock, FiZap, FiDollarSign } from 'react-icons/fi'
 import { CheckoutFlow } from '@/components/billing/CheckoutModal'
 
 /**
@@ -30,6 +29,14 @@ export default function CadastroPage() {
   const [resending, setResending] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
   const [showConfirmPassword, setShowConfirmPassword] = useState(false)
+  const [step, setStep] = useState<1 | 2>(1)
+  // Step 2 — Dados da empresa
+  const [companyName, setCompanyName] = useState('')
+  const [cnpj, setCnpj] = useState('')
+  const [businessType, setBusinessType] = useState('')
+  const [employeeRange, setEmployeeRange] = useState('')
+  const [city, setCity] = useState('')
+  const [state, setState] = useState('')
   const [postSignupStep, setPostSignupStep] = useState<'welcome' | 'checkout' | null>(null)
   const [userOrgId, setUserOrgId] = useState<string | null>(null)
   const otpRefs = useRef<(HTMLInputElement | null)[]>([])
@@ -130,17 +137,29 @@ export default function CadastroPage() {
     return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7)}`
   }
 
+  const formatCnpj = (value: string) => {
+    const digits = value.replace(/\D/g, '').slice(0, 14)
+    if (digits.length <= 2) return digits
+    if (digits.length <= 5) return `${digits.slice(0, 2)}.${digits.slice(2)}`
+    if (digits.length <= 8) return `${digits.slice(0, 2)}.${digits.slice(2, 5)}.${digits.slice(5)}`
+    if (digits.length <= 12) return `${digits.slice(0, 2)}.${digits.slice(2, 5)}.${digits.slice(5, 8)}/${digits.slice(8)}`
+    return `${digits.slice(0, 2)}.${digits.slice(2, 5)}.${digits.slice(5, 8)}/${digits.slice(8, 12)}-${digits.slice(12)}`
+  }
+
+  const handleNextStep = () => {
+    setError(null)
+    if (!fullName || !email || !phone) { setError('Preencha todos os campos obrigatorios.'); return }
+    if (password.length < 8) { setError('A senha deve ter no minimo 8 caracteres com maiuscula e numero.'); return }
+    if (password !== confirmPassword) { setError('As senhas nao coincidem.'); return }
+    setStep(2)
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError(null)
 
-    if (password.length < 6) {
-      setError('A senha deve ter no mínimo 6 caracteres.')
-      return
-    }
-
-    if (password !== confirmPassword) {
-      setError('As senhas não coincidem.')
+    if (!companyName) {
+      setError('Nome da empresa e obrigatorio.')
       return
     }
 
@@ -155,6 +174,7 @@ export default function CadastroPage() {
           data: {
             full_name: fullName,
             phone: phone.replace(/\D/g, ''),
+            company_name: companyName,
           },
           emailRedirectTo: `${window.location.origin}/auth/callback`,
         },
@@ -194,7 +214,23 @@ export default function CadastroPage() {
           .eq('user_id', user.id)
           .limit(1)
           .single()
-        if (data?.organization_id) setUserOrgId(data.organization_id)
+        if (data?.organization_id) {
+          setUserOrgId(data.organization_id)
+          // Salvar dados da empresa na org
+          if (companyName || cnpj) {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            await (supabase as any).from('organizations').update({
+              name: companyName || undefined,
+              business_info: {
+                cnpj: cnpj.replace(/\D/g, '') || null,
+                businessType: businessType || null,
+                employeeRange: employeeRange || null,
+                city: city || null,
+                state: state || null,
+              },
+            }).eq('id', data.organization_id)
+          }
+        }
       } catch {
         // org may not exist yet — will be created in onboarding
       }
@@ -202,7 +238,7 @@ export default function CadastroPage() {
     fetchOrgId()
   }, [verified])
 
-  // Tela de confirmacao concluida — fluxo de assinatura
+  // Tela de confirmacao concluida — fluxo de assinatura inline
   if (verified) {
     if (postSignupStep === 'checkout' && userOrgId) {
       return (
@@ -216,17 +252,58 @@ export default function CadastroPage() {
     }
 
     return (
-      <WelcomeModal
-        onTrial={() => router.push('/dashboard')}
-        onSubscribe={() => {
-          if (userOrgId) {
-            setPostSignupStep('checkout')
-          } else {
-            // Sem org ainda — vai para onboarding primeiro, depois billing
-            router.push('/onboarding')
-          }
-        }}
-      />
+      <div className="h-screen w-screen p-4">
+        <div className="h-full w-full flex overflow-hidden">
+          <div className="flex-1 flex flex-col relative bg-page rounded-[20px]">
+            <div className="absolute top-5 right-5 z-10"><ThemeToggle /></div>
+            <div className="flex-1 flex items-center justify-center px-6 sm:px-12">
+              <div className="w-full max-w-lg text-center">
+                <div className="w-16 h-16 rounded-full bg-success/10 flex items-center justify-center mx-auto mb-6">
+                  <FiCheck className="w-8 h-8 text-success" />
+                </div>
+                <h1 className="text-2xl font-bold text-main mb-2">Conta criada com sucesso!</h1>
+                <p className="text-muted mb-8">Escolha como deseja comecar a usar o OpereCheck</p>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-left">
+                  {/* Trial */}
+                  <button
+                    onClick={() => router.push('/dashboard')}
+                    className="card p-5 border-2 border-subtle hover:border-primary/30 transition-all text-left"
+                  >
+                    <FiClock className="w-6 h-6 text-muted mb-3" />
+                    <h3 className="font-bold text-main mb-1">Testar 14 dias gratis</h3>
+                    <p className="text-xs text-muted mb-3">Explore o sistema sem compromisso. Sem cartao de credito.</p>
+                    <ul className="text-xs text-muted space-y-1">
+                      <li className="flex items-center gap-1.5"><FiCheck className="w-3 h-3 text-success" /> Ate 3 usuarios</li>
+                      <li className="flex items-center gap-1.5"><FiCheck className="w-3 h-3 text-success" /> 1 loja</li>
+                      <li className="flex items-center gap-1.5"><FiCheck className="w-3 h-3 text-success" /> Checklists e relatorios</li>
+                    </ul>
+                  </button>
+
+                  {/* Assinar */}
+                  <button
+                    onClick={() => {
+                      if (userOrgId) setPostSignupStep('checkout')
+                      else router.push('/onboarding')
+                    }}
+                    className="card p-5 border-2 border-accent hover:border-accent/80 transition-all text-left relative"
+                  >
+                    <span className="absolute -top-2.5 right-3 px-2 py-0.5 bg-accent text-[10px] font-bold text-white rounded-full uppercase">Recomendado</span>
+                    <FiZap className="w-6 h-6 text-accent mb-3" />
+                    <h3 className="font-bold text-main mb-1">Assinar agora</h3>
+                    <p className="text-xs text-muted mb-3">Desbloqueie todos os recursos e escale seu negocio.</p>
+                    <ul className="text-xs text-muted space-y-1">
+                      <li className="flex items-center gap-1.5"><FiDollarSign className="w-3 h-3 text-accent" /> A partir de R$ 297/mes</li>
+                      <li className="flex items-center gap-1.5"><FiCheck className="w-3 h-3 text-success" /> Ate 999 usuarios</li>
+                      <li className="flex items-center gap-1.5"><FiCheck className="w-3 h-3 text-success" /> Todas as integracoes</li>
+                    </ul>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
     )
   }
 
@@ -331,12 +408,26 @@ export default function CadastroPage() {
                   </span>
                 </div>
                 <p className="text-muted text-center mt-1.5 text-[15px]">
-                  Preencha os dados abaixo para criar sua conta
+                  {step === 1 ? 'Preencha seus dados pessoais' : 'Dados da sua empresa'}
                 </p>
+              </div>
+
+              {/* Step indicator */}
+              <div className="flex items-center justify-center gap-3 mb-6">
+                <div className={`flex items-center gap-1.5 ${step === 1 ? 'text-primary' : 'text-muted'}`}>
+                  <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ${step === 1 ? 'bg-primary text-primary-foreground' : 'bg-surface-hover text-muted'}`}>1</div>
+                  <span className="text-xs font-medium hidden sm:inline">Pessoal</span>
+                </div>
+                <div className="w-8 h-0.5 bg-subtle rounded" />
+                <div className={`flex items-center gap-1.5 ${step === 2 ? 'text-primary' : 'text-muted'}`}>
+                  <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ${step === 2 ? 'bg-primary text-primary-foreground' : 'bg-surface-hover text-muted'}`}>2</div>
+                  <span className="text-xs font-medium hidden sm:inline">Empresa</span>
+                </div>
               </div>
 
               {/* Form */}
               <form onSubmit={handleSubmit} className="space-y-4">
+                {step === 1 && (<>
                 {/* Nome */}
                 <div>
                   <label htmlFor="fullName" className="block text-sm font-medium text-secondary mb-2">
@@ -413,11 +504,11 @@ export default function CadastroPage() {
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
                       required
-                      minLength={6}
+                      minLength={8}
                       autoComplete="new-password"
                       className="input"
                       style={{ paddingLeft: '2.75rem', paddingRight: '2.75rem' }}
-                      placeholder="Mínimo 6 caracteres"
+                      placeholder="Min 8 chars, maiuscula + numero"
                     />
                     <button
                       type="button"
@@ -444,7 +535,7 @@ export default function CadastroPage() {
                       value={confirmPassword}
                       onChange={(e) => setConfirmPassword(e.target.value)}
                       required
-                      minLength={6}
+                      minLength={8}
                       autoComplete="new-password"
                       className="input"
                       style={{ paddingLeft: '2.75rem', paddingRight: '2.75rem' }}
@@ -462,6 +553,73 @@ export default function CadastroPage() {
                   </div>
                 </div>
 
+                </>)}
+
+                {step === 2 && (<>
+                {/* Nome da empresa */}
+                <div>
+                  <label className="block text-sm font-medium text-secondary mb-2">Nome da empresa *</label>
+                  <div className="relative">
+                    <FiBriefcase className="absolute left-4 top-1/2 -translate-y-1/2 w-[18px] h-[18px] text-muted pointer-events-none" />
+                    <input type="text" value={companyName} onChange={e => setCompanyName(e.target.value)} required
+                      className="input" style={{ paddingLeft: '2.75rem' }} placeholder="Nome do restaurante ou empresa" />
+                  </div>
+                </div>
+
+                {/* CNPJ */}
+                <div>
+                  <label className="block text-sm font-medium text-secondary mb-2">CNPJ</label>
+                  <input type="text" value={cnpj} onChange={e => setCnpj(formatCnpj(e.target.value))}
+                    className="input" placeholder="00.000.000/0000-00" />
+                </div>
+
+                {/* Tipo de empresa */}
+                <div>
+                  <label className="block text-sm font-medium text-secondary mb-2">Tipo de empresa</label>
+                  <select value={businessType} onChange={e => setBusinessType(e.target.value)}
+                    className="input">
+                    <option value="">Selecione...</option>
+                    <option value="restaurante">Restaurante</option>
+                    <option value="bar">Bar</option>
+                    <option value="lanchonete">Lanchonete</option>
+                    <option value="padaria">Padaria</option>
+                    <option value="hotel">Hotel</option>
+                    <option value="industria">Industria Alimenticia</option>
+                    <option value="outro">Outro</option>
+                  </select>
+                </div>
+
+                {/* Funcionarios */}
+                <div>
+                  <label className="block text-sm font-medium text-secondary mb-2">Quantidade de funcionarios</label>
+                  <select value={employeeRange} onChange={e => setEmployeeRange(e.target.value)}
+                    className="input">
+                    <option value="">Selecione...</option>
+                    <option value="1-10">1 a 10</option>
+                    <option value="11-50">11 a 50</option>
+                    <option value="51-200">51 a 200</option>
+                    <option value="200+">Mais de 200</option>
+                  </select>
+                </div>
+
+                {/* Cidade / Estado */}
+                <div className="grid grid-cols-3 gap-3">
+                  <div className="col-span-2">
+                    <label className="block text-sm font-medium text-secondary mb-2">Cidade</label>
+                    <div className="relative">
+                      <FiMapPin className="absolute left-4 top-1/2 -translate-y-1/2 w-[18px] h-[18px] text-muted pointer-events-none" />
+                      <input type="text" value={city} onChange={e => setCity(e.target.value)}
+                        className="input" style={{ paddingLeft: '2.75rem' }} placeholder="Recife" />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-secondary mb-2">UF</label>
+                    <input type="text" value={state} onChange={e => setState(e.target.value.toUpperCase().slice(0, 2))}
+                      className="input text-center" placeholder="PE" maxLength={2} />
+                  </div>
+                </div>
+                </>)}
+
                 {/* Error */}
                 {error && (
                   <div className="p-3.5 bg-red-500/10 rounded-xl border border-red-500/20">
@@ -469,21 +627,24 @@ export default function CadastroPage() {
                   </div>
                 )}
 
-                {/* Submit */}
-                <button
-                  type="submit"
-                  disabled={loading}
-                  className="btn-primary w-full py-3.5 flex items-center justify-center gap-2 text-[15px] font-semibold shadow-lg shadow-primary/20 hover:shadow-xl hover:shadow-primary/30 transition-all duration-300"
-                >
-                  {loading ? (
-                    <>
-                      <LoadingInline />
-                      Criando conta...
-                    </>
-                  ) : (
-                    'Criar conta'
-                  )}
-                </button>
+                {/* Botoes */}
+                {step === 1 ? (
+                  <button type="button" onClick={handleNextStep}
+                    className="btn-primary w-full py-3.5 flex items-center justify-center gap-2 text-[15px] font-semibold shadow-lg shadow-primary/20">
+                    Proximo <FiArrowRight className="w-4 h-4" />
+                  </button>
+                ) : (
+                  <div className="flex gap-3">
+                    <button type="button" onClick={() => { setStep(1); setError(null) }}
+                      className="btn-secondary flex-1 py-3.5 flex items-center justify-center gap-2 text-[15px]">
+                      <FiArrowLeft className="w-4 h-4" /> Voltar
+                    </button>
+                    <button type="submit" disabled={loading}
+                      className="btn-primary flex-1 py-3.5 flex items-center justify-center gap-2 text-[15px] font-semibold shadow-lg shadow-primary/20">
+                      {loading ? (<><LoadingInline /> Criando...</>) : 'Criar conta'}
+                    </button>
+                  </div>
+                )}
               </form>
 
               {/* Link para login */}

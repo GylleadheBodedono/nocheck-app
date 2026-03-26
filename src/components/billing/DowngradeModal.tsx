@@ -102,6 +102,13 @@ export function DowngradeModal({
           </div>
         </div>
 
+        {/* Erro */}
+        {error && (
+          <div className="p-3 bg-error/10 border border-error/30 rounded-xl text-sm text-error">
+            {error}
+          </div>
+        )}
+
         {/* Impactos */}
         <div className="bg-warning/10 border border-warning/20 rounded-xl p-4 space-y-2">
           <div className="flex items-center gap-2 text-warning text-sm font-medium">

@@ -56,7 +56,19 @@ export function PWAInstall() {
   }, [])
 
   useEffect(() => {
-    // Registrar Service Worker e configurar auto-update
+    // Em desenvolvimento, desregistrar SW existente para evitar cache stale
+    if (process.env.NODE_ENV === 'development' && 'serviceWorker' in navigator) {
+      navigator.serviceWorker.getRegistrations().then(registrations => {
+        for (const reg of registrations) {
+          reg.unregister()
+          console.log('[PWA] SW desregistrado em dev mode')
+        }
+      })
+      caches.keys().then(keys => keys.forEach(key => caches.delete(key)))
+      return
+    }
+
+    // Registrar Service Worker e configurar auto-update (apenas producao)
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.register('/sw.js', { updateViaCache: 'none' }).then(registration => {
         console.log('[PWA] SW registered, checking for updates every 60s')

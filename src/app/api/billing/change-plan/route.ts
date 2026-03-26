@@ -113,7 +113,9 @@ export async function POST(req: NextRequest) {
         stripe_subscription_id: updated.id,
         trial_ends_at: null,
         pending_plan: null,
+        previous_plan: null,
         cancel_at_period_end: false,
+        current_period_end: null,
       })
 
       return NextResponse.json({

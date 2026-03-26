@@ -23,16 +23,26 @@ export async function POST(req: NextRequest) {
 
     const prompt = `Voce e um designer de UI/UX especialista em SaaS. Recebeu as cores dominantes da logo de um cliente: ${dominantColors.join(', ')}.
 
-Baseado nessas cores, sugira uma paleta completa para um aplicativo web SaaS de gestao operacional:
+Crie uma paleta COMPLETA para um app web SaaS, com versoes para tema LIGHT e DARK. As cores devem harmonizar com a logo.
 
-1. primaryColor — cor principal (botoes, links, destaque). Deve ser vibrante e acessivel.
-2. primaryHover — versao mais escura da primaryColor para hover states.
-3. accentColor — cor de destaque secundaria (badges, alertas positivos).
-4. suggestedTheme — "dark" ou "light" baseado no estilo da marca.
-5. reasoning — breve explicacao de por que essas cores foram escolhidas (1 frase).
+Para cada tema, defina:
+- primary: cor principal (botoes, links). Vibrante e acessivel.
+- primaryHover: versao mais escura da primary.
+- secondary: cor secundaria (menus, headers).
+- secondaryHover: versao hover da secondary.
+- accent: cor de destaque (badges, destaques especiais). Quente e chamativa.
+- accentHover: versao hover do accent.
+- bgPage: fundo da pagina.
+- bgSurface: fundo de cards e paineis.
 
-IMPORTANTE: Retorne APENAS JSON valido, sem markdown, sem texto extra. Formato exato:
-{"primaryColor":"#XXXXXX","primaryHover":"#XXXXXX","accentColor":"#XXXXXX","suggestedTheme":"dark","reasoning":"texto"}`
+Regras:
+- No tema light: fundos claros, textos escuros, primary vibrante
+- No tema dark: fundos escuros (#09090b a #27272a), textos claros, primary pode ser mais clara
+- Accent deve contrastar bem em ambos os temas
+- reasoning: 1 frase explicando a escolha
+
+RETORNE APENAS JSON valido, sem markdown:
+{"light":{"primary":"#...","primaryHover":"#...","secondary":"#...","secondaryHover":"#...","accent":"#...","accentHover":"#...","bgPage":"#...","bgSurface":"#..."},"dark":{"primary":"#...","primaryHover":"#...","secondary":"#...","secondaryHover":"#...","accent":"#...","accentHover":"#...","bgPage":"#...","bgSurface":"#..."},"reasoning":"texto"}`
 
     const groqRes = await fetch('https://api.groq.com/openai/v1/chat/completions', {
       method: 'POST',
@@ -46,7 +56,7 @@ IMPORTANTE: Retorne APENAS JSON valido, sem markdown, sem texto extra. Formato e
           { role: 'user', content: prompt },
         ],
         temperature: 0.3,
-        max_tokens: 300,
+        max_tokens: 600,
       }),
     })
 

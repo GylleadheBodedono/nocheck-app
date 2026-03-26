@@ -19,9 +19,79 @@ function BrandingContent() {
   const supabase = useMemo(() => createClient(), [])
   const { organization } = useTenant()
 
+  // Todas as variaveis CSS editaveis, organizadas por grupo
+  const COLOR_GROUPS = [
+    { label: 'Principal', keys: ['primary', 'primaryHover', 'primaryForeground'] },
+    { label: 'Secundaria', keys: ['secondary', 'secondaryHover', 'secondaryForeground'] },
+    { label: 'Destaque', keys: ['accent', 'accentHover', 'accentForeground'] },
+    { label: 'Fundos', keys: ['bgPage', 'bgSurface', 'bgSurfaceHover', 'bgSurfaceActive'] },
+    { label: 'Textos', keys: ['textMain', 'textSecondary', 'textMuted', 'textInverse'] },
+    { label: 'Bordas', keys: ['borderSubtle', 'borderDefault', 'borderStrong'] },
+    { label: 'Sucesso', keys: ['statusSuccessBg', 'statusSuccessText', 'statusSuccessBorder'] },
+    { label: 'Erro', keys: ['statusErrorBg', 'statusErrorText', 'statusErrorBorder'] },
+    { label: 'Aviso', keys: ['statusWarningBg', 'statusWarningText', 'statusWarningBorder'] },
+    { label: 'Info', keys: ['statusInfoBg', 'statusInfoText', 'statusInfoBorder'] },
+  ] as const
+
+  const COLOR_LABELS: Record<string, string> = {
+    primary: 'Primaria', primaryHover: 'Primaria Hover', primaryForeground: 'Texto Primaria',
+    secondary: 'Secundaria', secondaryHover: 'Secundaria Hover', secondaryForeground: 'Texto Secundaria',
+    accent: 'Destaque', accentHover: 'Destaque Hover', accentForeground: 'Texto Destaque',
+    bgPage: 'Fundo Pagina', bgSurface: 'Fundo Cards', bgSurfaceHover: 'Fundo Hover', bgSurfaceActive: 'Fundo Ativo',
+    textMain: 'Texto Principal', textSecondary: 'Texto Secundario', textMuted: 'Texto Suave', textInverse: 'Texto Inverso',
+    borderSubtle: 'Borda Sutil', borderDefault: 'Borda Padrao', borderStrong: 'Borda Forte',
+    statusSuccessBg: 'Fundo', statusSuccessText: 'Texto', statusSuccessBorder: 'Borda',
+    statusErrorBg: 'Fundo', statusErrorText: 'Texto', statusErrorBorder: 'Borda',
+    statusWarningBg: 'Fundo', statusWarningText: 'Texto', statusWarningBorder: 'Borda',
+    statusInfoBg: 'Fundo', statusInfoText: 'Texto', statusInfoBorder: 'Borda',
+  }
+
+  // Map de camelCase para CSS variable name
+  const CSS_VAR_MAP: Record<string, string> = {
+    primary: '--primary', primaryHover: '--primary-hover', primaryForeground: '--primary-foreground',
+    secondary: '--secondary', secondaryHover: '--secondary-hover', secondaryForeground: '--secondary-foreground',
+    accent: '--accent', accentHover: '--accent-hover', accentForeground: '--accent-foreground',
+    bgPage: '--bg-page', bgSurface: '--bg-surface', bgSurfaceHover: '--bg-surface-hover', bgSurfaceActive: '--bg-surface-active',
+    textMain: '--text-main', textSecondary: '--text-secondary', textMuted: '--text-muted', textInverse: '--text-inverse',
+    borderSubtle: '--border-subtle', borderDefault: '--border-default', borderStrong: '--border-strong',
+    statusSuccessBg: '--status-success-bg', statusSuccessText: '--status-success-text', statusSuccessBorder: '--status-success-border',
+    statusErrorBg: '--status-error-bg', statusErrorText: '--status-error-text', statusErrorBorder: '--status-error-border',
+    statusWarningBg: '--status-warning-bg', statusWarningText: '--status-warning-text', statusWarningBorder: '--status-warning-border',
+    statusInfoBg: '--status-info-bg', statusInfoText: '--status-info-text', statusInfoBorder: '--status-info-border',
+  }
+
+  const LIGHT_DEFAULTS: Record<string, string> = {
+    primary: '#0D9488', primaryHover: '#0F766E', primaryForeground: '#FFFFFF',
+    secondary: '#334155', secondaryHover: '#1E293B', secondaryForeground: '#FFFFFF',
+    accent: '#F59E0B', accentHover: '#D97706', accentForeground: '#FFFFFF',
+    bgPage: '#F8FAFC', bgSurface: '#FFFFFF', bgSurfaceHover: '#F1F5F9', bgSurfaceActive: '#E2E8F0',
+    textMain: '#0F172A', textSecondary: '#475569', textMuted: '#94A3B8', textInverse: '#FFFFFF',
+    borderSubtle: '#E2E8F0', borderDefault: '#CBD5E1', borderStrong: '#94A3B8',
+    statusSuccessBg: '#F2F8F0', statusSuccessText: '#3D7A2E', statusSuccessBorder: '#A3D492',
+    statusErrorBg: '#FDF2F0', statusErrorText: '#C03525', statusErrorBorder: '#E8A49B',
+    statusWarningBg: '#FDF6ED', statusWarningText: '#B5651D', statusWarningBorder: '#E8C98A',
+    statusInfoBg: '#F0F4FA', statusInfoText: '#3B6AA0', statusInfoBorder: '#A0C0E0',
+  }
+
+  const DARK_DEFAULTS: Record<string, string> = {
+    primary: '#fafafa', primaryHover: '#e4e4e7', primaryForeground: '#18181b',
+    secondary: '#27272a', secondaryHover: '#3f3f46', secondaryForeground: '#fafafa',
+    accent: '#F59E0B', accentHover: '#D97706', accentForeground: '#18181b',
+    bgPage: '#09090b', bgSurface: '#18181b', bgSurfaceHover: '#27272a', bgSurfaceActive: '#3f3f46',
+    textMain: '#fafafa', textSecondary: '#a1a1aa', textMuted: '#71717a', textInverse: '#09090b',
+    borderSubtle: '#27272a', borderDefault: '#3f3f46', borderStrong: '#52525b',
+    statusSuccessBg: '#14532d', statusSuccessText: '#4ade80', statusSuccessBorder: '#22c55e',
+    statusErrorBg: '#450a0a', statusErrorText: '#f87171', statusErrorBorder: '#ef4444',
+    statusWarningBg: '#422006', statusWarningText: '#fbbf24', statusWarningBorder: '#f59e0b',
+    statusInfoBg: '#1e3a5f', statusInfoText: '#60a5fa', statusInfoBorder: '#3b82f6',
+  }
+
   // Form state
   const [appName, setAppName] = useState('')
   const [primaryColor, setPrimaryColor] = useState('#0D9488')
+  const [lightColors, setLightColors] = useState<Record<string, string>>({ ...LIGHT_DEFAULTS })
+  const [darkColors, setDarkColors] = useState<Record<string, string>>({ ...DARK_DEFAULTS })
+  const [colorTab, setColorTab] = useState<'light' | 'dark'>('light')
   const [logoUrl, setLogoUrl] = useState<string | null>(null)
   const [faviconUrl, setFaviconUrl] = useState<string | null>(null)
   const [uploadingLogo, setUploadingLogo] = useState(false)
@@ -30,7 +100,29 @@ function BrandingContent() {
   const logoInputRef = useRef<HTMLInputElement>(null)
   const faviconInputRef = useRef<HTMLInputElement>(null)
   const [suggestingColors, setSuggestingColors] = useState(false)
-  const [suggestion, setSuggestion] = useState<{ primaryColor: string; accentColor?: string; suggestedTheme?: string; reasoning?: string } | null>(null)
+  const savedRef = useRef(false) // true quando usuario clicou "Salvar"
+
+  // Snapshot das CSS variables ao entrar na pagina (para restaurar se nao salvar)
+  const cssSnapshotRef = useRef<Record<string, string>>({})
+  useEffect(() => {
+    const root = document.documentElement
+    const snapshot: Record<string, string> = {}
+    Object.values(CSS_VAR_MAP).forEach(cssVar => {
+      snapshot[cssVar] = getComputedStyle(root).getPropertyValue(cssVar).trim()
+    })
+    cssSnapshotRef.current = snapshot
+
+    // Cleanup: restaurar ao sair se nao salvou
+    return () => {
+      if (!savedRef.current) {
+        Object.entries(cssSnapshotRef.current).forEach(([cssVar, val]) => {
+          if (val) root.style.setProperty(cssVar, val)
+        })
+      }
+    }
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  type ThemePalette = { primary: string; primaryHover: string; secondary: string; secondaryHover: string; accent: string; accentHover: string; bgPage: string; bgSurface: string }
+  const [suggestion, setSuggestion] = useState<{ light: ThemePalette; dark: ThemePalette; reasoning?: string } | null>(null)
 
   // Extrair cores dominantes da logo via canvas e enviar para IA
   const handleSuggestColors = useCallback(async () => {
@@ -172,6 +264,11 @@ function BrandingContent() {
         setPrimaryColor(theme.primaryColor || '#0D9488')
         setLogoUrl(theme.logoUrl || null)
         setFaviconUrl(theme.faviconUrl || null)
+        // Carregar cores customizadas salvas
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const t = theme as any
+        if (t.lightColors) setLightColors({ ...LIGHT_DEFAULTS, ...t.lightColors })
+        if (t.darkColors) setDarkColors({ ...DARK_DEFAULTS, ...t.darkColors })
       }
 
       setLoading(false)
@@ -181,28 +278,8 @@ function BrandingContent() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [organization])
 
-  // Apply preview in real-time (only if user has white_label feature)
-  const originalPrimaryRef = useRef<string | null>(null)
-  useEffect(() => {
-    if (blocked || !primaryColor) return
-    // Save original color on first apply
-    if (!originalPrimaryRef.current) {
-      originalPrimaryRef.current = getComputedStyle(document.documentElement).getPropertyValue('--primary').trim()
-    }
-    document.documentElement.style.setProperty('--primary', primaryColor)
-    const h = primaryColor.replace('#', '')
-    const r = Math.max(0, Math.round(parseInt(h.substring(0, 2), 16) * 0.85))
-    const g = Math.max(0, Math.round(parseInt(h.substring(2, 4), 16) * 0.85))
-    const b = Math.max(0, Math.round(parseInt(h.substring(4, 6), 16) * 0.85))
-    const hover = `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`
-    document.documentElement.style.setProperty('--primary-hover', hover)
-    // Cleanup: restore original colors when leaving page
-    return () => {
-      if (originalPrimaryRef.current) {
-        document.documentElement.style.setProperty('--primary', originalPrimaryRef.current)
-      }
-    }
-  }, [primaryColor, blocked])
+  // Preview em tempo real agora e feito diretamente no onChange de cada color picker
+  // O SessionTenantProvider reaplica do banco ao navegar
 
   const handleUpload = useCallback(async (file: File, type: 'logo' | 'favicon') => {
     if (!organization?.id) return
@@ -275,10 +352,12 @@ function BrandingContent() {
         ...organization.settings,
         theme: {
           ...organization.settings.theme,
-          primaryColor,
+          primaryColor: lightColors.primary,
           appName: appName || APP_CONFIG.name,
           logoUrl,
           faviconUrl,
+          lightColors,
+          darkColors,
         },
       }
 
@@ -290,8 +369,9 @@ function BrandingContent() {
 
       if (updateError) throw new Error(updateError.message)
 
-      setSuccess('Branding salvo com sucesso! Recarregue a página para ver as alterações.')
-      setTimeout(() => setSuccess(null), 5000)
+      savedRef.current = true
+      setSuccess('Branding salvo! Aplicando...')
+      setTimeout(() => window.location.reload(), 1000)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Erro ao salvar')
     } finally {
@@ -329,13 +409,6 @@ function BrandingContent() {
 
   return (
     <div className="min-h-screen bg-page">
-      <Header
-        title="Branding"
-        subtitle="Personalize a aparência do sistema"
-        icon={FiImage}
-        backHref="/admin/configuracoes"
-      />
-
       <PageContainer size="md" className="space-y-6">
         {/* Nome do App */}
         <div className="card p-5">
@@ -352,44 +425,69 @@ function BrandingContent() {
           />
         </div>
 
-        {/* Cor Primaria */}
+        {/* Editor de Cores Completo */}
         <div className="card p-5">
-          <h2 className="text-base font-semibold text-main mb-1">Cor Primária</h2>
+          <h2 className="text-base font-semibold text-main mb-1">Cores do Tema</h2>
           <p className="text-sm text-muted mb-4">
-            Usada em botões, links e destaques. A mudança é visualizada em tempo real.
+            Customize todas as cores da aplicacao para os temas light e dark.
           </p>
-          <div className="flex items-center gap-4">
-            <input
-              type="color"
-              value={primaryColor}
-              onChange={(e) => setPrimaryColor(e.target.value)}
-              className="w-12 h-12 rounded-xl border border-subtle cursor-pointer"
-            />
-            <input
-              type="text"
-              value={primaryColor}
-              onChange={(e) => {
-                if (/^#[0-9A-Fa-f]{0,6}$/.test(e.target.value)) {
-                  setPrimaryColor(e.target.value)
-                }
-              }}
-              className="input w-32 font-mono text-sm"
-              placeholder="#0D9488"
-            />
-            <div className="flex items-center gap-2">
-              <div
-                className="w-10 h-10 rounded-lg border border-subtle"
-                style={{ backgroundColor: primaryColor }}
-                title="Cor primária"
-              />
-              <span className="text-xs text-muted">Preview</span>
-            </div>
+
+          {/* Abas Light / Dark */}
+          <div className="flex gap-1 mb-4 p-1 bg-surface-hover rounded-xl w-fit">
+            <button onClick={() => setColorTab('light')}
+              className={`px-4 py-1.5 rounded-lg text-xs font-semibold transition-colors ${colorTab === 'light' ? 'bg-surface text-main shadow-sm' : 'text-muted hover:text-main'}`}>
+              Light
+            </button>
+            <button onClick={() => setColorTab('dark')}
+              className={`px-4 py-1.5 rounded-lg text-xs font-semibold transition-colors ${colorTab === 'dark' ? 'bg-surface text-main shadow-sm' : 'text-muted hover:text-main'}`}>
+              Dark
+            </button>
           </div>
-          {/* Live preview of button */}
-          <div className="mt-4 flex items-center gap-3">
-            <button className="btn-primary text-sm">Botão Primário</button>
-            <span className="text-primary text-sm font-medium">Texto primário</span>
+
+          {/* Grupos de cores */}
+          <div className="space-y-4">
+            {COLOR_GROUPS.map((group) => {
+              const colors = colorTab === 'light' ? lightColors : darkColors
+              const setColors = colorTab === 'light' ? setLightColors : setDarkColors
+              return (
+                <div key={group.label}>
+                  <p className="text-[10px] font-bold text-muted uppercase tracking-wider mb-2">{group.label}</p>
+                  <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
+                    {group.keys.map((key) => (
+                      <div key={key} className="flex items-center gap-1.5">
+                        <label className="relative cursor-pointer group">
+                          <input
+                            type="color"
+                            value={colors[key] || '#000000'}
+                            onChange={e => {
+                              setColors(prev => ({ ...prev, [key]: e.target.value }))
+                              // Preview em tempo real na variavel CSS correspondente
+                              const cssVar = CSS_VAR_MAP[key]
+                              if (cssVar) document.documentElement.style.setProperty(cssVar, e.target.value)
+                              if (key === 'primary') setPrimaryColor(e.target.value)
+                            }}
+                            className="w-7 h-7 rounded-md border border-subtle cursor-pointer"
+                          />
+                        </label>
+                        <span className="text-[9px] text-muted truncate">{COLOR_LABELS[key]}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )
+            })}
           </div>
+
+          {/* Reset para defaults */}
+          <button
+            onClick={() => {
+              if (colorTab === 'light') setLightColors({ ...LIGHT_DEFAULTS })
+              else setDarkColors({ ...DARK_DEFAULTS })
+            }}
+            className="mt-4 text-xs text-muted hover:text-error transition-colors underline underline-offset-2"
+          >
+            Resetar {colorTab} para cores padrao
+          </button>
         </div>
 
         {/* Upload Logo */}
@@ -470,50 +568,96 @@ function BrandingContent() {
               )}
             </button>
 
-            {/* Preview da sugestao */}
+            {/* Preview da sugestao — light + dark side by side */}
             {suggestion && (
-              <div className="mt-4 p-4 bg-surface-hover rounded-xl space-y-3">
+              <div className="mt-4 p-4 bg-surface-hover rounded-xl space-y-4">
                 <p className="text-xs font-semibold text-main uppercase tracking-wide">Sugestao da IA</p>
-                <div className="flex items-center gap-3 flex-wrap">
-                  <div className="flex items-center gap-2">
-                    <div className="w-8 h-8 rounded-lg border border-subtle" style={{ backgroundColor: suggestion.primaryColor }} />
-                    <div>
-                      <p className="text-[10px] text-muted">Primaria</p>
-                      <p className="text-xs font-mono text-main">{suggestion.primaryColor}</p>
-                    </div>
-                  </div>
-                  {suggestion.accentColor && (
-                    <div className="flex items-center gap-2">
-                      <div className="w-8 h-8 rounded-lg border border-subtle" style={{ backgroundColor: suggestion.accentColor }} />
-                      <div>
-                        <p className="text-[10px] text-muted">Destaque</p>
-                        <p className="text-xs font-mono text-main">{suggestion.accentColor}</p>
+
+                <div className="grid grid-cols-2 gap-3">
+                  {/* Light theme preview */}
+                  <div className="rounded-xl p-3 space-y-2" style={{ backgroundColor: suggestion.light.bgPage }}>
+                    <p className="text-[10px] font-bold uppercase" style={{ color: suggestion.light.primary }}>Light</p>
+                    <div className="rounded-lg p-2 space-y-1.5" style={{ backgroundColor: suggestion.light.bgSurface }}>
+                      <div className="flex gap-1.5">
+                        {Object.entries(suggestion.light).filter(([k]) => !k.includes('bg')).map(([key, color]) => (
+                          <div key={key} className="text-center">
+                            <div className="w-6 h-6 rounded border border-black/10" style={{ backgroundColor: color }} />
+                            <p className="text-[7px] mt-0.5" style={{ color: suggestion.light.secondary }}>{key.replace('Hover', '')}</p>
+                          </div>
+                        ))}
+                      </div>
+                      <div className="flex gap-1.5 items-center">
+                        <span className="px-2 py-0.5 rounded text-[8px] text-white font-bold" style={{ backgroundColor: suggestion.light.primary }}>Botao</span>
+                        <span className="px-2 py-0.5 rounded text-[8px] text-white font-bold" style={{ backgroundColor: suggestion.light.accent }}>Accent</span>
                       </div>
                     </div>
-                  )}
-                  {suggestion.suggestedTheme && (
-                    <span className={`px-2 py-1 rounded-full text-[10px] font-semibold ${
-                      suggestion.suggestedTheme === 'dark' ? 'bg-slate-800 text-white' : 'bg-white text-slate-800 border'
-                    }`}>
-                      Tema: {suggestion.suggestedTheme}
-                    </span>
-                  )}
+                  </div>
+
+                  {/* Dark theme preview */}
+                  <div className="rounded-xl p-3 space-y-2" style={{ backgroundColor: suggestion.dark.bgPage }}>
+                    <p className="text-[10px] font-bold uppercase" style={{ color: suggestion.dark.primary }}>Dark</p>
+                    <div className="rounded-lg p-2 space-y-1.5" style={{ backgroundColor: suggestion.dark.bgSurface }}>
+                      <div className="flex gap-1.5">
+                        {Object.entries(suggestion.dark).filter(([k]) => !k.includes('bg')).map(([key, color]) => (
+                          <div key={key} className="text-center">
+                            <div className="w-6 h-6 rounded border border-white/10" style={{ backgroundColor: color }} />
+                            <p className="text-[7px] mt-0.5" style={{ color: suggestion.dark.secondary }}>{key.replace('Hover', '')}</p>
+                          </div>
+                        ))}
+                      </div>
+                      <div className="flex gap-1.5 items-center">
+                        <span className="px-2 py-0.5 rounded text-[8px] font-bold" style={{ backgroundColor: suggestion.dark.primary, color: suggestion.dark.bgPage }}>Botao</span>
+                        <span className="px-2 py-0.5 rounded text-[8px] font-bold" style={{ backgroundColor: suggestion.dark.accent, color: suggestion.dark.bgPage }}>Accent</span>
+                      </div>
+                    </div>
+                  </div>
                 </div>
+
                 {suggestion.reasoning && (
                   <p className="text-xs text-muted italic">{suggestion.reasoning}</p>
                 )}
-                <button
-                  onClick={() => {
-                    setPrimaryColor(suggestion.primaryColor)
-                    setSuggestion(null)
-                    setSuccess('Cores aplicadas! Clique em "Salvar" para confirmar.')
-                    setTimeout(() => setSuccess(null), 3000)
-                  }}
-                  className="btn-primary text-sm flex items-center gap-2"
-                >
-                  <FiCheck className="w-4 h-4" />
-                  Aplicar sugestao
-                </button>
+
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => {
+                      // Aplicar TODAS as cores light no state + CSS variables
+                      const s = suggestion.light
+                      setLightColors(prev => ({ ...prev, ...s }))
+                      setPrimaryColor(s.primary)
+                      // Aplicar em tempo real
+                      Object.entries(s).forEach(([key, val]) => {
+                        const cssVar = CSS_VAR_MAP[key]
+                        if (cssVar) document.documentElement.style.setProperty(cssVar, val)
+                      })
+                      setSuggestion(null)
+                      setSuccess('Paleta light aplicada! Clique em "Salvar" para confirmar.')
+                      setTimeout(() => setSuccess(null), 3000)
+                    }}
+                    className="btn-primary text-sm flex items-center gap-2"
+                  >
+                    <FiCheck className="w-4 h-4" />
+                    Aplicar Light
+                  </button>
+                  <button
+                    onClick={() => {
+                      // Aplicar TODAS as cores dark no state + CSS variables
+                      const s = suggestion.dark
+                      setDarkColors(prev => ({ ...prev, ...s }))
+                      setPrimaryColor(s.primary)
+                      Object.entries(s).forEach(([key, val]) => {
+                        const cssVar = CSS_VAR_MAP[key]
+                        if (cssVar) document.documentElement.style.setProperty(cssVar, val)
+                      })
+                      setSuggestion(null)
+                      setSuccess('Paleta dark aplicada! Clique em "Salvar" para confirmar.')
+                      setTimeout(() => setSuccess(null), 3000)
+                    }}
+                    className="btn-secondary text-sm flex items-center gap-2"
+                  >
+                    <FiCheck className="w-4 h-4" />
+                    Aplicar Dark
+                  </button>
+                </div>
               </div>
             )}
           </div>
@@ -581,8 +725,27 @@ function BrandingContent() {
           </div>
         )}
 
-        {/* Save */}
+        {/* Save + Reset */}
         <div className="flex items-center gap-3">
+          <button
+            onClick={async () => {
+              if (!organization?.id || !confirm('Resetar todas as cores para o tema padrao? Isso sera salvo imediatamente.')) return
+              setSaving(true)
+              try {
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                await (supabase as any).from('organizations').update({
+                  settings: { ...organization.settings, theme: { primaryColor: '#0D9488', logoUrl, faviconUrl, appName: appName || APP_CONFIG.name } },
+                  updated_at: new Date().toISOString(),
+                }).eq('id', organization.id)
+                savedRef.current = true
+                window.location.reload()
+              } catch { setSaving(false) }
+            }}
+            disabled={saving}
+            className="btn-secondary flex items-center gap-2 text-sm"
+          >
+            Resetar tema padrao
+          </button>
           <button
             onClick={handleSave}
             disabled={saving}

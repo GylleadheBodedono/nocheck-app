@@ -34,6 +34,7 @@ import type { IconType } from 'react-icons'
 type SidebarChild = {
   label: string
   href: string
+  requiredFeature?: Feature
 }
 
 type SidebarItem = {
@@ -102,6 +103,7 @@ const SIDEBAR_ITEMS: SidebarItem[] = [
       { label: 'Email / Geral', href: routes.adminSettings },
       { label: 'Equipe', href: routes.adminSettings + '/equipe' },
       { label: 'Billing', href: routes.adminSettings + '/billing' },
+      { label: 'Branding', href: routes.adminSettings + '/branding', requiredFeature: 'white_label' },
     ],
   },
 ]
@@ -241,7 +243,7 @@ export function PermanentSidebar({ collapsed, onToggleCollapse, mobileOpen, onMo
             {/* Children */}
             {hasChildren && isExpanded && showText && (
               <div className="ml-7 mt-0.5 space-y-0.5 border-l-2 border-subtle pl-3">
-                {item.children!.map((child) => {
+                {item.children!.filter(child => !child.requiredFeature || hasFeature(child.requiredFeature)).map((child) => {
                   const childActive = pathname === child.href
                   return (
                     <Link
