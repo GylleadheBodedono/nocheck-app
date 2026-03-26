@@ -59,7 +59,9 @@
       "Bash(sed -i 's/return data as Organization/return data as unknown as Organization/g' src/services/tenant.service.ts)",
       "Bash(sed -i 's/return data as OrganizationMember\\\\[\\\\]/return \\(data || []\\) as unknown as OrganizationMember[]/g' src/services/tenant.service.ts)",
       "Bash(sed -i 's/return data as Invite\\\\[\\\\]/return \\(data || []\\) as unknown as Invite[]/g' src/services/tenant.service.ts)",
-      "Bash(sed -i 's/return data as Invite/return data as unknown as Invite/g' src/services/tenant.service.ts)"
+      "Bash(sed -i 's/return data as Invite/return data as unknown as Invite/g' src/services/tenant.service.ts)",
+      "Bash(npx --yes tsc --noEmit)",
+      "Bash(node_modules/.bin/tsc --noEmit)"
     ]
   }
 }

@@ -3,6 +3,7 @@ export const runtime = 'edge'
 import { NextRequest, NextResponse } from 'next/server'
 import { verifyApiAuth } from '@/lib/api-auth'
 import { createRequestLogger } from '@/lib/serverLogger'
+import type { ChatRequestDTO, ChatResponseDTO, ChatErrorDTO } from '@/dtos'
 
 /**
  * Constrói o system prompt do assistente Flux com o nome do app (suporta white-label).
@@ -74,10 +75,12 @@ export async function POST(request: NextRequest) {
   if (auth.error) return auth.error
 
   try {
-    const { messages, appName } = await request.json()
+    // Extrai e tipifica o body com o DTO de chat
+    const { messages, appName } = await request.json() as ChatRequestDTO
 
     if (!Array.isArray(messages) || messages.length === 0) {
-      return NextResponse.json({ error: 'Mensagens invalidas' }, { status: 400 })
+      const errorResponse: ChatErrorDTO = { error: 'Mensagens invalidas' }
+      return NextResponse.json(errorResponse, { status: 400 })
     }
 
     const recentMessages = messages.slice(-20)
@@ -109,7 +112,9 @@ export async function POST(request: NextRequest) {
     const data = await groqRes.json()
     const reply = data.choices?.[0]?.message?.content || 'Opa, nao consegui processar sua pergunta. Tenta de novo?'
 
-    return NextResponse.json({ message: reply })
+    // Resposta tipada via DTO de chat
+    const chatResponse: ChatResponseDTO = { message: reply }
+    return NextResponse.json(chatResponse)
   } catch (error) {
     log.error('Erro inesperado em POST /api/chat', {}, error)
     return NextResponse.json(

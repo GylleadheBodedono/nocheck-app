@@ -5,6 +5,7 @@ import { createClient } from '@supabase/supabase-js'
 import { verifyApiAuth } from '@/lib/api-auth'
 import { isAllowedImageType, isValidBase64, estimateBase64Size, MAX_FILE_SIZE, ALLOWED_IMAGE_TYPES } from '@/lib/validation'
 import { createRequestLogger } from '@/lib/serverLogger'
+import type { UploadImageRequestDTO, UploadImageSuccessDTO, UploadImageErrorDTO } from '@/dtos'
 
 export const dynamic = 'force-dynamic'
 
@@ -28,12 +29,9 @@ export async function POST(request: NextRequest) {
   if (auth.error) return auth.error
 
   try {
-    const body = await request.json()
-    const { image, fileName, folder } = body as {
-      image: string
-      fileName: string
-      folder?: string
-    }
+    // Extrai e tipifica o body com o DTO de upload de imagem
+    const body = await request.json() as UploadImageRequestDTO
+    const { image, fileName, folder } = body
 
     if (!image || typeof image !== 'string') {
       return NextResponse.json(
@@ -103,19 +101,20 @@ export async function POST(request: NextRequest) {
 
     log.info('Upload concluido com sucesso', { filePath, publicUrl: urlData.publicUrl })
 
-    return NextResponse.json({
+    // Resposta tipada via DTO de sucesso no upload
+    const successResponse: UploadImageSuccessDTO = {
       success: true,
       url: urlData.publicUrl,
       path: data.path,
-    })
+    }
+    return NextResponse.json(successResponse)
   } catch (error) {
     log.error('Erro inesperado em POST /api/upload', {}, error)
-    return NextResponse.json(
-      {
-        success: false,
-        error: error instanceof Error ? error.message : 'Erro desconhecido',
-      },
-      { status: 500 }
-    )
+    // Resposta tipada via DTO de erro no upload
+    const errorResponse: UploadImageErrorDTO = {
+      success: false,
+      error: error instanceof Error ? error.message : 'Erro desconhecido',
+    }
+    return NextResponse.json(errorResponse, { status: 500 })
   }
 }

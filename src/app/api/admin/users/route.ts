@@ -5,6 +5,11 @@ import { verifyApiAuth } from '@/lib/api-auth'
 import { getSupabaseAdmin } from '@/lib/stripe'
 import { escapeHtml } from '@/lib/validation'
 import { createRequestLogger } from '@/lib/serverLogger'
+import type {
+  CreateUserRequestDTO,
+  CreateUserResponseDTO,
+  ListUsersResponseDTO,
+} from '@/dtos'
 
 // ── Route Handlers ──
 
@@ -105,8 +110,10 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: usersError.message }, { status: 500 })
     }
 
+    // Tipagem da resposta via DTO para garantir contrato com o cliente
+    const response: ListUsersResponseDTO = { users: users as ListUsersResponseDTO['users'], synced: missing.length }
     return NextResponse.json(
-      { users, synced: missing.length },
+      response,
       { headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate' } }
     )
   } catch (error) {
@@ -139,21 +146,9 @@ export async function POST(request: NextRequest) {
   if (auth.error) return auth.error
 
   try {
-    const body = await request.json()
-    const { email, password, fullName, phone, isAdmin, isTech, autoConfirm, storeId, functionId, sectorId, storeAssignments, redirectTo } = body as {
-      email: string
-      password: string
-      fullName: string
-      phone?: string
-      isAdmin: boolean
-      isTech?: boolean
-      autoConfirm?: boolean
-      storeId?: number
-      functionId?: number
-      sectorId?: number
-      storeAssignments?: { store_id: number; sector_id: number | null; is_primary: boolean }[]
-      redirectTo?: string
-    }
+    // Extrai e tipifica o body da requisição com o DTO correspondente
+    const body = await request.json() as CreateUserRequestDTO
+    const { email, password, fullName, phone, isAdmin, isTech, autoConfirm, storeId, functionId, sectorId, storeAssignments, redirectTo } = body
 
     if (!email || !password || !fullName) {
       return NextResponse.json(
@@ -306,11 +301,13 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    return NextResponse.json({
+    // Resposta tipada via DTO de criação de usuário
+    const response: CreateUserResponseDTO = {
       success: true,
       needsConfirmation: !autoConfirm,
       user: { id: userId, email },
-    })
+    }
+    return NextResponse.json(response)
   } catch (error) {
     log.error('Erro inesperado em POST /api/admin/users', {}, error)
     return NextResponse.json(
