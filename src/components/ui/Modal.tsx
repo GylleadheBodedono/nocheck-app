@@ -42,17 +42,22 @@ export function Modal({ isOpen, onClose, title, children, size = 'md' }: ModalPr
     <div
       className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
       onClick={onClose}
+      role="presentation"
     >
       <div
         className={`bg-surface rounded-2xl shadow-xl w-full ${sizeClasses[size]} max-h-[90vh] flex flex-col`}
         onClick={(e) => e.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="modal-title"
       >
         <div className="flex items-center justify-between px-5 py-4 border-b border-subtle shrink-0">
-          <h2 className="text-base font-semibold text-main">{title}</h2>
+          <h2 id="modal-title" className="text-base font-semibold text-main">{title}</h2>
           <button
             type="button"
             onClick={onClose}
             className="p-1.5 rounded-lg text-muted hover:text-main hover:bg-surface-hover transition-colors"
+            aria-label="Fechar modal"
           >
             <FiX className="w-4 h-4" />
           </button>

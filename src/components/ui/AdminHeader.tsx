@@ -168,10 +168,13 @@ export function AdminHeader({ children }: Props) {
             onClick={() => setNotifOpen(!notifOpen)}
             className="p-2 text-muted hover:text-main hover:bg-surface-hover rounded-xl transition-colors relative"
             title="Notificações"
+            aria-label={`Notificacoes${unreadCount > 0 ? ` (${unreadCount} nao lidas)` : ''}`}
+            aria-haspopup="true"
+            aria-expanded={notifOpen}
           >
             <FiBell className="w-5 h-5" />
             {unreadCount > 0 && (
-              <span className="absolute -top-0.5 -right-0.5 w-4 h-4 bg-warning text-[10px] text-white font-bold rounded-full flex items-center justify-center">
+              <span className="absolute -top-0.5 -right-0.5 w-4 h-4 bg-warning text-[10px] text-white font-bold rounded-full flex items-center justify-center" aria-hidden="true">
                 {unreadCount > 9 ? '9+' : unreadCount}
               </span>
             )}
@@ -290,6 +293,7 @@ export function AdminHeader({ children }: Props) {
           onClick={handleSignOut}
           className="p-2 text-muted hover:text-error hover:bg-surface-hover rounded-xl transition-colors"
           title="Sair"
+          aria-label="Sair da conta"
         >
           <FiLogOut className="w-5 h-5" />
         </button>
