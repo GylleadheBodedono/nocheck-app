@@ -32,7 +32,8 @@ export default function PlatformLayout({ children }: { children: React.ReactNode
       const supabase = createClient()
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) { router.push('/login'); return }
-      const isPlatformAdmin = user.user_metadata?.is_platform_admin === true || user.app_metadata?.is_platform_admin === true
+      // Checar app_metadata (JWT enriquecido pelo auth hook) E user_metadata (fallback para seed)
+      const isPlatformAdmin = user.app_metadata?.is_platform_admin === true || user.user_metadata?.is_platform_admin === true
       if (!isPlatformAdmin) { router.push('/dashboard'); return }
       const name = user.user_metadata?.full_name || user.email?.split('@')[0] || 'Admin'
       setUserName(name)

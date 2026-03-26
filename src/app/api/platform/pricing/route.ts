@@ -25,8 +25,8 @@ export async function PUT(req: NextRequest) {
       return NextResponse.json({ error: 'Nao autenticado' }, { status: 401 })
     }
 
-    // APENAS app_metadata (server-controlled). user_metadata e controlavel pelo usuario.
-    const isPlatformAdmin = user.app_metadata?.is_platform_admin === true
+    const { checkIsPlatformAdmin } = await import('@/lib/withTenantAuth')
+    const isPlatformAdmin = checkIsPlatformAdmin(user)
     if (!isPlatformAdmin) {
       return NextResponse.json({ error: 'Acesso negado — apenas superadmin' }, { status: 403 })
     }

@@ -23,8 +23,8 @@ export async function POST(req: NextRequest) {
     // Setup so pode ser chamado por platform admin autenticado
     const auth = await verifyApiAuth(req, true)
     if (auth.error) return auth.error
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const isPlatformAdmin = (auth.user as any).app_metadata?.is_platform_admin === true
+    const { checkIsPlatformAdmin } = await import('@/lib/withTenantAuth')
+    const isPlatformAdmin = checkIsPlatformAdmin(auth.user as Record<string, unknown>)
     if (!isPlatformAdmin) {
       return NextResponse.json({ error: 'Apenas platform admin pode executar setup' }, { status: 403 })
     }

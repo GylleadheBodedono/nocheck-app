@@ -82,8 +82,8 @@ function LoginForm() {
         setStatus('Redirecionando...')
         // Redirecionar baseado no role: superadmin → /platform, outros → /dashboard
         const user = session.session?.user
-        const isPlatformAdmin = user?.user_metadata?.is_platform_admin === true
-          || user?.app_metadata?.is_platform_admin === true
+        const isPlatformAdmin = user?.app_metadata?.is_platform_admin === true
+          || user?.user_metadata?.is_platform_admin === true
         window.location.href = isPlatformAdmin ? APP_CONFIG.routes.platform : APP_CONFIG.routes.dashboard
       } else {
         window.location.href = APP_CONFIG.routes.dashboard

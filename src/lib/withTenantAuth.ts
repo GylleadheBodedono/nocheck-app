@@ -99,3 +99,16 @@ export async function verifyTenantMember(
 ): Promise<TenantAuthResult> {
   return verifyTenantAccess(request, orgId, ['owner', 'admin', 'manager', 'member', 'viewer'])
 }
+
+/**
+ * Verifica se um usuario e platform admin.
+ * Checa app_metadata (JWT enriquecido pelo auth hook) E user_metadata (banco direto).
+ * Ambos sao necessarios porque getUser() retorna dados do banco (user_metadata)
+ * enquanto getSession() retorna JWT (app_metadata).
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function checkIsPlatformAdmin(user: { app_metadata?: any; user_metadata?: any } | null): boolean {
+  if (!user) return false
+  return user.app_metadata?.is_platform_admin === true
+    || user.user_metadata?.is_platform_admin === true
+}
