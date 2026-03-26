@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { verifyApiAuth } from '@/lib/api-auth'
 import { createRequestLogger } from '@/lib/serverLogger'
+import type { UpdateSettingRequestDTO, UpdateSettingResponseDTO, SettingDTO } from '@/dtos'
 
 // ── Supabase Service Client ──
 
@@ -69,7 +70,9 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: error.message }, { status: 404 })
     }
 
-    return NextResponse.json({ key: data.key, value: data.value })
+    // Resposta tipada via DTO de configuração individual
+    const settingResponse: SettingDTO = { key: data.key, value: data.value }
+    return NextResponse.json(settingResponse)
   } catch (error) {
     log.error('Erro inesperado em GET /api/settings', {}, error)
     return NextResponse.json(
@@ -92,8 +95,9 @@ export async function PUT(request: NextRequest) {
   if (auth.error) return auth.error
 
   try {
-    const body = await request.json()
-    const { key, value } = body as { key: string; value: string }
+    // Extrai e tipifica o body com o DTO de atualização de configuração
+    const body = await request.json() as UpdateSettingRequestDTO
+    const { key, value } = body
 
     if (!key || value === undefined) {
       return NextResponse.json({ error: 'key and value are required' }, { status: 400 })
@@ -110,7 +114,9 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: error.message }, { status: 500 })
     }
 
-    return NextResponse.json({ success: true, key, value })
+    // Resposta tipada via DTO de confirmação de atualização
+    const updateResponse: UpdateSettingResponseDTO = { success: true, key, value }
+    return NextResponse.json(updateResponse)
   } catch (error) {
     log.error('Erro inesperado em PUT /api/settings', {}, error)
     return NextResponse.json(

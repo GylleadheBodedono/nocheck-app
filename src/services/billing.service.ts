@@ -3,47 +3,29 @@
 // ============================================
 // Integracao com Stripe para gerenciamento de assinaturas.
 // Usa API routes do Next.js (/api/billing/*).
+//
+// Os tipos de parâmetros e retorno são importados dos DTOs
+// centralizados em /dtos/billing.dto.ts para garantir
+// consistência entre cliente e servidor.
 // ============================================
 
-/** Parametros para criar uma sessao de checkout */
-interface CheckoutSessionParams {
-  /** ID da organizacao no Supabase */
-  orgId: string
-  /** ID do preco no Stripe (ex: "price_xxx") */
-  priceId: string
-  /** URL de redirecionamento apos sucesso */
-  successUrl?: string
-  /** URL de redirecionamento apos cancelamento */
-  cancelUrl?: string
-}
-
-/** Parametros para abrir o portal de gerenciamento */
-interface PortalSessionParams {
-  /** ID da organizacao no Supabase */
-  orgId: string
-  /** URL de retorno apos sair do portal */
-  returnUrl?: string
-}
-
-/** Status da assinatura retornado pela API */
-interface SubscriptionStatus {
-  /** Status atual no Stripe (ex: "active", "past_due", "canceled") */
-  status: string
-  /** Data de fim do periodo atual (ISO 8601) ou null */
-  currentPeriodEnd: string | null
-  /** Se a assinatura sera cancelada no fim do periodo */
-  cancelAtPeriodEnd: boolean
-}
+// Importa tipos centralizados de billing — substitui interfaces locais
+import type {
+  CheckoutRequestDTO,
+  PortalRequestDTO,
+  SubscriptionStatusResponseDTO,
+  BillingRedirectResponseDTO,
+} from '@/dtos'
 
 /**
  * Cria uma sessao de checkout no Stripe para upgrade de plano.
  * Redireciona o usuario para a pagina de pagamento do Stripe.
  *
- * @param params - Dados da sessao de checkout
+ * @param params - Dados da sessao de checkout (CheckoutRequestDTO)
  * @returns URL do checkout do Stripe para redirecionamento
  * @throws Error se a API retornar erro
  */
-export async function createCheckoutSession(params: CheckoutSessionParams): Promise<{ url: string }> {
+export async function createCheckoutSession(params: CheckoutRequestDTO): Promise<BillingRedirectResponseDTO> {
   const res = await fetch('/api/billing/checkout', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -60,11 +42,11 @@ export async function createCheckoutSession(params: CheckoutSessionParams): Prom
  * Cria uma sessao do portal do Stripe para gerenciar assinatura.
  * Permite ao usuario alterar plano, metodo de pagamento, cancelar, etc.
  *
- * @param params - Dados da sessao do portal
+ * @param params - Dados da sessao do portal (PortalRequestDTO)
  * @returns URL do portal do Stripe para redirecionamento
  * @throws Error se a API retornar erro
  */
-export async function createPortalSession(params: PortalSessionParams): Promise<{ url: string }> {
+export async function createPortalSession(params: PortalRequestDTO): Promise<BillingRedirectResponseDTO> {
   const res = await fetch('/api/billing/portal', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -81,10 +63,10 @@ export async function createPortalSession(params: PortalSessionParams): Promise<
  * Consulta o status atual da assinatura no Stripe.
  *
  * @param params - ID da organizacao
- * @returns Status da assinatura com periodo atual e flag de cancelamento
+ * @returns Status da assinatura com periodo atual e flag de cancelamento (SubscriptionStatusResponseDTO)
  * @throws Error se a API retornar erro
  */
-export async function getSubscriptionStatus(params: { orgId: string }): Promise<SubscriptionStatus> {
+export async function getSubscriptionStatus(params: { orgId: string }): Promise<SubscriptionStatusResponseDTO> {
   const res = await fetch('/api/billing/status', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
