@@ -2,6 +2,7 @@ export const runtime = 'edge'
 
 import { NextRequest, NextResponse } from 'next/server'
 import { verifyApiAuth } from '@/lib/api-auth'
+import { aiLimiter, getRequestIdentifier } from '@/lib/rateLimit'
 
 const HEX_COLOR_RE = /^#[0-9A-Fa-f]{6}$/
 
@@ -14,6 +15,10 @@ const HEX_COLOR_RE = /^#[0-9A-Fa-f]{6}$/
  */
 export async function POST(req: NextRequest) {
   try {
+    // Rate limiting (IA e cara — max 3 por minuto)
+    const rl = aiLimiter.check(getRequestIdentifier(req))
+    if (!rl.success) return NextResponse.json({ error: 'Muitas requisicoes de IA. Aguarde 1 minuto.' }, { status: 429 })
+
     // Autenticacao obrigatoria
     const auth = await verifyApiAuth(req)
     if (auth.error) return auth.error

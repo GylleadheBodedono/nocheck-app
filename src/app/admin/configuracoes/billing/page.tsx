@@ -146,7 +146,7 @@ export default function BillingPage() {
 
   const trialDays = org?.trial_ends_at ? getTrialDaysRemaining(org.trial_ends_at) : 0
   const currentPlan = (org?.plan || 'trial') as Plan
-  console.log('[Billing] currentPlan:', currentPlan, 'org:', org?.plan, 'selectedPlan:', selectedPlan)
+  // Debug removido em producao
 
   const featureLabels: Record<string, string> = {
     basic_orders: 'Checklists ilimitados',

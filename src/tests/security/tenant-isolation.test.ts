@@ -7,8 +7,8 @@
  * Testa a funcao verifyTenantAccess/verifyTenantMember do withTenantAuth.ts.
  */
 
-import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { ORG_A, ORG_B, USER_A_ADMIN, USER_B_ADMIN, PLATFORM_ADMIN, USER_ESCALATION } from '../fixtures/tenants'
+import { describe, it, expect, vi } from 'vitest'
+import { ORG_A, ORG_B, USER_A_ADMIN, PLATFORM_ADMIN, USER_ESCALATION } from '../fixtures/tenants'
 
 // Mock Supabase
 const mockSingle = vi.fn()

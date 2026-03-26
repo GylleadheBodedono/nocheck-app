@@ -4,6 +4,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getStripe, getSupabaseAdmin, updateOrgPlan } from '@/lib/stripe'
 import { PLAN_CONFIGS, type Plan, type PlanConfig } from '@/types/tenant'
 import { verifyTenantAccess } from '@/lib/withTenantAuth'
+import { changePlanSchema, validateBody } from '@/lib/billingSchemas'
+import { billingLimiter, getRequestIdentifier } from '@/lib/rateLimit'
 
 /**
  * POST /api/billing/change-plan
@@ -19,10 +21,15 @@ import { verifyTenantAccess } from '@/lib/withTenantAuth'
  */
 export async function POST(req: NextRequest) {
   try {
-    const { orgId, newPlan } = await req.json()
-    if (!orgId || !newPlan) {
-      return NextResponse.json({ error: 'orgId e newPlan são obrigatórios' }, { status: 400 })
-    }
+    // Rate limiting
+    const rl = billingLimiter.check(getRequestIdentifier(req))
+    if (!rl.success) return NextResponse.json({ error: 'Muitas requisicoes. Tente novamente em breve.' }, { status: 429 })
+
+    // Validacao Zod
+    const body = await req.json()
+    const validation = validateBody(changePlanSchema, body)
+    if (validation.error) return NextResponse.json({ error: validation.error }, { status: 400 })
+    const { orgId, newPlan } = validation.data!
 
     // Verificar que o usuario pertence a esta organizacao
     const tenantAuth = await verifyTenantAccess(req, orgId)

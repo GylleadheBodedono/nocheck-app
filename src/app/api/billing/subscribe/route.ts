@@ -10,15 +10,18 @@ export const runtime = 'edge'
 import { NextRequest, NextResponse } from 'next/server'
 import { getStripe, getSupabaseAdmin, updateOrgPlan, getPlanFromPriceId } from '@/lib/stripe'
 import { verifyTenantAccess } from '@/lib/withTenantAuth'
+import { subscribeSchema, validateBody } from '@/lib/billingSchemas'
+import { billingLimiter, getRequestIdentifier } from '@/lib/rateLimit'
 
 export async function POST(req: NextRequest) {
   try {
     const { orgId, priceId, paymentMethodId } = await req.json()
 
-    if (!orgId || !priceId || !paymentMethodId) {
-      return NextResponse.json({ error: 'orgId, priceId e paymentMethodId sao obrigatorios' }, { status: 400 }
-      )
-    }
+    const rl = billingLimiter.check(getRequestIdentifier(req))
+    if (!rl.success) return NextResponse.json({ error: 'Muitas requisicoes' }, { status: 429 })
+
+    const validation = validateBody(subscribeSchema, { orgId, priceId, paymentMethodId })
+    if (validation.error) return NextResponse.json({ error: validation.error }, { status: 400 })
 
     const tenantAuth = await verifyTenantAccess(req, orgId)
     if (tenantAuth.error) return tenantAuth.error

@@ -18,10 +18,15 @@ export async function POST(request: NextRequest) {
   if (auth.error) return auth.error
 
   try {
+    // Rate limiting — prevenir brute-force de enumeracao
+    const { authLimiter, getRequestIdentifier } = await import('@/lib/rateLimit')
+    const rl = authLimiter.check(getRequestIdentifier(request))
+    if (!rl.success) return NextResponse.json({ exists: true }, { status: 429 })
+
     const { email } = await request.json()
 
     if (!email || typeof email !== 'string') {
-      return NextResponse.json({ exists: false })
+      return NextResponse.json({ exists: true }) // Sempre true (anti-enumeration)
     }
 
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
