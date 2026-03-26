@@ -57,7 +57,7 @@ export function SessionTenantProvider({ children }: { children: React.ReactNode 
     load()
   }, [])
 
-  // Aplicar tema white-label do tenant (todas as variaveis CSS)
+  // Aplicar tema white-label do tenant (se tiver branding custom)
   useEffect(() => {
     if (!org?.settings?.theme) return
     const theme = org.settings.theme
@@ -65,9 +65,19 @@ export function SessionTenantProvider({ children }: { children: React.ReactNode 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const t = theme as any
 
-    // Detectar tema atual (light ou dark)
-    const isDark = document.documentElement.getAttribute('data-theme') === 'dark'
-    const colors = isDark ? t.darkColors : t.lightColors
+    // Verificar se a org TEM branding customizado
+    const hasCustomColors = t.lightColors || t.darkColors
+    if (!hasCustomColors) {
+      // Sem branding custom — deixar globals.css controlar tudo
+      // Apenas aplicar appName e favicon se definidos
+      if (theme.appName && theme.appName !== 'Sistema') document.title = theme.appName
+      if (theme.faviconUrl) {
+        let link = document.querySelector("link[rel~='icon']") as HTMLLinkElement | null
+        if (!link) { link = document.createElement('link'); link.rel = 'icon'; document.head.appendChild(link) }
+        link.href = theme.faviconUrl
+      }
+      return
+    }
 
     // Map de camelCase → CSS variable
     const varMap: Record<string, string> = {
@@ -83,35 +93,43 @@ export function SessionTenantProvider({ children }: { children: React.ReactNode 
       statusInfoBg: '--status-info-bg', statusInfoText: '--status-info-text', statusInfoBorder: '--status-info-border',
     }
 
-    // Aplicar cores customizadas (se existirem)
-    if (colors && typeof colors === 'object') {
+    // Funcao que aplica as cores corretas para o tema atual
+    const applyThemeColors = () => {
+      const isDark = root.getAttribute('data-theme') === 'dark'
+      const colors = isDark ? t.darkColors : t.lightColors
+      if (!colors || typeof colors !== 'object') return
+
       for (const [key, cssVar] of Object.entries(varMap)) {
-        if (colors[key]) root.style.setProperty(cssVar, colors[key])
+        if (colors[key]) {
+          root.style.setProperty(cssVar, colors[key])
+        } else {
+          // Remover inline para deixar globals.css controlar esta variavel
+          root.style.removeProperty(cssVar)
+        }
       }
-      // Ring color baseado na primary
       if (colors.primary) {
         const r = parseInt(colors.primary.slice(1, 3), 16)
         const g = parseInt(colors.primary.slice(3, 5), 16)
         const b = parseInt(colors.primary.slice(5, 7), 16)
         root.style.setProperty('--ring-color', `rgba(${r}, ${g}, ${b}, 0.35)`)
       }
-    } else if (theme.primaryColor) {
-      // Fallback: so primary color (compatibilidade com branding antigo)
-      root.style.setProperty('--primary', theme.primaryColor)
-      const r = parseInt(theme.primaryColor.slice(1, 3), 16)
-      const g = parseInt(theme.primaryColor.slice(3, 5), 16)
-      const b = parseInt(theme.primaryColor.slice(5, 7), 16)
-      root.style.setProperty('--primary-hover', `#${Math.max(0, r - 20).toString(16).padStart(2, '0')}${Math.max(0, g - 20).toString(16).padStart(2, '0')}${Math.max(0, b - 20).toString(16).padStart(2, '0')}`)
-      root.style.setProperty('--ring-color', `rgba(${r}, ${g}, ${b}, 0.35)`)
     }
 
-    if (theme.appName && theme.appName !== 'Sistema') document.title = theme.appName
+    // Aplicar agora
+    applyThemeColors()
 
+    // Escutar mudancas de tema (quando usuario toggle sol/lua)
+    const observer = new MutationObserver(() => applyThemeColors())
+    observer.observe(root, { attributes: true, attributeFilter: ['data-theme'] })
+
+    if (theme.appName && theme.appName !== 'Sistema') document.title = theme.appName
     if (theme.faviconUrl) {
       let link = document.querySelector("link[rel~='icon']") as HTMLLinkElement | null
       if (!link) { link = document.createElement('link'); link.rel = 'icon'; document.head.appendChild(link) }
       link.href = theme.faviconUrl
     }
+
+    return () => observer.disconnect()
   }, [org])
 
   const ctx = useMemo<TenantContext>(() => ({

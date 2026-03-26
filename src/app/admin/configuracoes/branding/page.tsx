@@ -19,33 +19,6 @@ function BrandingContent() {
   const supabase = useMemo(() => createClient(), [])
   const { organization } = useTenant()
 
-  // Todas as variaveis CSS editaveis, organizadas por grupo
-  const COLOR_GROUPS = [
-    { label: 'Principal', keys: ['primary', 'primaryHover', 'primaryForeground'] },
-    { label: 'Secundaria', keys: ['secondary', 'secondaryHover', 'secondaryForeground'] },
-    { label: 'Destaque', keys: ['accent', 'accentHover', 'accentForeground'] },
-    { label: 'Fundos', keys: ['bgPage', 'bgSurface', 'bgSurfaceHover', 'bgSurfaceActive'] },
-    { label: 'Textos', keys: ['textMain', 'textSecondary', 'textMuted', 'textInverse'] },
-    { label: 'Bordas', keys: ['borderSubtle', 'borderDefault', 'borderStrong'] },
-    { label: 'Sucesso', keys: ['statusSuccessBg', 'statusSuccessText', 'statusSuccessBorder'] },
-    { label: 'Erro', keys: ['statusErrorBg', 'statusErrorText', 'statusErrorBorder'] },
-    { label: 'Aviso', keys: ['statusWarningBg', 'statusWarningText', 'statusWarningBorder'] },
-    { label: 'Info', keys: ['statusInfoBg', 'statusInfoText', 'statusInfoBorder'] },
-  ] as const
-
-  const COLOR_LABELS: Record<string, string> = {
-    primary: 'Primaria', primaryHover: 'Primaria Hover', primaryForeground: 'Texto Primaria',
-    secondary: 'Secundaria', secondaryHover: 'Secundaria Hover', secondaryForeground: 'Texto Secundaria',
-    accent: 'Destaque', accentHover: 'Destaque Hover', accentForeground: 'Texto Destaque',
-    bgPage: 'Fundo Pagina', bgSurface: 'Fundo Cards', bgSurfaceHover: 'Fundo Hover', bgSurfaceActive: 'Fundo Ativo',
-    textMain: 'Texto Principal', textSecondary: 'Texto Secundario', textMuted: 'Texto Suave', textInverse: 'Texto Inverso',
-    borderSubtle: 'Borda Sutil', borderDefault: 'Borda Padrao', borderStrong: 'Borda Forte',
-    statusSuccessBg: 'Fundo', statusSuccessText: 'Texto', statusSuccessBorder: 'Borda',
-    statusErrorBg: 'Fundo', statusErrorText: 'Texto', statusErrorBorder: 'Borda',
-    statusWarningBg: 'Fundo', statusWarningText: 'Texto', statusWarningBorder: 'Borda',
-    statusInfoBg: 'Fundo', statusInfoText: 'Texto', statusInfoBorder: 'Borda',
-  }
-
   // Map de camelCase para CSS variable name
   const CSS_VAR_MAP: Record<string, string> = {
     primary: '--primary', primaryHover: '--primary-hover', primaryForeground: '--primary-foreground',
@@ -425,69 +398,179 @@ function BrandingContent() {
           />
         </div>
 
-        {/* Editor de Cores Completo */}
-        <div className="card p-5">
-          <h2 className="text-base font-semibold text-main mb-1">Cores do Tema</h2>
-          <p className="text-sm text-muted mb-4">
-            Customize todas as cores da aplicacao para os temas light e dark.
-          </p>
-
-          {/* Abas Light / Dark */}
-          <div className="flex gap-1 mb-4 p-1 bg-surface-hover rounded-xl w-fit">
-            <button onClick={() => setColorTab('light')}
-              className={`px-4 py-1.5 rounded-lg text-xs font-semibold transition-colors ${colorTab === 'light' ? 'bg-surface text-main shadow-sm' : 'text-muted hover:text-main'}`}>
-              Light
-            </button>
-            <button onClick={() => setColorTab('dark')}
-              className={`px-4 py-1.5 rounded-lg text-xs font-semibold transition-colors ${colorTab === 'dark' ? 'bg-surface text-main shadow-sm' : 'text-muted hover:text-main'}`}>
-              Dark
-            </button>
+        {/* ═══════════ Palette Configuration ═══════════ */}
+        <div className="space-y-4">
+          {/* Header + Light/Dark toggle */}
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-xl font-bold text-main">Configuracao de Paleta</h2>
+              <p className="text-xs text-muted mt-1">Defina as cores base da sua aplicacao. As mudancas propagam automaticamente por todo o sistema.</p>
+            </div>
+            <div className="flex gap-1 p-1 bg-surface-hover rounded-xl">
+              <button onClick={() => setColorTab('light')}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${colorTab === 'light' ? 'bg-surface text-main shadow-sm' : 'text-muted hover:text-main'}`}>
+                ☀ Light
+              </button>
+              <button onClick={() => setColorTab('dark')}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${colorTab === 'dark' ? 'bg-surface text-main shadow-sm' : 'text-muted hover:text-main'}`}>
+                🌙 Dark
+              </button>
+            </div>
           </div>
 
-          {/* Grupos de cores */}
-          <div className="space-y-4">
-            {COLOR_GROUPS.map((group) => {
-              const colors = colorTab === 'light' ? lightColors : darkColors
-              const setColors = colorTab === 'light' ? setLightColors : setDarkColors
-              return (
-                <div key={group.label}>
-                  <p className="text-[10px] font-bold text-muted uppercase tracking-wider mb-2">{group.label}</p>
-                  <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
-                    {group.keys.map((key) => (
-                      <div key={key} className="flex items-center gap-1.5">
-                        <label className="relative cursor-pointer group">
-                          <input
-                            type="color"
-                            value={colors[key] || '#000000'}
-                            onChange={e => {
-                              setColors(prev => ({ ...prev, [key]: e.target.value }))
-                              // Preview em tempo real na variavel CSS correspondente
-                              const cssVar = CSS_VAR_MAP[key]
-                              if (cssVar) document.documentElement.style.setProperty(cssVar, e.target.value)
-                              if (key === 'primary') setPrimaryColor(e.target.value)
-                            }}
-                            className="w-7 h-7 rounded-md border border-subtle cursor-pointer"
-                          />
-                        </label>
-                        <span className="text-[9px] text-muted truncate">{COLOR_LABELS[key]}</span>
-                      </div>
-                    ))}
+          {(() => {
+            const colors = colorTab === 'light' ? lightColors : darkColors
+            const setColors = colorTab === 'light' ? setLightColors : setDarkColors
+            const handleColorChange = (key: string, value: string) => {
+              setColors(prev => ({ ...prev, [key]: value }))
+              const cssVar = CSS_VAR_MAP[key]
+              if (cssVar) document.documentElement.style.setProperty(cssVar, value)
+              if (key === 'primary') setPrimaryColor(value)
+            }
+
+            // Componente de swatch grande (para Brand Colors)
+            const BigSwatch = ({ colorKey, label, desc }: { colorKey: string; label: string; desc: string }) => (
+              <div className="flex flex-col items-center gap-2">
+                <label className="relative cursor-pointer group">
+                  <input type="color" value={colors[colorKey] || '#000000'} onChange={e => handleColorChange(colorKey, e.target.value)}
+                    className="absolute inset-0 opacity-0 w-full h-full cursor-pointer" />
+                  <div className="w-24 h-24 rounded-2xl border-2 border-subtle group-hover:border-primary/50 transition-all shadow-sm"
+                    style={{ backgroundColor: colors[colorKey] }} />
+                  <span className="absolute bottom-2 left-1/2 -translate-x-1/2 text-[9px] font-mono px-1.5 py-0.5 rounded bg-black/50 text-white">{colors[colorKey]}</span>
+                </label>
+                <div className="text-center">
+                  <p className="text-xs font-semibold text-main">{label}</p>
+                  <p className="text-[9px] text-muted">{desc}</p>
+                </div>
+              </div>
+            )
+
+            // Componente de swatch pequeno (para Surface, Status, etc.)
+            const SmallSwatch = ({ colorKey, label }: { colorKey: string; label: string }) => (
+              <div className="flex items-center gap-2.5">
+                <label className="relative cursor-pointer shrink-0">
+                  <input type="color" value={colors[colorKey] || '#000000'} onChange={e => handleColorChange(colorKey, e.target.value)}
+                    className="absolute inset-0 opacity-0 w-full h-full cursor-pointer" />
+                  <div className="w-8 h-8 rounded-lg border border-subtle hover:border-primary/50 transition-all"
+                    style={{ backgroundColor: colors[colorKey] }} />
+                </label>
+                <span className="text-xs text-muted">{label}</span>
+              </div>
+            )
+
+            // Status item
+            const StatusItem = ({ colorKey, label, desc }: { colorKey: string; label: string; desc: string }) => (
+              <div className="flex items-center gap-3">
+                <label className="relative cursor-pointer shrink-0">
+                  <input type="color" value={colors[colorKey] || '#000000'} onChange={e => handleColorChange(colorKey, e.target.value)}
+                    className="absolute inset-0 opacity-0 w-full h-full cursor-pointer" />
+                  <div className="w-6 h-6 rounded-md" style={{ backgroundColor: colors[colorKey] }} />
+                </label>
+                <div>
+                  <p className="text-xs font-semibold text-main">{label}</p>
+                  <p className="text-[9px] text-muted">{desc}</p>
+                </div>
+              </div>
+            )
+
+            return (<>
+              {/* Row 1: Brand Colors + Status Colors */}
+              <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
+                {/* Brand Colors (3/5) */}
+                <div className="lg:col-span-3 card p-5">
+                  <h3 className="text-sm font-bold text-main mb-4 flex items-center gap-2">✨ Cores da Marca</h3>
+                  <div className="flex justify-around">
+                    <BigSwatch colorKey="primary" label="Primaria" desc="Identidade principal" />
+                    <BigSwatch colorKey="secondary" label="Secundaria" desc="Suporte e interacoes" />
+                    <BigSwatch colorKey="accent" label="Destaque" desc="Enfase e calculos" />
                   </div>
                 </div>
-              )
-            })}
-          </div>
 
-          {/* Reset para defaults */}
-          <button
-            onClick={() => {
-              if (colorTab === 'light') setLightColors({ ...LIGHT_DEFAULTS })
-              else setDarkColors({ ...DARK_DEFAULTS })
-            }}
-            className="mt-4 text-xs text-muted hover:text-error transition-colors underline underline-offset-2"
-          >
-            Resetar {colorTab} para cores padrao
-          </button>
+                {/* Status Colors (2/5) */}
+                <div className="lg:col-span-2 card p-5">
+                  <h3 className="text-sm font-bold text-main mb-4 flex items-center gap-2">🎯 Cores de Status</h3>
+                  <div className="space-y-3">
+                    <StatusItem colorKey="statusSuccessText" label="Sucesso" desc="Confirmacoes e estados validos" />
+                    <StatusItem colorKey="statusErrorText" label="Erro" desc="Falhas criticas e alertas" />
+                    <StatusItem colorKey="statusWarningText" label="Aviso" desc="Estados de cautela" />
+                    <StatusItem colorKey="statusInfoText" label="Info" desc="Informacoes gerais do sistema" />
+                  </div>
+                </div>
+              </div>
+
+              {/* Row 2: Surface & Backgrounds + Typography */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                {/* Surface & Backgrounds */}
+                <div className="card p-5">
+                  <h3 className="text-sm font-bold text-main mb-4 flex items-center gap-2">🎨 Superficies e Fundos</h3>
+                  <div className="grid grid-cols-2 gap-3">
+                    <SmallSwatch colorKey="bgPage" label="Fundo Pagina" />
+                    <SmallSwatch colorKey="bgSurface" label="Fundo Cards" />
+                    <SmallSwatch colorKey="bgSurfaceHover" label="Fundo Hover" />
+                    <SmallSwatch colorKey="bgSurfaceActive" label="Fundo Ativo" />
+                  </div>
+                </div>
+
+                {/* Typography */}
+                <div className="card p-5">
+                  <h3 className="text-sm font-bold text-main mb-4 flex items-center gap-2">T Tipografia</h3>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="flex items-center gap-2.5">
+                      <label className="relative cursor-pointer shrink-0">
+                        <input type="color" value={colors.textMain || '#000000'} onChange={e => handleColorChange('textMain', e.target.value)}
+                          className="absolute inset-0 opacity-0 cursor-pointer" />
+                        <span className="text-xl font-bold" style={{ color: colors.textMain }}>Aa</span>
+                      </label>
+                      <div><p className="text-xs font-semibold text-main">Texto Principal</p><p className="text-[8px] font-mono text-muted">{colors.textMain}</p></div>
+                    </div>
+                    <div className="flex items-center gap-2.5">
+                      <label className="relative cursor-pointer shrink-0">
+                        <input type="color" value={colors.textSecondary || '#000000'} onChange={e => handleColorChange('textSecondary', e.target.value)}
+                          className="absolute inset-0 opacity-0 cursor-pointer" />
+                        <span className="text-xl font-bold" style={{ color: colors.textSecondary }}>Aa</span>
+                      </label>
+                      <div><p className="text-xs font-semibold text-main">Texto Secundario</p><p className="text-[8px] font-mono text-muted">{colors.textSecondary}</p></div>
+                    </div>
+                    <div className="flex items-center gap-2.5">
+                      <label className="relative cursor-pointer shrink-0">
+                        <input type="color" value={colors.textMuted || '#000000'} onChange={e => handleColorChange('textMuted', e.target.value)}
+                          className="absolute inset-0 opacity-0 cursor-pointer" />
+                        <span className="text-lg" style={{ color: colors.textMuted }}>Aa</span>
+                      </label>
+                      <div><p className="text-xs font-semibold text-main">Texto Suave</p><p className="text-[8px] font-mono text-muted">{colors.textMuted}</p></div>
+                    </div>
+                    <div className="flex items-center gap-2.5">
+                      <label className="relative cursor-pointer shrink-0">
+                        <input type="color" value={colors.textInverse || '#000000'} onChange={e => handleColorChange('textInverse', e.target.value)}
+                          className="absolute inset-0 opacity-0 cursor-pointer" />
+                        <span className="text-xl font-bold px-1.5 rounded" style={{ color: colors.textInverse, backgroundColor: colors.textMain }}>Aa</span>
+                      </label>
+                      <div><p className="text-xs font-semibold text-main">Texto Inverso</p><p className="text-[8px] font-mono text-muted">{colors.textInverse}</p></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Row 3: Borders & Outlines */}
+              <div className="card p-5">
+                <h3 className="text-sm font-bold text-main mb-4 flex items-center gap-2">✏️ Bordas e Contornos</h3>
+                <div className="grid grid-cols-3 gap-6">
+                  <div>
+                    <SmallSwatch colorKey="borderSubtle" label="Borda Sutil" />
+                    <p className="text-[9px] text-muted mt-1 ml-10">Divisorias leves e separacoes</p>
+                  </div>
+                  <div>
+                    <SmallSwatch colorKey="borderDefault" label="Borda Padrao" />
+                    <p className="text-[9px] text-muted mt-1 ml-10">Inputs, botoes e containers</p>
+                  </div>
+                  <div>
+                    <SmallSwatch colorKey="borderStrong" label="Borda Forte" />
+                    <p className="text-[9px] text-muted mt-1 ml-10">Focus states e enfase</p>
+                  </div>
+                </div>
+              </div>
+            </>)
+          })()}
         </div>
 
         {/* Upload Logo */}
@@ -737,6 +820,11 @@ function BrandingContent() {
                   settings: { ...organization.settings, theme: { primaryColor: '#0D9488', logoUrl, faviconUrl, appName: appName || APP_CONFIG.name } },
                   updated_at: new Date().toISOString(),
                 }).eq('id', organization.id)
+                // Limpar TODAS as inline CSS variables para globals.css controlar
+                Object.values(CSS_VAR_MAP).forEach(cssVar => {
+                  document.documentElement.style.removeProperty(cssVar)
+                })
+                document.documentElement.style.removeProperty('--ring-color')
                 savedRef.current = true
                 window.location.reload()
               } catch { setSaving(false) }
