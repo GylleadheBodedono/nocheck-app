@@ -8,8 +8,9 @@
 
 export const runtime = 'edge'
 
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { getStripe } from '@/lib/stripe'
+import { verifyApiAuth } from '@/lib/api-auth'
 
 const PLANS = [
   { name: 'OpereCheck Starter', price: 29700, plan: 'starter' },       // R$ 297
@@ -17,8 +18,16 @@ const PLANS = [
   { name: 'OpereCheck Enterprise', price: 99700, plan: 'enterprise' },    // R$ 997
 ]
 
-export async function POST() {
+export async function POST(req: NextRequest) {
   try {
+    // Setup so pode ser chamado por platform admin autenticado
+    const auth = await verifyApiAuth(req, true)
+    if (auth.error) return auth.error
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const isPlatformAdmin = (auth.user as any).app_metadata?.is_platform_admin === true
+    if (!isPlatformAdmin) {
+      return NextResponse.json({ error: 'Apenas platform admin pode executar setup' }, { status: 403 })
+    }
     const results: Record<string, { productId: string; priceId: string }> = {}
 
     const stripe = getStripe()

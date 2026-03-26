@@ -172,8 +172,8 @@ function escapeHtml(str: string): string {
     .replace(/"/g, '&quot;')
 }
 
-/** Variáveis que contêm HTML/URLs e NÃO devem ser escapadas (usadas em atributos style/href). */
-const RAW_VARIABLES = new Set<string>(['severity_color', 'plan_url', 'reincidencia_prefix'])
+/** Apenas variaveis com hex color ou URL — todo o resto e escapado contra XSS. */
+const RAW_VARIABLES = new Set<string>(['severity_color', 'plan_url'])
 
 /**
  * Substitui todos os placeholders `{{variavel}}` no template pelos valores fornecidos.

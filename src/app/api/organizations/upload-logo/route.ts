@@ -3,6 +3,7 @@ export const runtime = 'edge'
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { verifyApiAuth } from '@/lib/api-auth'
+import { verifyTenantAccess } from '@/lib/withTenantAuth'
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
@@ -21,11 +22,14 @@ export async function POST(request: NextRequest) {
     const orgId = formData.get('orgId') as string | null
 
     if (!file || !type || !orgId) {
-      return NextResponse.json(
-        { error: 'file, type e orgId sao obrigatorios' },
+      return NextResponse.json({ error: 'file, type e orgId sao obrigatorios' },
         { status: 400 }
       )
     }
+
+    // Verificar que o usuario pertence a esta org
+    const tenantAuth = await verifyTenantAccess(request, orgId)
+    if (tenantAuth.error) return tenantAuth.error
 
     if (!ALLOWED_TYPES.includes(file.type)) {
       return NextResponse.json(

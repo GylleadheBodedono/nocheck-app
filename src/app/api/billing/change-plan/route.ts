@@ -3,6 +3,7 @@ export const runtime = 'edge'
 import { NextRequest, NextResponse } from 'next/server'
 import { getStripe, getSupabaseAdmin, updateOrgPlan } from '@/lib/stripe'
 import { PLAN_CONFIGS, type Plan, type PlanConfig } from '@/types/tenant'
+import { verifyTenantAccess } from '@/lib/withTenantAuth'
 
 /**
  * POST /api/billing/change-plan
@@ -22,6 +23,10 @@ export async function POST(req: NextRequest) {
     if (!orgId || !newPlan) {
       return NextResponse.json({ error: 'orgId e newPlan são obrigatórios' }, { status: 400 })
     }
+
+    // Verificar que o usuario pertence a esta organizacao
+    const tenantAuth = await verifyTenantAccess(req, orgId)
+    if (tenantAuth.error) return tenantAuth.error
 
     const supabase = getSupabaseAdmin()
 

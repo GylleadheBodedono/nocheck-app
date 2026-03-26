@@ -328,7 +328,7 @@ export default function ConfiguracoesPage() {
                 className="w-full border-0"
                 style={{ minHeight: 500 }}
                 title="Email Preview"
-                sandbox="allow-same-origin"
+                sandbox=""
               />
             </div>
           </div>

@@ -9,6 +9,7 @@ export const runtime = 'edge'
 
 import { NextRequest, NextResponse } from 'next/server'
 import { getStripe, getSupabaseAdmin } from '@/lib/stripe'
+import { verifyTenantAccess } from '@/lib/withTenantAuth'
 
 export async function POST(req: NextRequest) {
   try {
@@ -16,6 +17,18 @@ export async function POST(req: NextRequest) {
 
     if (!orgId || !priceId) {
       return NextResponse.json({ error: 'orgId e priceId sao obrigatorios' }, { status: 400 })
+    }
+
+    const tenantAuth = await verifyTenantAccess(req, orgId)
+    if (tenantAuth.error) return tenantAuth.error
+
+    // Validar URLs (prevenir open redirect)
+    const appOrigin = process.env.NEXT_PUBLIC_SITE_URL || ''
+    if (successUrl && !successUrl.startsWith('/') && !successUrl.startsWith(appOrigin)) {
+      return NextResponse.json({ error: 'successUrl invalida' }, { status: 400 })
+    }
+    if (cancelUrl && !cancelUrl.startsWith('/') && !cancelUrl.startsWith(appOrigin)) {
+      return NextResponse.json({ error: 'cancelUrl invalida' }, { status: 400 })
     }
 
     const stripe = getStripe()

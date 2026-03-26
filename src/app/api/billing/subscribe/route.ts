@@ -9,17 +9,19 @@ export const runtime = 'edge'
 
 import { NextRequest, NextResponse } from 'next/server'
 import { getStripe, getSupabaseAdmin, updateOrgPlan, getPlanFromPriceId } from '@/lib/stripe'
+import { verifyTenantAccess } from '@/lib/withTenantAuth'
 
 export async function POST(req: NextRequest) {
   try {
     const { orgId, priceId, paymentMethodId } = await req.json()
 
     if (!orgId || !priceId || !paymentMethodId) {
-      return NextResponse.json(
-        { error: 'orgId, priceId e paymentMethodId sao obrigatorios' },
-        { status: 400 }
+      return NextResponse.json({ error: 'orgId, priceId e paymentMethodId sao obrigatorios' }, { status: 400 }
       )
     }
+
+    const tenantAuth = await verifyTenantAccess(req, orgId)
+    if (tenantAuth.error) return tenantAuth.error
 
     const stripe = getStripe()
     const supabase = getSupabaseAdmin()
@@ -107,13 +109,20 @@ export async function POST(req: NextRequest) {
     }
 
     // Pagamento OK — atualizar plano
+    // Se este update falhar, o webhook (checkout.session.completed ou
+    // customer.subscription.updated) vai reconciliar automaticamente.
     const plan = await getPlanFromPriceId(priceId)
     if (plan) {
-      await updateOrgPlan(orgId, plan, {
-        stripe_customer_id: customerId,
-        stripe_subscription_id: subscription.id,
-        trial_ends_at: null,
-      })
+      try {
+        await updateOrgPlan(orgId, plan, {
+          stripe_customer_id: customerId,
+          stripe_subscription_id: subscription.id,
+          trial_ends_at: null,
+        })
+      } catch (dbErr) {
+        // DB falhou mas Stripe ja cobrou — webhook vai reconciliar
+        console.error('[Billing Subscribe] DB update falhou apos Stripe sucesso — webhook vai reconciliar:', dbErr)
+      }
     }
 
     return NextResponse.json({ success: true, subscriptionId: subscription.id })

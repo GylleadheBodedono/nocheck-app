@@ -35,14 +35,18 @@ export async function POST(request: NextRequest) {
       { auth: { autoRefreshToken: false, persistSession: false } }
     )
 
-    const { count } = await supabase
+    // Verificar no banco mas SEMPRE retornar a mesma resposta
+    // (prevenir email enumeration — atacante nao descobre quem e cliente)
+    await supabase
       .from('users')
       .select('id', { count: 'exact', head: true })
       .ilike('email', email)
 
-    return NextResponse.json({ exists: (count ?? 0) > 0 })
+    // Sempre retorna o mesmo resultado independente de existir ou nao
+    // O frontend trata como "se existe, mostra link de reset; se nao, mostra mensagem generica"
+    return NextResponse.json({ exists: true })
   } catch (err) {
     log.error('Erro ao verificar email', {}, err)
-    return NextResponse.json({ exists: false })
+    return NextResponse.json({ exists: true })
   }
 }

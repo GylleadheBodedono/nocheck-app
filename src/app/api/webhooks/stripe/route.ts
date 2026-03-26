@@ -26,14 +26,18 @@ export async function POST(req: NextRequest) {
   const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET
 
   const stripe = getStripe()
+
+  if (!webhookSecret) {
+    console.error('[Stripe Webhook] STRIPE_WEBHOOK_SECRET nao configurado — rejeitando request')
+    return NextResponse.json({ error: 'Webhook secret nao configurado' }, { status: 500 })
+  }
+
+  if (!sig) {
+    return NextResponse.json({ error: 'Missing stripe-signature header' }, { status: 400 })
+  }
+
   try {
-    if (webhookSecret && sig) {
-      event = stripe.webhooks.constructEvent(body, sig, webhookSecret)
-    } else {
-      // Sem webhook secret (dev local) — aceitar qualquer payload
-      event = JSON.parse(body) as Stripe.Event
-      console.log('[Stripe Webhook] AVISO: Sem webhook secret, aceitando payload sem validacao')
-    }
+    event = stripe.webhooks.constructEvent(body, sig, webhookSecret)
   } catch (err) {
     console.error('[Stripe Webhook] Signature invalida:', err)
     return NextResponse.json({ error: 'Signature invalida' }, { status: 400 })
@@ -41,7 +45,19 @@ export async function POST(req: NextRequest) {
 
   const supabase = getSupabaseAdmin()
 
-  console.log('[Stripe Webhook] Evento:', event.type)
+  console.log('[Stripe Webhook] Evento:', event.type, event.id)
+
+  // Idempotencia: verificar se ja processamos este evento
+  const { data: existing } = await supabase
+    .from('stripe_webhook_events')
+    .select('event_id')
+    .eq('event_id', event.id)
+    .maybeSingle()
+
+  if (existing) {
+    console.log('[Stripe Webhook] Evento ja processado, ignorando:', event.id)
+    return NextResponse.json({ received: true, duplicate: true })
+  }
 
   let hasErrors = false
 
@@ -191,11 +207,13 @@ export async function POST(req: NextRequest) {
       console.error('[Stripe Webhook] Evento processado com erros:', event.type)
     }
 
-    // Always return 200 — Stripe expects it even if we had DB errors
+    // Marcar evento como processado (idempotencia)
+    try { await supabase.from('stripe_webhook_events').insert({ event_id: event.id, event_type: event.type }) } catch { /* ignore duplicate */ }
+
     return NextResponse.json({ received: true })
   } catch (err) {
     console.error('[Stripe Webhook] Erro ao processar:', err)
-    // Still return 200 to prevent Stripe retries for unrecoverable errors
+    try { await supabase.from('stripe_webhook_events').insert({ event_id: event.id, event_type: event.type }) } catch { /* ignore */ }
     return NextResponse.json({ received: true })
   }
 }

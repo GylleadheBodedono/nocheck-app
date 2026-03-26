@@ -16,7 +16,7 @@ export const ALLOWED_STORAGE_FOLDERS = ['uploads', 'anexos'] as const
  */
 export function isAllowedImageType(dataUrl: string): boolean {
   const match = dataUrl.match(/^data:(image\/\w+);base64,/)
-  if (!match) return true // raw base64 without data URL prefix is allowed
+  if (!match) return false // rejeitar dados sem prefixo MIME valido
   return ALLOWED_IMAGE_TYPES.includes(match[1] as typeof ALLOWED_IMAGE_TYPES[number])
 }
 

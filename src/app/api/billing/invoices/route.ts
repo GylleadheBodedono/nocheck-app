@@ -2,6 +2,7 @@ export const runtime = 'edge'
 
 import { NextRequest, NextResponse } from 'next/server'
 import { getStripe, getSupabaseAdmin } from '@/lib/stripe'
+import { verifyTenantMember } from '@/lib/withTenantAuth'
 
 /**
  * GET /api/billing/invoices?orgId=xxx
@@ -11,6 +12,9 @@ export async function GET(req: NextRequest) {
   try {
     const orgId = req.nextUrl.searchParams.get('orgId')
     if (!orgId) return NextResponse.json({ error: 'orgId obrigatorio' }, { status: 400 })
+
+    const tenantAuth = await verifyTenantMember(req, orgId)
+    if (tenantAuth.error) return tenantAuth.error
 
     const supabase = getSupabaseAdmin()
     const { data: org } = await supabase

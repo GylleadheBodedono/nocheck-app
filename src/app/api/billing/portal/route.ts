@@ -9,6 +9,7 @@ export const runtime = 'edge'
 
 import { NextRequest, NextResponse } from 'next/server'
 import { getStripe, getSupabaseAdmin } from '@/lib/stripe'
+import { verifyTenantAccess } from '@/lib/withTenantAuth'
 
 export async function POST(req: NextRequest) {
   try {
@@ -17,6 +18,9 @@ export async function POST(req: NextRequest) {
     if (!orgId) {
       return NextResponse.json({ error: 'orgId obrigatorio' }, { status: 400 })
     }
+
+    const tenantAuth = await verifyTenantAccess(req, orgId)
+    if (tenantAuth.error) return tenantAuth.error
 
     const supabase = getSupabaseAdmin()
 
@@ -30,10 +34,16 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Nenhuma assinatura Stripe encontrada. Faca um upgrade primeiro para ativar o gerenciamento de pagamentos.' }, { status: 400 })
     }
 
+    // Validar return URL (prevenir open redirect)
+    const appOrigin = process.env.NEXT_PUBLIC_SITE_URL || req.headers.get('origin') || ''
+    const safeReturnUrl = (returnUrl && (returnUrl.startsWith('/') || returnUrl.startsWith(appOrigin)))
+      ? returnUrl
+      : `${appOrigin}/admin/configuracoes`
+
     const stripe = getStripe()
     const session = await stripe.billingPortal.sessions.create({
       customer: org.stripe_customer_id,
-      return_url: returnUrl || `${req.headers.get('origin')}/admin/configuracoes`,
+      return_url: safeReturnUrl,
     })
 
     return NextResponse.json({ url: session.url })

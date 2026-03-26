@@ -6,6 +6,7 @@ export const runtime = 'edge'
 
 import { NextRequest, NextResponse } from 'next/server'
 import { getStripe, getSupabaseAdmin } from '@/lib/stripe'
+import { verifyTenantMember } from '@/lib/withTenantAuth'
 
 export async function POST(req: NextRequest) {
   try {
@@ -14,6 +15,9 @@ export async function POST(req: NextRequest) {
     if (!orgId) {
       return NextResponse.json({ error: 'orgId obrigatorio' }, { status: 400 })
     }
+
+    const tenantAuth = await verifyTenantMember(req, orgId)
+    if (tenantAuth.error) return tenantAuth.error
 
     const supabase = getSupabaseAdmin()
 

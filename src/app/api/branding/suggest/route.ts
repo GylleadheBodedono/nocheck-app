@@ -1,19 +1,33 @@
 export const runtime = 'edge'
 
 import { NextRequest, NextResponse } from 'next/server'
+import { verifyApiAuth } from '@/lib/api-auth'
+
+const HEX_COLOR_RE = /^#[0-9A-Fa-f]{6}$/
 
 /**
  * POST /api/branding/suggest
  *
  * Recebe cores dominantes extraidas da logo (via canvas no frontend)
  * e usa Groq (llama-3.3-70b) para sugerir paleta completa para o app.
+ * Requer autenticacao.
  */
 export async function POST(req: NextRequest) {
   try {
+    // Autenticacao obrigatoria
+    const auth = await verifyApiAuth(req)
+    if (auth.error) return auth.error
+
     const { dominantColors } = await req.json()
 
     if (!dominantColors || !Array.isArray(dominantColors) || dominantColors.length === 0) {
       return NextResponse.json({ error: 'dominantColors e obrigatorio (array de hex)' }, { status: 400 })
+    }
+
+    // Validar que cada cor e hex valido (prevenir prompt injection)
+    const validColors = dominantColors.filter((c: unknown) => typeof c === 'string' && HEX_COLOR_RE.test(c))
+    if (validColors.length === 0) {
+      return NextResponse.json({ error: 'Nenhuma cor hex valida fornecida' }, { status: 400 })
     }
 
     const groqKey = process.env.GROQ_API_KEY
@@ -21,7 +35,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'GROQ_API_KEY nao configurada' }, { status: 500 })
     }
 
-    const prompt = `Voce e um designer de UI/UX especialista em SaaS. Recebeu as cores dominantes da logo de um cliente: ${dominantColors.join(', ')}.
+    const prompt = `Voce e um designer de UI/UX especialista em SaaS. Recebeu as cores dominantes da logo de um cliente: ${validColors.join(', ')}.
 
 Crie uma paleta COMPLETA para um app web SaaS, com versoes para tema LIGHT e DARK. As cores devem harmonizar com a logo.
 

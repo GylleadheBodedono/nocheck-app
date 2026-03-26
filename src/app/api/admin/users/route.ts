@@ -183,6 +183,7 @@ export async function POST(request: NextRequest) {
         const { count } = await adminClient
           .from('users')
           .select('id', { count: 'exact', head: true })
+          .eq('tenant_id', memberData.organization_id)
 
         const currentUsers = count || 0
         const maxUsers = org.max_users || 5
