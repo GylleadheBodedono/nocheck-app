@@ -51,7 +51,15 @@
       "mcp__claude_ai_ClickUp__clickup_filter_tasks",
       "Bash(ls -la supabase/migrations/*.sql)",
       "Bash(xargs -I {} grep -l \"organization\\\\|org\\\\|tenant\" {})",
-      "Bash(npm ls:*)"
+      "Bash(npm ls:*)",
+      "Bash(ls supabase/migrations/*.sql)",
+      "Bash(xargs -I {} basename {})",
+      "Bash(sed -i 's/const supabase = createClient\\(\\)/const supabase = createTypedClient\\(\\)/g' src/services/tenant.service.ts)",
+      "Bash(sed -i 's/\\(supabase as any\\)/supabase/g' src/services/tenant.service.ts)",
+      "Bash(sed -i 's/return data as Organization/return data as unknown as Organization/g' src/services/tenant.service.ts)",
+      "Bash(sed -i 's/return data as OrganizationMember\\\\[\\\\]/return \\(data || []\\) as unknown as OrganizationMember[]/g' src/services/tenant.service.ts)",
+      "Bash(sed -i 's/return data as Invite\\\\[\\\\]/return \\(data || []\\) as unknown as Invite[]/g' src/services/tenant.service.ts)",
+      "Bash(sed -i 's/return data as Invite/return data as unknown as Invite/g' src/services/tenant.service.ts)"
     ]
   }
 }
