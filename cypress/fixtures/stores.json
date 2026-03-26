@@ -1,0 +1,29 @@
+[
+  {
+    "id": 1,
+    "name": "Loja Centro",
+    "is_active": true,
+    "require_gps": true,
+    "latitude": -23.5505,
+    "longitude": -46.6333,
+    "created_at": "2024-01-01T00:00:00Z"
+  },
+  {
+    "id": 2,
+    "name": "Loja Shopping Norte",
+    "is_active": true,
+    "require_gps": false,
+    "latitude": -23.5100,
+    "longitude": -46.6200,
+    "created_at": "2024-01-02T00:00:00Z"
+  },
+  {
+    "id": 3,
+    "name": "Loja Sul (Desativada)",
+    "is_active": false,
+    "require_gps": false,
+    "latitude": null,
+    "longitude": null,
+    "created_at": "2024-01-03T00:00:00Z"
+  }
+]
