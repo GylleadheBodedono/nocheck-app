@@ -1,0 +1,429 @@
+'use client'
+
+import { useEffect, useState, useMemo } from 'react'
+import { createClient } from '@/lib/supabase'
+import Link from 'next/link'
+import {
+  FiPlus,
+  FiEdit2,
+  FiTrash2,
+  FiUserCheck,
+  FiUserX,
+  FiSearch,
+  FiStar,
+} from 'react-icons/fi'
+import type { User, Store, Sector, FunctionRow, UserStoreWithDetails } from '@/types/database'
+import { APP_CONFIG } from '@/lib/config'
+import { PageContainer } from '@/components/ui'
+import { logError, logWarn } from '@/lib/clientLogger'
+import { useRealtimeRefresh } from '@/hooks/useRealtimeRefresh'
+
+type UserWithAssignment = User & {
+  store: Store | null
+  function_ref: FunctionRow | null
+  sector: Sector | null
+  user_stores?: UserStoreWithDetails[]
+}
+
+interface Props {
+  initialUsers: UserWithAssignment[]
+  initialFavoriteIds: string[]
+  currentUserId: string
+}
+
+/**
+ * Client component for user management page (`/admin/usuarios`).
+ * Receives initial data from server component. Handles CRUD, search, filter, and realtime updates.
+ */
+export default function UsuariosPageClient({ initialUsers, initialFavoriteIds, currentUserId }: Props) {
+  const [users, setUsers] = useState<UserWithAssignment[]>(initialUsers)
+  const [searchTerm, setSearchTerm] = useState('')
+  const [filterActive, setFilterActive] = useState<boolean | null>(null)
+  const [favoriteUserIds, setFavoriteUserIds] = useState<Set<string>>(new Set(initialFavoriteIds))
+  const [showFavoritesOnly, setShowFavoritesOnly] = useState(false)
+  const supabase = useMemo(() => createClient(), [])
+  const { refreshKey } = useRealtimeRefresh(['users'])
+
+  useEffect(() => {
+    if (refreshKey > 0 && navigator.onLine) refetchUsers()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [refreshKey])
+
+  const refetchUsers = async () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data } = await (supabase as any)
+      .from('users')
+      .select(`
+        *,
+        store:stores!users_store_id_fkey(*),
+        function_ref:functions!users_function_id_fkey(*),
+        sector:sectors!users_sector_id_fkey(*),
+        user_stores(
+          id,
+          store_id,
+          sector_id,
+          is_primary,
+          created_at,
+          store:stores(*),
+          sector:sectors(*)
+        )
+      `)
+      .order('full_name')
+    if (data) setUsers(data as UserWithAssignment[])
+  }
+
+  const toggleUserStatus = async (userId: string, currentStatus: boolean) => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { error } = await (supabase as any)
+      .from('users')
+      .update({ is_active: !currentStatus })
+      .eq('id', userId)
+
+    if (error) {
+      logError('Error updating user', { error: error instanceof Error ? error.message : String(error) })
+      return
+    }
+
+    // Atualiza estado local imediatamente
+    setUsers(prev => prev.map(u =>
+      u.id === userId ? { ...u, is_active: !currentStatus } : u
+    ))
+  }
+
+  const deleteUser = async (userId: string) => {
+    if (!confirm('Tem certeza que deseja excluir este usuário?')) return
+
+    // Remove da tela imediatamente (otimista)
+    const previousUsers = users
+    setUsers(prev => prev.filter(u => u.id !== userId))
+
+    try {
+      // Tenta API server-side (deleta de auth.users + CASCADE)
+      const res = await fetch(`/api/admin/users/${userId}`, { method: 'DELETE' })
+      const data = await res.json()
+
+      if (!res.ok) {
+        throw new Error(data.error || 'Erro ao excluir usuario')
+      }
+    } catch (err) {
+      const errMsg = err instanceof Error ? err.message : 'Erro desconhecido'
+      logWarn('[Usuarios] API delete falhou', { value: errMsg })
+
+      // If FK constraint error, show useful message and revert
+      if (errMsg.includes('registros vinculados') || errMsg.includes('migration')) {
+        alert(errMsg)
+        setUsers(previousUsers)
+        return
+      }
+
+      // Fallback: deleta direto do public.users
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { error } = await (supabase as any)
+        .from('users')
+        .delete()
+        .eq('id', userId)
+
+      if (error) {
+        logError('Erro ao deletar usuario', { error: error instanceof Error ? error.message : String(error) })
+        alert(error.message || 'Erro ao excluir usuario. Tente novamente.')
+        // Reverte a remoçao otimista
+        setUsers(previousUsers)
+      }
+    }
+  }
+
+  const toggleFavoriteUser = async (targetUserId: string) => {
+    const isFav = favoriteUserIds.has(targetUserId)
+
+    // Otimistic update
+    setFavoriteUserIds(prev => {
+      const next = new Set(prev)
+      if (isFav) next.delete(targetUserId)
+      else next.add(targetUserId)
+      return next
+    })
+
+    try {
+      if (isFav) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        await (supabase as any)
+          .from('admin_favorites')
+          .delete()
+          .eq('user_id', currentUserId)
+          .eq('entity_type', 'user')
+          .eq('entity_id', targetUserId)
+      } else {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        await (supabase as any)
+          .from('admin_favorites')
+          .insert({ user_id: currentUserId, entity_type: 'user', entity_id: targetUserId })
+      }
+    } catch {
+      // Reverter em caso de erro
+      setFavoriteUserIds(prev => {
+        const next = new Set(prev)
+        if (isFav) next.add(targetUserId)
+        else next.delete(targetUserId)
+        return next
+      })
+    }
+  }
+
+  const filteredUsers = users
+    .filter(user => {
+      const matchesSearch =
+        user.full_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        user.email.toLowerCase().includes(searchTerm.toLowerCase())
+
+      const matchesFilter = filterActive === null || user.is_active === filterActive
+      const matchesFavorite = !showFavoritesOnly || favoriteUserIds.has(user.id)
+
+      return matchesSearch && matchesFilter && matchesFavorite
+    })
+    .sort((a, b) => {
+      const aFav = favoriteUserIds.has(a.id) ? 1 : 0
+      const bFav = favoriteUserIds.has(b.id) ? 1 : 0
+      return bFav - aFav
+    })
+
+  return (
+      <PageContainer>
+        {/* Top actions */}
+        <div className="flex items-center justify-end mb-6">
+          <Link href={APP_CONFIG.routes.adminUsersNew} className="btn-primary flex items-center gap-2">
+            <FiPlus className="w-4 h-4" />
+            Novo Usuario
+          </Link>
+        </div>
+
+        {/* Filters */}
+        <div className="flex flex-col sm:flex-row gap-4 mb-6">
+          <div className="flex-1 relative">
+            <FiSearch className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted" />
+            <input
+              type="text"
+              placeholder="Buscar por nome ou email..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="input pl-10"
+            />
+          </div>
+
+          <div className="flex gap-2 flex-wrap">
+            <button
+              onClick={() => setShowFavoritesOnly(!showFavoritesOnly)}
+              className={`px-4 py-2 rounded-xl font-medium transition-colors flex items-center gap-1.5 ${
+                showFavoritesOnly
+                  ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
+                  : 'btn-secondary'
+              }`}
+              title="Filtrar favoritos"
+            >
+              <FiStar className={`w-3.5 h-3.5 ${showFavoritesOnly ? 'fill-amber-400' : ''}`} />
+              Favoritos
+            </button>
+            <button
+              onClick={() => setFilterActive(null)}
+              className={`px-4 py-2 rounded-xl font-medium transition-colors ${
+                filterActive === null
+                  ? 'btn-primary'
+                  : 'btn-secondary'
+              }`}
+            >
+              Todos
+            </button>
+            <button
+              onClick={() => setFilterActive(true)}
+              className={`px-4 py-2 rounded-xl font-medium transition-colors ${
+                filterActive === true
+                  ? 'btn-primary'
+                  : 'btn-secondary'
+              }`}
+            >
+              Ativos
+            </button>
+            <button
+              onClick={() => setFilterActive(false)}
+              className={`px-4 py-2 rounded-xl font-medium transition-colors ${
+                filterActive === false
+                  ? 'bg-error text-error border border-error'
+                  : 'btn-secondary'
+              }`}
+            >
+              Inativos
+            </button>
+          </div>
+        </div>
+
+        {/* Users Table */}
+        <div className="card overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="border-b border-subtle">
+                  <th className="px-6 py-4 text-left text-sm font-semibold text-secondary">Usuario</th>
+                  <th className="px-6 py-4 text-left text-sm font-semibold text-secondary">Loja</th>
+                  <th className="px-6 py-4 text-left text-sm font-semibold text-secondary">Função</th>
+                  <th className="px-6 py-4 text-left text-sm font-semibold text-secondary">Setor</th>
+                  <th className="px-6 py-4 text-left text-sm font-semibold text-secondary">Tipo</th>
+                  <th className="px-6 py-4 text-right text-sm font-semibold text-secondary">Acoes</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-subtle">
+                {filteredUsers.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} className="px-6 py-12 text-center text-muted">
+                      Nenhum usuario encontrado
+                    </td>
+                  </tr>
+                ) : (
+                  filteredUsers.map((user) => (
+                    <tr key={user.id} className="hover:bg-surface-hover transition-colors">
+                      <td className="px-6 py-4">
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => toggleFavoriteUser(user.id)}
+                            className={`p-0.5 transition-colors shrink-0 ${
+                              favoriteUserIds.has(user.id)
+                                ? 'text-amber-400'
+                                : 'text-muted hover:text-amber-400'
+                            }`}
+                            title={favoriteUserIds.has(user.id) ? 'Remover favorito' : 'Favoritar'}
+                          >
+                            <FiStar className={`w-4 h-4 ${favoriteUserIds.has(user.id) ? 'fill-amber-400' : ''}`} />
+                          </button>
+                          <div>
+                            <p className="font-medium text-main">{user.full_name}</p>
+                            <p className="text-sm text-muted">{user.email}</p>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4">
+                        {user.user_stores && user.user_stores.length > 0 ? (
+                          <div className="flex flex-wrap gap-1">
+                            {user.user_stores.map((us) => (
+                              <span
+                                key={us.store_id}
+                                className={`text-xs px-2 py-0.5 rounded-lg ${
+                                  us.is_primary
+                                    ? 'bg-primary/20 text-primary font-medium'
+                                    : 'bg-surface-hover text-muted'
+                                }`}
+                              >
+                                {us.store?.name || `Loja ${us.store_id}`}
+                              </span>
+                            ))}
+                          </div>
+                        ) : user.store ? (
+                          <span className="text-sm text-main">{user.store.name}</span>
+                        ) : (
+                          <span className="text-sm text-muted">-</span>
+                        )}
+                      </td>
+                      <td className="px-6 py-4">
+                        {user.function_ref ? (
+                          <span
+                            className="px-2 py-1 text-xs rounded-lg"
+                            style={{ backgroundColor: user.function_ref.color + '20', color: user.function_ref.color }}
+                          >
+                            {user.function_ref.name}
+                          </span>
+                        ) : (
+                          <span className="text-sm text-muted">-</span>
+                        )}
+                      </td>
+                      <td className="px-6 py-4">
+                        {(() => {
+                          const primaryUs = user.user_stores?.find(us => us.is_primary)
+                          const sectorToShow = primaryUs?.sector || user.sector
+                          const otherSectors = user.user_stores?.filter(us => !us.is_primary && us.sector).length || 0
+                          if (sectorToShow) {
+                            return (
+                              <div className="flex items-center gap-1">
+                                <span
+                                  className="px-2 py-1 text-xs rounded-lg"
+                                  style={{ backgroundColor: sectorToShow.color + '20', color: sectorToShow.color }}
+                                >
+                                  {sectorToShow.name}
+                                </span>
+                                {otherSectors > 0 && (
+                                  <span className="text-xs text-muted">+{otherSectors}</span>
+                                )}
+                              </div>
+                            )
+                          }
+                          return <span className="text-sm text-muted">-</span>
+                        })()}
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="flex items-center gap-1 flex-wrap">
+                          {user.is_admin ? (
+                            <span className="px-2 py-1 text-xs bg-warning text-warning rounded-lg">
+                              Admin
+                            </span>
+                          ) : (
+                            <span className="px-2 py-1 text-xs bg-surface-hover text-muted rounded-lg">
+                              Funcionario
+                            </span>
+                          )}
+                          {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+                          {(user as any).is_tech && (
+                            <span className="px-2 py-1 text-xs bg-cyan-500/20 text-cyan-400 rounded-lg">
+                              Tecnico
+                            </span>
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="flex items-center justify-end gap-2">
+                          <Link
+                            href={`${APP_CONFIG.routes.adminUsers}/${user.id}`}
+                            className="btn-ghost p-2"
+                            title="Editar"
+                          >
+                            <FiEdit2 className="w-4 h-4" />
+                          </Link>
+                          <button
+                            onClick={() => toggleUserStatus(user.id, user.is_active)}
+                            className={`p-2 rounded-lg transition-colors ${
+                              user.is_active
+                                ? 'text-warning hover:bg-warning/20'
+                                : 'text-success hover:bg-success/20'
+                            }`}
+                            title={user.is_active ? 'Desativar' : 'Ativar'}
+                          >
+                            {user.is_active ? (
+                              <FiUserX className="w-4 h-4" />
+                            ) : (
+                              <FiUserCheck className="w-4 h-4" />
+                            )}
+                          </button>
+                          <button
+                            onClick={() => deleteUser(user.id)}
+                            className="p-2 text-error hover:bg-error/20 rounded-lg transition-colors"
+                            title="Excluir"
+                          >
+                            <FiTrash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {/* Stats */}
+        <div className="mt-6 flex items-center justify-between text-sm text-muted">
+          <p>
+            Mostrando {filteredUsers.length} de {users.length} usuarios
+          </p>
+          <p>
+            {users.filter(u => u.is_active).length} ativos, {users.filter(u => !u.is_active).length} inativos
+          </p>
+        </div>
+      </PageContainer>
+  )
+}

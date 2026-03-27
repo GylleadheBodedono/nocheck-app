@@ -82,7 +82,7 @@ RETORNE APENAS JSON valido, sem markdown:
 
     if (!groqRes.ok) {
       const err = await groqRes.text()
-      serverLogger.error('[Branding Suggest] Groq error', { error: err instanceof Error ? err.message : String(err) })
+      serverLogger.error('[Branding Suggest] Groq error', { error: String(err) })
       return NextResponse.json({ error: 'Falha na IA ao sugerir cores' }, { status: 502 })
     }
 

@@ -111,6 +111,7 @@ type Props = {
 export const OverviewTab = memo(function OverviewTab({
   overallMetrics, sortedTemplateAdherence, sortedStoreAdherence, sortedUserAdherence,
   coverageGaps, dailyStatusStats, avgCompletionTime, attentionPoints, summaryText,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   rawStores, sectorStats, requiredActions,
   period, setPeriod, overviewFilterStore, setOverviewFilterStore,
   showAdvancedFilters, setShowAdvancedFilters,

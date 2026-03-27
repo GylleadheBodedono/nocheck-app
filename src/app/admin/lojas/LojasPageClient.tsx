@@ -1,0 +1,487 @@
+'use client'
+
+import { useState, useMemo } from 'react'
+import { createClient } from '@/lib/supabase'
+import { PLAN_CONFIGS, type Plan } from '@/types/tenant'
+import {
+  FiMapPin,
+  FiEdit2,
+  FiTrash2,
+  FiCheckCircle,
+  FiXCircle,
+  FiSearch,
+  FiPlus,
+  FiUsers,
+  FiLock,
+  FiShield,
+} from 'react-icons/fi'
+import type { Store } from '@/types/database'
+import { logError } from '@/lib/clientLogger'
+import { PageContainer } from '@/components/ui'
+import { LocationPicker } from '@/components/ui/LocationPickerDynamic'
+import { useRealtimeRefresh } from '@/hooks/useRealtimeRefresh'
+import { useEffect } from 'react'
+
+type StoreWithStats = Store & {
+  user_count: number
+  checklist_count: number
+}
+
+type Props = {
+  initialStores: StoreWithStats[]
+  initialOrgPlan: string
+}
+
+/**
+ * Página de gerenciamento de lojas (`/admin/lojas`).
+ * CRUD de unidades com nome, CNPJ, endereço, coordenadas GPS e configuração
+ * de exigência de localização para preenchimento de checklists.
+ */
+export default function LojasPageClient({ initialStores, initialOrgPlan }: Props) {
+  const [stores, setStores] = useState<StoreWithStats[]>(initialStores)
+  const [searchTerm, setSearchTerm] = useState('')
+  const [filterActive, setFilterActive] = useState<boolean | null>(null)
+  const [editingStore, setEditingStore] = useState<Store | null>(null)
+  const [showModal, setShowModal] = useState(false)
+  const [formData, setFormData] = useState({ name: '', is_active: true, require_gps: true, latitude: null as number | null, longitude: null as number | null })
+  const [saving, setSaving] = useState(false)
+  const [orgPlan] = useState<string>(initialOrgPlan)
+  const supabase = useMemo(() => createClient(), [])
+  const { refreshKey } = useRealtimeRefresh(['stores'])
+
+  useEffect(() => {
+    if (refreshKey > 0 && navigator.onLine) refetchStores()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [refreshKey])
+
+  const refetchStores = async () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: storesRaw } = await (supabase as any).from('stores').select('*').order('name')
+    if (storesRaw) {
+      const withStats = await Promise.all(
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        storesRaw.map(async (store: any) => {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const { count: userCount } = await (supabase as any).from('users').select('id', { count: 'exact', head: true }).eq('store_id', store.id)
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const { count: checklistCount } = await (supabase as any).from('checklists').select('id', { count: 'exact', head: true }).eq('store_id', store.id)
+          return { ...store, user_count: userCount || 0, checklist_count: checklistCount || 0 }
+        })
+      )
+      setStores(withStats)
+    }
+  }
+
+  const openModal = (store?: Store) => {
+    if (store) {
+      setEditingStore(store)
+      setFormData({ name: store.name, is_active: store.is_active, require_gps: store.require_gps ?? true, latitude: store.latitude ?? null, longitude: store.longitude ?? null })
+    } else {
+      setEditingStore(null)
+      setFormData({ name: '', is_active: true, require_gps: true, latitude: null, longitude: null })
+    }
+    setShowModal(true)
+  }
+
+  const closeModal = () => {
+    setShowModal(false)
+    setEditingStore(null)
+    setFormData({ name: '', is_active: true, require_gps: true, latitude: null, longitude: null })
+  }
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!formData.name.trim()) return
+
+    // Bloquear criação se atingiu limite do plano
+    if (!editingStore && stores.length >= maxStores) {
+      alert(`Limite de ${maxStores} loja${maxStores > 1 ? 's' : ''} atingido. Faça upgrade para criar mais.`)
+      return
+    }
+
+    setSaving(true)
+
+    try {
+      if (editingStore) {
+        // Update existing store
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const { error } = await (supabase as any)
+          .from('stores')
+          .update({
+            name: formData.name,
+            is_active: formData.is_active,
+            require_gps: formData.require_gps,
+            latitude: formData.latitude,
+            longitude: formData.longitude,
+          })
+          .eq('id', editingStore.id)
+
+        if (error) throw error
+      } else {
+        // Create new store
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const { error } = await (supabase as any)
+          .from('stores')
+          .insert({
+            name: formData.name,
+            is_active: formData.is_active,
+            require_gps: formData.require_gps,
+            latitude: formData.latitude,
+            longitude: formData.longitude,
+          })
+
+        if (error) throw error
+      }
+
+      closeModal()
+      refetchStores()
+    } catch (error) {
+      logError('Error saving store', { error: error instanceof Error ? error.message : String(error) })
+      const errorMessage = error instanceof Error ? error.message : 'Erro desconhecido'
+      alert(`Erro ao salvar loja: ${errorMessage}\n\nVerifique se você tem permissão de administrador.`)
+    }
+
+    setSaving(false)
+  }
+
+  const toggleStoreStatus = async (store: Store) => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { error } = await (supabase as any)
+      .from('stores')
+      .update({ is_active: !store.is_active })
+      .eq('id', store.id)
+
+    if (error) {
+      logError('Error updating store', { error: error instanceof Error ? error.message : String(error) })
+      return
+    }
+
+    refetchStores()
+  }
+
+  const deleteStore = async (store: Store) => {
+    if (!confirm(`Tem certeza que deseja excluir a loja "${store.name}"?`)) return
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { error } = await (supabase as any)
+      .from('stores')
+      .delete()
+      .eq('id', store.id)
+
+    if (error) {
+      logError('Error deleting store', { error: error instanceof Error ? error.message : String(error) })
+      alert('Erro ao excluir loja. Verifique se não existem usuários ou checklists vinculados.')
+      return
+    }
+
+    refetchStores()
+  }
+
+  const allGpsEnabled = stores.length > 0 && stores.every(s => s.require_gps !== false)
+
+  const toggleAllGps = async (enable: boolean) => {
+    if (!confirm(enable
+      ? 'Ativar verificação GPS para TODAS as lojas?'
+      : 'Desativar verificação GPS para TODAS as lojas?'
+    )) return
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { error } = await (supabase as any)
+      .from('stores')
+      .update({ require_gps: enable })
+      .neq('id', 0) // update all rows
+
+    if (error) {
+      logError('Error toggling GPS', { error: error instanceof Error ? error.message : String(error) })
+      alert('Erro ao atualizar lojas.')
+      return
+    }
+
+    refetchStores()
+  }
+
+  // Determinar lojas bloqueadas pelo plano
+  const planConfig = PLAN_CONFIGS[orgPlan as Plan]
+  const maxStores = planConfig?.maxStores || 999
+  const sortedByDate = [...stores].sort((a, b) => new Date(a.created_at || 0).getTime() - new Date(b.created_at || 0).getTime())
+  const allowedStoreIds = new Set(sortedByDate.slice(0, maxStores).map(s => s.id))
+  const isStoreBlocked = (storeId: number) => stores.length > maxStores && !allowedStoreIds.has(storeId)
+
+  const filteredStores = stores.filter(store => {
+    const matchesSearch = store.name.toLowerCase().includes(searchTerm.toLowerCase())
+    const matchesFilter = filterActive === null || store.is_active === filterActive
+
+    return matchesSearch && matchesFilter
+  })
+
+  return (
+    <>
+      {/* Main Content */}
+      <PageContainer>
+        {/* Top actions */}
+        <div className="flex items-center justify-between mb-6">
+          {stores.length >= maxStores && (
+            <p className="text-xs text-warning">Limite de {maxStores} loja{maxStores > 1 ? 's' : ''} atingido. Faça upgrade para criar mais.</p>
+          )}
+          <div className="ml-auto">
+            <button
+              onClick={() => openModal()}
+              disabled={stores.length >= maxStores}
+              className={`btn-primary flex items-center gap-2 ${stores.length >= maxStores ? 'opacity-50 cursor-not-allowed' : ''}`}
+            >
+              <FiPlus className="w-4 h-4" />
+              Nova Loja
+            </button>
+          </div>
+        </div>
+
+        {/* GPS Toggle All */}
+        {stores.length > 0 && (
+          <div className="flex items-center justify-between bg-surface border border-subtle rounded-xl p-4 mb-6">
+            <div className="flex items-center gap-3">
+              <FiShield className={`w-5 h-5 ${allGpsEnabled ? 'text-success' : 'text-warning'}`} />
+              <div>
+                <p className="text-sm font-medium text-main">
+                  Verificação GPS: {allGpsEnabled ? 'Ativa em todas' : 'Desativada em algumas'}
+                </p>
+                <p className="text-xs text-muted">
+                  Controla se funcionários precisam estar no local da loja para responder checklists
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={() => toggleAllGps(!allGpsEnabled)}
+              className={`px-4 py-2 rounded-xl text-sm font-medium transition-colors ${
+                allGpsEnabled
+                  ? 'bg-warning/10 text-warning hover:bg-warning/20'
+                  : 'bg-success/10 text-success hover:bg-success/20'
+              }`}
+            >
+              {allGpsEnabled ? 'Desativar Todas' : 'Ativar Todas'}
+            </button>
+          </div>
+        )}
+
+        {/* Filters */}
+        <div className="flex flex-col sm:flex-row gap-4 mb-6">
+          <div className="flex-1 relative">
+            <FiSearch className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted" />
+            <input
+              type="text"
+              placeholder="Buscar por nome..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="input pl-10"
+            />
+          </div>
+
+          <div className="flex gap-2">
+            <button
+              onClick={() => setFilterActive(null)}
+              className={`px-4 py-2 rounded-xl font-medium transition-colors ${
+                filterActive === null ? 'btn-primary' : 'btn-secondary'
+              }`}
+            >
+              Todas
+            </button>
+            <button
+              onClick={() => setFilterActive(true)}
+              className={`px-4 py-2 rounded-xl font-medium transition-colors ${
+                filterActive === true ? 'btn-primary' : 'btn-secondary'
+              }`}
+            >
+              Ativas
+            </button>
+            <button
+              onClick={() => setFilterActive(false)}
+              className={`px-4 py-2 rounded-xl font-medium transition-colors ${
+                filterActive === false ? 'bg-error text-error border border-error' : 'btn-secondary'
+              }`}
+            >
+              Inativas
+            </button>
+          </div>
+        </div>
+
+        {/* Stores Grid */}
+        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {filteredStores.length === 0 ? (
+            <div className="col-span-full card p-12 text-center text-muted">
+              Nenhuma loja encontrada
+            </div>
+          ) : (
+            filteredStores.map((store) => (
+              <div key={store.id} className="card p-6 hover:shadow-theme-md transition-shadow relative">
+                {isStoreBlocked(store.id) && (
+                  <div className="absolute inset-0 bg-[rgba(var(--bg-surface-rgb),0.85)] backdrop-blur-sm rounded-2xl flex items-center justify-center z-10">
+                    <div className="text-center p-4">
+                      <FiLock className="w-8 h-8 text-warning mx-auto mb-2" />
+                      <p className="text-sm font-medium text-warning">Loja bloqueada</p>
+                      <p className="text-xs text-muted mt-1">Seu plano permite {maxStores} loja{maxStores > 1 ? 's' : ''}. Faça upgrade para desbloquear.</p>
+                    </div>
+                  </div>
+                )}
+                <div className="flex items-start justify-between mb-4">
+                  <div className="flex items-center gap-3">
+                    <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${
+                      store.is_active ? 'bg-primary' : 'bg-surface-hover'
+                    }`}>
+                      <FiMapPin className={`w-6 h-6 ${store.is_active ? 'text-primary-foreground' : 'text-muted'}`} />
+                    </div>
+                    <div>
+                      <h3 className="font-semibold text-main">{store.name}</h3>
+                    </div>
+                  </div>
+                  <span
+                    className={`px-2 py-1 text-xs rounded-lg ${
+                      store.is_active
+                        ? 'bg-success text-success'
+                        : 'bg-error text-error'
+                    }`}
+                  >
+                    {store.is_active ? 'Ativa' : 'Inativa'}
+                  </span>
+                </div>
+
+                <div className="flex items-center gap-4 mb-4 text-sm text-muted">
+                  <div className="flex items-center gap-1">
+                    <FiUsers className="w-4 h-4" />
+                    <span>{store.user_count} usuários</span>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <FiCheckCircle className="w-4 h-4" />
+                    <span>{store.checklist_count} checklists</span>
+                  </div>
+                  {store.latitude && store.longitude && (
+                    <div className="flex items-center gap-1 text-primary">
+                      <FiMapPin className="w-4 h-4" />
+                      <span>GPS</span>
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex items-center gap-2 pt-4 border-t border-subtle">
+                  <button
+                    onClick={() => openModal(store)}
+                    className="btn-ghost p-2 flex-1 flex items-center justify-center gap-2"
+                    title="Editar"
+                  >
+                    <FiEdit2 className="w-4 h-4" />
+                    Editar
+                  </button>
+                  <button
+                    onClick={() => toggleStoreStatus(store)}
+                    className={`p-2 rounded-lg transition-colors ${
+                      store.is_active
+                        ? 'text-warning hover:bg-warning/20'
+                        : 'text-success hover:bg-success/20'
+                    }`}
+                    title={store.is_active ? 'Desativar' : 'Ativar'}
+                  >
+                    {store.is_active ? <FiXCircle className="w-4 h-4" /> : <FiCheckCircle className="w-4 h-4" />}
+                  </button>
+                  <button
+                    onClick={() => deleteStore(store)}
+                    className="p-2 text-error hover:bg-error/20 rounded-lg transition-colors"
+                    title="Excluir"
+                  >
+                    <FiTrash2 className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+
+        {/* Stats */}
+        <div className="mt-6 flex items-center justify-between text-sm text-muted">
+          <p>
+            Mostrando {filteredStores.length} de {stores.length} lojas
+          </p>
+          <p>
+            {stores.filter(s => s.is_active).length} ativas, {stores.filter(s => !s.is_active).length} inativas
+          </p>
+        </div>
+      </PageContainer>
+
+      {/* Modal */}
+      {showModal && (
+        <div className="fixed inset-0 z-50 bg-black/50 overflow-y-auto">
+          <div className="min-h-full flex items-center justify-center py-8 px-4">
+          <div className="card w-full max-w-lg p-6">
+            <h2 className="text-xl font-bold text-main mb-6">
+              {editingStore ? 'Editar Loja' : 'Nova Loja'}
+            </h2>
+
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-secondary mb-1">
+                  Nome *
+                </label>
+                <input
+                  type="text"
+                  value={formData.name}
+                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                  className="input"
+                  placeholder="Ex: BDN Boa Viagem"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={formData.is_active}
+                    onChange={(e) => setFormData({ ...formData, is_active: e.target.checked })}
+                    className="w-5 h-5 rounded border-default bg-surface text-primary"
+                  />
+                  <span className="text-sm text-secondary">Loja ativa</span>
+                </label>
+              </div>
+
+              <div>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={formData.require_gps}
+                    onChange={(e) => setFormData({ ...formData, require_gps: e.target.checked })}
+                    className="w-5 h-5 rounded border-default bg-surface text-primary"
+                  />
+                  <span className="text-sm text-secondary">Exigir verificação GPS</span>
+                </label>
+                <p className="text-xs text-muted mt-1 ml-7">
+                  Desative para permitir checklists sem validar a localização do funcionário
+                </p>
+              </div>
+
+              <LocationPicker
+                value={formData.latitude && formData.longitude ? { lat: formData.latitude, lng: formData.longitude } : null}
+                onChange={(coords) => setFormData({ ...formData, latitude: coords?.lat ?? null, longitude: coords?.lng ?? null })}
+              />
+
+              <div className="flex gap-3 pt-4">
+                <button
+                  type="button"
+                  onClick={closeModal}
+                  className="btn-secondary flex-1"
+                  disabled={saving}
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="btn-primary flex-1"
+                  disabled={saving}
+                >
+                  {saving ? 'Salvando...' : 'Salvar'}
+                </button>
+              </div>
+            </form>
+          </div>
+          </div>
+        </div>
+      )}
+    </>
+  )
+}
