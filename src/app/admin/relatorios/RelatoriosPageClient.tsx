@@ -87,7 +87,8 @@ export default function RelatoriosPageClient() {
 
   // ── Data fetching ───────────────────────────────────────────────────────────
   const {
-    loading, isOffline, summary, storeStats, templateStats, dailyStats,
+    coreLoading, analyticsLoading, isOffline, fetchError, dataWarning,
+    summary, storeStats, templateStats, dailyStats,
     sectorStats, requiredActions, rawActiveChecklists, rawTemplates, rawStores,
     rawUsers, rawVisibility, rawChartDays, rawOverdueCount,
     userChecklists, allUsers, allStoresSimple, allTemplatesSimple,
@@ -344,7 +345,7 @@ export default function RelatoriosPageClient() {
 
   // ── Render ───────────────────────────────────────────────────────────────────
 
-  if (loading) return <LoadingPage />
+  if (coreLoading) return <LoadingPage />
 
   return (
     <>
@@ -353,6 +354,20 @@ export default function RelatoriosPageClient() {
           <div className="bg-warning/10 border border-warning/30 rounded-xl p-4 mb-6 flex items-center gap-3">
             <FiWifiOff className="w-5 h-5 text-warning" />
             <p className="text-warning text-sm">Voce esta offline. Os dados de relatorios nao estao disponiveis no cache local.</p>
+          </div>
+        )}
+
+        {fetchError && (
+          <div className="bg-error/10 border border-error/30 rounded-xl p-4 mb-6 flex items-center gap-3">
+            <FiAlertTriangle className="w-5 h-5 text-error" />
+            <p className="text-error text-sm">{fetchError}</p>
+          </div>
+        )}
+
+        {dataWarning && (
+          <div className="bg-warning/10 border border-warning/30 rounded-xl p-4 mb-6 flex items-center gap-3">
+            <FiAlertTriangle className="w-5 h-5 text-warning" />
+            <p className="text-warning text-sm">{dataWarning}</p>
           </div>
         )}
 
@@ -441,6 +456,7 @@ export default function RelatoriosPageClient() {
             complianceByStore={complianceByStore}
             heatmapData={heatmapData}
             exportDropdownNode={exportDropdownNode}
+            isLoading={analyticsLoading}
           />
         )}
 
@@ -451,6 +467,7 @@ export default function RelatoriosPageClient() {
             reincRows={reincRows}
             assigneeStats={assigneeStats}
             exportDropdownNode={exportDropdownNode}
+            isLoading={analyticsLoading}
           />
         )}
       </PageContainer>

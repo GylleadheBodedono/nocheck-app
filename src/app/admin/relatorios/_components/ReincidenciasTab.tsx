@@ -11,13 +11,27 @@ type Props = {
   reincRows: ReincidenciaRow[]
   assigneeStats: AssigneeStats[]
   exportDropdownNode: React.ReactNode
+  isLoading?: boolean
 }
 
 export const ReincidenciasTab = memo(function ReincidenciasTab({
   period, setPeriod,
   reincSummary, reincRows, assigneeStats,
-  exportDropdownNode,
+  exportDropdownNode, isLoading,
 }: Props) {
+  if (isLoading) {
+    return (
+      <div className="space-y-4 animate-pulse">
+        <div className="h-8 w-48 bg-surface-hover rounded-lg" />
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          {[1,2,3].map(i => <div key={i} className="h-24 bg-surface-hover rounded-xl" />)}
+        </div>
+        <div className="h-64 bg-surface-hover rounded-xl" />
+      </div>
+    )
+  }
+
+
   return (
     <div>
       {/* Period filter */}

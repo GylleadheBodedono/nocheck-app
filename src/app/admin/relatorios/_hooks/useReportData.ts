@@ -43,8 +43,11 @@ import type {
 // ── Return type ───────────────────────────────────────────────────────────────
 
 export type ReportData = {
-  loading: boolean
+  coreLoading: boolean
+  analyticsLoading: boolean
   isOffline: boolean
+  fetchError: string | null
+  dataWarning: string | null
   summary: {
     totalChecklists: number
     completedToday: number
@@ -88,8 +91,11 @@ export function useReportData(period: Period): ReportData {
   const supabase = useMemo(() => createClient() as any, [])
   const { refreshKey } = useRealtimeRefresh(['checklists'])
 
-  const [loading, setLoading] = useState(true)
+  const [coreLoading, setCoreLoading] = useState(true)
+  const [analyticsLoading, setAnalyticsLoading] = useState(true)
   const [isOffline, setIsOffline] = useState(false)
+  const [fetchError, setFetchError] = useState<string | null>(null)
+  const [dataWarning, setDataWarning] = useState<string | null>(null)
   const [summary, setSummary] = useState({
     totalChecklists: 0, completedToday: 0, avgPerDay: 0,
     activeUsers: 0, activeStores: 0, activeTemplates: 0,
@@ -127,7 +133,10 @@ export function useReportData(period: Period): ReportData {
   // ── Fetch ───────────────────────────────────────────────────────────────────
 
   const fetchReportData = async () => {
-    if (!isSupabaseConfigured || !supabase) { setLoading(false); return }
+    if (!isSupabaseConfigured || !supabase) { setCoreLoading(false); setAnalyticsLoading(false); return }
+
+    setFetchError(null)
+    setDataWarning(null)
 
     let userId: string | null = null
     let isAdminUser = false
@@ -180,7 +189,7 @@ export function useReportData(period: Period): ReportData {
         supabase.from('stores').select('id, name').eq('is_active', true),
         supabase.from('checklist_templates').select('id, name').eq('is_active', true),
         supabase.from('checklists')
-          .select('id, store_id, template_id, sector_id, status, created_by, started_at, created_at, completed_at')
+          .select('id, store_id, template_id, sector_id, status, created_by, started_at, created_at, completed_at', { count: 'exact' })
           .gte('created_at', startDate.toISOString()),
         supabase.from('sectors').select('id, name, store_id, store:stores(name)').eq('is_active', true),
         supabase.from('action_plans')
@@ -192,6 +201,22 @@ export function useReportData(period: Period): ReportData {
         supabase.from('template_visibility').select('template_id, store_id'),
       ])
 
+      // ── Critical error check ──────────────────────────────────────────────────
+      const criticalErrors = [
+        { name: 'checklists', res: allChecklists },
+        { name: 'stores', res: storesData },
+        { name: 'templates', res: templatesData },
+        { name: 'users', res: allUsersData },
+      ].filter(q => q.res.error)
+
+      if (criticalErrors.length > 0) {
+        logError('[Relatorios] Erro em queries criticas', {
+          queries: criticalErrors.map(e => e.name),
+          errors: criticalErrors.map(e => ({ query: e.name, message: e.res.error?.message })),
+        })
+        setFetchError('Erro ao carregar dados dos relatorios. Tente recarregar a pagina.')
+      }
+
       setSummary({
         totalChecklists: periodCountRes.count || 0,
         completedToday: todayCountRes.count || 0,
@@ -201,7 +226,27 @@ export function useReportData(period: Period): ReportData {
         activeTemplates: templatesRes.count || 0,
       })
 
-      const checklists: RawChecklist[] = allChecklists.data || []
+      // ── Checklist pagination ────────────────────────────────────────────────
+      let checklistRows: RawChecklist[] = allChecklists.data || []
+      const totalChecklistCount = allChecklists.count || 0
+      const MAX_ROWS = 5000
+      let warningSet = false
+      if (totalChecklistCount > checklistRows.length) {
+        const PAGE_SIZE = 1000
+        for (let offset = checklistRows.length; offset < Math.min(totalChecklistCount, MAX_ROWS); offset += PAGE_SIZE) {
+          const { data: page } = await supabase.from('checklists')
+            .select('id, store_id, template_id, sector_id, status, created_by, started_at, created_at, completed_at')
+            .gte('created_at', startDate.toISOString())
+            .range(offset, offset + PAGE_SIZE - 1)
+          if (page) checklistRows = checklistRows.concat(page)
+        }
+        if (totalChecklistCount > MAX_ROWS) {
+          setDataWarning(`Exibindo ${MAX_ROWS} de ${totalChecklistCount} checklists no periodo.`)
+          warningSet = true
+        }
+      }
+
+      const checklists: RawChecklist[] = checklistRows
 
       // Store stats
       if (storesData.data) {
@@ -318,20 +363,49 @@ export function useReportData(period: Period): ReportData {
       setRawChartDays(chartDays)
       setRawOverdueCount(actionPlans.filter((ap: { status: string }) => ap.status === 'vencido').length)
 
-      // Responses tab data (latest 500 checklists with joins)
-      const { data: userChecklistsData } = await supabase
+      // Core data is ready — unblock the UI
+      setCoreLoading(false)
+
+      // Responses tab data (latest checklists with joins)
+      const { data: userChecklistsData, error: userChecklistsError, count: userChecklistsCount } = await supabase
         .from('checklists')
         .select(`
           id, status, created_at, completed_at, created_by,
           user:users!checklists_created_by_fkey(full_name, email),
           store:stores(name),
           template:checklist_templates(name)
-        `)
+        `, { count: 'exact' })
         .order('created_at', { ascending: false })
-        .limit(500)
+        .limit(1000)
 
-      if (userChecklistsData) {
-        const mapped = userChecklistsData.map((c: {
+      if (userChecklistsError) {
+        logError('[Relatorios] Erro ao buscar checklists de usuarios', { error: userChecklistsError.message })
+      }
+
+      // ── User checklists pagination ──────────────────────────────────────────
+      let ucRows = userChecklistsData || []
+      const ucTotal = userChecklistsCount || 0
+      if (ucTotal > ucRows.length) {
+        for (let offset = ucRows.length; offset < Math.min(ucTotal, 3000); offset += 1000) {
+          const { data: page } = await supabase
+            .from('checklists')
+            .select(`
+              id, status, created_at, completed_at, created_by,
+              user:users!checklists_created_by_fkey(full_name, email),
+              store:stores(name),
+              template:checklist_templates(name)
+            `)
+            .order('created_at', { ascending: false })
+            .range(offset, offset + 999)
+          if (page) ucRows = ucRows.concat(page)
+        }
+        if (ucTotal > 3000 && !warningSet) {
+          setDataWarning(`Exibindo ${Math.min(ucRows.length, 3000)} de ${ucTotal} checklists na aba Respostas.`)
+        }
+      }
+
+      if (ucRows.length > 0) {
+        const mapped = ucRows.map((c: {
           id: number; status: string; created_at: string; completed_at: string | null; created_by: string;
           user: { full_name: string; email: string } | null;
           store: { name: string } | null;
@@ -352,7 +426,7 @@ export function useReportData(period: Period): ReportData {
         const usersMap = new Map<string, { id: string; name: string; email: string }>()
         const storesMap = new Map<string, { id: number; name: string }>()
         const templatesMap = new Map<string, { id: number; name: string }>()
-        for (const c of userChecklistsData) {
+        for (const c of ucRows) {
           if (c.created_by && c.user) usersMap.set(c.created_by, { id: c.created_by, name: c.user.full_name || c.user.email, email: c.user.email })
           if (c.store) storesMap.set(c.store.name, { id: 0, name: c.store.name })
           if (c.template) templatesMap.set(c.template.name, { id: 0, name: c.template.name })
@@ -381,19 +455,22 @@ export function useReportData(period: Period): ReportData {
           error: analyticsErr instanceof Error ? analyticsErr.message : String(analyticsErr),
         })
       }
+
+      setAnalyticsLoading(false)
     } catch (error) {
       logError('[Relatorios] Erro ao buscar dados', { error: error instanceof Error ? error.message : String(error) })
       setIsOffline(true)
+      setCoreLoading(false)
+      setAnalyticsLoading(false)
     }
-
-    setLoading(false)
   }
 
   useEffect(() => { fetchReportData() }, [period]) // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (refreshKey > 0 && navigator.onLine) fetchReportData() }, [refreshKey]) // eslint-disable-line react-hooks/exhaustive-deps
 
   return {
-    loading, isOffline, summary, storeStats, templateStats, dailyStats,
+    coreLoading, analyticsLoading, isOffline, fetchError, dataWarning,
+    summary, storeStats, templateStats, dailyStats,
     sectorStats, requiredActions, rawActiveChecklists, rawTemplates, rawStores,
     rawUsers, rawVisibility, rawChartDays, rawOverdueCount,
     userChecklists, allUsers, allStoresSimple, allTemplatesSimple,

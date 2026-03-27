@@ -12,13 +12,27 @@ type Props = {
   complianceByStore: StoreComplianceRow[]
   heatmapData: { cells: HeatmapCell[]; stores: string[]; fields: string[] }
   exportDropdownNode: React.ReactNode
+  isLoading?: boolean
 }
 
 export const ConformidadeTab = memo(function ConformidadeTab({
   period, setPeriod,
   complianceSummary, complianceByField, complianceByStore, heatmapData,
-  exportDropdownNode,
+  exportDropdownNode, isLoading,
 }: Props) {
+  if (isLoading) {
+    return (
+      <div className="space-y-4 animate-pulse">
+        <div className="h-8 w-48 bg-surface-hover rounded-lg" />
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          {[1,2,3].map(i => <div key={i} className="h-24 bg-surface-hover rounded-xl" />)}
+        </div>
+        <div className="h-64 bg-surface-hover rounded-xl" />
+      </div>
+    )
+  }
+
+
   // Computed once for the entire heatmap render, not once per store row
   const heatmapMaxCount = useMemo(
     () => Math.max(...heatmapData.cells.map(c => c.count), 1),
