@@ -1372,6 +1372,56 @@ function ChecklistForm() {
         autoSaveField.flush()
       }
     }
+
+    // Verificar se a secao atual ficou completa apos esta resposta
+    if (activeSection !== null) {
+      const updatedResponses = { ...responsesRef.current, [fieldId]: value }
+      const secFields = getFieldsForSection(activeSection)
+      const allRequiredNowFilled = secFields
+        .filter(f => f.field_type !== 'gps')
+        .every(f => {
+          const v = updatedResponses[f.id]
+          if (f.is_required) {
+            if (v === undefined || v === null || v === '' || (Array.isArray(v) && v.length === 0)) return false
+            if (f.field_type === 'text' && typeof v === 'string' && v.trim().length < 3) return false
+          }
+          if (f.field_type === 'yes_no' && v !== undefined && v !== null && v !== '') {
+            let ans: string | undefined
+            let obj: Record<string, unknown> = {}
+            if (typeof v === 'string') { ans = v } else if (typeof v === 'object') { obj = v as Record<string, unknown>; ans = obj.answer as string | undefined }
+            if (f.is_required && (!ans || ans === '')) return false
+            if (ans) {
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              const opts = f.options as any
+              if (opts?.photoRequired === true) { const photos = obj.photos as string[] | undefined; if (!photos || photos.length === 0) return false }
+              const condConfig = (ans === 'nao' ? opts?.onNo : ans === 'sim' ? opts?.onYes : undefined) as
+                { showTextField?: boolean; textFieldRequired?: boolean; showPhotoField?: boolean; photoFieldRequired?: boolean } | undefined
+              if (condConfig) {
+                if (condConfig.showTextField && condConfig.textFieldRequired) { const text = obj.conditionalText as string | undefined; if (!text || text.trim().length < 3) return false }
+                if (condConfig.showPhotoField && condConfig.photoFieldRequired) { const photos = obj.conditionalPhotos as string[] | undefined; if (!photos || photos.length === 0) return false }
+              }
+            }
+          }
+          return true
+        })
+      const hasAny = secFields.some(f => {
+        const v = updatedResponses[f.id]
+        return v !== undefined && v !== null && v !== '' && !(Array.isArray(v) && v.length === 0)
+      })
+      if (allRequiredNowFilled && hasAny) {
+        const sp = sectionProgress.find(s => s.section_id === activeSection)
+        if (sp && sp.status !== 'concluido') {
+          setSectionProgress(prev => prev.map(s =>
+            s.section_id === activeSection ? { ...s, status: 'concluido' as const, completed_at: new Date().toISOString() } : s
+          ))
+          // Fire-and-forget DB update
+          if (navigator.onLine && checklistIdRef.current && sp.db_id) {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            (supabase as any).from('checklist_sections').update({ status: 'concluido', completed_at: new Date().toISOString() }).eq('id', sp.db_id)
+          }
+        }
+      }
+    }
   }
 
   // Navigate back to dashboard, ensuring pending auto-save completes
@@ -1970,8 +2020,12 @@ function ChecklistForm() {
       autoSaveField.flush()
       if (hasSections && activeSection !== null) {
         await handleSectionBack()
+        // Re-push para manter entry no history (Android back button precisa disso)
+        window.history.pushState({ checklist: true }, '', window.location.href)
       } else if (hasSubSections && activeParentSection !== null) {
         setActiveParentSection(null)
+        // Re-push para manter entry no history
+        window.history.pushState({ checklist: true }, '', window.location.href)
       } else {
         // Na tela de etapas: voltar direto ao dashboard (auto-save ja salvou tudo)
         router.push(APP_CONFIG.routes.dashboard)
@@ -1982,7 +2036,7 @@ function ChecklistForm() {
   // Registra listener UMA VEZ no mount + pushState UMA VEZ
   useEffect(() => {
     const handler = () => { popStateHandlerRef.current?.() }
-    window.history.pushState(null, '', window.location.href)
+    window.history.pushState({ checklist: true }, '', window.location.href)
     window.addEventListener('popstate', handler)
     return () => window.removeEventListener('popstate', handler)
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
@@ -1990,7 +2044,7 @@ function ChecklistForm() {
   // Push nova entrada no historico a cada nivel de navegacao (para o botao voltar do Android funcionar em todos os niveis)
   useEffect(() => {
     if (activeSection !== null || activeParentSection !== null) {
-      window.history.pushState(null, '', window.location.href)
+      window.history.pushState({ checklist: true }, '', window.location.href)
     }
   }, [activeSection, activeParentSection])
 
