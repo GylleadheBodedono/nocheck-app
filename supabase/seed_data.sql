@@ -18,11 +18,11 @@
 
 -- ============================================
 -- 1. CONFIGURE SEU USUARIO COMO ADMIN
--- Substitua 'admin@nocheck.com' pelo seu email
+-- Substitua 'admin@operecheck.com' pelo seu email
 -- ============================================
 DO $$
 DECLARE
-  user_email TEXT := 'admin@nocheck.com'; -- ALTERE PARA SEU EMAIL
+  user_email TEXT := 'admin@operecheck.com'; -- ALTERE PARA SEU EMAIL
   user_uuid UUID;
 BEGIN
   SELECT id INTO user_uuid FROM auth.users WHERE email = user_email;
