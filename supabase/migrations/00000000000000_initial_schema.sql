@@ -286,7 +286,8 @@ CREATE TABLE IF NOT EXISTS public.template_sections (
   template_id BIGINT NOT NULL REFERENCES public.checklist_templates(id) ON DELETE CASCADE,
   name TEXT NOT NULL,
   description TEXT,
-  sort_order INT NOT NULL DEFAULT 0
+  sort_order INT NOT NULL DEFAULT 0,
+  parent_id BIGINT REFERENCES public.template_sections(id) ON DELETE CASCADE DEFAULT NULL
 );
 
 CREATE INDEX IF NOT EXISTS idx_template_sections_template_id ON public.template_sections(template_id);
