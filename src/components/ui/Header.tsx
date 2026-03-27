@@ -4,7 +4,7 @@ import { useEffect, useState, useMemo, useRef, useCallback } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
 import { useRouter } from 'next/navigation'
-import { FiArrowLeft, FiLogOut, FiUser, FiBell, FiSettings, FiCheck, FiAlertTriangle, FiCheckCircle, FiClock, FiTrash2, FiX, FiMenu } from 'react-icons/fi'
+import { FiArrowLeft, FiLogOut, FiUser, FiBell, FiSettings, FiCheck, FiAlertTriangle, FiCheckCircle, FiClock, FiTrash2, FiX, FiMenu, FiRefreshCw } from 'react-icons/fi'
 import { GlobalSearch } from './GlobalSearch'
 import { AdminSidebar } from './AdminSidebar'
 import { APP_CONFIG } from '@/lib/config'
@@ -15,6 +15,49 @@ import { getAuthCache, getUserCache } from '@/lib/offlineCache'
 import { useNotifications, type AppNotification } from '@/hooks/useNotifications'
 import type { IconType } from 'react-icons'
 import { BsFillHouseFill } from 'react-icons/bs'
+
+function HeaderUpdateButton() {
+  const [checking, setChecking] = useState(false)
+
+  const checkForUpdates = async () => {
+    if (checking) return
+    setChecking(true)
+    try {
+      if ('serviceWorker' in navigator) {
+        const reg = await navigator.serviceWorker.getRegistration()
+        if (reg) {
+          await reg.update()
+          await new Promise(r => setTimeout(r, 2000))
+          if (reg.waiting) {
+            reg.waiting.postMessage({ type: 'SKIP_WAITING' })
+            setTimeout(() => window.location.reload(), 1000)
+            return
+          }
+        }
+      }
+      if ('caches' in window) {
+        const keys = await caches.keys()
+        await Promise.all(keys.map(k => caches.delete(k)))
+      }
+      window.location.reload()
+    } catch {
+      window.location.reload()
+    } finally {
+      setChecking(false)
+    }
+  }
+
+  return (
+    <button
+      onClick={checkForUpdates}
+      disabled={checking}
+      className="p-2 text-muted hover:text-primary hover:bg-surface-hover rounded-xl transition-colors"
+      title="Verificar atualizacoes"
+    >
+      <FiRefreshCw className={`w-5 h-5 ${checking ? 'animate-spin' : ''}`} />
+    </button>
+  )
+}
 
 type HeaderAction = {
   label: string
@@ -295,6 +338,9 @@ export function Header({
 
             {/* Right: Actions + User */}
             <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+              {/* Check for updates */}
+              <HeaderUpdateButton />
+
               {/* Notifications bell */}
               {showNotifications && (
                 <div className="relative" ref={notifRef}>
