@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useMemo, useRef, useCallback } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
-import { FiBell, FiLogOut, FiUser, FiCheck, FiTrash2, FiX, FiAlertTriangle, FiCheckCircle, FiClock } from 'react-icons/fi'
+import { FiBell, FiLogOut, FiUser, FiCheck, FiTrash2, FiX, FiAlertTriangle, FiCheckCircle, FiClock, FiRefreshCw } from 'react-icons/fi'
 import { GlobalSearch } from '@/components/ui/GlobalSearch'
 import { ThemeToggle } from '@/components/ui'
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -10,6 +10,71 @@ import { APP_CONFIG } from '@/lib/config'
 import { createClient } from '@/lib/supabase'
 import { fullLogout } from '@/lib/logout'
 import { useNotifications, type AppNotification } from '@/hooks/useNotifications'
+
+// ------------------------------------
+// UPDATE BUTTON — busca atualizacoes do SW e recarrega
+// ------------------------------------
+
+function UpdateButton() {
+  const [checking, setChecking] = useState(false)
+  const [hasUpdate, setHasUpdate] = useState(false)
+
+  const checkForUpdates = async () => {
+    if (checking) return
+    setChecking(true)
+
+    try {
+      if ('serviceWorker' in navigator) {
+        const registration = await navigator.serviceWorker.getRegistration()
+        if (registration) {
+          // Forcar checagem de update no SW
+          await registration.update()
+
+          // Esperar um pouco para o SW processar
+          await new Promise(r => setTimeout(r, 2000))
+
+          if (registration.waiting) {
+            // Tem update pronto — ativar e recarregar
+            setHasUpdate(true)
+            registration.waiting.postMessage({ type: 'SKIP_WAITING' })
+            // O controllerchange listener no PWAInstall vai recarregar
+            // Mas por seguranca, recarregamos apos 1s
+            setTimeout(() => window.location.reload(), 1000)
+            return
+          }
+        }
+      }
+
+      // Sem SW ou sem update pendente — forcar reload hard
+      // Limpar caches e recarregar para pegar codigo novo
+      if ('caches' in window) {
+        const keys = await caches.keys()
+        await Promise.all(keys.map(k => caches.delete(k)))
+      }
+      window.location.reload()
+    } catch {
+      // Fallback: reload simples
+      window.location.reload()
+    } finally {
+      setChecking(false)
+    }
+  }
+
+  return (
+    <button
+      onClick={checkForUpdates}
+      disabled={checking}
+      className="p-2 text-muted hover:text-primary hover:bg-surface-hover rounded-xl transition-colors relative"
+      title="Verificar atualizacoes"
+      aria-label="Verificar atualizacoes"
+    >
+      <FiRefreshCw className={`w-5 h-5 ${checking ? 'animate-spin' : ''}`} />
+      {hasUpdate && (
+        <span className="absolute -top-0.5 -right-0.5 w-3 h-3 bg-success rounded-full" />
+      )}
+    </button>
+  )
+}
 
 // ------------------------------------
 // TITLES MAP
@@ -162,6 +227,9 @@ export function AdminHeader({ children }: Props) {
 
       {/* Right: actions */}
       <div className="flex items-center gap-2 shrink-0">
+        {/* Check for updates */}
+        <UpdateButton />
+
         {/* Notifications */}
         <div className="relative" ref={notifRef}>
           <button
