@@ -32,6 +32,7 @@ export const ConformidadeTab = memo(function ConformidadeTab({
     )
   }
 
+
   // Computed once for the entire heatmap render, not once per store row
   const heatmapMaxCount = useMemo(
     () => Math.max(...heatmapData.cells.map(c => c.count), 1),

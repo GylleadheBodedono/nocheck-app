@@ -31,6 +31,7 @@ export const ReincidenciasTab = memo(function ReincidenciasTab({
     )
   }
 
+
   return (
     <div>
       {/* Period filter */}

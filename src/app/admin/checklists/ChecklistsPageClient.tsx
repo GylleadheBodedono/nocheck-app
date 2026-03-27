@@ -1,0 +1,589 @@
+'use client'
+
+import { useEffect, useState, useMemo } from 'react'
+import { createClient } from '@/lib/supabase'
+import { logError } from '@/lib/clientLogger'
+import { Select, PageContainer } from '@/components/ui'
+import {
+  FiTrash2,
+  FiSearch,
+  FiFilter,
+  FiCheckCircle,
+  FiClock,
+  FiAlertCircle,
+  FiChevronLeft,
+  FiChevronRight,
+  FiX,
+  FiEye,
+  FiDownload,
+} from 'react-icons/fi'
+import Link from 'next/link'
+import type { Store, ChecklistTemplate, User } from '@/types/database'
+import { useRealtimeRefresh } from '@/hooks/useRealtimeRefresh'
+
+type ChecklistWithDetails = {
+  id: number
+  status: string
+  created_at: string
+  completed_at: string | null
+  created_by: string
+  template: ChecklistTemplate
+  store: Store
+  user: User
+}
+
+interface ChecklistsPageClientProps {
+  initialChecklists: ChecklistWithDetails[]
+  initialStores: Store[]
+  initialTemplates: ChecklistTemplate[]
+  initialUsers: User[]
+}
+
+/**
+ * Client component for the checklists page (`/admin/checklists`).
+ * Lists all submitted checklists with filters by store, template, user and date range.
+ * Supports viewing details, CSV export and bulk delete.
+ */
+export default function ChecklistsPageClient({
+  initialChecklists,
+  initialStores,
+  initialTemplates,
+  initialUsers,
+}: ChecklistsPageClientProps) {
+  const [checklists, setChecklists] = useState<ChecklistWithDetails[]>(initialChecklists)
+  const [stores, setStores] = useState<Store[]>(initialStores)
+  const [templates, setTemplates] = useState<ChecklistTemplate[]>(initialTemplates)
+  const [users, setUsers] = useState<User[]>(initialUsers)
+  const [deleting, setDeleting] = useState<number | null>(null)
+  const [selectedIds, setSelectedIds] = useState<number[]>([])
+  const [deletingBulk, setDeletingBulk] = useState(false)
+
+  // Filters
+  const [searchTerm, setSearchTerm] = useState('')
+  const [filterStore, setFilterStore] = useState<number | ''>('')
+  const [filterTemplate, setFilterTemplate] = useState<number | ''>('')
+  const [filterUser, setFilterUser] = useState<string | ''>('')
+  const [filterStatus, setFilterStatus] = useState<string | ''>('')
+  const [filterDateFrom, setFilterDateFrom] = useState('')
+  const [filterDateTo, setFilterDateTo] = useState('')
+
+  // Pagination
+  const [page, setPage] = useState(1)
+  const perPage = 20
+
+  const supabase = useMemo(() => createClient(), [])
+  const { refreshKey } = useRealtimeRefresh(['checklists', 'checklist_responses'])
+
+  useEffect(() => {
+    if (refreshKey > 0 && navigator.onLine) refetchData()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [refreshKey])
+
+  const refetchData = async () => {
+    try {
+      // Fetch stores
+      const { data: storesData } = await supabase
+        .from('stores')
+        .select('*')
+        .order('name')
+
+      if (storesData) setStores(storesData)
+
+      // Fetch templates
+      const { data: templatesData } = await supabase
+        .from('checklist_templates')
+        .select('*')
+        .order('name')
+
+      if (templatesData) setTemplates(templatesData)
+
+      // Fetch users
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data: usersData } = await (supabase as any)
+        .from('users')
+        .select('id, email, full_name')
+        .order('full_name')
+
+      if (usersData) setUsers(usersData)
+
+      // Fetch checklists
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data: checklistsData, error: checklistsError } = await (supabase as any)
+        .from('checklists')
+        .select(`
+          id,
+          status,
+          created_at,
+          completed_at,
+          created_by,
+          template:checklist_templates(*),
+          store:stores(*)
+        `)
+        .order('created_at', { ascending: false })
+
+      if (checklistsError) {
+        logError('Erro ao buscar checklists', { error: checklistsError instanceof Error ? checklistsError.message : String(checklistsError) })
+      }
+
+      if (checklistsData && usersData) {
+        const usersMap = new Map(usersData.map((u: User) => [u.id, u]))
+
+        const checklistsWithUsers = checklistsData.map((c: { created_by: string; template: ChecklistTemplate; store: Store; id: number; status: string; created_at: string; completed_at: string | null }) => ({
+          ...c,
+          user: usersMap.get(c.created_by) || { id: c.created_by, email: 'Desconhecido', full_name: 'Usuário Desconhecido' }
+        }))
+
+        setChecklists(checklistsWithUsers as ChecklistWithDetails[])
+      }
+    } catch (err) {
+      logError('[Checklists] Erro ao refetch', { error: err instanceof Error ? err.message : String(err) })
+    }
+  }
+
+  const handleExport = async (checklistId: number) => {
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const sb = supabase as any
+
+      // Buscar dados do checklist
+      const [clRes, respRes, fieldsRes] = await Promise.all([
+        sb.from('checklists').select('*, template:checklist_templates(name), store:stores(name), user:users!checklists_created_by_fkey(full_name)').eq('id', checklistId).single(),
+        sb.from('checklist_responses').select('field_id, value_text, value_number, value_json').eq('checklist_id', checklistId),
+        sb.from('template_fields').select('id, name, field_type, section_id').eq('template_id', checklists.find(c => c.id === checklistId)?.template?.id || 0).order('sort_order'),
+      ])
+
+      if (!clRes.data || !respRes.data) { alert('Erro ao buscar dados'); return }
+
+      const cl = clRes.data
+      const responses = respRes.data as Array<{ field_id: number; value_text: string | null; value_number: number | null; value_json: unknown }>
+      const fields = fieldsRes.data as Array<{ id: number; name: string; field_type: string; section_id: number | null }>
+      const respMap = new Map(responses.map(r => [r.field_id, r]))
+
+      // Montar CSV
+      const lines: string[] = []
+      lines.push(`Checklist: ${cl.template?.name || 'N/A'}`)
+      lines.push(`Loja: ${cl.store?.name || 'N/A'}`)
+      lines.push(`Usuario: ${cl.user?.full_name || 'N/A'}`)
+      lines.push(`Status: ${cl.status}`)
+      lines.push(`Data: ${cl.created_at ? new Date(cl.created_at).toLocaleString('pt-BR') : 'N/A'}`)
+      lines.push('')
+      lines.push('Campo;Resposta')
+
+      for (const f of fields) {
+        const r = respMap.get(f.id)
+        let value = ''
+        if (r) {
+          if (r.value_text) value = r.value_text
+          else if (r.value_number !== null) value = String(r.value_number)
+          else if (r.value_json) {
+            const vj = r.value_json as Record<string, unknown>
+            if (vj.answer) value = String(vj.answer)
+            else value = JSON.stringify(vj)
+          }
+        }
+        lines.push(`${f.name};${value.replace(/;/g, ',')}`)
+      }
+
+      const csv = lines.join('\n')
+      const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `checklist_${checklistId}_${Date.now()}.csv`
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+    } catch (err) {
+      logError('[Export] Erro', { error: err instanceof Error ? err.message : String(err) })
+      alert('Erro ao exportar checklist')
+    }
+  }
+
+  const handleDelete = async (id: number) => {
+    if (!confirm('Tem certeza que deseja excluir este checklist? Esta ação não pode ser desfeita.')) {
+      return
+    }
+
+    setDeleting(id)
+
+    try {
+      // Delete responses first
+      await supabase.from('checklist_responses').delete().eq('checklist_id', id)
+      // Delete checklist
+      const { error } = await supabase.from('checklists').delete().eq('id', id)
+
+      if (error) throw error
+
+      setChecklists(prev => prev.filter(c => c.id !== id))
+      setSelectedIds(prev => prev.filter(i => i !== id))
+    } catch (err) {
+      logError('Error deleting checklist', { error: err instanceof Error ? err.message : String(err) })
+      alert('Erro ao excluir checklist')
+    } finally {
+      setDeleting(null)
+    }
+  }
+
+  const handleBulkDelete = async () => {
+    if (selectedIds.length === 0) return
+
+    if (!confirm(`Tem certeza que deseja excluir ${selectedIds.length} checklist(s)? Esta ação não pode ser desfeita.`)) {
+      return
+    }
+
+    setDeletingBulk(true)
+
+    try {
+      for (const id of selectedIds) {
+        await supabase.from('checklist_responses').delete().eq('checklist_id', id)
+        await supabase.from('checklists').delete().eq('id', id)
+      }
+
+      setChecklists(prev => prev.filter(c => !selectedIds.includes(c.id)))
+      setSelectedIds([])
+    } catch (err) {
+      logError('Error bulk deleting', { error: err instanceof Error ? err.message : String(err) })
+      alert('Erro ao excluir checklists')
+    } finally {
+      setDeletingBulk(false)
+    }
+  }
+
+  const toggleSelectAll = () => {
+    if (selectedIds.length === filteredChecklists.length) {
+      setSelectedIds([])
+    } else {
+      setSelectedIds(filteredChecklists.map(c => c.id))
+    }
+  }
+
+  const toggleSelect = (id: number) => {
+    setSelectedIds(prev =>
+      prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]
+    )
+  }
+
+  const clearFilters = () => {
+    setSearchTerm('')
+    setFilterStore('')
+    setFilterTemplate('')
+    setFilterUser('')
+    setFilterStatus('')
+    setFilterDateFrom('')
+    setFilterDateTo('')
+    setPage(1)
+  }
+
+  // Filter checklists
+  const filteredChecklists = useMemo(() => {
+    return checklists.filter(checklist => {
+      // Search term
+      if (searchTerm) {
+        const search = searchTerm.toLowerCase()
+        const matchesSearch =
+          checklist.user?.full_name?.toLowerCase().includes(search) ||
+          checklist.user?.email?.toLowerCase().includes(search) ||
+          checklist.template?.name?.toLowerCase().includes(search) ||
+          checklist.store?.name?.toLowerCase().includes(search)
+        if (!matchesSearch) return false
+      }
+
+      // Store filter
+      if (filterStore && checklist.store?.id !== filterStore) return false
+
+      // Template filter
+      if (filterTemplate && checklist.template?.id !== filterTemplate) return false
+
+      // User filter
+      if (filterUser && checklist.created_by !== filterUser) return false
+
+      // Status filter
+      if (filterStatus && checklist.status !== filterStatus) return false
+
+      // Date range
+      if (filterDateFrom) {
+        const checklistDate = new Date(checklist.created_at)
+        const fromDate = new Date(filterDateFrom)
+        if (checklistDate < fromDate) return false
+      }
+
+      if (filterDateTo) {
+        const checklistDate = new Date(checklist.created_at)
+        const toDate = new Date(filterDateTo)
+        toDate.setHours(23, 59, 59)
+        if (checklistDate > toDate) return false
+      }
+
+      return true
+    })
+  }, [checklists, searchTerm, filterStore, filterTemplate, filterUser, filterStatus, filterDateFrom, filterDateTo])
+
+  // Pagination
+  const totalPages = Math.ceil(filteredChecklists.length / perPage)
+  const paginatedChecklists = filteredChecklists.slice((page - 1) * perPage, page * perPage)
+
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleString('pt-BR', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    })
+  }
+
+  const getStatusBadge = (status: string) => {
+    const badges: Record<string, { label: string; class: string; icon: typeof FiCheckCircle }> = {
+      rascunho: { label: 'Rascunho', class: 'bg-surface-hover text-muted', icon: FiClock },
+      em_andamento: { label: 'Em Andamento', class: 'bg-warning/20 text-warning', icon: FiClock },
+      concluido: { label: 'Concluído', class: 'bg-success/20 text-success', icon: FiCheckCircle },
+      incompleto: { label: 'Incompleto', class: 'bg-warning/20 text-warning', icon: FiAlertCircle },
+      validado: { label: 'Validado', class: 'bg-info/20 text-info', icon: FiCheckCircle },
+    }
+    return badges[status] || badges.rascunho
+  }
+
+  const hasActiveFilters = searchTerm || filterStore || filterTemplate || filterUser || filterStatus || filterDateFrom || filterDateTo
+
+  return (
+      <PageContainer>
+        {/* Filters */}
+        <div className="card p-4 mb-6">
+          <div className="flex items-center gap-2 mb-4">
+            <FiFilter className="w-5 h-5 text-primary" />
+            <h2 className="font-semibold text-main">Filtros</h2>
+            {hasActiveFilters && (
+              <button
+                onClick={clearFilters}
+                className="ml-auto text-sm text-primary hover:underline flex items-center gap-1"
+              >
+                <FiX className="w-4 h-4" />
+                Limpar filtros
+              </button>
+            )}
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            {/* Search */}
+            <div className="relative">
+              <FiSearch className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted" />
+              <input
+                type="text"
+                placeholder="Buscar por nome, email..."
+                value={searchTerm}
+                onChange={(e) => { setSearchTerm(e.target.value); setPage(1) }}
+                className="input pl-10 w-full"
+              />
+            </div>
+
+            {/* Store filter */}
+            <Select
+              value={String(filterStore)}
+              onChange={(v) => { setFilterStore(v ? Number(v) : ''); setPage(1) }}
+              placeholder="Todas as lojas"
+              options={stores.map(store => ({ value: String(store.id), label: store.name }))}
+            />
+
+            {/* Template filter */}
+            <Select
+              value={String(filterTemplate)}
+              onChange={(v) => { setFilterTemplate(v ? Number(v) : ''); setPage(1) }}
+              placeholder="Todos os checklists"
+              options={templates.map(template => ({ value: String(template.id), label: template.name }))}
+            />
+
+            {/* User filter */}
+            <Select
+              value={filterUser}
+              onChange={(v) => { setFilterUser(v); setPage(1) }}
+              placeholder="Todos os usuários"
+              options={users.map(user => ({ value: user.id, label: user.full_name || user.email }))}
+            />
+
+            {/* Status filter */}
+            <Select
+              value={filterStatus}
+              onChange={(v) => { setFilterStatus(v); setPage(1) }}
+              placeholder="Todos os status"
+              options={[
+                { value: 'rascunho', label: 'Rascunho' },
+                { value: 'em_andamento', label: 'Em Andamento' },
+                { value: 'concluido', label: 'Concluído' },
+                { value: 'validado', label: 'Validado' },
+              ]}
+            />
+
+            {/* Date from */}
+            <input
+              type="date"
+              value={filterDateFrom}
+              onChange={(e) => { setFilterDateFrom(e.target.value); setPage(1) }}
+              className="input"
+              placeholder="Data inicial"
+            />
+
+            {/* Date to */}
+            <input
+              type="date"
+              value={filterDateTo}
+              onChange={(e) => { setFilterDateTo(e.target.value); setPage(1) }}
+              className="input"
+              placeholder="Data final"
+            />
+          </div>
+        </div>
+
+        {/* Bulk actions */}
+        {selectedIds.length > 0 && (
+          <div className="card p-4 mb-4 bg-warning/10 border-warning/30 flex items-center justify-between">
+            <span className="text-main font-medium">
+              {selectedIds.length} checklist(s) selecionado(s)
+            </span>
+            <button
+              onClick={handleBulkDelete}
+              disabled={deletingBulk}
+              className="btn-primary bg-red-500 hover:bg-red-600 flex items-center gap-2"
+            >
+              <FiTrash2 className="w-4 h-4" />
+              {deletingBulk ? 'Excluindo...' : 'Excluir selecionados'}
+            </button>
+          </div>
+        )}
+
+        {/* Stats */}
+        <div className="flex items-center justify-between mb-4">
+          <p className="text-sm text-muted">
+            {filteredChecklists.length} checklist(s) encontrado(s)
+          </p>
+        </div>
+
+        {/* Table */}
+        <div className="card overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead className="bg-surface-hover">
+                <tr>
+                  <th className="px-4 py-3 text-left">
+                    <input
+                      type="checkbox"
+                      checked={selectedIds.length === filteredChecklists.length && filteredChecklists.length > 0}
+                      onChange={toggleSelectAll}
+                      className="rounded border-default"
+                    />
+                  </th>
+                  <th className="px-4 py-3 text-left text-sm font-medium text-muted">Usuário</th>
+                  <th className="px-4 py-3 text-left text-sm font-medium text-muted">Checklist</th>
+                  <th className="px-4 py-3 text-left text-sm font-medium text-muted">Loja</th>
+                  <th className="px-4 py-3 text-left text-sm font-medium text-muted">Status</th>
+                  <th className="px-4 py-3 text-left text-sm font-medium text-muted">Data</th>
+                  <th className="px-4 py-3 text-right text-sm font-medium text-muted">Ações</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-subtle">
+                {paginatedChecklists.length === 0 ? (
+                  <tr>
+                    <td colSpan={7} className="px-4 py-12 text-center text-muted">
+                      <FiAlertCircle className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                      Nenhum checklist encontrado
+                    </td>
+                  </tr>
+                ) : (
+                  paginatedChecklists.map(checklist => {
+                    const statusBadge = getStatusBadge(checklist.status)
+                    const StatusIcon = statusBadge.icon
+                    return (
+                      <tr key={checklist.id} className="hover:bg-surface-hover/50">
+                        <td className="px-4 py-3">
+                          <input
+                            type="checkbox"
+                            checked={selectedIds.includes(checklist.id)}
+                            onChange={() => toggleSelect(checklist.id)}
+                            className="rounded border-default"
+                          />
+                        </td>
+                        <td className="px-4 py-3">
+                          <div>
+                            <p className="font-medium text-main text-sm">
+                              {checklist.user?.full_name || 'Usuário'}
+                            </p>
+                            <p className="text-xs text-muted">{checklist.user?.email}</p>
+                          </div>
+                        </td>
+                        <td className="px-4 py-3">
+                          <p className="text-sm text-main">{checklist.template?.name}</p>
+                        </td>
+                        <td className="px-4 py-3">
+                          <p className="text-sm text-secondary">{checklist.store?.name}</p>
+                        </td>
+                        <td className="px-4 py-3">
+                          <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium ${statusBadge.class}`}>
+                            <StatusIcon className="w-3 h-3" />
+                            {statusBadge.label}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3">
+                          <p className="text-sm text-muted">{formatDate(checklist.created_at)}</p>
+                        </td>
+                        <td className="px-4 py-3 text-right">
+                          <div className="flex items-center justify-end gap-1">
+                            <Link
+                              href={`/checklist/${checklist.id}`}
+                              className="p-2 text-primary hover:bg-primary/20 rounded-lg transition-colors"
+                              title="Visualizar"
+                            >
+                              <FiEye className="w-4 h-4" />
+                            </Link>
+                            <button
+                              onClick={() => handleExport(checklist.id)}
+                              className="p-2 text-secondary hover:bg-primary/20 hover:text-primary rounded-lg transition-colors"
+                              title="Exportar CSV"
+                            >
+                              <FiDownload className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={() => handleDelete(checklist.id)}
+                              disabled={deleting === checklist.id}
+                              className="p-2 text-red-400 hover:bg-red-500/20 rounded-lg transition-colors disabled:opacity-50"
+                              title="Excluir"
+                            >
+                              <FiTrash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    )
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Pagination */}
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between px-4 py-3 border-t border-subtle">
+              <p className="text-sm text-muted">
+                Página {page} de {totalPages}
+              </p>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setPage(p => Math.max(1, p - 1))}
+                  disabled={page === 1}
+                  className="btn-ghost p-2 disabled:opacity-50"
+                >
+                  <FiChevronLeft className="w-4 h-4" />
+                </button>
+                <button
+                  onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                  disabled={page === totalPages}
+                  className="btn-ghost p-2 disabled:opacity-50"
+                >
+                  <FiChevronRight className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      </PageContainer>
+  )
+}

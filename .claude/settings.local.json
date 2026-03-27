@@ -61,7 +61,23 @@
       "Bash(sed -i 's/return data as Invite\\\\[\\\\]/return \\(data || []\\) as unknown as Invite[]/g' src/services/tenant.service.ts)",
       "Bash(sed -i 's/return data as Invite/return data as unknown as Invite/g' src/services/tenant.service.ts)",
       "Bash(npx --yes tsc --noEmit)",
-      "Bash(node_modules/.bin/tsc --noEmit)"
+      "Bash(node_modules/.bin/tsc --noEmit)",
+      "Bash(f=\"C:/Users/ESC-17/Documents/Projetos/nocheck-app/src/app/admin/planos-de-acao/modelos/page.tsx\")",
+      "Read(//c/Users/ESC-17/Documents/Projetos/nocheck-app/**)",
+      "Bash(supabase start:*)",
+      "Bash(where supabase:*)",
+      "Read(//usr/local/bin/**)",
+      "Read(//c/Users/ESC-17/AppData/Local/**)",
+      "Read(//c/Users/ESC-17/scoop/shims/**)",
+      "Read(//c/ProgramData/chocolatey/bin/**)",
+      "Bash(cmd.exe /c \"supabase start\" 2>&1)",
+      "Bash(cmd.exe /c \"supabase status\" 2>&1)",
+      "Bash(cmd.exe /c \"PackageInspector.exe start C:\\\\\\\\ 2>&1\")",
+      "Bash(cmd.exe /c \"where PackageInspector.exe 2>&1 & echo EXIT_CODE=%ERRORLEVEL%\")",
+      "Bash(powershell.exe -Command \"where.exe PackageInspector.exe\" 2>&1)",
+      "Bash(powershell.exe -Command \"& 'C:\\\\Windows\\\\System32\\\\PackageInspector.exe' start 'C:\\\\Users\\\\ESC-17\\\\Downloads\\\\supabase_windows_amd64' /path:'C:\\\\Users\\\\ESC-17\\\\Downloads\\\\supabase_windows_amd64\\\\supabase.exe'\" 2>&1)",
+      "Bash(powershell.exe -Command \"& 'C:\\\\Windows\\\\System32\\\\PackageInspector.exe' scan 'C:\\\\Users\\\\ESC-17\\\\Downloads\\\\supabase_windows_amd64' -out cat -name supabase -resdir 'C:\\\\Users\\\\ESC-17\\\\Downloads\\\\supabase_windows_amd64'\" 2>&1)",
+      "Bash(powershell.exe -Command \"Get-ChildItem 'C:\\\\Users\\\\ESC-17\\\\Downloads\\\\supabase_windows_amd64' | Select-Object Name, Length, LastWriteTime | Format-Table -AutoSize\" 2>&1)"
     ]
   }
 }
