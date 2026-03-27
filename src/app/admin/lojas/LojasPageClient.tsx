@@ -271,7 +271,8 @@ export default function LojasPageClient({ initialStores, initialOrgPlan }: Props
               placeholder="Buscar por nome..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="input pl-10"
+              className="input"
+              style={{ paddingLeft: '2.5rem' }}
             />
           </div>
 

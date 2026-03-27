@@ -175,6 +175,14 @@ export async function acceptInvite(token: string, userId: string): Promise<void>
 
   if (memberError) throw memberError
 
+  // Set tenant_id on user record
+  const { error: tenantErr } = await supabase
+    .from('users')
+    .update({ tenant_id: invite.tenant_id })
+    .eq('id', userId)
+
+  if (tenantErr) console.error('[Tenant] Failed to set tenant_id on user:', tenantErr)
+
   // Marcar convite como aceito
   const { error: inviteErr } = await supabase
     .from('invites')

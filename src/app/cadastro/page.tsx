@@ -1,13 +1,14 @@
  'use client'
 
-import { useState, useRef, useCallback, useEffect } from 'react'
+import { useState, useRef, useCallback, useEffect, Suspense } from 'react'
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { APP_CONFIG } from '@/lib/config'
 import { ThemeToggle, LoadingInline } from '@/components/ui'
-import { FiLock, FiMail, FiUser, FiPhone, FiArrowLeft, FiArrowRight, FiEye, FiEyeOff, FiBriefcase, FiMapPin, FiCheck, FiClock, FiZap, FiDollarSign } from 'react-icons/fi'
+import { FiLock, FiMail, FiUser, FiPhone, FiArrowLeft, FiArrowRight, FiEye, FiEyeOff, FiBriefcase, FiMapPin, FiCheck, FiClock, FiZap, FiDollarSign, FiLink, FiLoader } from 'react-icons/fi'
 import { CheckoutFlow } from '@/components/billing/CheckoutModal'
+import type { ValidateInviteResponseDTO } from '@/dtos'
 
 /**
  * Página de cadastro de novo usuário (`/cadastro`).
@@ -15,6 +16,14 @@ import { CheckoutFlow } from '@/components/billing/CheckoutModal'
  * Após o registro, exibe instrução para confirmar o e-mail.
  */
 export default function CadastroPage() {
+  return (
+    <Suspense fallback={<div className="h-screen w-screen flex items-center justify-center bg-page"><FiLoader className="w-6 h-6 animate-spin text-primary" /></div>}>
+      <CadastroContent />
+    </Suspense>
+  )
+}
+
+function CadastroContent() {
   const [fullName, setFullName] = useState('')
   const [email, setEmail] = useState('')
   const [phone, setPhone] = useState('')
@@ -45,6 +54,63 @@ export default function CadastroPage() {
   const [userOrgId, setUserOrgId] = useState<string | null>(null)
   const otpRefs = useRef<(HTMLInputElement | null)[]>([])
   const router = useRouter()
+  const searchParams = useSearchParams()
+
+  // ── Invite State ──
+  const inviteToken = searchParams.get('invite')
+  const [inviteData, setInviteData] = useState<{ email: string; role: string; orgName: string } | null>(null)
+  const [inviteLoading, setInviteLoading] = useState(!!inviteToken)
+  const [inviteError, setInviteError] = useState<string | null>(null)
+  const [acceptingInvite, setAcceptingInvite] = useState(false)
+  // Manual invite code input (when funcionario clicks without URL token)
+  const [manualInviteCode, setManualInviteCode] = useState('')
+  const [validatingManualCode, setValidatingManualCode] = useState(false)
+
+  // ── Validate invite token on mount ──
+  useEffect(() => {
+    if (!inviteToken) return
+    async function validate() {
+      try {
+        const res = await fetch(`/api/invites/validate?token=${inviteToken}`)
+        const data = (await res.json()) as ValidateInviteResponseDTO
+        if (data.valid && data.email && data.orgName) {
+          setInviteData({ email: data.email, role: data.role || 'member', orgName: data.orgName })
+          setEmail(data.email)
+          setUserType('funcionario')
+          setStep(1) // Go directly to personal info
+        } else {
+          setInviteError('Convite invalido ou expirado. Solicite um novo convite ao administrador.')
+        }
+      } catch {
+        setInviteError('Erro ao validar convite. Tente novamente.')
+      } finally {
+        setInviteLoading(false)
+      }
+    }
+    validate()
+  }, [inviteToken])
+
+  // ── Validate manual invite code ──
+  const handleValidateManualCode = async () => {
+    if (!manualInviteCode.trim()) return
+    setValidatingManualCode(true)
+    setInviteError(null)
+    try {
+      const res = await fetch(`/api/invites/validate?token=${manualInviteCode.trim()}`)
+      const data = (await res.json()) as ValidateInviteResponseDTO
+      if (data.valid && data.email && data.orgName) {
+        setInviteData({ email: data.email, role: data.role || 'member', orgName: data.orgName })
+        setEmail(data.email)
+        setStep(1) // Go to personal info
+      } else {
+        setInviteError('Codigo de convite invalido ou expirado.')
+      }
+    } catch {
+      setInviteError('Erro ao validar codigo.')
+    } finally {
+      setValidatingManualCode(false)
+    }
+  }
 
   const handleOtpChange = useCallback((index: number, value: string) => {
     if (value.length > 1) value = value.slice(-1)
@@ -90,6 +156,34 @@ export default function CadastroPage() {
     setError(null)
 
     try {
+      // Invite flow: verify via our custom OTP endpoint, then sign in
+      if (inviteData) {
+        const res = await fetch('/api/invites/verify-otp', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, otp: code }),
+        })
+        const result = await res.json()
+        if (!res.ok || !result.success) {
+          setError(result.error || 'Código inválido ou expirado.')
+          setVerifying(false)
+          return
+        }
+
+        // Email confirmed — now sign in to get a session
+        const supabase = createClient()
+        const { error: signInError } = await supabase.auth.signInWithPassword({ email, password })
+        if (signInError) {
+          setError('Email confirmado, mas erro ao fazer login. Tente fazer login manualmente.')
+          setVerifying(false)
+          return
+        }
+
+        setVerified(true)
+        return
+      }
+
+      // Normal flow: verify via Supabase OTP
       const supabase = createClient()
       const { error: verifyError } = await supabase.auth.verifyOtp({
         email,
@@ -115,17 +209,33 @@ export default function CadastroPage() {
     setResending(true)
     setError(null)
     try {
-      const supabase = createClient()
-      const { error: resendError } = await supabase.auth.resend({
-        type: 'signup',
-        email,
-      })
-      if (resendError) {
-        setError(resendError.message)
+      // Invite flow: use our custom resend endpoint
+      if (inviteData) {
+        const res = await fetch('/api/invites/resend-otp', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email }),
+        })
+        const result = await res.json()
+        if (!res.ok || !result.success) {
+          setError(result.error || 'Erro ao reenviar codigo.')
+        } else {
+          setOtpCode(['', '', '', '', '', ''])
+          otpRefs.current[0]?.focus()
+        }
       } else {
-        setError(null)
-        setOtpCode(['', '', '', '', '', ''])
-        otpRefs.current[0]?.focus()
+        // Normal flow: use Supabase resend
+        const supabase = createClient()
+        const { error: resendError } = await supabase.auth.resend({
+          type: 'signup',
+          email,
+        })
+        if (resendError) {
+          setError(resendError.message)
+        } else {
+          setOtpCode(['', '', '', '', '', ''])
+          otpRefs.current[0]?.focus()
+        }
       }
     } catch {
       setError('Erro ao reenviar código.')
@@ -227,6 +337,32 @@ export default function CadastroPage() {
     setLoading(true)
 
     try {
+      // Invite flow: use server-side registration (sends both OTP + link)
+      const activeInviteToken = inviteToken || manualInviteCode.trim()
+      if (inviteData && activeInviteToken) {
+        const res = await fetch('/api/invites/register', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            email,
+            password,
+            fullName,
+            phone: phone.replace(/\D/g, ''),
+            cpf: cpf.replace(/\D/g, '') || null,
+            inviteToken: activeInviteToken,
+          }),
+        })
+        const result = await res.json()
+        if (!res.ok || !result.success) {
+          setError(result.error || 'Erro ao criar conta.')
+          setLoading(false)
+          return
+        }
+        setSuccess(true)
+        return
+      }
+
+      // Normal flow: use Supabase signUp (empresa users)
       const supabase = createClient()
       const { error } = await supabase.auth.signUp({
         email,
@@ -237,7 +373,6 @@ export default function CadastroPage() {
             phone: phone.replace(/\D/g, ''),
             user_type: userType,
             ...(userType === 'empresa' ? { company_name: companyName } : {}),
-            ...(userType === 'funcionario' ? { cpf: cpf.replace(/\D/g, '') } : {}),
           },
           emailRedirectTo: `${window.location.origin}/auth/callback`,
         },
@@ -261,9 +396,48 @@ export default function CadastroPage() {
     }
   }
 
-  // Buscar orgId quando verificado
+  // Buscar orgId quando verificado — ou aceitar convite se for funcionario
   useEffect(() => {
     if (!verified) return
+
+    // Funcionario com convite — aceitar invite automaticamente
+    const tokenToAccept = inviteToken || (inviteData ? manualInviteCode.trim() : null)
+    if (inviteData && tokenToAccept) {
+      setAcceptingInvite(true)
+      async function acceptInvite() {
+        try {
+          const supabase = createClient()
+          const { data: { session } } = await supabase.auth.getSession()
+          if (!session?.access_token) {
+            setError('Sessao nao encontrada. Faca login novamente.')
+            setAcceptingInvite(false)
+            return
+          }
+          const res = await fetch('/api/invites/accept', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${session.access_token}`,
+            },
+            body: JSON.stringify({ token: tokenToAccept }),
+          })
+          const result = await res.json()
+          if (result.success) {
+            router.push('/dashboard')
+          } else {
+            setError(result.error || 'Erro ao aceitar convite.')
+            setAcceptingInvite(false)
+          }
+        } catch {
+          setError('Erro ao aceitar convite. Tente novamente.')
+          setAcceptingInvite(false)
+        }
+      }
+      acceptInvite()
+      return
+    }
+
+    // Empresa — fluxo normal (checkout/trial)
     setPostSignupStep('welcome')
     async function fetchOrgId() {
       try {
@@ -294,15 +468,82 @@ export default function CadastroPage() {
             }).eq('id', data.organization_id)
           }
         }
-      } catch {
-        // org may not exist yet — will be created in onboarding
+      } catch(error) {
+        console.error(error)
       }
     }
     fetchOrgId()
   }, [verified])
 
+  // Invite loading screen
+  if (inviteLoading) {
+    return (
+      <div className="h-screen w-screen flex items-center justify-center bg-page">
+        <div className="text-center">
+          <FiLoader className="w-8 h-8 animate-spin text-primary mx-auto mb-4" />
+          <p className="text-muted">Validando convite...</p>
+        </div>
+      </div>
+    )
+  }
+
+  // Invalid invite token — block registration
+  if (inviteToken && inviteError && !inviteData) {
+    return (
+      <div className="h-screen w-screen flex items-center justify-center bg-page p-4">
+        <div className="card p-8 max-w-md w-full text-center">
+          <div className="w-16 h-16 rounded-full bg-red-500/10 flex items-center justify-center mx-auto mb-6">
+            <FiLink className="w-8 h-8 text-red-500" />
+          </div>
+          <h1 className="text-2xl font-bold text-main mb-2">Convite invalido</h1>
+          <p className="text-muted mb-6">{inviteError}</p>
+          <Link href={APP_CONFIG.routes.login} className="btn-primary inline-flex items-center gap-2 px-6 py-3">
+            Ir para login
+          </Link>
+        </div>
+      </div>
+    )
+  }
+
   // Tela de confirmacao concluida — fluxo de assinatura inline
   if (verified) {
+    // Funcionario com convite — mostra tela de aceite
+    if (inviteData) {
+      return (
+        <div className="h-screen w-screen flex items-center justify-center bg-page p-4">
+          <div className="card p-8 max-w-md w-full text-center">
+            {acceptingInvite ? (
+              <>
+                <FiLoader className="w-8 h-8 animate-spin text-primary mx-auto mb-4" />
+                <h1 className="text-xl font-bold text-main mb-2">Vinculando sua conta...</h1>
+                <p className="text-muted">Entrando na organizacao {inviteData.orgName}</p>
+              </>
+            ) : error ? (
+              <>
+                <div className="w-16 h-16 rounded-full bg-red-500/10 flex items-center justify-center mx-auto mb-6">
+                  <FiLink className="w-8 h-8 text-red-500" />
+                </div>
+                <h1 className="text-xl font-bold text-main mb-2">Erro ao aceitar convite</h1>
+                <p className="text-red-500 text-sm mb-6">{error}</p>
+                <button onClick={() => router.push('/dashboard')} className="btn-primary px-6 py-3">
+                  Ir para o dashboard
+                </button>
+              </>
+            ) : (
+              <>
+                <div className="w-16 h-16 rounded-full bg-success/10 flex items-center justify-center mx-auto mb-6">
+                  <FiCheck className="w-8 h-8 text-success" />
+                </div>
+                <h1 className="text-xl font-bold text-main mb-2">Conta criada com sucesso!</h1>
+                <p className="text-muted">Redirecionando...</p>
+              </>
+            )}
+          </div>
+        </div>
+      )
+    }
+
+    // Empresa — fluxo normal
     if (postSignupStep === 'checkout' && userOrgId) {
       return (
         <CheckoutFlow
@@ -495,22 +736,27 @@ export default function CadastroPage() {
               {/* Step 0 — Seleção de tipo */}
               {step === 0 && (
                 <div className="space-y-3">
+                  {/* Empresa — always available */}
+                  {!inviteData && (
+                    <button
+                      type="button"
+                      onClick={() => { setUserType('empresa'); setStep(1) }}
+                      className="w-full card p-5 border-2 border-subtle hover:border-primary hover:bg-primary/15 hover:shadow-md hover:-translate-y-0.5 active:translate-y-0 active:shadow-sm transition-all duration-150 text-left flex items-start gap-4 group"
+                    >
+                      <div className="w-10 h-10 rounded-xl bg-primary/10 group-hover:bg-primary/20 flex items-center justify-center shrink-0 mt-0.5 transition-colors duration-150">
+                        <FiBriefcase className="w-5 h-5 text-primary" />
+                      </div>
+                      <div>
+                        <p className="font-semibold text-main group-hover:text-primary text-[15px] transition-colors duration-150">Empresa</p>
+                        <p className="text-xs text-muted mt-0.5">Gerencio uma equipe e quero usar o OpereCheck no meu negocio</p>
+                      </div>
+                    </button>
+                  )}
+
+                  {/* Funcionario — requires invite */}
                   <button
                     type="button"
-                    onClick={() => { setUserType('empresa'); setStep(1) }}
-                    className="w-full card p-5 border-2 border-subtle hover:border-primary hover:bg-primary/15 hover:shadow-md hover:-translate-y-0.5 active:translate-y-0 active:shadow-sm transition-all duration-150 text-left flex items-start gap-4 group"
-                  >
-                    <div className="w-10 h-10 rounded-xl bg-primary/10 group-hover:bg-primary/20 flex items-center justify-center shrink-0 mt-0.5 transition-colors duration-150">
-                      <FiBriefcase className="w-5 h-5 text-primary" />
-                    </div>
-                    <div>
-                      <p className="font-semibold text-main group-hover:text-primary text-[15px] transition-colors duration-150">Empresa</p>
-                      <p className="text-xs text-muted mt-0.5">Gerencio uma equipe e quero usar o OpereCheck no meu negocio</p>
-                    </div>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => { setUserType('funcionario'); setStep(1) }}
+                    onClick={() => { setUserType('funcionario'); if (inviteData) setStep(1) }}
                     className="w-full card p-5 border-2 border-subtle hover:border-primary hover:bg-primary/15 hover:shadow-md hover:-translate-y-0.5 active:translate-y-0 active:shadow-sm transition-all duration-150 text-left flex items-start gap-4 group"
                   >
                     <div className="w-10 h-10 rounded-xl bg-primary/10 group-hover:bg-primary/20 flex items-center justify-center shrink-0 mt-0.5 transition-colors duration-150">
@@ -518,14 +764,58 @@ export default function CadastroPage() {
                     </div>
                     <div>
                       <p className="font-semibold text-main group-hover:text-primary text-[15px] transition-colors duration-150">Funcionario</p>
-                      <p className="text-xs text-muted mt-0.5">Sou colaborador e fui indicado a usar o sistema</p>
+                      <p className="text-xs text-muted mt-0.5">Sou colaborador e fui convidado a usar o sistema</p>
                     </div>
                   </button>
+
+                  {/* Invite gate — shown when funcionario is selected without invite */}
+                  {userType === 'funcionario' && !inviteData && (
+                    <div className="card p-5 border-2 border-amber-500/30 bg-amber-500/5 space-y-3">
+                      <p className="text-sm text-main font-medium">
+                        Funcionarios precisam de um convite para se cadastrar.
+                      </p>
+                      <p className="text-xs text-muted">
+                        Solicite ao administrador da sua empresa ou insira o codigo de convite abaixo.
+                      </p>
+                      <div className="flex gap-2">
+                        <input
+                          type="text"
+                          value={manualInviteCode}
+                          onChange={(e) => setManualInviteCode(e.target.value)}
+                          placeholder="Cole o codigo do convite"
+                          className="input flex-1 text-sm"
+                        />
+                        <button
+                          type="button"
+                          onClick={handleValidateManualCode}
+                          disabled={validatingManualCode || !manualInviteCode.trim()}
+                          className="btn-primary px-4 py-2 text-sm whitespace-nowrap disabled:opacity-50"
+                        >
+                          {validatingManualCode ? <LoadingInline /> : 'Validar'}
+                        </button>
+                      </div>
+                      {inviteError && (
+                        <p className="text-red-500 text-xs">{inviteError}</p>
+                      )}
+                    </div>
+                  )}
                 </div>
               )}
 
               {/* Form */}
               <form onSubmit={handleSubmit} className={`space-y-4${step === 0 ? ' hidden' : ''}`}>
+                {/* Invite banner */}
+                {step === 1 && inviteData && (
+                  <div className="p-3.5 bg-primary/10 rounded-xl border border-primary/20 mb-2">
+                    <p className="text-sm text-main font-medium">
+                      Convite para <strong>{inviteData.orgName}</strong>
+                    </p>
+                    <p className="text-xs text-muted mt-0.5">
+                      Cargo: {inviteData.role === 'admin' ? 'Administrador' : inviteData.role === 'manager' ? 'Gerente' : inviteData.role === 'viewer' ? 'Visualizador' : 'Membro'}
+                    </p>
+                  </div>
+                )}
+
                 {step === 1 && (<>
                 {/* Nome */}
                 <div>
@@ -559,14 +849,18 @@ export default function CadastroPage() {
                       id="email"
                       type="email"
                       value={email}
-                      onChange={(e) => setEmail(e.target.value)}
+                      onChange={(e) => { if (!inviteData) setEmail(e.target.value) }}
                       required
+                      readOnly={!!inviteData}
                       autoComplete="email"
-                      className="input"
+                      className={`input${inviteData ? ' bg-surface-hover cursor-not-allowed opacity-70' : ''}`}
                       style={{ paddingLeft: '2.75rem' }}
                       placeholder="seu@email.com"
                     />
                   </div>
+                  {inviteData && (
+                    <p className="text-xs text-muted mt-1">Email vinculado ao convite (nao pode ser alterado)</p>
+                  )}
                 </div>
 
                 {/* Telefone */}
@@ -765,10 +1059,12 @@ export default function CadastroPage() {
                 {/* Botoes */}
                 {step === 1 ? (
                   <div className="flex gap-3">
-                    <button type="button" onClick={() => { setStep(0); setError(null) }}
-                      className="btn-secondary py-3.5 px-4 flex items-center justify-center gap-2 text-[15px]">
-                      <FiArrowLeft className="w-4 h-4" />
-                    </button>
+                    {!inviteData && (
+                      <button type="button" onClick={() => { setStep(0); setError(null) }}
+                        className="btn-secondary py-3.5 px-4 flex items-center justify-center gap-2 text-[15px]">
+                        <FiArrowLeft className="w-4 h-4" />
+                      </button>
+                    )}
                     <button type="button" onClick={handleNextStep} disabled={loading}
                       className="btn-primary flex-1 py-3.5 flex items-center justify-center gap-2 text-[15px] font-semibold shadow-lg shadow-primary/20">
                       {loading ? (<><LoadingInline /> Criando...</>) : userType === 'funcionario' ? 'Criar conta' : (<>Proximo <FiArrowRight className="w-4 h-4" /></>)}

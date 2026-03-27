@@ -201,7 +201,7 @@ export async function POST(request: NextRequest) {
         email,
         password,
         email_confirm: true,
-        user_metadata: { full_name: fullName },
+        user_metadata: { full_name: fullName, user_type: 'funcionario' },
       })
 
       if (adminError) {
@@ -220,7 +220,7 @@ export async function POST(request: NextRequest) {
         email,
         password,
         email_confirm: false,
-        user_metadata: { full_name: fullName },
+        user_metadata: { full_name: fullName, user_type: 'funcionario' },
       })
 
       if (createError) {
@@ -267,6 +267,8 @@ export async function POST(request: NextRequest) {
 
     const primary = assignments.find(a => a.is_primary) || assignments[0] || null
 
+    const adminOrgId = memberData?.organization_id || null
+
     const { error: profileError } = await supabase
       .from('users')
       .update({
@@ -277,6 +279,8 @@ export async function POST(request: NextRequest) {
         store_id: isAdmin ? null : (primary?.store_id || null),
         function_id: isAdmin ? null : (functionId || null),
         sector_id: isAdmin ? null : (primary?.sector_id || null),
+        tenant_id: adminOrgId,
+        user_type: 'funcionario',
       })
       .eq('id', userId)
 
@@ -298,6 +302,27 @@ export async function POST(request: NextRequest) {
 
       if (storesError) {
         log.error('Erro ao inserir user_stores', { userId }, storesError)
+      }
+    }
+
+    // ── Insert into organization_members ──
+    // Ensures the user appears on the equipe page and has proper org membership
+    if (adminOrgId) {
+      const { error: memberInsertError } = await supabase
+        .from('organization_members')
+        .insert({
+          organization_id: adminOrgId,
+          user_id: userId,
+          role: isAdmin ? 'admin' : 'member',
+          invited_by: auth.user.id,
+          invited_email: email,
+          accepted_at: new Date().toISOString(),
+        })
+
+      if (memberInsertError) {
+        // May fail if handle_new_user trigger already created a membership (for empresa users)
+        // or if there's a duplicate — non-fatal
+        log.warn('Erro ao inserir organization_members (pode ser duplicata)', { detail: `userId:${userId} error:${memberInsertError.message}` })
       }
     }
 

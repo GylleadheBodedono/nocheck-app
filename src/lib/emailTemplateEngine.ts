@@ -172,6 +172,84 @@ function escapeHtml(str: string): string {
     .replace(/"/g, '&quot;')
 }
 
+// ============================================
+// TEMPLATE DE CONVITE DE FUNCIONARIO
+// ============================================
+
+export type InviteEmailVariables = {
+  org_name: string
+  inviter_name: string
+  role_label: string
+  invite_url: string
+  expires_at: string
+  app_name: string
+}
+
+export const DEFAULT_INVITE_EMAIL_SUBJECT = '[{{app_name}}] Voce foi convidado para {{org_name}}'
+
+export const DEFAULT_INVITE_EMAIL_HTML = `<!DOCTYPE html>
+<html>
+<head><meta charset="UTF-8"></head>
+<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f8fafc; padding: 20px; margin: 0;">
+  <div style="max-width: 600px; margin: 0 auto; background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+    <!-- Header -->
+    <div style="background: #0D9488; padding: 24px; color: white;">
+      <h1 style="margin: 0; font-size: 20px; font-weight: 700;">Convite para {{org_name}}</h1>
+      <p style="margin: 6px 0 0; opacity: 0.9; font-size: 14px;">{{app_name}}</p>
+    </div>
+
+    <!-- Corpo -->
+    <div style="padding: 28px 24px;">
+      <p style="color: #1e293b; font-size: 16px; line-height: 1.6; margin: 0 0 20px;">
+        Voce foi convidado por <strong>{{inviter_name}}</strong> para fazer parte de <strong>{{org_name}}</strong> como <strong>{{role_label}}</strong>.
+      </p>
+
+      <p style="color: #475569; font-size: 14px; line-height: 1.6; margin: 0 0 24px;">
+        Clique no botao abaixo para criar sua conta e comecar a usar o sistema.
+      </p>
+
+      <!-- CTA -->
+      <div style="text-align: center; margin-bottom: 24px;">
+        <a href="{{invite_url}}" style="display: inline-block; background: #0D9488; color: white; padding: 14px 32px; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 14px;">
+          Aceitar Convite e Criar Conta
+        </a>
+      </div>
+
+      <p style="color: #94a3b8; font-size: 12px; line-height: 1.5; margin: 0;">
+        Este convite expira em {{expires_at}}. Se voce nao esperava receber este email, pode ignora-lo com seguranca.
+      </p>
+    </div>
+
+    <!-- Footer -->
+    <div style="padding: 16px 24px; background: #f8fafc; border-top: 1px solid #e2e8f0; text-align: center;">
+      <p style="margin: 0; color: #94a3b8; font-size: 12px;">{{app_name}} - Sistema de Checklists</p>
+    </div>
+  </div>
+</body>
+</html>`
+
+const INVITE_RAW_VARIABLES = new Set<string>(['invite_url'])
+
+/**
+ * Constroi o HTML e o assunto do email de convite.
+ */
+export function buildInviteEmailHtml(
+  variables: InviteEmailVariables
+): { html: string; subject: string } {
+  let html = DEFAULT_INVITE_EMAIL_HTML
+  let subject = DEFAULT_INVITE_EMAIL_SUBJECT
+  for (const [key, value] of Object.entries(variables)) {
+    const safeValue = INVITE_RAW_VARIABLES.has(key) ? (value ?? '') : escapeHtml(value ?? '')
+    html = html.replace(new RegExp(`\\{\\{${key}\\}\\}`, 'g'), safeValue)
+    subject = subject.replace(new RegExp(`\\{\\{${key}\\}\\}`, 'g'), safeValue)
+  }
+  return { html, subject }
+}
+
+// ============================================
+// FUNCOES UTILITARIAS
+// ============================================
+
 /** Apenas variaveis com hex color ou URL — todo o resto e escapado contra XSS. */
 const RAW_VARIABLES = new Set<string>(['severity_color', 'plan_url'])
 

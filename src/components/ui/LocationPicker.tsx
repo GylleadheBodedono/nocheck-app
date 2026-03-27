@@ -279,7 +279,8 @@ export function LocationPicker({ value, onChange }: LocationPickerProps) {
             value={searchQuery}
             onChange={(e) => { setSearchQuery(e.target.value); setSearchError('') }}
             onKeyDown={handleSearchKeyDown}
-            className="input pl-9 text-sm"
+            className="input text-sm"
+            style={{ paddingLeft: '2.25rem' }}
             placeholder="Rua, número, bairro, CEP..."
           />
         </div>

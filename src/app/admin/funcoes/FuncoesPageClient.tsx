@@ -219,7 +219,8 @@ export default function FuncoesPageClient({ initialFunctions }: FuncoesPageClien
               placeholder="Buscar funcao..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="input pl-10"
+              className="input"
+              style={{ paddingLeft: '2.5rem' }}
             />
           </div>
         </div>

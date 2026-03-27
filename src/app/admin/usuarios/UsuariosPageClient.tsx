@@ -205,7 +205,8 @@ export default function UsuariosPageClient({ initialUsers, initialFavoriteIds, c
               placeholder="Buscar por nome ou email..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="input pl-10"
+              className="input"
+              style={{ paddingLeft: '2.5rem' }}
             />
           </div>
 
