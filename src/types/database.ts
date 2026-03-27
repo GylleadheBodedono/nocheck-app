@@ -856,7 +856,7 @@ export type Database = {
           id: number
           action_plan_id: number
           user_id: string
-          update_type: 'comment' | 'status_change' | 'evidence' | 'reassign'
+          update_type: 'comment' | 'status_change' | 'evidence' | 'reassign' | 'deadline_change'
           content: string | null
           old_status: string | null
           new_status: string | null
@@ -866,7 +866,7 @@ export type Database = {
           id?: number
           action_plan_id: number
           user_id: string
-          update_type: 'comment' | 'status_change' | 'evidence' | 'reassign'
+          update_type: 'comment' | 'status_change' | 'evidence' | 'reassign' | 'deadline_change'
           content?: string | null
           old_status?: string | null
           new_status?: string | null
@@ -876,7 +876,7 @@ export type Database = {
           id?: number
           action_plan_id?: number
           user_id?: string
-          update_type?: 'comment' | 'status_change' | 'evidence' | 'reassign'
+          update_type?: 'comment' | 'status_change' | 'evidence' | 'reassign' | 'deadline_change'
           content?: string | null
           old_status?: string | null
           new_status?: string | null

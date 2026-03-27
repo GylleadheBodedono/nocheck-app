@@ -80,7 +80,7 @@ type PlanUpdate = {
   id: number
   action_plan_id: number
   user_id: string
-  update_type: 'comment' | 'status_change' | 'evidence' | 'reassign'
+  update_type: 'comment' | 'status_change' | 'evidence' | 'reassign' | 'deadline_change'
   content: string | null
   old_status: string | null
   new_status: string | null
@@ -139,6 +139,8 @@ function getUpdateIcon(type: string) {
       return FiPaperclip
     case 'reassign':
       return FiUser
+    case 'deadline_change':
+      return FiCalendar
     default:
       return FiInfo
   }
@@ -169,6 +171,11 @@ export default function ActionPlanDetailPage() {
   const [error, setError] = useState<string | null>(null)
   const [accessLevel, setAccessLevel] = useState<'admin' | 'assignee' | 'viewer'>('admin')
   const [isAdminUser, setIsAdminUser] = useState(false)
+
+  // Deadline editing
+  const [editingDeadline, setEditingDeadline] = useState(false)
+  const [newDeadline, setNewDeadline] = useState('')
+  const [savingDeadline, setSavingDeadline] = useState(false)
 
   // Completion modal state
   const [showCompletionModal, setShowCompletionModal] = useState(false)
@@ -822,13 +829,90 @@ export default function ActionPlanDetailPage() {
           )}
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <FiCalendar className={`w-4 h-4 flex-shrink-0 ${deadlineOverdue ? 'text-error' : 'text-muted'}`} />
               <span className="text-muted">Prazo:</span>
-              <span className={`font-medium ${deadlineOverdue ? 'text-error' : 'text-main'}`}>
-                {formatDateShort(plan.deadline)}
-                {deadlineOverdue && ' (Vencido!)'}
-              </span>
+              {editingDeadline ? (
+                <>
+                  <input
+                    type="date"
+                    value={newDeadline}
+                    onChange={(e) => setNewDeadline(e.target.value)}
+                    className="px-2 py-1 rounded-lg text-sm bg-surface border border-subtle text-main"
+                    min={new Date().toISOString().split('T')[0]}
+                  />
+                  <button
+                    onClick={async () => {
+                      if (!newDeadline || !plan || !currentUserId) return
+                      setSavingDeadline(true)
+                      try {
+                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                        const sb = supabase as any
+                        const oldDeadline = plan.deadline
+
+                        await sb.from('action_plans').update({ deadline: newDeadline }).eq('id', plan.id)
+
+                        await sb.from('action_plan_updates').insert({
+                          action_plan_id: plan.id,
+                          user_id: currentUserId,
+                          update_type: 'deadline_change',
+                          content: `Prazo alterado de ${formatDateShort(oldDeadline)} para ${formatDateShort(newDeadline)}`,
+                          old_status: oldDeadline,
+                          new_status: newDeadline,
+                        })
+
+                        // Se vencido e novo prazo futuro, reabrir
+                        if (plan.status === 'vencido' && new Date(newDeadline) >= new Date()) {
+                          await sb.from('action_plans').update({ status: 'aberto' }).eq('id', plan.id)
+                          setPlan(prev => prev ? { ...prev, deadline: newDeadline, status: 'aberto' } : prev)
+                        } else {
+                          setPlan(prev => prev ? { ...prev, deadline: newDeadline } : prev)
+                        }
+
+                        // Refresh updates
+                        const { data: freshUpdates } = await sb
+                          .from('action_plan_updates')
+                          .select('*')
+                          .eq('action_plan_id', plan.id)
+                          .order('created_at', { ascending: false })
+                        if (freshUpdates) setUpdates(freshUpdates)
+
+                        setEditingDeadline(false)
+                      } catch (err) {
+                        console.error('[ActionPlan] Erro ao alterar prazo:', err)
+                      } finally {
+                        setSavingDeadline(false)
+                      }
+                    }}
+                    disabled={savingDeadline || !newDeadline}
+                    className="px-2 py-1 rounded-lg text-xs font-medium bg-primary text-white hover:bg-primary/90 disabled:opacity-50"
+                  >
+                    {savingDeadline ? 'Salvando...' : 'Salvar'}
+                  </button>
+                  <button
+                    onClick={() => setEditingDeadline(false)}
+                    className="px-2 py-1 rounded-lg text-xs font-medium text-muted hover:text-main"
+                  >
+                    Cancelar
+                  </button>
+                </>
+              ) : (
+                <>
+                  <span className={`font-medium ${deadlineOverdue ? 'text-error' : 'text-main'}`}>
+                    {formatDateShort(plan.deadline)}
+                    {deadlineOverdue && ' (Vencido!)'}
+                  </span>
+                  {(accessLevel === 'admin' || accessLevel === 'assignee') &&
+                    plan.status !== 'concluido' && plan.status !== 'cancelado' && (
+                    <button
+                      onClick={() => { setNewDeadline(plan.deadline); setEditingDeadline(true) }}
+                      className="text-xs text-primary hover:text-primary/80 underline"
+                    >
+                      Alterar
+                    </button>
+                  )}
+                </>
+              )}
             </div>
             <div className="flex items-center gap-2">
               <FiClock className="w-4 h-4 text-muted flex-shrink-0" />
@@ -1116,9 +1200,11 @@ export default function ActionPlanDetailPage() {
                           ? 'bg-primary/20 text-primary'
                           : update.update_type === 'evidence'
                             ? 'bg-success/20 text-success'
-                            : update.update_type === 'comment'
-                              ? 'bg-blue-500/20 text-blue-400'
-                              : 'bg-surface-hover text-muted'
+                            : update.update_type === 'deadline_change'
+                              ? 'bg-warning/20 text-warning'
+                              : update.update_type === 'comment'
+                                ? 'bg-blue-500/20 text-blue-400'
+                                : 'bg-surface-hover text-muted'
                       }`}>
                         <UpdateIcon className="w-4 h-4" />
                       </div>
