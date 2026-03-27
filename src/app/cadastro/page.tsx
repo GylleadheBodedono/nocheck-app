@@ -29,7 +29,10 @@ export default function CadastroPage() {
   const [resending, setResending] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
   const [showConfirmPassword, setShowConfirmPassword] = useState(false)
-  const [step, setStep] = useState<1 | 2>(1)
+  const [step, setStep] = useState<0 | 1 | 2>(0)
+  const [userType, setUserType] = useState<'empresa' | 'funcionario' | null>(null)
+  const [cpf, setCpf] = useState('')
+  const [cpfError, setCpfError] = useState<string | null>(null)
   // Step 2 — Dados da empresa
   const [companyName, setCompanyName] = useState('')
   const [cnpj, setCnpj] = useState('')
@@ -37,6 +40,7 @@ export default function CadastroPage() {
   const [employeeRange, setEmployeeRange] = useState('')
   const [city, setCity] = useState('')
   const [state, setState] = useState('')
+  const [cnpjError, setCnpjError] = useState<string | null>(null)
   const [postSignupStep, setPostSignupStep] = useState<'welcome' | 'checkout' | null>(null)
   const [userOrgId, setUserOrgId] = useState<string | null>(null)
   const otpRefs = useRef<(HTMLInputElement | null)[]>([])
@@ -137,6 +141,45 @@ export default function CadastroPage() {
     return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7)}`
   }
 
+  const validateCnpj = (value: string): boolean => {
+    const digits = value.replace(/\D/g, '')
+    if (digits.length !== 14) return false
+    // Reject sequences of all-same digits (00000000000000, 11111111111111, etc.)
+    if (/^(\d)\1{13}$/.test(digits)) return false
+    const calc = (d: string, weights: number[]) => {
+      const sum = weights.reduce((acc, w, i) => acc + parseInt(d[i]) * w, 0)
+      const rem = sum % 11
+      return rem < 2 ? 0 : 11 - rem
+    }
+    const w1 = [5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2]
+    const w2 = [6, 5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2]
+    return (
+      calc(digits, w1) === parseInt(digits[12]) &&
+      calc(digits, w2) === parseInt(digits[13])
+    )
+  }
+
+  const formatCpf = (value: string) => {
+    const digits = value.replace(/\D/g, '').slice(0, 11)
+    if (digits.length <= 3) return digits
+    if (digits.length <= 6) return `${digits.slice(0, 3)}.${digits.slice(3)}`
+    if (digits.length <= 9) return `${digits.slice(0, 3)}.${digits.slice(3, 6)}.${digits.slice(6)}`
+    return `${digits.slice(0, 3)}.${digits.slice(3, 6)}.${digits.slice(6, 9)}-${digits.slice(9)}`
+  }
+
+  const validateCpf = (value: string): boolean => {
+    const digits = value.replace(/\D/g, '')
+    if (digits.length !== 11) return false
+    if (/^(\d)\1{10}$/.test(digits)) return false
+    const calc = (d: string, len: number) => {
+      let sum = 0
+      for (let i = 0; i < len; i++) sum += parseInt(d[i]) * (len + 1 - i)
+      const rem = (sum * 10) % 11
+      return rem === 10 ? 0 : rem
+    }
+    return calc(digits, 9) === parseInt(digits[9]) && calc(digits, 10) === parseInt(digits[10])
+  }
+
   const formatCnpj = (value: string) => {
     const digits = value.replace(/\D/g, '').slice(0, 14)
     if (digits.length <= 2) return digits
@@ -151,6 +194,13 @@ export default function CadastroPage() {
     if (!fullName || !email || !phone) { setError('Preencha todos os campos obrigatorios.'); return }
     if (password.length < 8) { setError('A senha deve ter no minimo 8 caracteres com maiuscula e numero.'); return }
     if (password !== confirmPassword) { setError('As senhas nao coincidem.'); return }
+    if (userType === 'funcionario') {
+      if (!validateCpf(cpf)) { setCpfError('CPF invalido. Verifique os digitos informados.'); return }
+      // Funcionário skips company step — submit directly
+      const fakeEvent = { preventDefault: () => {} } as React.FormEvent
+      handleSubmit(fakeEvent)
+      return
+    }
     setStep(2)
   }
 
@@ -158,9 +208,20 @@ export default function CadastroPage() {
     e.preventDefault()
     setError(null)
 
-    if (!companyName) {
-      setError('Nome da empresa e obrigatorio.')
-      return
+    if (userType === 'empresa') {
+      if (!companyName) {
+        setError('Nome da empresa e obrigatorio.')
+        return
+      }
+      const cnpjDigits = cnpj.replace(/\D/g, '')
+      if (!cnpjDigits) {
+        setCnpjError('CNPJ e obrigatorio.')
+        return
+      }
+      if (!validateCnpj(cnpj)) {
+        setCnpjError('CNPJ invalido. Verifique os digitos informados.')
+        return
+      }
     }
 
     setLoading(true)
@@ -174,7 +235,9 @@ export default function CadastroPage() {
           data: {
             full_name: fullName,
             phone: phone.replace(/\D/g, ''),
-            company_name: companyName,
+            user_type: userType,
+            ...(userType === 'empresa' ? { company_name: companyName } : {}),
+            ...(userType === 'funcionario' ? { cpf: cpf.replace(/\D/g, '') } : {}),
           },
           emailRedirectTo: `${window.location.origin}/auth/callback`,
         },
@@ -216,8 +279,8 @@ export default function CadastroPage() {
           .single()
         if (data?.organization_id) {
           setUserOrgId(data.organization_id)
-          // Salvar dados da empresa na org
-          if (companyName || cnpj) {
+          // Salvar dados da empresa na org (apenas para tipo empresa)
+          if (userType === 'empresa' && (companyName || cnpj)) {
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             await (supabase as any).from('organizations').update({
               name: companyName || undefined,
@@ -408,25 +471,61 @@ export default function CadastroPage() {
                   </span>
                 </div>
                 <p className="text-muted text-center mt-1.5 text-[15px]">
-                  {step === 1 ? 'Preencha seus dados pessoais' : 'Dados da sua empresa'}
+                  {step === 0 ? 'Como você vai usar o OpereCheck?' : step === 1 ? 'Preencha seus dados pessoais' : 'Dados da sua empresa'}
                 </p>
               </div>
 
-              {/* Step indicator */}
-              <div className="flex items-center justify-center gap-3 mb-6">
-                <div className={`flex items-center gap-1.5 ${step === 1 ? 'text-primary' : 'text-muted'}`}>
-                  <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ${step === 1 ? 'bg-primary text-primary-foreground' : 'bg-surface-hover text-muted'}`}>1</div>
-                  <span className="text-xs font-medium hidden sm:inline">Pessoal</span>
+              {/* Step indicator — only shown after type selection */}
+              {step > 0 && (
+                <div className="flex items-center justify-center gap-3 mb-6">
+                  <div className={`flex items-center gap-1.5 ${step === 1 ? 'text-primary' : 'text-muted'}`}>
+                    <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ${step === 1 ? 'bg-primary text-primary-foreground' : 'bg-surface-hover text-muted'}`}>1</div>
+                    <span className="text-xs font-medium hidden sm:inline">Pessoal</span>
+                  </div>
+                  {userType === 'empresa' && (<>
+                    <div className="w-8 h-0.5 bg-subtle rounded" />
+                    <div className={`flex items-center gap-1.5 ${step === 2 ? 'text-primary' : 'text-muted'}`}>
+                      <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ${step === 2 ? 'bg-primary text-primary-foreground' : 'bg-surface-hover text-muted'}`}>2</div>
+                      <span className="text-xs font-medium hidden sm:inline">Empresa</span>
+                    </div>
+                  </>)}
                 </div>
-                <div className="w-8 h-0.5 bg-subtle rounded" />
-                <div className={`flex items-center gap-1.5 ${step === 2 ? 'text-primary' : 'text-muted'}`}>
-                  <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ${step === 2 ? 'bg-primary text-primary-foreground' : 'bg-surface-hover text-muted'}`}>2</div>
-                  <span className="text-xs font-medium hidden sm:inline">Empresa</span>
+              )}
+
+              {/* Step 0 — Seleção de tipo */}
+              {step === 0 && (
+                <div className="space-y-3">
+                  <button
+                    type="button"
+                    onClick={() => { setUserType('empresa'); setStep(1) }}
+                    className="w-full card p-5 border-2 border-subtle hover:border-primary hover:bg-primary/15 hover:shadow-md hover:-translate-y-0.5 active:translate-y-0 active:shadow-sm transition-all duration-150 text-left flex items-start gap-4 group"
+                  >
+                    <div className="w-10 h-10 rounded-xl bg-primary/10 group-hover:bg-primary/20 flex items-center justify-center shrink-0 mt-0.5 transition-colors duration-150">
+                      <FiBriefcase className="w-5 h-5 text-primary" />
+                    </div>
+                    <div>
+                      <p className="font-semibold text-main group-hover:text-primary text-[15px] transition-colors duration-150">Empresa</p>
+                      <p className="text-xs text-muted mt-0.5">Gerencio uma equipe e quero usar o OpereCheck no meu negocio</p>
+                    </div>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setUserType('funcionario'); setStep(1) }}
+                    className="w-full card p-5 border-2 border-subtle hover:border-primary hover:bg-primary/15 hover:shadow-md hover:-translate-y-0.5 active:translate-y-0 active:shadow-sm transition-all duration-150 text-left flex items-start gap-4 group"
+                  >
+                    <div className="w-10 h-10 rounded-xl bg-primary/10 group-hover:bg-primary/20 flex items-center justify-center shrink-0 mt-0.5 transition-colors duration-150">
+                      <FiUser className="w-5 h-5 text-primary" />
+                    </div>
+                    <div>
+                      <p className="font-semibold text-main group-hover:text-primary text-[15px] transition-colors duration-150">Funcionario</p>
+                      <p className="text-xs text-muted mt-0.5">Sou colaborador e fui indicado a usar o sistema</p>
+                    </div>
+                  </button>
                 </div>
-              </div>
+              )}
 
               {/* Form */}
-              <form onSubmit={handleSubmit} className="space-y-4">
+              <form onSubmit={handleSubmit} className={`space-y-4${step === 0 ? ' hidden' : ''}`}>
                 {step === 1 && (<>
                 {/* Nome */}
                 <div>
@@ -490,6 +589,32 @@ export default function CadastroPage() {
                     />
                   </div>
                 </div>
+
+                {/* CPF — apenas para funcionário */}
+                {userType === 'funcionario' && (
+                  <div>
+                    <label htmlFor="cpf" className="block text-sm font-medium text-secondary mb-2">
+                      CPF *
+                    </label>
+                    <div className="relative">
+                      <FiUser className="absolute left-4 top-1/2 -translate-y-1/2 w-[18px] h-[18px] text-muted pointer-events-none" />
+                      <input
+                        id="cpf"
+                        type="text"
+                        inputMode="numeric"
+                        value={cpf}
+                        onChange={(e) => { setCpf(formatCpf(e.target.value)); setCpfError(null) }}
+                        onBlur={() => {
+                          if (cpf && !validateCpf(cpf)) setCpfError('CPF invalido. Verifique os digitos informados.')
+                        }}
+                        className={`input${cpfError ? ' ring-2 ring-red-500/50 border-red-500/50' : ''}`}
+                        style={{ paddingLeft: '2.75rem' }}
+                        placeholder="000.000.000-00"
+                      />
+                    </div>
+                    {cpfError && <p className="text-red-500 text-xs mt-1">{cpfError}</p>}
+                  </div>
+                )}
 
                 {/* Senha */}
                 <div>
@@ -568,9 +693,19 @@ export default function CadastroPage() {
 
                 {/* CNPJ */}
                 <div>
-                  <label className="block text-sm font-medium text-secondary mb-2">CNPJ</label>
-                  <input type="text" value={cnpj} onChange={e => setCnpj(formatCnpj(e.target.value))}
-                    className="input" placeholder="00.000.000/0000-00" />
+                  <label className="block text-sm font-medium text-secondary mb-2">CNPJ *</label>
+                  <input
+                    type="text"
+                    value={cnpj}
+                    onChange={e => { setCnpj(formatCnpj(e.target.value)); setCnpjError(null) }}
+                    onBlur={() => {
+                      if (!cnpj) { setCnpjError('CNPJ e obrigatorio.'); return }
+                      if (!validateCnpj(cnpj)) setCnpjError('CNPJ invalido. Verifique os digitos informados.')
+                    }}
+                    className={`input${cnpjError ? ' ring-2 ring-red-500/50 border-red-500/50' : ''}`}
+                    placeholder="00.000.000/0000-00"
+                  />
+                  {cnpjError && <p className="text-red-500 text-xs mt-1">{cnpjError}</p>}
                 </div>
 
                 {/* Tipo de empresa */}
@@ -629,10 +764,16 @@ export default function CadastroPage() {
 
                 {/* Botoes */}
                 {step === 1 ? (
-                  <button type="button" onClick={handleNextStep}
-                    className="btn-primary w-full py-3.5 flex items-center justify-center gap-2 text-[15px] font-semibold shadow-lg shadow-primary/20">
-                    Proximo <FiArrowRight className="w-4 h-4" />
-                  </button>
+                  <div className="flex gap-3">
+                    <button type="button" onClick={() => { setStep(0); setError(null) }}
+                      className="btn-secondary py-3.5 px-4 flex items-center justify-center gap-2 text-[15px]">
+                      <FiArrowLeft className="w-4 h-4" />
+                    </button>
+                    <button type="button" onClick={handleNextStep} disabled={loading}
+                      className="btn-primary flex-1 py-3.5 flex items-center justify-center gap-2 text-[15px] font-semibold shadow-lg shadow-primary/20">
+                      {loading ? (<><LoadingInline /> Criando...</>) : userType === 'funcionario' ? 'Criar conta' : (<>Proximo <FiArrowRight className="w-4 h-4" /></>)}
+                    </button>
+                  </div>
                 ) : (
                   <div className="flex gap-3">
                     <button type="button" onClick={() => { setStep(1); setError(null) }}

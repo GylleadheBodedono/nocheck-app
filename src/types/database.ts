@@ -57,6 +57,8 @@ export type Database = {
           store_id: number | null
           function_id: number | null
           sector_id: number | null
+          cpf: string | null
+          user_type: 'empresa' | 'funcionario'
           created_at: string
           updated_at: string
         }
@@ -72,6 +74,8 @@ export type Database = {
           store_id?: number | null
           function_id?: number | null
           sector_id?: number | null
+          cpf?: string | null
+          user_type?: 'empresa' | 'funcionario' | null
           created_at?: string
           updated_at?: string
         }
@@ -87,6 +91,8 @@ export type Database = {
           store_id?: number | null
           function_id?: number | null
           sector_id?: number | null
+          cpf?: string | null
+          user_type?: 'empresa' | 'funcionario' | null
           created_at?: string
           updated_at?: string
         }

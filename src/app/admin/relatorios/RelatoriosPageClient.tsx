@@ -239,7 +239,7 @@ export default function RelatoriosPageClient() {
   }, [activeTab, summary, storeStats, templateStats, dailyStats, period, overallMetrics, templateAdherence, storeAdherence, userAdherence, coverageGaps, avgCompletionTime, userChecklists, responseFilterUser, responseFilterStore, responseFilterTemplate, complianceSummary, complianceByField, complianceByStore, reincSummary, reincRows, assigneeStats])
 
   const handleExportPdf = useCallback(async () => {
-    if (exportingPdf) return
+    if (!canExportPdf || exportingPdf) return
     setExportMenuOpen(false)
     setExportingPdf(true)
     try {
@@ -276,7 +276,7 @@ export default function RelatoriosPageClient() {
   }, [sortedTemplateAdherence, sortedStoreAdherence, sortedUserAdherence, period])
 
   const handleExportChecklistPDF = useCallback(async (c: UserChecklist) => {
-    if (exportingChecklistId !== null) return
+    if (!canExportPdf || exportingChecklistId !== null) return
     setExportingChecklistId(c.id)
     try {
       const { data: responses } = await supabase
@@ -337,6 +337,7 @@ export default function RelatoriosPageClient() {
       exporting={exporting}
       exportingPdf={exportingPdf}
       isOpen={exportMenuOpen}
+      canExportPdf={canExportPdf}
       onToggle={() => setExportMenuOpen(v => !v)}
       onExport={handleExport}
       onExportPdf={handleExportPdf}

@@ -7,6 +7,7 @@ type Props = {
   exporting: boolean
   exportingPdf: boolean
   isOpen: boolean
+  canExportPdf: boolean
   onToggle: () => void
   onExport: (format: 'csv' | 'txt' | 'xlsx') => void
   onExportPdf: () => void
@@ -18,7 +19,7 @@ type Props = {
  * memoized component that only re-renders when its own props change.
  */
 export const ExportDropdown = memo(function ExportDropdown({
-  exporting, exportingPdf, isOpen, onToggle, onExport, onExportPdf,
+  exporting, exportingPdf, isOpen, canExportPdf, onToggle, onExport, onExportPdf,
 }: Props) {
   return (
     <div className="relative">
@@ -36,9 +37,13 @@ export const ExportDropdown = memo(function ExportDropdown({
           <button onClick={() => onExport('csv')} className="w-full px-4 py-2 text-sm text-left text-main hover:bg-surface-hover rounded-t-lg">CSV</button>
           <button onClick={() => onExport('xlsx')} className="w-full px-4 py-2 text-sm text-left text-main hover:bg-surface-hover">Excel</button>
           <button onClick={() => onExport('txt')} className="w-full px-4 py-2 text-sm text-left text-main hover:bg-surface-hover">TXT</button>
-          <button onClick={onExportPdf} disabled={exportingPdf} className="w-full px-4 py-2 text-sm text-left text-main hover:bg-surface-hover rounded-b-lg disabled:opacity-50">
-            {exportingPdf ? 'Gerando PDF...' : 'PDF'}
-          </button>
+          {canExportPdf ? (
+            <button onClick={onExportPdf} disabled={exportingPdf} className="w-full px-4 py-2 text-sm text-left text-main hover:bg-surface-hover rounded-b-lg disabled:opacity-50">
+              {exportingPdf ? 'Gerando PDF...' : 'PDF'}
+            </button>
+          ) : (
+            <span className="w-full px-4 py-2 text-sm text-left text-muted block cursor-not-allowed rounded-b-lg" title="Disponível no plano Professional">PDF (Pro)</span>
+          )}
         </div>
       )}
     </div>

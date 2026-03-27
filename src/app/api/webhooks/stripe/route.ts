@@ -117,13 +117,34 @@ export async function POST(req: NextRequest) {
             }).eq('id', orgId)
             serverLogger.info(`[Stripe] Subscription cancel scheduled: org ${orgId} → trial em ${new Date(sub.current_period_end * 1000).toLocaleDateString()}`)
           } else {
-            // Mudanca imediata ou restauracao
-            await updateOrgPlan(orgId, plan, {
-              pending_plan: null,
-              current_period_end: new Date(sub.current_period_end * 1000).toISOString(),
-              cancel_at_period_end: false,
-            })
-            serverLogger.info(`[Stripe] Subscription updated: org ${orgId} → ${plan}`)
+            // Verificar se e um downgrade agendado (pending_plan ja definido com period_end futuro)
+            // Nesse caso, NAO aplicar a mudanca imediatamente — o cron apply-pending-downgrades faz isso
+            const { data: orgState } = await supabase
+              .from('organizations')
+              .select('pending_plan, current_period_end')
+              .eq('id', orgId)
+              .single()
+
+            const isScheduledDowngrade =
+              orgState?.pending_plan &&
+              orgState?.current_period_end &&
+              new Date(orgState.current_period_end) > new Date()
+
+            if (isScheduledDowngrade) {
+              // Apenas atualiza o period_end com o valor atual do Stripe (pode ter mudado)
+              await supabase.from('organizations').update({
+                current_period_end: new Date(sub.current_period_end * 1000).toISOString(),
+              }).eq('id', orgId)
+              serverLogger.info(`[Stripe] Downgrade agendado detectado: org ${orgId} → ${orgState!.pending_plan} em ${new Date(orgState!.current_period_end!).toLocaleDateString()}. Nao aplicando agora.`)
+            } else {
+              // Mudanca imediata ou restauracao (upgrade, reativacao, etc.)
+              await updateOrgPlan(orgId, plan, {
+                pending_plan: null,
+                current_period_end: new Date(sub.current_period_end * 1000).toISOString(),
+                cancel_at_period_end: false,
+              })
+              serverLogger.info(`[Stripe] Subscription updated: org ${orgId} → ${plan}`)
+            }
           }
         } catch (updateErr) {
           serverLogger.error('[Stripe Webhook] DB update failed (customer.subscription.updated)', { error: updateErr instanceof Error ? updateErr.message : String(updateErr) })

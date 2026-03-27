@@ -137,25 +137,26 @@ describe('API Routes', () => {
 
   describe('Rate Limiting', () => {
     it('deve lidar com múltiplas requisições sem erros críticos', () => {
-      // Send rapid-fire requests
-      const makeRequest = () =>
+      // Send 10 sequential requests and verify each one receives a valid HTTP response.
+      // Some may be rate-limited (429) — that is acceptable and expected behaviour.
+      // We use a recursive helper so each request runs only after the previous
+      // one completes, keeping the test fully sequential and deterministic.
+      const validStatuses = [400, 401, 403, 429, 500]
+
+      const sendRequest = (remaining: number): void => {
+        if (remaining === 0) return
         cy.request({
           method: 'POST',
           url: '/api/chat',
           body: { messages: [{ role: 'user', content: 'test' }] },
           failOnStatusCode: false,
+        }).then((res) => {
+          expect(res.status).to.be.oneOf(validStatuses)
+          sendRequest(remaining - 1)
         })
+      }
 
-      // Send 10 sequential requests and collect statuses
-      const statuses: number[] = []
-      Cypress._.times(10, () => {
-        makeRequest().then((res) => {
-          statuses.push(res.status)
-        })
-      })
-
-      // After all requests, verify we got responses (some may be rate limited)
-      cy.wrap(statuses).should('have.length.greaterThan', 0)
+      sendRequest(10)
     })
   })
 })

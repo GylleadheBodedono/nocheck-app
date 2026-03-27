@@ -4,6 +4,12 @@ describe('Login - Autenticação', () => {
   beforeEach(() => {
     cy.logout()
     cy.visit('/login')
+    // Wait for the Suspense boundary to resolve and React to finish mounting
+    // before any test tries to interact with form elements.
+    cy.get('button[type="submit"]', { timeout: 15000 })
+      .should('be.visible')
+      .and('not.be.disabled')
+      .and('contain', 'Entrar')
   })
 
   describe('Renderização da página', () => {

@@ -131,7 +131,10 @@ export function TenantProvider({ children, orgSlug }: TenantProviderProps) {
   // Montar contexto final
   const context: TenantContext = useMemo(() => {
     const role = jwtRole ?? null
-    const features = Array.isArray(appMeta.features) ? (appMeta.features as Feature[]) : []
+    // Preferir features da DB (sempre atualizadas) em vez do JWT (pode estar stale após mudanças de plano)
+    const features = Array.isArray(organization?.features)
+      ? (organization.features as Feature[])
+      : Array.isArray(appMeta.features) ? (appMeta.features as Feature[]) : []
     const isOwner = role === 'owner'
     const isOrgAdmin = role === 'owner' || role === 'admin'
     const isManager = role === 'owner' || role === 'admin' || role === 'manager'

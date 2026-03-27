@@ -5,6 +5,7 @@
  */
 
 import { redirect } from 'next/navigation'
+import { createClient } from '@supabase/supabase-js'
 import { createServerSupabaseClient } from './supabase-server'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -41,6 +42,7 @@ export async function requireAdmin(): Promise<AdminAuthResult> {
 /**
  * Requires platform admin (superadmin).
  * Checks app_metadata or user_metadata for is_platform_admin flag.
+ * Returns a service role Supabase client so platform pages bypass RLS entirely.
  */
 export async function requirePlatformAdmin(): Promise<AdminAuthResult> {
   const supabase = await createServerSupabaseClient()
@@ -55,5 +57,12 @@ export async function requirePlatformAdmin(): Promise<AdminAuthResult> {
 
   if (!isPlatformAdmin) redirect('/dashboard')
 
-  return { user: { id: user.id, email: user.email ?? '' }, supabase }
+  // Usar service role para queries de dados — bypassa RLS sem depender do JWT claim
+  const adminClient = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    { auth: { autoRefreshToken: false, persistSession: false } }
+  )
+
+  return { user: { id: user.id, email: user.email ?? '' }, supabase: adminClient }
 }

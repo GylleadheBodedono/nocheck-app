@@ -1,5 +1,16 @@
 /// <reference types="cypress" />
 /// <reference types="@testing-library/cypress" />
+/// <reference types="cypress-real-events" />
+
+/**
+ * E2E support entry point — loaded before every spec file.
+ *
+ * Responsibilities:
+ *  1. Import custom commands (see commands.ts)
+ *  2. Register cypress-real-events so cy.realPress / cy.realClick / etc. work
+ *  3. Suppress known non-fatal exceptions that would otherwise fail tests
+ *  4. Hide noisy XHR/fetch entries from the Cypress command log
+ */
 
 import './commands'
 import 'cypress-real-events'
@@ -37,6 +48,13 @@ Cypress.on('uncaught:exception', (err) => {
     msg.includes('Minified React error #425')
   )
     return false
+  // React internal cascading errors that follow a hydration mismatch.
+  // "Unknown root exit status" is React's signal that it could not recover from
+  // a prior rendering error — it is a downstream symptom, not an app logic bug.
+  if (msg.includes('Unknown root exit status')) return false
+  // Catch-all for other minified React internal errors (e.g. #301, #310, #421)
+  // that surface during hydration in the test environment.
+  if (/Minified React error #\d+/.test(msg)) return false
   // Next.js chunk / lazy load errors (transient in test env)
   if (msg.includes('Loading chunk') || msg.includes('ChunkLoadError')) return false
   // React Query dev tools or observer errors

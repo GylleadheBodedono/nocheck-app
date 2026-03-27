@@ -19,6 +19,7 @@ import { APP_CONFIG } from '@/lib/config'
 import { logError } from '@/lib/clientLogger'
 import { LoadingPage, Select, PageContainer } from '@/components/ui'
 import { useRealtimeRefresh } from '@/hooks/useRealtimeRefresh'
+import { useFeature } from '@/hooks/useFeature'
 import {
   fetchNCPhotoReport,
   groupByWeek,
@@ -91,6 +92,8 @@ const PAGE_SIZE = 20
 export default function FotosNcPageClient() {
   const supabase = useMemo(() => createClient(), [])
   const { refreshKey } = useRealtimeRefresh(['checklist_responses', 'action_plans'])
+  const { hasFeature } = useFeature()
+  const canExportPdf = hasFeature('export_pdf')
 
   // State
   const [loading, setLoading] = useState(true)
@@ -215,7 +218,7 @@ export default function FotosNcPageClient() {
   }
 
   const handleExportPdf = async () => {
-    if (exportingPdf || filteredItems.length === 0) return
+    if (!canExportPdf || exportingPdf || filteredItems.length === 0) return
     setExportMenuOpen(false)
     setExportingPdf(true)
     try {
@@ -378,14 +381,18 @@ export default function FotosNcPageClient() {
                   <button onClick={() => handleExport('csv')} className="w-full px-4 py-2 text-sm text-left hover:bg-surface-hover">CSV</button>
                   <button onClick={() => handleExport('xlsx')} className="w-full px-4 py-2 text-sm text-left hover:bg-surface-hover">Excel</button>
                   <button onClick={() => handleExport('txt')} className="w-full px-4 py-2 text-sm text-left hover:bg-surface-hover">TXT</button>
-                  <button
-                    onClick={handleExportPdf}
-                    disabled={exportingPdf}
-                    className="w-full px-4 py-2 text-sm text-left hover:bg-surface-hover flex items-center gap-2 disabled:opacity-50"
-                  >
-                    <FiDownload className="text-sm" />
-                    {exportingPdf ? 'Gerando PDF...' : 'PDF (com fotos)'}
-                  </button>
+                  {canExportPdf ? (
+                    <button
+                      onClick={handleExportPdf}
+                      disabled={exportingPdf}
+                      className="w-full px-4 py-2 text-sm text-left hover:bg-surface-hover flex items-center gap-2 disabled:opacity-50"
+                    >
+                      <FiDownload className="text-sm" />
+                      {exportingPdf ? 'Gerando PDF...' : 'PDF (com fotos)'}
+                    </button>
+                  ) : (
+                    <span className="w-full px-4 py-2 text-sm text-left text-muted block cursor-not-allowed" title="Disponível no plano Professional">PDF (Pro)</span>
+                  )}
                 </div>
               )}
             </div>

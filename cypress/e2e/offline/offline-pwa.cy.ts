@@ -43,7 +43,10 @@ describe('Offline / PWA', () => {
       cy.get('body', { timeout: 15000 }).should('be.visible')
 
       // Wait for data to be cached, then verify databases exist
-      cy.wait(2000) // Allow time for async IndexedDB operations
+      // IndexedDB writes happen asynchronously outside the Cypress command queue.
+      // There is no DOM event or network request to intercept, so a short static
+      // wait is the pragmatic solution here.
+      cy.wait(2000)
 
       cy.window().then((win) => {
         return new Cypress.Promise((resolve) => {

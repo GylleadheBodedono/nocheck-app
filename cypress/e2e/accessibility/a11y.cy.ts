@@ -4,6 +4,10 @@ describe('Acessibilidade (A11y)', () => {
   describe('Página de Login', () => {
     beforeEach(() => {
       cy.visit('/login')
+      // Wait for the Suspense boundary to resolve before running a11y assertions
+      cy.get('button[type="submit"]', { timeout: 15000 })
+        .should('be.visible')
+        .and('not.be.disabled')
     })
 
     it('todos os inputs devem ter labels associados', () => {
@@ -50,6 +54,7 @@ describe('Acessibilidade (A11y)', () => {
   describe('Navegação por teclado', () => {
     it('deve ser possível navegar pelo formulário com Tab', () => {
       cy.visit('/login')
+      cy.get('button[type="submit"]', { timeout: 15000 }).should('be.visible').and('not.be.disabled')
       cy.get('input#email').focus().should('have.focus')
       cy.realPress('Tab')
       // Next focusable element should receive focus
@@ -58,9 +63,10 @@ describe('Acessibilidade (A11y)', () => {
 
     it('formulário deve ser submetido com Enter', () => {
       cy.visit('/login')
-      cy.get('input#email').type('test@test.com')
+      cy.get('button[type="submit"]', { timeout: 15000 }).should('be.visible').and('not.be.disabled')
+      cy.get('input#email').type('test@test.com').should('have.value', 'test@test.com')
       cy.get('input#password').type('123456{enter}')
-      // Form should attempt submission (button becomes disabled or loading state)
+      // Form should attempt submission (button becomes disabled or shows loading state)
       cy.get('button[type="submit"]').should('exist')
     })
   })

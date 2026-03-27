@@ -141,6 +141,7 @@ export async function POST(req: NextRequest) {
     await stripe.subscriptions.update(org.stripe_subscription_id, {
       items: [{ id: currentItemId, price: newPriceId }],
       proration_behavior: 'none',
+      metadata: { org_id: orgId }, // garante que o webhook consegue identificar a org
     })
 
     await supabase.from('organizations').update({

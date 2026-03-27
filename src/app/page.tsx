@@ -190,39 +190,24 @@ const stats = [
 
 // ─── Glowing Smoke Background ───
 const smokeBlobs = [
-  { color: '#0D9488', size: 'w-[350px] h-[300px]', pos: 'top-[5%] left-[-8%]', blur: 180, drift: 'animate-smoke-drift-1', py: [-180, 60] },
-  { color: '#14B8A6', size: 'w-[300px] h-[250px]', pos: 'top-[18%] right-[-10%]', blur: 200, drift: 'animate-smoke-drift-2', py: [120, -80] },
-  { color: '#0D9488', size: 'w-[320px] h-[280px]', pos: 'top-[42%] left-[5%]', blur: 190, drift: 'animate-smoke-drift-3', py: [-250, 50] },
-  { color: '#14B8A6', size: 'w-[280px] h-[240px]', pos: 'top-[58%] right-[0%]', blur: 200, drift: 'animate-smoke-drift-1', py: [160, -40] },
-  { color: '#0D9488', size: 'w-[260px] h-[220px]', pos: 'top-[76%] left-[-5%]', blur: 170, drift: 'animate-smoke-drift-2', py: [-100, 70] },
-  { color: '#14B8A6', size: 'w-[300px] h-[260px]', pos: 'top-[88%] right-[-8%]', blur: 190, drift: 'animate-smoke-drift-3', py: [200, -60] },
+  { color: '#0D9488', size: 'w-[350px] h-[300px]', pos: 'top-[5%] left-[-8%]', blur: 180, drift: 'animate-smoke-drift-1' },
+  { color: '#14B8A6', size: 'w-[300px] h-[250px]', pos: 'top-[18%] right-[-10%]', blur: 200, drift: 'animate-smoke-drift-2' },
+  { color: '#0D9488', size: 'w-[320px] h-[280px]', pos: 'top-[42%] left-[5%]', blur: 190, drift: 'animate-smoke-drift-3' },
+  { color: '#14B8A6', size: 'w-[280px] h-[240px]', pos: 'top-[58%] right-[0%]', blur: 200, drift: 'animate-smoke-drift-1' },
+  { color: '#0D9488', size: 'w-[260px] h-[220px]', pos: 'top-[76%] left-[-5%]', blur: 170, drift: 'animate-smoke-drift-2' },
+  { color: '#14B8A6', size: 'w-[300px] h-[260px]', pos: 'top-[88%] right-[-8%]', blur: 190, drift: 'animate-smoke-drift-3' },
 ]
 
 function SmokeBackground() {
-  const { scrollYProgress } = useScroll()
-
-  const parallax = [
-    { y: useTransform(scrollYProgress, [0, 1], [0, smokeBlobs[0].py[0]]), x: useTransform(scrollYProgress, [0, 1], [0, smokeBlobs[0].py[1]]) },
-    { y: useTransform(scrollYProgress, [0, 1], [0, smokeBlobs[1].py[0]]), x: useTransform(scrollYProgress, [0, 1], [0, smokeBlobs[1].py[1]]) },
-    { y: useTransform(scrollYProgress, [0, 1], [0, smokeBlobs[2].py[0]]), x: useTransform(scrollYProgress, [0, 1], [0, smokeBlobs[2].py[1]]) },
-    { y: useTransform(scrollYProgress, [0, 1], [0, smokeBlobs[3].py[0]]), x: useTransform(scrollYProgress, [0, 1], [0, smokeBlobs[3].py[1]]) },
-    { y: useTransform(scrollYProgress, [0, 1], [0, smokeBlobs[4].py[0]]), x: useTransform(scrollYProgress, [0, 1], [0, smokeBlobs[4].py[1]]) },
-    { y: useTransform(scrollYProgress, [0, 1], [0, smokeBlobs[5].py[0]]), x: useTransform(scrollYProgress, [0, 1], [0, smokeBlobs[5].py[1]]) },
-  ]
-
   return (
     <div className="fixed inset-0 z-0 pointer-events-none" aria-hidden="true">
       {smokeBlobs.map((blob, i) => (
-        <motion.div
-          key={i}
-          className={`absolute ${blob.pos}`}
-          style={{ y: parallax[i].y, x: parallax[i].x }}
-        >
+        <div key={i} className={`absolute ${blob.pos}`}>
           <div
             className={`rounded-full ${blob.size} ${blob.drift} animate-smoke-pulse`}
-            style={{ background: blob.color, filter: `blur(${blob.blur}px)` }}
+            style={{ background: blob.color, filter: `blur(${blob.blur}px)`, willChange: 'transform' }}
           />
-        </motion.div>
+        </div>
       ))}
     </div>
   )
@@ -231,11 +216,8 @@ function SmokeBackground() {
 // ─── Aurora Gradient + Sparkles ───
 function AuroraBackground() {
   return (
-    <motion.div
+    <div
       className="fixed inset-0 z-0 pointer-events-none mix-blend-screen"
-      initial={{ backgroundPosition: '0% 50%' }}
-      animate={{ backgroundPosition: ['0% 50%', '100% 50%', '0% 50%'] }}
-      transition={{ duration: 30, repeat: Infinity, ease: 'easeInOut' }}
       style={{
         backgroundImage: [
           'radial-gradient(120% 120% at 15% 18%, rgba(34, 195, 182, 0.16), transparent 45%)',
@@ -244,6 +226,7 @@ function AuroraBackground() {
           'linear-gradient(150deg, #05080f 0%, #04070d 40%, #03060b 100%)',
         ].join(','),
         backgroundSize: '170% 170%',
+        backgroundPosition: '0% 50%',
         opacity: 0.35,
       }}
     />
@@ -252,7 +235,7 @@ function AuroraBackground() {
 
 function SparkleField() {
   return (
-    <motion.div
+    <div
       className="fixed inset-0 z-0 pointer-events-none"
       style={{
         backgroundImage: [
@@ -264,14 +247,6 @@ function SparkleField() {
         opacity: 0.4,
         mixBlendMode: 'screen',
       }}
-      animate={{
-        backgroundPosition: [
-          '0px 0px, 0px 0px, 0px 0px',
-          '40px 30px, -30px 20px, 20px -20px',
-          '0px 0px, 0px 0px, 0px 0px',
-        ],
-      }}
-      transition={{ duration: 40, repeat: Infinity, ease: 'linear' }}
     />
   )
 }
@@ -322,6 +297,7 @@ function IconFloatLayer() {
             left: item.left,
             top: item.top,
             filter: 'drop-shadow(0 14px 28px rgba(0,0,0,0.35))',
+            willChange: 'transform',
           }}
           animate={{
             y: [0, -18, 14, -10, 0],
@@ -457,38 +433,13 @@ function ProcessGraph() {
   )
 }
 
-// ─── Floating Particles ───
-const particles = [
-  { size: 3, x: '7%', y: '14%', dx: [0, 45, -20, 35, 0], dy: [0, -35, 50, -20, 0], dur: 20, color: '#0D9488', op: 0.25 },
-  { size: 2, x: '88%', y: '22%', dx: [0, -35, 25, -15, 0], dy: [0, 40, -25, 35, 0], dur: 24, color: '#14B8A6', op: 0.2 },
-  { size: 4, x: '14%', y: '48%', dx: [0, 30, -40, 20, 0], dy: [0, -20, 35, -45, 0], dur: 18, color: '#0D9488', op: 0.18 },
-  { size: 2, x: '80%', y: '56%', dx: [0, -25, 40, -30, 0], dy: [0, 30, -20, 40, 0], dur: 22, color: '#0D9488', op: 0.22 },
-  { size: 3, x: '45%', y: '72%', dx: [0, 35, -30, 25, 0], dy: [0, -40, 20, -30, 0], dur: 26, color: '#14B8A6', op: 0.2 },
-  { size: 2, x: '25%', y: '85%', dx: [0, -20, 35, -25, 0], dy: [0, 25, -35, 20, 0], dur: 19, color: '#0D9488', op: 0.18 },
-  { size: 3, x: '65%', y: '35%', dx: [0, 40, -25, 30, 0], dy: [0, -30, 40, -20, 0], dur: 21, color: '#14B8A6', op: 0.15 },
-  { size: 2, x: '52%', y: '8%', dx: [0, -30, 20, -35, 0], dy: [0, 35, -25, 30, 0], dur: 23, color: '#0D9488', op: 0.2 },
-  { size: 3, x: '92%', y: '68%', dx: [0, -40, 30, -20, 0], dy: [0, -25, 35, -30, 0], dur: 17, color: '#14B8A6', op: 0.22 },
-  { size: 2, x: '35%', y: '92%', dx: [0, 25, -35, 40, 0], dy: [0, -35, 20, -25, 0], dur: 25, color: '#0D9488', op: 0.15 },
-]
-
-function FloatingParticles() {
-  return (
-    <div className="fixed inset-0 z-[1] pointer-events-none" aria-hidden="true">
-      {particles.map((p, i) => (
-        <motion.div
-          key={i}
-          className="absolute rounded-full"
-          style={{ width: p.size, height: p.size, left: p.x, top: p.y, background: p.color }}
-          animate={{
-            x: p.dx,
-            y: p.dy,
-            opacity: [p.op, p.op * 1.6, p.op, p.op * 0.7, p.op],
-          }}
-          transition={{ duration: p.dur, repeat: Infinity, ease: 'easeInOut' }}
-        />
-      ))}
-    </div>
-  )
+// ─── Lazy Section (mounts children only when approaching viewport) ───
+function LazySection({ children }: { children: React.ReactNode }) {
+  const ref = useRef(null)
+  const isInView = useInView(ref, { once: true, margin: '300px' })
+  const [mounted, setMounted] = useState(false)
+  useEffect(() => { if (isInView) setMounted(true) }, [isInView])
+  return <div ref={ref}>{mounted ? children : null}</div>
 }
 
 // ─── Main Component ───
@@ -499,6 +450,7 @@ function FloatingParticles() {
  */
 export default function LandingPage() {
   const [, setScrolled] = useState(false)
+  const prefersReducedMotion = typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches
   const { scrollYProgress } = useScroll()
   const lenisRef = useRef<InstanceType<typeof Lenis> | null>(null)
   const tabletRef = useRef(null)
@@ -578,9 +530,8 @@ export default function LandingPage() {
       <AuroraBackground />
       <SparkleField />
       <CornerOrbs />
-      <IconFloatLayer />
-      <SmokeBackground />
-      <FloatingParticles />
+      {!prefersReducedMotion && <IconFloatLayer />}
+      {!prefersReducedMotion && <SmokeBackground />}
 
       {/* ═══════════════════ NAV ═══════════════════ */}
       <div className="fixed top-5 inset-x-0 z-50 flex justify-center pointer-events-none">
@@ -825,90 +776,101 @@ export default function LandingPage() {
       </section>
 
       {/* ═══════════════════ HOW IT WORKS ═══════════════════ */}
-      <ProcessGraph />
+      <LazySection>
+        <ProcessGraph />
+      </LazySection>
 
       {/* ═══════════════════ STATS ═══════════════════ */}
-      <section className="py-24 px-6 relative">
-        <div className="absolute inset-0 bg-white/4 backdrop-blur-2xl  rounded-2xl shadow-lg
+      <LazySection>
+        <section className="py-24 px-6 relative">
+          <div className="absolute inset-0 bg-white/4 backdrop-blur-2xl  rounded-2xl shadow-lg
   shadow-black/10 " />
 
-        <div className="max-w-5xl mx-auto  relative">
-          <motion.div
-            initial="hidden"
-            whileInView="visible"
-            viewport={{ once: true, margin: '-60px' }}
-            variants={stagger}
-            className="grid grid-cols-2 lg:grid-cols-4 gap-8"
-          >
-            {stats.map((stat, i) => (
-              <motion.div
-                key={i}
-                variants={scaleIn}
-                className="text-center p-6"
-              >
-                <div className="text-4xl sm:text-5xl font-bold mb-2 bg-gradient-to-br from-[#0D9488] to-[#14B8A6] bg-clip-text text-transparent">
-                  {stat.displayOverride ? (
-                    stat.displayOverride
-                  ) : (
-                    <AnimatedCounter value={stat.value} suffix={stat.suffix} prefix={stat.prefix || ''} />
-                  )}
-                </div>
-                <div className="text-sm text-[#71717a] font-medium">{stat.label}</div>
-              </motion.div>
-            ))}
-          </motion.div>
-        </div>
-      </section>
+          <div className="max-w-5xl mx-auto  relative">
+            <motion.div
+              initial="hidden"
+              whileInView="visible"
+              viewport={{ once: true, margin: '-60px' }}
+              variants={stagger}
+              className="grid grid-cols-2 lg:grid-cols-4 gap-8"
+            >
+              {stats.map((stat, i) => (
+                <motion.div
+                  key={i}
+                  variants={scaleIn}
+                  className="text-center p-6"
+                >
+                  <div className="text-4xl sm:text-5xl font-bold mb-2 bg-gradient-to-br from-[#0D9488] to-[#14B8A6] bg-clip-text text-transparent">
+                    {stat.displayOverride ? (
+                      stat.displayOverride
+                    ) : (
+                      <AnimatedCounter value={stat.value} suffix={stat.suffix} prefix={stat.prefix || ''} />
+                    )}
+                  </div>
+                  <div className="text-sm text-[#71717a] font-medium">{stat.label}</div>
+                </motion.div>
+              ))}
+            </motion.div>
+          </div>
+        </section>
+      </LazySection>
 
       {/* ═══════════════════ PRICING ═══════════════════ */}
-      <PricingSection />
+      <LazySection>
+        <PricingSection />
+      </LazySection>
 
       {/* ═══════════════════ TESTIMONIAL ═══════════════════ */}
-      <section className="py-28 px-6">
-        <div className="max-w-4xl mx-auto">
-          <motion.div
-            initial="hidden"
-            whileInView="visible"
-            viewport={{ once: true, margin: '-80px' }}
-            variants={fadeIn}
-            className="relative p-10 sm:p-14 rounded-3xl border border-white/[0.06] bg-[#18181b]/40 text-center overflow-hidden"
-          >
-            <div className="absolute inset-0 pointer-events-none">
-              <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[500px] h-[300px] rounded-full opacity-[0.06]"
-                style={{ background: 'radial-gradient(ellipse, #0D9488 0%, transparent 70%)' }}
-              />
-            </div>
-
-            <div className="relative">
-              <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-[#0D9488]/[0.1] border border-[#0D9488]/[0.15] mb-6">
-                <svg viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5 text-[#0D9488]">
-                  <path d="M14.017 21v-7.391c0-5.704 3.731-9.57 8.983-10.609l.995 2.151c-2.432.917-3.995 3.638-3.995 5.849h4v10H14.017zM0 21v-7.391c0-5.704 3.748-9.57 9-10.609l.996 2.151C7.563 6.068 6 8.789 6 11h4v10H0z" />
-                </svg>
+      <LazySection>
+        <section className="py-28 px-6">
+          <div className="max-w-4xl mx-auto">
+            <motion.div
+              initial="hidden"
+              whileInView="visible"
+              viewport={{ once: true, margin: '-80px' }}
+              variants={fadeIn}
+              className="relative p-10 sm:p-14 rounded-3xl border border-white/[0.06] bg-[#18181b]/40 text-center overflow-hidden"
+            >
+              <div className="absolute inset-0 pointer-events-none">
+                <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[500px] h-[300px] rounded-full opacity-[0.06]"
+                  style={{ background: 'radial-gradient(ellipse, #0D9488 0%, transparent 70%)' }}
+                />
               </div>
 
-              <p className="text-xl sm:text-2xl leading-relaxed text-[#a1a1aa] mb-8 font-light">
-                &ldquo;O OpereCheck transformou a forma como gerenciamos a qualidade na nossa operação.
-                Antes era tudo no papel, agora temos controle total em tempo real.&rdquo;
-              </p>
-
-              <div className="flex items-center justify-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[#0D9488] to-[#14B8A6] flex items-center justify-center text-sm font-bold text-[#09090b]">
-                  OC
+              <div className="relative">
+                <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-[#0D9488]/[0.1] border border-[#0D9488]/[0.15] mb-6">
+                  <svg viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5 text-[#0D9488]">
+                    <path d="M14.017 21v-7.391c0-5.704 3.731-9.57 8.983-10.609l.995 2.151c-2.432.917-3.995 3.638-3.995 5.849h4v10H14.017zM0 21v-7.391c0-5.704 3.748-9.57 9-10.609l.996 2.151C7.563 6.068 6 8.789 6 11h4v10H0z" />
+                  </svg>
                 </div>
-                <div className="text-left">
-                  <div className="text-sm font-semibold text-[#fafafa]">OpereCheck</div>
-                  <div className="text-xs text-[#71717a]">Gestão de Qualidade</div>
+
+                <p className="text-xl sm:text-2xl leading-relaxed text-[#a1a1aa] mb-8 font-light">
+                  &ldquo;O OpereCheck transformou a forma como gerenciamos a qualidade na nossa operação.
+                  Antes era tudo no papel, agora temos controle total em tempo real.&rdquo;
+                </p>
+
+                <div className="flex items-center justify-center gap-3">
+                  <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[#0D9488] to-[#14B8A6] flex items-center justify-center text-sm font-bold text-[#09090b]">
+                    OC
+                  </div>
+                  <div className="text-left">
+                    <div className="text-sm font-semibold text-[#fafafa]">OpereCheck</div>
+                    <div className="text-xs text-[#71717a]">Gestão de Qualidade</div>
+                  </div>
                 </div>
               </div>
-            </div>
-          </motion.div>
-        </div>
-      </section>
+            </motion.div>
+          </div>
+        </section>
+      </LazySection>
 
       {/* ═══════════════════ FAQ ═══════════════════ */}
-      <FAQSection />
+      <LazySection>
+        <FAQSection />
+      </LazySection>
 
       {/* ═══════════════════ CTA FINAL ═══════════════════ */}
+      <LazySection>
       <section id="contato" className="py-28 px-6 flex w-full bg-white/4 backdrop-blur-2xl rounded-2xl shadow-lg
   shadow-black/10  scroll-mt-20">
         <div className=" inset-0 overflow-hidden">
@@ -971,6 +933,7 @@ export default function LandingPage() {
           </motion.div>
         </div>
       </section>
+      </LazySection>
 
       {/* ═══════════════════ FOOTER ═══════════════════ */}
       <footer className="border-t border-white/[0.06] py-8 px-6">

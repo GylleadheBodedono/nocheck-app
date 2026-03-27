@@ -77,7 +77,13 @@
       "Bash(powershell.exe -Command \"where.exe PackageInspector.exe\" 2>&1)",
       "Bash(powershell.exe -Command \"& 'C:\\\\Windows\\\\System32\\\\PackageInspector.exe' start 'C:\\\\Users\\\\ESC-17\\\\Downloads\\\\supabase_windows_amd64' /path:'C:\\\\Users\\\\ESC-17\\\\Downloads\\\\supabase_windows_amd64\\\\supabase.exe'\" 2>&1)",
       "Bash(powershell.exe -Command \"& 'C:\\\\Windows\\\\System32\\\\PackageInspector.exe' scan 'C:\\\\Users\\\\ESC-17\\\\Downloads\\\\supabase_windows_amd64' -out cat -name supabase -resdir 'C:\\\\Users\\\\ESC-17\\\\Downloads\\\\supabase_windows_amd64'\" 2>&1)",
-      "Bash(powershell.exe -Command \"Get-ChildItem 'C:\\\\Users\\\\ESC-17\\\\Downloads\\\\supabase_windows_amd64' | Select-Object Name, Length, LastWriteTime | Format-Table -AutoSize\" 2>&1)"
+      "Bash(powershell.exe -Command \"Get-ChildItem 'C:\\\\Users\\\\ESC-17\\\\Downloads\\\\supabase_windows_amd64' | Select-Object Name, Length, LastWriteTime | Format-Table -AutoSize\" 2>&1)",
+      "Bash(python -c \"import json,sys; d=json.load\\(sys.stdin\\); deps={**d.get\\(''''dependencies'''',{}\\), **d.get\\(''''devDependencies'''',{}\\)}; [print\\(f''''{k}: {v}''''\\) for k,v in deps.items\\(\\) if any\\(x in k.lower\\(\\) for x in [''''cypress'''',''''testing'''',''''real-event'''']\\)]\")",
+      "Bash(python -c \"import json,sys; d=json.load\\(sys.stdin\\); print\\(d.get\\(''''devDependencies'''',{}\\).get\\(''''cypress-real-events'''',''''NOT FOUND''''\\)\\)\")",
+      "mcp__claude_ai_Supabase__list_branches",
+      "mcp__claude_ai_Supabase__list_migrations",
+      "mcp__claude_ai_Supabase__get_advisors",
+      "mcp__claude_ai_Supabase__list_tables"
     ]
   }
 }
