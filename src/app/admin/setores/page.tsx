@@ -22,6 +22,7 @@ import {
 import type { Store, Sector } from '@/types/database'
 import { APP_CONFIG } from '@/lib/config'
 import { LoadingPage, Select, PageContainer } from '@/components/ui'
+import { logError, logInfo } from '@/lib/clientLogger'
 import { getAuthCache, getUserCache, getStoresCache, getSectorsCache } from '@/lib/offlineCache'
 import { useRealtimeRefresh } from '@/hooks/useRealtimeRefresh'
 
@@ -112,7 +113,7 @@ export default function SetoresPage() {
         isAdmin = profile && 'is_admin' in profile ? (profile as { is_admin: boolean }).is_admin : false
       }
     } catch {
-      console.log('[Setores] Falha ao verificar online, tentando cache...')
+      logInfo('[Setores] Falha ao verificar online, tentando cache...')
     }
 
     // Fallback para cache se offline
@@ -125,7 +126,7 @@ export default function SetoresPage() {
           isAdmin = cachedUser?.is_admin || false
         }
       } catch {
-        console.log('[Setores] Falha ao buscar cache')
+        logInfo('[Setores] Falha ao buscar cache')
       }
     }
 
@@ -206,7 +207,7 @@ export default function SetoresPage() {
 
       setIsOffline(false)
     } catch (err) {
-      console.error('[Setores] Erro ao buscar online:', err)
+      logError('[Setores] Erro ao buscar online', { error: err instanceof Error ? err.message : String(err) })
 
       // Fallback para cache offline
       try {
@@ -227,9 +228,9 @@ export default function SetoresPage() {
 
         setSectors(sectorsWithStats)
         setIsOffline(true)
-        console.log('[Setores] Carregado do cache offline')
+        logInfo('[Setores] Carregado do cache offline')
       } catch (cacheErr) {
-        console.error('[Setores] Erro ao buscar cache:', cacheErr)
+        logError('[Setores] Erro ao buscar cache', { error: cacheErr instanceof Error ? cacheErr.message : String(cacheErr) })
       }
     }
 
@@ -315,7 +316,7 @@ export default function SetoresPage() {
       closeSectorModal()
       fetchData()
     } catch (error) {
-      console.error('Error saving sector:', error)
+      logError('Error saving sector', { error: error instanceof Error ? error.message : String(error) })
       alert('Erro ao salvar setor')
     }
 
@@ -330,7 +331,7 @@ export default function SetoresPage() {
       .eq('id', sector.id)
 
     if (error) {
-      console.error('Error updating sector:', error)
+      logError('Error updating sector', { error: error instanceof Error ? error.message : String(error) })
       return
     }
 
@@ -347,7 +348,7 @@ export default function SetoresPage() {
       .eq('id', sector.id)
 
     if (error) {
-      console.error('Error deleting sector:', error)
+      logError('Error deleting sector', { error: error instanceof Error ? error.message : String(error) })
       alert('Erro ao excluir setor. Verifique se não existem usuários ou templates vinculados.')
       return
     }
@@ -390,7 +391,7 @@ export default function SetoresPage() {
       .eq('id', userId)
 
     if (error) {
-      console.error('Error adding user to sector:', error)
+      logError('Error adding user to sector', { error: error instanceof Error ? error.message : String(error) })
       alert('Erro ao adicionar usuário ao setor')
       return
     }
@@ -410,7 +411,7 @@ export default function SetoresPage() {
       .eq('id', userId)
 
     if (error) {
-      console.error('Error removing user from sector:', error)
+      logError('Error removing user from sector', { error: error instanceof Error ? error.message : String(error) })
       return
     }
 

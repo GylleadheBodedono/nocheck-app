@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { verifyApiAuth } from '@/lib/api-auth'
 import { verifyTenantAccess } from '@/lib/withTenantAuth'
+import { serverLogger } from '@/lib/serverLogger'
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
@@ -70,7 +71,7 @@ export async function POST(request: NextRequest) {
       })
 
     if (uploadError) {
-      console.error('[Upload Logo] Storage error:', uploadError)
+      serverLogger.error('[Upload Logo] Storage error', { error: uploadError instanceof Error ? uploadError.message : String(uploadError) })
       return NextResponse.json(
         { error: uploadError.message },
         { status: 500 }
@@ -84,7 +85,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ url: urlData.publicUrl })
   } catch (error) {
-    console.error('[Upload Logo] Error:', error)
+    serverLogger.error('[Upload Logo] Error', { error: error instanceof Error ? error.message : String(error) })
     return NextResponse.json(
       { error: error instanceof Error ? error.message : 'Erro no upload' },
       { status: 500 }

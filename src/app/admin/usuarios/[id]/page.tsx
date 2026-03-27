@@ -11,6 +11,7 @@ import { FiSave } from 'react-icons/fi'
 import type { User, Store, Sector, FunctionRow, UserStoreWithDetails } from '@/types/database'
 import { APP_CONFIG } from '@/lib/config'
 import { LoadingPage, Select, PageContainer } from '@/components/ui'
+import { logError } from '@/lib/clientLogger'
 
 type UserWithAssignment = User & {
   store: Store | null
@@ -108,7 +109,7 @@ export default function EditarUsuarioPage() {
       .single()
 
     if (userError || !userData) {
-      console.error('Error fetching user:', userError)
+      logError('Error fetching user', { error: userError instanceof Error ? userError.message : String(userError) })
       router.push(APP_CONFIG.routes.adminUsers)
       return
     }
@@ -228,7 +229,7 @@ export default function EditarUsuarioPage() {
       setSuccess('Usuario atualizado com sucesso!')
       fetchData()
     } catch (err) {
-      console.error('Error updating user:', err)
+      logError('Error updating user', { error: err instanceof Error ? err.message : String(err) })
       setError(err instanceof Error ? err.message : 'Erro ao atualizar usuario')
     }
 

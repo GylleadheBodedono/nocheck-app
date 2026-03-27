@@ -16,6 +16,7 @@ import {
 } from 'react-icons/fi'
 import type { FunctionRow } from '@/types/database'
 import { APP_CONFIG } from '@/lib/config'
+import { logError, logInfo } from '@/lib/clientLogger'
 import { LoadingPage, PageContainer } from '@/components/ui'
 import { getAuthCache, getUserCache, getFunctionsCache } from '@/lib/offlineCache'
 import { useRealtimeRefresh } from '@/hooks/useRealtimeRefresh'
@@ -85,7 +86,7 @@ export default function FuncoesPage() {
         isAdmin = profile && 'is_admin' in profile ? (profile as { is_admin: boolean }).is_admin : false
       }
     } catch {
-      console.log('[Funcoes] Falha ao verificar online, tentando cache...')
+      logInfo('[Funcoes] Falha ao verificar online, tentando cache...')
     }
 
     // Fallback para cache se offline
@@ -98,7 +99,7 @@ export default function FuncoesPage() {
           isAdmin = cachedUser?.is_admin || false
         }
       } catch {
-        console.log('[Funcoes] Falha ao buscar cache')
+        logInfo('[Funcoes] Falha ao buscar cache')
       }
     }
 
@@ -142,7 +143,7 @@ export default function FuncoesPage() {
 
       setIsOffline(false)
     } catch (err) {
-      console.error('[Funcoes] Erro ao buscar online:', err)
+      logError('[Funcoes] Erro ao buscar online', { error: err instanceof Error ? err.message : String(err) })
 
       // Fallback para cache offline
       try {
@@ -154,7 +155,7 @@ export default function FuncoesPage() {
         setFunctions(functionsWithStats)
         setIsOffline(true)
       } catch (cacheErr) {
-        console.error('[Funcoes] Erro ao buscar cache:', cacheErr)
+        logError('[Funcoes] Erro ao buscar cache', { error: cacheErr instanceof Error ? cacheErr.message : String(cacheErr) })
       }
     }
 
@@ -232,7 +233,7 @@ export default function FuncoesPage() {
       closeModal()
       fetchData()
     } catch (error) {
-      console.error('Error saving function:', error)
+      logError('Error saving function', { error: error instanceof Error ? error.message : String(error) })
       alert('Erro ao salvar funcao')
     }
 
@@ -247,7 +248,7 @@ export default function FuncoesPage() {
       .eq('id', fn.id)
 
     if (error) {
-      console.error('Error updating function:', error)
+      logError('Error updating function', { error: error instanceof Error ? error.message : String(error) })
       return
     }
 
@@ -264,7 +265,7 @@ export default function FuncoesPage() {
       .eq('id', fn.id)
 
     if (error) {
-      console.error('Error deleting function:', error)
+      logError('Error deleting function', { error: error instanceof Error ? error.message : String(error) })
       alert('Erro ao excluir função. Verifique se não existem usuários vinculados.')
       return
     }

@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
 import { createClient } from '@supabase/supabase-js'
 import { cookies } from 'next/headers'
+import { serverLogger } from '@/lib/serverLogger'
 
 /**
  * PUT /api/platform/pricing
@@ -65,7 +66,7 @@ export async function PUT(req: NextRequest) {
     return NextResponse.json(data)
   } catch (err) {
     const errMsg = err instanceof Error ? err.message : JSON.stringify(err)
-    console.error('[API /platform/pricing] Erro:', errMsg, err)
+    serverLogger.error('[API /platform/pricing] Erro', { detail: errMsg, error: err instanceof Error ? err.message : String(err) })
     return NextResponse.json({ error: `Falha ao atualizar pricing: ${errMsg}` }, { status: 500 })
   }
 }

@@ -4,6 +4,7 @@ import { useEffect, useState, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { APP_CONFIG } from '@/lib/config'
+import { logError, logInfo } from '@/lib/clientLogger'
 import { LoadingPage, Select, PageContainer } from '@/components/ui'
 import {
   FiTrash2,
@@ -95,7 +96,7 @@ export default function AdminChecklistsPage() {
         isAdmin = profile && 'is_admin' in profile ? (profile as { is_admin: boolean }).is_admin : false
       }
     } catch {
-      console.log('[Checklists] Falha ao verificar online, tentando cache...')
+      logInfo('[Checklists] Falha ao verificar online, tentando cache...')
     }
 
     // Fallback para cache se offline
@@ -108,7 +109,7 @@ export default function AdminChecklistsPage() {
           isAdmin = cachedUser?.is_admin || false
         }
       } catch {
-        console.log('[Checklists] Falha ao buscar cache')
+        logInfo('[Checklists] Falha ao buscar cache')
       }
     }
 
@@ -166,7 +167,7 @@ export default function AdminChecklistsPage() {
       .order('created_at', { ascending: false })
 
     if (checklistsError) {
-      console.error('Erro ao buscar checklists:', checklistsError)
+      logError('Erro ao buscar checklists', { error: checklistsError instanceof Error ? checklistsError.message : String(checklistsError) })
     }
 
     if (checklistsData && usersData) {
@@ -183,7 +184,7 @@ export default function AdminChecklistsPage() {
       setIsOffline(false)
     }
     } catch (err) {
-      console.error('[Checklists] Erro ao buscar online:', err)
+      logError('[Checklists] Erro ao buscar online', { error: err instanceof Error ? err.message : String(err) })
       setIsOffline(true)
     }
 
@@ -245,7 +246,7 @@ export default function AdminChecklistsPage() {
       document.body.removeChild(a)
       URL.revokeObjectURL(url)
     } catch (err) {
-      console.error('[Export] Erro:', err)
+      logError('[Export] Erro', { error: err instanceof Error ? err.message : String(err) })
       alert('Erro ao exportar checklist')
     }
   }
@@ -268,7 +269,7 @@ export default function AdminChecklistsPage() {
       setChecklists(prev => prev.filter(c => c.id !== id))
       setSelectedIds(prev => prev.filter(i => i !== id))
     } catch (err) {
-      console.error('Error deleting checklist:', err)
+      logError('Error deleting checklist', { error: err instanceof Error ? err.message : String(err) })
       alert('Erro ao excluir checklist')
     } finally {
       setDeleting(null)
@@ -293,7 +294,7 @@ export default function AdminChecklistsPage() {
       setChecklists(prev => prev.filter(c => !selectedIds.includes(c.id)))
       setSelectedIds([])
     } catch (err) {
-      console.error('Error bulk deleting:', err)
+      logError('Error bulk deleting', { error: err instanceof Error ? err.message : String(err) })
       alert('Erro ao excluir checklists')
     } finally {
       setDeletingBulk(false)

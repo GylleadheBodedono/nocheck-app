@@ -3,6 +3,7 @@ export const runtime = 'edge'
 import { NextRequest, NextResponse } from 'next/server'
 import { verifyApiAuth } from '@/lib/api-auth'
 import { aiLimiter, getRequestIdentifier } from '@/lib/rateLimit'
+import { serverLogger } from '@/lib/serverLogger'
 
 const HEX_COLOR_RE = /^#[0-9A-Fa-f]{6}$/
 
@@ -81,7 +82,7 @@ RETORNE APENAS JSON valido, sem markdown:
 
     if (!groqRes.ok) {
       const err = await groqRes.text()
-      console.error('[Branding Suggest] Groq error:', err)
+      serverLogger.error('[Branding Suggest] Groq error', { error: err instanceof Error ? err.message : String(err) })
       return NextResponse.json({ error: 'Falha na IA ao sugerir cores' }, { status: 502 })
     }
 
@@ -97,7 +98,7 @@ RETORNE APENAS JSON valido, sem markdown:
     const suggestion = JSON.parse(jsonMatch[0])
     return NextResponse.json(suggestion)
   } catch (err) {
-    console.error('[Branding Suggest] Erro:', err)
+    serverLogger.error('[Branding Suggest] Erro', { error: err instanceof Error ? err.message : String(err) })
     return NextResponse.json({ error: 'Erro ao processar sugestao de cores' }, { status: 500 })
   }
 }

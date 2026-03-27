@@ -3,6 +3,7 @@ export const runtime = 'edge'
 import { NextResponse } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
+import { serverLogger } from '@/lib/serverLogger'
 
 /**
  * GET /api/pricing
@@ -34,7 +35,7 @@ export async function GET() {
       },
     })
   } catch (err) {
-    console.error('[API /pricing] Erro:', err)
+    serverLogger.error('[API /pricing] Erro', { error: err instanceof Error ? err.message : String(err) })
     return NextResponse.json({ error: 'Falha ao carregar pricing' }, { status: 500 })
   }
 }

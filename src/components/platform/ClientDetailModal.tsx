@@ -9,6 +9,7 @@ import {
 } from 'react-icons/fi'
 import { type Plan, type Feature } from '@/types/tenant'
 import { Modal } from '@/components/ui'
+import { logError } from '@/lib/clientLogger'
 import { PaymentModal } from '@/components/billing/PaymentModal'
 import { DowngradeModal } from '@/components/billing/DowngradeModal'
 
@@ -93,7 +94,7 @@ export function ClientDetailModal({ orgId, onClose, onOrgUpdate }: Props) {
         setModalStoreCount(sc || 0)
         const { count: cc } = await supabase.from('checklists').select('id', { count: 'exact', head: true }).eq('tenant_id', orgId)
         setModalChecklistCount(cc || 0)
-      } catch (e) { console.error(e) }
+      } catch (e) { logError(e instanceof Error ? e.message : String(e)) }
       setModalLoading(false)
     }
     load()

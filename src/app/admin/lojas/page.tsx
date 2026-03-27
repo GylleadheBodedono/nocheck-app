@@ -19,6 +19,7 @@ import {
 } from 'react-icons/fi'
 import type { Store } from '@/types/database'
 import { APP_CONFIG } from '@/lib/config'
+import { logError, logInfo } from '@/lib/clientLogger'
 import { LoadingPage, PageContainer } from '@/components/ui'
 import { LocationPicker } from '@/components/ui/LocationPickerDynamic'
 import { getAuthCache, getUserCache, getStoresCache } from '@/lib/offlineCache'
@@ -82,7 +83,7 @@ export default function LojasPage() {
         isAdmin = profile && 'is_admin' in profile ? (profile as { is_admin: boolean }).is_admin : false
       }
     } catch {
-      console.log('[Lojas] Falha ao verificar online, tentando cache...')
+      logInfo('[Lojas] Falha ao verificar online, tentando cache...')
     }
 
     // Fallback para cache se offline
@@ -95,7 +96,7 @@ export default function LojasPage() {
           isAdmin = cachedUser?.is_admin || false
         }
       } catch {
-        console.log('[Lojas] Falha ao buscar cache')
+        logInfo('[Lojas] Falha ao buscar cache')
       }
     }
 
@@ -156,7 +157,7 @@ export default function LojasPage() {
         }
       } catch { /* nao critico */ }
     } catch (err) {
-      console.error('[Lojas] Erro ao buscar online:', err)
+      logError('[Lojas] Erro ao buscar online', { error: err instanceof Error ? err.message : String(err) })
 
       // Fallback para cache offline
       try {
@@ -168,9 +169,9 @@ export default function LojasPage() {
         }))
         setStores(storesWithStats)
         setIsOffline(true)
-        console.log('[Lojas] Carregado do cache offline')
+        logInfo('[Lojas] Carregado do cache offline')
       } catch (cacheErr) {
-        console.error('[Lojas] Erro ao buscar cache:', cacheErr)
+        logError('[Lojas] Erro ao buscar cache', { error: cacheErr instanceof Error ? cacheErr.message : String(cacheErr) })
       }
     }
 
@@ -241,7 +242,7 @@ export default function LojasPage() {
       closeModal()
       fetchStores()
     } catch (error) {
-      console.error('Error saving store:', error)
+      logError('Error saving store', { error: error instanceof Error ? error.message : String(error) })
       const errorMessage = error instanceof Error ? error.message : 'Erro desconhecido'
       alert(`Erro ao salvar loja: ${errorMessage}\n\nVerifique se você tem permissão de administrador.`)
     }
@@ -257,7 +258,7 @@ export default function LojasPage() {
       .eq('id', store.id)
 
     if (error) {
-      console.error('Error updating store:', error)
+      logError('Error updating store', { error: error instanceof Error ? error.message : String(error) })
       return
     }
 
@@ -274,7 +275,7 @@ export default function LojasPage() {
       .eq('id', store.id)
 
     if (error) {
-      console.error('Error deleting store:', error)
+      logError('Error deleting store', { error: error instanceof Error ? error.message : String(error) })
       alert('Erro ao excluir loja. Verifique se não existem usuários ou checklists vinculados.')
       return
     }
@@ -297,7 +298,7 @@ export default function LojasPage() {
       .neq('id', 0) // update all rows
 
     if (error) {
-      console.error('Error toggling GPS:', error)
+      logError('Error toggling GPS', { error: error instanceof Error ? error.message : String(error) })
       alert('Erro ao atualizar lojas.')
       return
     }

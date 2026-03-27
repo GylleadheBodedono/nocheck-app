@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { createClient, isSupabaseConfigured } from '@/lib/supabase'
 import { FiCopy, FiEye, FiSave, FiRotateCcw, FiSend, FiChevronDown, FiChevronUp, FiCheck } from 'react-icons/fi'
 import { APP_CONFIG } from '@/lib/config'
+import { logInfo } from '@/lib/clientLogger'
 import { LoadingPage, PageContainer } from '@/components/ui'
 import { getAuthCache, getUserCache } from '@/lib/offlineCache'
 import { useRealtimeRefresh } from '@/hooks/useRealtimeRefresh'
@@ -97,7 +98,7 @@ export default function ConfiguracoesPage() {
         if (tplRes.data?.value) setEmailTemplate(tplRes.data.value)
         if (subjRes.data?.value) setEmailSubject(subjRes.data.value)
       } catch {
-        console.log('[Config] Usando templates padrao')
+        logInfo('[Config] Usando templates padrao')
       }
 
       setLoading(false)
@@ -121,7 +122,7 @@ export default function ConfiguracoesPage() {
           if (tplRes.data?.value) setEmailTemplate(tplRes.data.value)
           if (subjRes.data?.value) setEmailSubject(subjRes.data.value)
         } catch {
-          console.log('[Config] Erro ao recarregar settings via realtime')
+          logInfo('[Config] Erro ao recarregar settings via realtime')
         }
       }
       reloadSettings()

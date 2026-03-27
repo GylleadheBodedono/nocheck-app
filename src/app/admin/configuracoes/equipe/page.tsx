@@ -6,6 +6,7 @@ import { createClient, isSupabaseConfigured } from '@/lib/supabase'
 import { FiUser, FiMail, FiTrash2, FiPlus, FiShield, FiClock } from 'react-icons/fi'
 import { APP_CONFIG } from '@/lib/config'
 import { LoadingPage, PageContainer } from '@/components/ui'
+import { logError } from '@/lib/clientLogger'
 import {
   getMembers,
   updateMemberRole,
@@ -142,7 +143,7 @@ export default function EquipePage() {
 
         setInvites(invitesData)
       } catch (err) {
-        console.error('[Equipe] Erro ao carregar dados:', err)
+        logError('[Equipe] Erro ao carregar dados', { error: err instanceof Error ? err.message : String(err) })
         showToast('error', 'Erro ao carregar dados da equipe')
       }
     },
@@ -222,7 +223,7 @@ export default function EquipePage() {
         setOrgId(organizationId)
         await loadData(organizationId)
       } catch (err) {
-        console.error('[Equipe] Init error:', err)
+        logError('[Equipe] Init error', { error: err instanceof Error ? err.message : String(err) })
         showToast('error', 'Erro ao inicializar página')
       }
 
@@ -245,7 +246,7 @@ export default function EquipePage() {
         showToast('success', 'Role atualizado com sucesso')
         await loadData(orgId)
       } catch (err) {
-        console.error('[Equipe] Erro ao atualizar role:', err)
+        logError('[Equipe] Erro ao atualizar role', { error: err instanceof Error ? err.message : String(err) })
         showToast('error', 'Erro ao atualizar role')
       } finally {
         setUpdatingRoleId(null)
@@ -266,7 +267,7 @@ export default function EquipePage() {
         showToast('success', 'Membro removido com sucesso')
         await loadData(orgId)
       } catch (err) {
-        console.error('[Equipe] Erro ao remover membro:', err)
+        logError('[Equipe] Erro ao remover membro', { error: err instanceof Error ? err.message : String(err) })
         showToast('error', 'Erro ao remover membro')
       } finally {
         setRemovingId(null)
@@ -289,7 +290,7 @@ export default function EquipePage() {
         setInviteRole('member')
         await loadData(orgId)
       } catch (err) {
-        console.error('[Equipe] Erro ao enviar convite:', err)
+        logError('[Equipe] Erro ao enviar convite', { error: err instanceof Error ? err.message : String(err) })
         const message =
           err instanceof Error && err.message.includes('duplicate')
             ? 'Já existe um convite pendente para este email'
@@ -321,7 +322,7 @@ export default function EquipePage() {
         showToast('success', 'Convite cancelado')
         await loadData(orgId)
       } catch (err) {
-        console.error('[Equipe] Erro ao cancelar convite:', err)
+        logError('[Equipe] Erro ao cancelar convite', { error: err instanceof Error ? err.message : String(err) })
         showToast('error', 'Erro ao cancelar convite')
       } finally {
         setDeletingInviteId(null)

@@ -9,6 +9,7 @@ import { ThemeToggle, LoadingInline } from '@/components/ui'
 import { triggerPrecache } from '@/hooks/usePrecache'
 import { cacheAllDataForOffline } from '@/lib/offlineCache'
 import { FiLock, FiMail, FiEye, FiEyeOff } from 'react-icons/fi'
+import { logError } from '@/lib/clientLogger'
 
 function LoginForm() {
   const searchParams = useSearchParams()
@@ -68,14 +69,14 @@ function LoginForm() {
           try {
             await cacheAllDataForOffline(session.session.user.id)
           } catch (err) {
-            console.error('[Login] Erro ao cachear dados:', err)
+            logError('[Login] Erro ao cachear dados', { error: err instanceof Error ? err.message : String(err) })
           }
 
           setStatus('Preparando aplicação offline...')
           try {
             await triggerPrecache()
           } catch (err) {
-            console.error('[Login] Erro no precache:', err)
+            logError('[Login] Erro no precache', { error: err instanceof Error ? err.message : String(err) })
           }
         }
 

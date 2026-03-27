@@ -4,6 +4,7 @@ import { useEffect, useState, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient, isSupabaseConfigured } from '@/lib/supabase'
 import { APP_CONFIG } from '@/lib/config'
+import { logError, logInfo } from '@/lib/clientLogger'
 import { LoadingPage, Select, PageContainer } from '@/components/ui'
 import {
   FiCheckCircle,
@@ -96,7 +97,7 @@ export default function ValidacoesPage() {
         body: JSON.stringify({ key: 'validation_expiration_minutes', value: String(minutes) }),
       })
     } catch (err) {
-      console.error('[Validacoes] Erro ao salvar configuracao:', err)
+      logError('[Validacoes] Erro ao salvar configuracao', { error: err instanceof Error ? err.message : String(err) })
     }
     setSavingExpiration(false)
   }
@@ -134,7 +135,7 @@ export default function ValidacoesPage() {
       // Remove from local state
       setValidations(prev => prev.filter(v => v.id !== validationId && v.id !== linkedId))
     } catch (err) {
-      console.error('Error deleting validation:', err)
+      logError('Error deleting validation', { error: err instanceof Error ? err.message : String(err) })
       alert('Erro ao excluir validação')
     }
     setDeleting(null)
@@ -194,7 +195,7 @@ export default function ValidacoesPage() {
         isAdmin = profile?.is_admin || false
       }
     } catch {
-      console.log('[Validacoes] Falha ao verificar online, tentando cache...')
+      logInfo('[Validacoes] Falha ao verificar online, tentando cache...')
     }
 
     // Fallback para cache se offline
@@ -207,7 +208,7 @@ export default function ValidacoesPage() {
           isAdmin = cachedUser?.is_admin || false
         }
       } catch {
-        console.log('[Validacoes] Falha ao buscar cache')
+        logInfo('[Validacoes] Falha ao buscar cache')
       }
     }
 
@@ -273,7 +274,7 @@ export default function ValidacoesPage() {
       if (validationsData) setValidations(validationsData)
       setIsOffline(false)
     } catch (err) {
-      console.error('[Validacoes] Erro ao buscar online:', err)
+      logError('[Validacoes] Erro ao buscar online', { error: err instanceof Error ? err.message : String(err) })
 
       // Fallback para cache offline (apenas lojas)
       try {
@@ -281,9 +282,9 @@ export default function ValidacoesPage() {
         setStores(cachedStores.filter(s => s.is_active))
         setValidations([])
         setIsOffline(true)
-        console.log('[Validacoes] Carregado do cache offline')
+        logInfo('[Validacoes] Carregado do cache offline')
       } catch (cacheErr) {
-        console.error('[Validacoes] Erro ao buscar cache:', cacheErr)
+        logError('[Validacoes] Erro ao buscar cache', { error: cacheErr instanceof Error ? cacheErr.message : String(cacheErr) })
       }
     }
 

@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { createClient, isSupabaseConfigured } from '@/lib/supabase'
 import Link from 'next/link'
 import { APP_CONFIG } from '@/lib/config'
+import { logError, logInfo } from '@/lib/clientLogger'
 import { LoadingPage } from '@/components/ui'
 import {
   getAuthCache,
@@ -121,7 +122,7 @@ export default function AdminPage() {
           // full_name available in profile if needed
         }
       } catch {
-        console.log('[Admin] Falha ao buscar online, tentando cache...')
+        logInfo('[Admin] Falha ao buscar online, tentando cache...')
       }
 
       // Se não conseguiu online, tenta cache
@@ -135,7 +136,7 @@ export default function AdminPage() {
             // cachedUser full_name available if needed
           }
         } catch {
-          console.log('[Admin] Falha ao buscar cache')
+          logInfo('[Admin] Falha ao buscar cache')
         }
       }
 
@@ -201,7 +202,7 @@ export default function AdminPage() {
           recentValidations: recentValidationsRes.data || [],
         })
       } catch (err) {
-        console.error('[Admin] Erro ao buscar estatísticas online:', err)
+        logError('[Admin] Erro ao buscar estatísticas online', { error: err instanceof Error ? err.message : String(err) })
 
         // Fallback para cache offline
         try {
@@ -223,9 +224,9 @@ export default function AdminPage() {
             checklistsToday: 0,
             pendingValidations: 0,
           })
-          console.log('[Admin] Stats carregados do cache offline')
+          logInfo('[Admin] Stats carregados do cache offline')
         } catch (cacheErr) {
-          console.error('[Admin] Erro ao buscar cache:', cacheErr)
+          logError('[Admin] Erro ao buscar cache', { error: cacheErr instanceof Error ? cacheErr.message : String(cacheErr) })
         }
       }
 
@@ -317,7 +318,7 @@ export default function AdminPage() {
             recentValidations: recentValidationsRes.data || [],
           })
         } catch (err) {
-          console.error('[Admin] Erro ao re-buscar estatísticas:', err)
+          logError('[Admin] Erro ao re-buscar estatísticas', { error: err instanceof Error ? err.message : String(err) })
         }
       }
       refetchStats()
@@ -351,7 +352,7 @@ export default function AdminPage() {
         setIgnoreTimeRestrictions(newValue)
       }
     } catch (err) {
-      console.error('[Admin] Erro ao alterar configuracao de tempo:', err)
+      logError('[Admin] Erro ao alterar configuracao de tempo', { error: err instanceof Error ? err.message : String(err) })
     }
     setTogglingTime(false)
   }
@@ -370,7 +371,7 @@ export default function AdminPage() {
         }),
       })
     } catch (err) {
-      console.error('[Admin] Erro ao salvar lojas bypass:', err)
+      logError('[Admin] Erro ao salvar lojas bypass', { error: err instanceof Error ? err.message : String(err) })
     }
   }, 500)
 

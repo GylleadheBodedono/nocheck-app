@@ -17,6 +17,7 @@ import {
 import type { User, Store, Sector, FunctionRow, UserStoreWithDetails } from '@/types/database'
 import { APP_CONFIG } from '@/lib/config'
 import { LoadingPage, PageContainer } from '@/components/ui'
+import { logError, logWarn, logInfo } from '@/lib/clientLogger'
 import { getAuthCache, getUserCache, getAllUsersCache } from '@/lib/offlineCache'
 import { useRealtimeRefresh } from '@/hooks/useRealtimeRefresh'
 
@@ -73,7 +74,7 @@ export default function UsuariosPage() {
         isAdmin = profile?.is_admin || false
       }
     } catch {
-      console.log('[Usuarios] Falha ao verificar online, tentando cache...')
+      logInfo('[Usuarios] Falha ao verificar online, tentando cache...')
     }
 
     // Fallback para cache se nao conseguiu autenticar
@@ -86,7 +87,7 @@ export default function UsuariosPage() {
           isAdmin = cachedUser?.is_admin || false
         }
       } catch {
-        console.log('[Usuarios] Falha ao buscar cache')
+        logInfo('[Usuarios] Falha ao buscar cache')
       }
     }
 
@@ -129,7 +130,7 @@ export default function UsuariosPage() {
       const { users: data, synced } = await res.json()
 
       if (synced > 0) {
-        console.log(`[Usuarios] ${synced} usuario(s) sincronizado(s) do auth`)
+        logInfo(`[Usuarios] ${synced} usuario(s) sincronizado(s) do auth`)
       }
 
       setUsers(data as UserWithAssignment[])
@@ -137,7 +138,7 @@ export default function UsuariosPage() {
       setLoading(false)
       return
     } catch (err) {
-      console.warn('[Usuarios] API falhou, tentando Supabase direto...', err)
+      logWarn('[Usuarios] API falhou, tentando Supabase direto...', { error: err instanceof Error ? err.message : String(err) })
     }
 
     // Camada 2: Tenta Supabase direto com novo modelo
@@ -169,7 +170,7 @@ export default function UsuariosPage() {
       setLoading(false)
       return
     } catch (err) {
-      console.warn('[Usuarios] Supabase direto falhou, usando cache...', err)
+      logWarn('[Usuarios] Supabase direto falhou, usando cache...', { error: err instanceof Error ? err.message : String(err) })
     }
 
     // Camada 3: Cache offline (ultimo recurso)
@@ -186,7 +187,7 @@ export default function UsuariosPage() {
       setUsers(usersWithAssignment)
       setIsOffline(true)
     } catch (cacheErr) {
-      console.error('[Usuarios] Cache tambem falhou:', cacheErr)
+      logError('[Usuarios] Cache tambem falhou', { error: cacheErr instanceof Error ? cacheErr.message : String(cacheErr) })
     }
 
     setLoading(false)
@@ -200,7 +201,7 @@ export default function UsuariosPage() {
       .eq('id', userId)
 
     if (error) {
-      console.error('Error updating user:', error)
+      logError('Error updating user', { error: error instanceof Error ? error.message : String(error) })
       return
     }
 
@@ -227,7 +228,7 @@ export default function UsuariosPage() {
       }
     } catch (err) {
       const errMsg = err instanceof Error ? err.message : 'Erro desconhecido'
-      console.warn('[Usuarios] API delete falhou:', errMsg)
+      logWarn('[Usuarios] API delete falhou', { value: errMsg })
 
       // If FK constraint error, show useful message and revert
       if (errMsg.includes('registros vinculados') || errMsg.includes('migration')) {
@@ -244,7 +245,7 @@ export default function UsuariosPage() {
         .eq('id', userId)
 
       if (error) {
-        console.error('Erro ao deletar usuario:', error)
+        logError('Erro ao deletar usuario', { error: error instanceof Error ? error.message : String(error) })
         alert(error.message || 'Erro ao excluir usuario. Tente novamente.')
         // Reverte a remoçao otimista
         setUsers(previousUsers)

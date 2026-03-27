@@ -7,6 +7,7 @@ import { useRealtimeRefresh } from '@/hooks/useRealtimeRefresh'
 import { useRouter, useParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { APP_CONFIG } from '@/lib/config'
+import { logError } from '@/lib/clientLogger'
 import { LoadingPage, Select, Modal } from '@/components/ui'
 import { NodeCard } from '@/components/admin/NodeCard'
 import { SectionCard } from '@/components/admin/SectionCard'
@@ -500,7 +501,7 @@ export default function EditTemplatePage() {
           is_active: true,
         })
       if (insertErr) {
-        console.error('[Template] Erro ao salvar preset:', insertErr)
+        logError('[Template] Erro ao salvar preset', { error: insertErr instanceof Error ? insertErr.message : String(insertErr) })
         return
       }
       // Refresh presets
@@ -528,7 +529,7 @@ export default function EditTemplatePage() {
         )
       }
     } catch (err) {
-      console.error('[Template] Erro ao salvar preset:', err)
+      logError('[Template] Erro ao salvar preset', { error: err instanceof Error ? err.message : String(err) })
     }
   }
 
@@ -886,7 +887,7 @@ export default function EditTemplatePage() {
 
       router.push(APP_CONFIG.routes.adminTemplates)
     } catch (err) {
-      console.error('Error updating template:', err)
+      logError('Error updating template', { error: err instanceof Error ? err.message : String(err) })
       // Supabase errors are plain objects with message/details, not Error instances
       const supaErr = err as { message?: string; details?: string; code?: string }
       const msg = supaErr?.message || supaErr?.details || 'Erro ao atualizar checklist'
@@ -1001,7 +1002,7 @@ export default function EditTemplatePage() {
       if (delErr) throw delErr
       router.push(APP_CONFIG.routes.adminTemplates)
     } catch (err) {
-      console.error('Error deleting template:', err)
+      logError('Error deleting template', { error: err instanceof Error ? err.message : String(err) })
       const supaErr = err as { message?: string; details?: string }
       setError(supaErr?.message || 'Erro ao excluir template')
     }

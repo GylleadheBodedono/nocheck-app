@@ -17,6 +17,7 @@ import {
   type CachedAuth,
 } from '@/lib/offlineCache'
 import type { User } from '@/types/database'
+import { logError } from '@/lib/clientLogger'
 
 /** Estado da autenticação com suporte offline. */
 export type OfflineAuthState = {
@@ -147,7 +148,7 @@ export function useOfflineAuth(): OfflineAuthState & OfflineAuthActions {
         isLoading: false,
       }))
     } catch (error) {
-      console.error('[OfflineAuth] Init error:', error)
+      logError('[OfflineAuth] Init error', { error: error instanceof Error ? error.message : String(error) })
 
       // Em caso de erro, tenta cache
       try {
@@ -283,7 +284,7 @@ export function useOfflineAuth(): OfflineAuthState & OfflineAuthActions {
 
       await saveSyncMetadata('user_data', 'success')
     } catch (error) {
-      console.error('[OfflineAuth] Error caching user data:', error)
+      logError('[OfflineAuth] Error caching user data', { error: error instanceof Error ? error.message : String(error) })
       await saveSyncMetadata('user_data', 'failed')
     }
   }
@@ -334,7 +335,7 @@ export function useOfflineAuth(): OfflineAuthState & OfflineAuthActions {
 
       return false
     } catch (error) {
-      console.error('[OfflineAuth] Login error:', error)
+      logError('[OfflineAuth] Login error', { error: error instanceof Error ? error.message : String(error) })
       setState(prev => ({
         ...prev,
         isLoading: false,
@@ -366,7 +367,7 @@ export function useOfflineAuth(): OfflineAuthState & OfflineAuthActions {
       })
 
     } catch (error) {
-      console.error('[OfflineAuth] Logout error:', error)
+      logError('[OfflineAuth] Logout error', { error: error instanceof Error ? error.message : String(error) })
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])

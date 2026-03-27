@@ -5,6 +5,7 @@ import { useRealtimeRefresh } from '@/hooks/useRealtimeRefresh'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { APP_CONFIG } from '@/lib/config'
+import { logError } from '@/lib/clientLogger'
 import { Select, Modal } from '@/components/ui'
 import { NodeCard } from '@/components/admin/NodeCard'
 import { SectionCard } from '@/components/admin/SectionCard'
@@ -429,7 +430,7 @@ export default function NovoTemplatePage() {
 
       alert('Modelo salvo com sucesso!')
     } catch (err) {
-      console.error('[Template] Erro ao salvar modelo:', err)
+      logError('[Template] Erro ao salvar modelo', { error: err instanceof Error ? err.message : String(err) })
       alert('Erro ao salvar modelo. Tente novamente.')
     }
   }
@@ -607,7 +608,7 @@ export default function NovoTemplatePage() {
 
       router.push(APP_CONFIG.routes.adminTemplates)
     } catch (err) {
-      console.error('Error creating template:', err)
+      logError('Error creating template', { error: err instanceof Error ? err.message : String(err) })
       const supaErr = err as { message?: string; details?: string; code?: string }
       const msg = supaErr?.message || supaErr?.details || 'Erro ao criar checklist'
       setError(msg)

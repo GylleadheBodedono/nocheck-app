@@ -33,6 +33,7 @@ import {
   getTemplateFieldsCache,
   getTemplateSectionsCache,
 } from '@/lib/offlineCache'
+import { logInfo, logError } from '@/lib/clientLogger'
 
 type ChecklistDetail = {
   id: number
@@ -185,10 +186,10 @@ export default function ChecklistViewPage() {
       setChecklistSections(cachedClSections)
       setLoading(false)
 
-      console.log('[ChecklistView] Carregado do cache offline')
+      logInfo('[ChecklistView] Carregado do cache offline')
       return true
     } catch (err) {
-      console.error('[ChecklistView] Erro ao carregar do cache:', err)
+      logError('[ChecklistView] Erro ao carregar do cache', { error: err instanceof Error ? err.message : String(err) })
       return false
     }
   }
@@ -232,7 +233,7 @@ export default function ChecklistViewPage() {
         .single()
 
       if (checklistError || !checklistData) {
-        console.error('[ChecklistView] Erro ao buscar checklist:', checklistId, checklistError?.message, checklistError?.code)
+        logError('[ChecklistView] Erro ao buscar checklist', { error: `${checklistId} ${checklistError?.message} ${checklistError?.code}` })
         setError('Checklist nao encontrado')
         setLoading(false)
         return
@@ -291,7 +292,7 @@ export default function ChecklistViewPage() {
         }
       }
     } catch (err) {
-      console.error('[ChecklistView] Erro:', err)
+      logError('[ChecklistView] Erro', { error: err instanceof Error ? err.message : String(err) })
       // Tenta carregar do cache como fallback
       const loaded = await loadFromCache()
       if (!loaded) {

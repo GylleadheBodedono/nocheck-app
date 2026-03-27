@@ -28,6 +28,7 @@ import { getPendingChecklists, type PendingChecklist } from '@/lib/offlineStorag
 import { syncAll, subscribeSyncStatus } from '@/lib/syncService'
 import { fullLogout } from '@/lib/logout'
 import { isWithinTimeRange } from '@/lib/timeUtils'
+import { logInfo, logWarn, logError } from '@/lib/clientLogger'
 
 type TemplateSection = {
   id: number
@@ -126,7 +127,7 @@ type NotificationItem = {
 function isTemplateWithinAllowedTime(template: { allowed_start_time?: string | null; allowed_end_time?: string | null; name?: string }): boolean {
   if (!template?.allowed_start_time || !template?.allowed_end_time) return true
   const result = isWithinTimeRange(String(template.allowed_start_time), String(template.allowed_end_time))
-  console.log(`[Dashboard] TimeCheck template "${template.name || '?'}": ${result ? 'DENTRO do horario' : 'FORA do horario'}`)
+  logInfo(`[Dashboard] TimeCheck template "${template.name || '?'}": ${result ? 'DENTRO do horario' : 'FORA do horario'}`)
   return result
 }
 
@@ -228,7 +229,7 @@ export default function DashboardPage() {
   // Subscreve ao status de sincronizacao
   useEffect(() => {
     const unsubscribe = subscribeSyncStatus(async (status) => {
-      console.log('[Dashboard] Sync status changed:', status)
+      logInfo('[Dashboard] Sync status changed', { value: String(status) })
 
       if (!status.isSyncing && status.lastSyncAt) {
         const pending = await getPendingChecklists()
@@ -251,7 +252,7 @@ export default function DashboardPage() {
   const fetchData = async () => {
     // Se offline, carrega do cache
     if (!navigator.onLine) {
-      console.log('[Dashboard] Modo offline - carregando do cache')
+      logInfo('[Dashboard] Modo offline - carregando do cache')
       await loadFromCache()
       return
     }
@@ -305,20 +306,20 @@ export default function DashboardPage() {
         if (toggle === 'true') {
           const storesValue = settings.find(s => s.key === 'ignore_time_restrictions_stores')?.value
           if (!storesValue || storesValue === 'all') {
-            console.log('[Dashboard] Bypass de horario: ATIVO para TODAS as lojas')
+            logInfo('[Dashboard] Bypass de horario: ATIVO para TODAS as lojas')
             setTimeBypassStoreIds('all')
           } else {
             try {
               const parsed = JSON.parse(storesValue)
-              console.log('[Dashboard] Bypass de horario: ATIVO para lojas:', parsed)
+              logInfo('[Dashboard] Bypass de horario: ATIVO para lojas', { value: String(parsed) })
               setTimeBypassStoreIds(parsed)
             } catch {
-              console.log('[Dashboard] Bypass de horario: ATIVO (fallback all)')
+              logInfo('[Dashboard] Bypass de horario: ATIVO (fallback all)')
               setTimeBypassStoreIds('all')
             }
           }
         } else {
-          console.log('[Dashboard] Bypass de horario: INATIVO')
+          logInfo('[Dashboard] Bypass de horario: INATIVO')
           setTimeBypassStoreIds(null)
         }
       }
@@ -479,9 +480,9 @@ export default function DashboardPage() {
     try {
       const pending = await getPendingChecklists()
       setPendingChecklists(pending)
-      console.log('[Dashboard] Checklists pendentes:', pending.length)
+      logInfo('[Dashboard] Checklists pendentes', { value: String(pending.length) })
     } catch (err) {
-      console.error('[Dashboard] Erro ao buscar checklists pendentes:', err)
+      logError('[Dashboard] Erro ao buscar checklists pendentes', { error: err instanceof Error ? err.message : String(err) })
     }
 
     // Calculate stats
@@ -613,7 +614,7 @@ export default function DashboardPage() {
 
     // Atualiza cache offline em background
     cacheAllDataForOffline(user.id).catch(err => {
-      console.warn('[Dashboard] Erro ao atualizar cache offline em background:', err)
+      logWarn('[Dashboard] Erro ao atualizar cache offline em background', { error: err instanceof Error ? err.message : String(err) })
     })
   }
 
@@ -622,17 +623,17 @@ export default function DashboardPage() {
    */
   const loadFromCache = async (): Promise<boolean> => {
     try {
-      console.log('[Dashboard] Carregando dados do cache...')
+      logInfo('[Dashboard] Carregando dados do cache...')
 
       const cachedAuth = await getAuthCache()
       if (!cachedAuth) {
-        console.log('[Dashboard] Sem auth no cache')
+        logInfo('[Dashboard] Sem auth no cache')
         return false
       }
 
       const cachedUser = await getUserCache(cachedAuth.userId)
       if (!cachedUser) {
-        console.log('[Dashboard] Sem usuario no cache')
+        logInfo('[Dashboard] Sem usuario no cache')
         return false
       }
 
@@ -834,10 +835,10 @@ export default function DashboardPage() {
 
       setIsOffline(true)
       setLoading(false)
-      console.log('[Dashboard] Dados carregados do cache com sucesso')
+      logInfo('[Dashboard] Dados carregados do cache com sucesso')
       return true
     } catch (error) {
-      console.error('[Dashboard] Erro ao carregar cache:', error)
+      logError('[Dashboard] Erro ao carregar cache', { error: error instanceof Error ? error.message : String(error) })
       return false
     }
   }
@@ -847,7 +848,7 @@ export default function DashboardPage() {
   useEffect(() => {
     if (refreshTrigger === 0) return // skip initial
     if (!navigator.onLine) return
-    console.log('[Dashboard] Realtime refresh triggered:', refreshTrigger)
+    logInfo('[Dashboard] Realtime refresh triggered', { value: String(refreshTrigger) })
     fetchData()
   }, [refreshTrigger])
 
@@ -862,7 +863,7 @@ export default function DashboardPage() {
     setIsSyncing(true)
     try {
       const result = await syncAll()
-      console.log('[Dashboard] Sync result:', result)
+      logInfo('[Dashboard] Sync result', { value: String(result) })
 
       const pending = await getPendingChecklists()
       setPendingChecklists(pending)
@@ -875,7 +876,7 @@ export default function DashboardPage() {
         fetchData()
       }
     } catch (err) {
-      console.error('[Dashboard] Erro ao sincronizar:', err)
+      logError('[Dashboard] Erro ao sincronizar', { error: err instanceof Error ? err.message : String(err) })
     } finally {
       setIsSyncing(false)
     }

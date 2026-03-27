@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useCallback } from 'react'
+import { logError } from '@/lib/clientLogger'
 
 /** Estado do processo de pré-cache de páginas do Service Worker. */
 type PrecacheStatus = {
@@ -99,7 +100,7 @@ export function usePrecache() {
       }))
 
     } catch (error) {
-      console.error('[Precache] Erro:', error)
+      logError('[Precache] Erro', { error: error instanceof Error ? error.message : String(error) })
       setStatus(prev => ({
         ...prev,
         isCaching: false,
@@ -197,6 +198,6 @@ export async function triggerPrecache(): Promise<void> {
       })
     )
   } catch (error) {
-    console.error('[Precache] Erro:', error)
+    logError('[Precache] Erro', { error: error instanceof Error ? error.message : String(error) })
   }
 }

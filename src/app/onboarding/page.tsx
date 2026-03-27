@@ -6,6 +6,7 @@ import { APP_CONFIG } from '@/lib/config'
 import { updateOrganization, createInvite } from '@/services/tenant.service'
 import type { OrgRole } from '@/types/tenant'
 import { FiCheck, FiPlus, FiTrash2, FiArrowRight, FiLoader } from 'react-icons/fi'
+import { logError } from '@/lib/clientLogger'
 
 // ── Types ──
 
@@ -95,7 +96,7 @@ export default function OnboardingPage() {
           setOrgId(membership.organization_id)
         }
       } catch (err) {
-        console.error('[Onboarding] Erro ao inicializar:', err)
+        logError('[Onboarding] Erro ao inicializar', { error: err instanceof Error ? err.message : String(err) })
         setError('Erro ao carregar dados. Tente recarregar a página.')
       } finally {
         setLoading(false)
@@ -125,7 +126,7 @@ export default function OnboardingPage() {
       await updateOrganization(orgId, { name: orgName.trim() })
       goToStep(2)
     } catch (err) {
-      console.error('[Onboarding] Erro ao salvar organizacao:', err)
+      logError('[Onboarding] Erro ao salvar organizacao', { error: err instanceof Error ? err.message : String(err) })
       setError('Erro ao salvar o nome da organização. Tente novamente.')
     } finally {
       setSavingOrg(false)
@@ -152,7 +153,7 @@ export default function OnboardingPage() {
       if (insertError) throw insertError
       goToStep(3)
     } catch (err) {
-      console.error('[Onboarding] Erro ao criar loja:', err)
+      logError('[Onboarding] Erro ao criar loja', { error: err instanceof Error ? err.message : String(err) })
       setError('Erro ao criar a loja. Tente novamente.')
     } finally {
       setSavingStore(false)
@@ -216,7 +217,7 @@ export default function OnboardingPage() {
         window.location.href = '/dashboard'
       }
     } catch (err) {
-      console.error('[Onboarding] Erro ao enviar convites:', err)
+      logError('[Onboarding] Erro ao enviar convites', { error: err instanceof Error ? err.message : String(err) })
       setError('Erro ao enviar convites. Tente novamente.')
       setFinishing(false)
     }

@@ -23,6 +23,7 @@ import type {
   Sector,
   FunctionRow,
 } from '@/types/database'
+import { logError } from '@/lib/clientLogger'
 
 /** Estado dos dados carregados com suporte offline. */
 export type OfflineDataState = {
@@ -122,7 +123,7 @@ export function useOfflineData(): OfflineDataState & OfflineDataActions {
       setState(prev => ({ ...prev, stores: cached, isLoading: false }))
       return cached
     } catch (error) {
-      console.error('[OfflineData] Error loading stores:', error)
+      logError('[OfflineData] Error loading stores', { error: error instanceof Error ? error.message : String(error) })
 
       // Tenta cache em caso de erro
       try {
@@ -181,7 +182,7 @@ export function useOfflineData(): OfflineDataState & OfflineDataActions {
       setState(prev => ({ ...prev, templates: cached, isLoading: false }))
       return cached
     } catch (error) {
-      console.error('[OfflineData] Error loading templates:', error)
+      logError('[OfflineData] Error loading templates', { error: error instanceof Error ? error.message : String(error) })
 
       try {
         const cached = await getTemplatesCache()
@@ -227,7 +228,7 @@ export function useOfflineData(): OfflineDataState & OfflineDataActions {
       // Offline - usa cache
       return await getTemplateFieldsCache(templateId)
     } catch (error) {
-      console.error('[OfflineData] Error loading template fields:', error)
+      logError('[OfflineData] Error loading template fields', { error: error instanceof Error ? error.message : String(error) })
 
       try {
         return await getTemplateFieldsCache(templateId)
@@ -273,7 +274,7 @@ export function useOfflineData(): OfflineDataState & OfflineDataActions {
       setState(prev => ({ ...prev, sectors: cached, isLoading: false }))
       return cached
     } catch (error) {
-      console.error('[OfflineData] Error loading sectors:', error)
+      logError('[OfflineData] Error loading sectors', { error: error instanceof Error ? error.message : String(error) })
 
       try {
         const cached = await getSectorsCache(storeId)
@@ -316,7 +317,7 @@ export function useOfflineData(): OfflineDataState & OfflineDataActions {
       setState(prev => ({ ...prev, functions: cached, isLoading: false }))
       return cached
     } catch (error) {
-      console.error('[OfflineData] Error loading functions:', error)
+      logError('[OfflineData] Error loading functions', { error: error instanceof Error ? error.message : String(error) })
 
       try {
         const cached = await getFunctionsCache()
@@ -456,7 +457,7 @@ export function useOfflineData(): OfflineDataState & OfflineDataActions {
       }))
 
     } catch (error) {
-      console.error('[OfflineData] Sync error:', error)
+      logError('[OfflineData] Sync error', { error: error instanceof Error ? error.message : String(error) })
       await saveSyncMetadata('full_sync', 'failed')
 
       setState(prev => ({

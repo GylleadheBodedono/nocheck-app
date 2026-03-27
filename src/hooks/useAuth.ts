@@ -21,6 +21,7 @@ import {
   getSectorsCache,
 } from '@/lib/offlineCache'
 import { fullLogout } from '@/lib/logout'
+import { logError } from '@/lib/clientLogger'
 import type { TemplateVisibility } from '@/types/database'
 
 /** Usuário do banco com joins resolvidos para loja, função e setor. */
@@ -84,13 +85,13 @@ export function useAuth() {
         .single()
 
       if (error) {
-        console.error('Error fetching user profile:', error)
+        logError('Error fetching user profile', { error: error instanceof Error ? error.message : String(error) })
         return null
       }
 
       return data as UserWithProfile
     } catch (error) {
-      console.error('Error fetching user profile:', error)
+      logError('Error fetching user profile', { error: error instanceof Error ? error.message : String(error) })
       return null
     }
   }, [supabase])
@@ -145,7 +146,7 @@ export function useAuth() {
 
       return true
     } catch (error) {
-      console.error('[useAuth] Error loading from cache:', error)
+      logError('[useAuth] Error loading from cache', { error: error instanceof Error ? error.message : String(error) })
       return false
     }
   }, [])
@@ -236,7 +237,7 @@ export function useAuth() {
       }
 
     } catch (error) {
-      console.error('[useAuth] Error caching user data:', error)
+      logError('[useAuth] Error caching user data', { error: error instanceof Error ? error.message : String(error) })
     }
   }, [supabase])
 
@@ -272,7 +273,7 @@ export function useAuth() {
           setLoading(false)
         }
       } catch (error) {
-        console.error('[useAuth] Init error, trying cache:', error)
+        logError('[useAuth] Init error, trying cache', { error: error instanceof Error ? error.message : String(error) })
         // Em caso de erro (ex: offline), tenta cache
         await loadFromCache()
         setLoading(false)

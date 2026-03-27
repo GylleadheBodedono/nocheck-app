@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { createClient } from '@/lib/supabase'
+import { logError } from '@/lib/clientLogger'
 import { FiSearch, FiUsers, FiHome } from 'react-icons/fi'
 
 type SearchResult = {
@@ -45,7 +46,7 @@ export function PlatformSearch({ onSelectOrg }: Props) {
       ]
       setResults(items)
       setIsOpen(items.length > 0)
-    } catch (e) { console.error(e) }
+    } catch (e) { logError(e instanceof Error ? e.message : String(e)) }
     setLoading(false)
   }, [])
 

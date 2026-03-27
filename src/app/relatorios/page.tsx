@@ -13,6 +13,7 @@ import { APP_CONFIG } from '@/lib/config'
 import { LoadingPage, PageContainer } from '@/components/ui'
 import { getAuthCache, getUserCache } from '@/lib/offlineCache'
 import { exportResponsesToCSV, exportResponsesToTXT, type UserChecklistExport } from '@/lib/exportUtils'
+import { logError } from '@/lib/clientLogger'
 
 type MyChecklist = {
   id: number
@@ -113,7 +114,7 @@ export default function MeusRelatoriosPage() {
         })))
       }
     } catch (error) {
-      console.error('[MeusRelatorios] Erro ao buscar dados:', error)
+      logError('[MeusRelatorios] Erro ao buscar dados', { error: error instanceof Error ? error.message : String(error) })
     }
     setLoading(false)
   }
@@ -156,7 +157,7 @@ export default function MeusRelatoriosPage() {
       if (format === 'csv') exportResponsesToCSV(items, `meus_checklists_${ts}.csv`)
       else exportResponsesToTXT(items, `meus_checklists_${ts}.txt`)
     } catch (err) {
-      console.error('[MeusRelatorios] Erro ao exportar:', err)
+      logError('[MeusRelatorios] Erro ao exportar', { error: err instanceof Error ? err.message : String(err) })
     } finally {
       setExporting(false)
     }

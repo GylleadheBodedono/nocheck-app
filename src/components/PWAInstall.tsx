@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react'
 import { FiDownload, FiX, FiRefreshCw } from 'react-icons/fi'
+import { logInfo, logError } from '@/lib/clientLogger'
 
 interface BeforeInstallPromptEvent extends Event {
   prompt(): Promise<void>
@@ -45,7 +46,7 @@ export function PWAInstall() {
     if (dismissedTime) {
       const daysSinceDismissed = (Date.now() - new Date(dismissedTime).getTime()) / (1000 * 60 * 60 * 24)
       if (daysSinceDismissed < DAYS_TO_RESHOW) {
-        console.log('[PWA] Banner dispensado há', daysSinceDismissed.toFixed(1), 'dias')
+        logInfo('[PWA] Banner dispensado ha', { value: String(daysSinceDismissed.toFixed(1)) })
         return false
       }
       // Passou o tempo, limpa o flag
@@ -61,7 +62,7 @@ export function PWAInstall() {
       navigator.serviceWorker.getRegistrations().then(registrations => {
         for (const reg of registrations) {
           reg.unregister()
-          console.log('[PWA] SW desregistrado em dev mode')
+          logInfo('[PWA] SW desregistrado em dev mode')
         }
       })
       caches.keys().then(keys => keys.forEach(key => caches.delete(key)))
@@ -71,11 +72,11 @@ export function PWAInstall() {
     // Registrar Service Worker e configurar auto-update (apenas producao)
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.register('/sw.js', { updateViaCache: 'none' }).then(registration => {
-        console.log('[PWA] SW registered, checking for updates every 60s')
+        logInfo('[PWA] SW registered, checking for updates every 60s')
 
         // Verifica se já tem SW waiting (update pendente de sessao anterior)
         if (registration.waiting) {
-          console.log('[PWA] SW waiting detectado na inicializacao')
+          logInfo('[PWA] SW waiting detectado na inicializacao')
           setUpdateAvailable(true)
           setWaitingRegistration(registration)
         }
@@ -84,12 +85,12 @@ export function PWAInstall() {
         registration.addEventListener('updatefound', () => {
           const newWorker = registration.installing
           if (!newWorker) return
-          console.log('[PWA] Novo SW sendo instalado...')
+          logInfo('[PWA] Novo SW sendo instalado...')
 
           newWorker.addEventListener('statechange', () => {
             // Novo SW instalado e pronto para ativar
             if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-              console.log('[PWA] Novo SW instalado! Mostrando banner de atualizacao')
+              logInfo('[PWA] Novo SW instalado! Mostrando banner de atualizacao')
               setUpdateAvailable(true)
               setWaitingRegistration(registration)
             }
@@ -101,7 +102,7 @@ export function PWAInstall() {
           registration.update()
         }, 60 * 1000)
       }).catch(err => {
-        console.log('[PWA] SW register failed:', err)
+        logInfo('[PWA] SW register failed', { value: String(err) })
       })
 
       // Quando novo SW assume controle, recarrega para usar código novo
@@ -111,7 +112,7 @@ export function PWAInstall() {
         // Não recarrega se estiver offline — vai perder o conteúdo
         if (!navigator.onLine) return
         refreshing = true
-        console.log('[PWA] New SW activated, reloading...')
+        logInfo('[PWA] New SW activated, reloading...')
         window.location.reload()
       })
     }
@@ -119,7 +120,7 @@ export function PWAInstall() {
     // Verificar se já está instalado
     const checkInstalled = window.matchMedia('(display-mode: standalone)').matches
     if (checkInstalled) {
-      console.log('[PWA] App já instalado')
+      logInfo('[PWA] App ja instalado')
       setIsInstalled(true)
       return
     }
@@ -127,7 +128,7 @@ export function PWAInstall() {
     // Detecta iOS
     const isIOSDevice = /iPad|iPhone|iPod/.test(navigator.userAgent) && !('MSStream' in window)
     if (isIOSDevice) {
-      console.log('[PWA] Dispositivo iOS detectado')
+      logInfo('[PWA] Dispositivo iOS detectado')
       setIsIOS(true)
       if (shouldShowBanner()) {
         // Delay para iOS
@@ -138,12 +139,12 @@ export function PWAInstall() {
 
     // Handler para o evento beforeinstallprompt
     const handleBeforeInstallPrompt = (e: BeforeInstallPromptEvent) => {
-      console.log('[PWA] beforeinstallprompt capturado!')
+      logInfo('[PWA] beforeinstallprompt capturado!')
       e.preventDefault()
       setDeferredPrompt(e)
 
       if (shouldShowBanner()) {
-        console.log('[PWA] Mostrando banner')
+        logInfo('[PWA] Mostrando banner')
         setShowBanner(true)
       }
     }
@@ -153,7 +154,7 @@ export function PWAInstall() {
 
     // Handler para quando o app é instalado
     const handleAppInstalled = () => {
-      console.log('[PWA] App instalado!')
+      logInfo('[PWA] App instalado!')
       setShowBanner(false)
       setDeferredPrompt(null)
       setIsInstalled(true)
@@ -173,7 +174,7 @@ export function PWAInstall() {
     if (!updateAvailable || !waitingRegistration?.waiting) return
     const timer = setTimeout(() => {
       if (navigator.onLine && waitingRegistration.waiting) {
-        console.log('[PWA] Auto-update apos 30s sem interacao')
+        logInfo('[PWA] Auto-update apos 30s sem interacao')
         waitingRegistration.waiting.postMessage({ type: 'SKIP_WAITING' })
       }
     }, 30000)
@@ -181,23 +182,23 @@ export function PWAInstall() {
   }, [updateAvailable, waitingRegistration])
 
   const handleInstall = async () => {
-    console.log('[PWA] Botão Instalar clicado')
+    logInfo('[PWA] Botao Instalar clicado')
 
     if (!deferredPrompt) {
-      console.log('[PWA] Sem evento para prompt')
+      logInfo('[PWA] Sem evento para prompt')
       return
     }
 
     try {
       await deferredPrompt.prompt()
       const { outcome } = await deferredPrompt.userChoice
-      console.log('[PWA] Resultado:', outcome)
+      logInfo('[PWA] Resultado', { value: String(outcome) })
 
       if (outcome === 'accepted') {
         localStorage.setItem(STORAGE_KEY, new Date().toISOString())
       }
     } catch (err) {
-      console.error('[PWA] Erro no prompt:', err)
+      logError('[PWA] Erro no prompt', { error: err instanceof Error ? err.message : String(err) })
     }
 
     setDeferredPrompt(null)
@@ -205,13 +206,13 @@ export function PWAInstall() {
   }
 
   const handleDismiss = () => {
-    console.log('[PWA] Banner dispensado')
+    logInfo('[PWA] Banner dispensado')
     localStorage.setItem(STORAGE_KEY, new Date().toISOString())
     setShowBanner(false)
   }
 
   const handleUpdate = () => {
-    console.log('[PWA] Usuario clicou Atualizar agora')
+    logInfo('[PWA] Usuario clicou Atualizar agora')
     if (waitingRegistration?.waiting) {
       waitingRegistration.waiting.postMessage({ type: 'SKIP_WAITING' })
       // controllerchange vai disparar o reload automaticamente

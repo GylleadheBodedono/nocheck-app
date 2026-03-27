@@ -17,6 +17,7 @@ import {
 } from 'react-icons/fi'
 import Link from 'next/link'
 import { APP_CONFIG } from '@/lib/config'
+import { logError } from '@/lib/clientLogger'
 import { LoadingPage, Select, PageContainer } from '@/components/ui'
 import { getAuthCache, getUserCache } from '@/lib/offlineCache'
 import { useRealtimeRefresh } from '@/hooks/useRealtimeRefresh'
@@ -198,7 +199,7 @@ export default function FotosNCPage() {
       setSummary(result.summary)
       setVisibleCount(PAGE_SIZE)
     } catch (err) {
-      console.error('[FotosNC] Erro ao buscar dados:', err)
+      logError('[FotosNC] Erro ao buscar dados', { error: err instanceof Error ? err.message : String(err) })
     } finally {
       setLoading(false)
     }
@@ -239,7 +240,7 @@ export default function FotosNCPage() {
       else if (format === 'txt') exportToTXT(filteredItems, `${filename}.txt`)
       else await exportToExcel(filteredItems, `${filename}.xlsx`)
     } catch (err) {
-      console.error('[FotosNC] Erro ao exportar:', err)
+      logError('[FotosNC] Erro ao exportar', { error: err instanceof Error ? err.message : String(err) })
     } finally {
       setExporting(false)
     }
@@ -267,7 +268,7 @@ export default function FotosNCPage() {
         severityLabel: severityFilter ?? undefined,
       })
     } catch (err) {
-      console.error('[FotosNC] Erro ao exportar PDF:', err)
+      logError('[FotosNC] Erro ao exportar PDF', { error: err instanceof Error ? err.message : String(err) })
     } finally {
       setExportingPdf(false)
     }

@@ -3,6 +3,7 @@
 import { useEffect, useState, useMemo, useCallback, useRef } from 'react'
 import { createClient } from '@/lib/supabase'
 import { getAuthCache } from '@/lib/offlineCache'
+import { logError } from '@/lib/clientLogger'
 
 /** Notificação in-app retornada pela tabela `notifications` do Supabase. */
 export type AppNotification = {
@@ -50,7 +51,7 @@ export function useNotifications() {
         setUnreadCount((data as AppNotification[]).filter(n => !n.is_read).length)
       }
     } catch (err) {
-      console.error('[useNotifications] Erro ao buscar notificacoes:', err)
+      logError('[useNotifications] Erro ao buscar notificacoes', { error: err instanceof Error ? err.message : String(err) })
     }
   }, [supabase])
 
@@ -148,7 +149,7 @@ export function useNotifications() {
       )
       setUnreadCount(prev => Math.max(0, prev - 1))
     } catch (err) {
-      console.error('[useNotifications] Erro ao marcar como lida:', err)
+      logError('[useNotifications] Erro ao marcar como lida', { error: err instanceof Error ? err.message : String(err) })
     }
   }, [supabase])
 
@@ -166,7 +167,7 @@ export function useNotifications() {
       setNotifications(prev => prev.map(n => ({ ...n, is_read: true })))
       setUnreadCount(0)
     } catch (err) {
-      console.error('[useNotifications] Erro ao marcar todas como lidas:', err)
+      logError('[useNotifications] Erro ao marcar todas como lidas', { error: err instanceof Error ? err.message : String(err) })
     }
   }, [supabase, userId])
 
@@ -186,7 +187,7 @@ export function useNotifications() {
         return prev.filter(n => n.id !== notificationId)
       })
     } catch (err) {
-      console.error('[useNotifications] Erro ao excluir notificacao:', err)
+      logError('[useNotifications] Erro ao excluir notificacao', { error: err instanceof Error ? err.message : String(err) })
     }
   }, [supabase])
 
@@ -203,7 +204,7 @@ export function useNotifications() {
       setNotifications([])
       setUnreadCount(0)
     } catch (err) {
-      console.error('[useNotifications] Erro ao excluir todas notificacoes:', err)
+      logError('[useNotifications] Erro ao excluir todas notificacoes', { error: err instanceof Error ? err.message : String(err) })
     }
   }, [supabase, userId])
 

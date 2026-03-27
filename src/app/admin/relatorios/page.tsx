@@ -26,6 +26,7 @@ import {
 } from 'react-icons/fi'
 import Link from 'next/link'
 import { APP_CONFIG } from '@/lib/config'
+import { logError, logWarn, logInfo } from '@/lib/clientLogger'
 import { LoadingPage, Select, PageContainer } from '@/components/ui'
 import { getAuthCache, getUserCache } from '@/lib/offlineCache'
 import { useRealtimeRefresh } from '@/hooks/useRealtimeRefresh'
@@ -204,7 +205,7 @@ export default function RelatoriosPage() {
         isAdminUser = profile && 'is_admin' in profile ? (profile as { is_admin: boolean }).is_admin : false
       }
     } catch {
-      console.log('[Relatorios] Falha ao verificar online, tentando cache...')
+      logInfo('[Relatorios] Falha ao verificar online, tentando cache...')
     }
 
     // Fallback para cache se offline
@@ -217,7 +218,7 @@ export default function RelatoriosPage() {
           isAdminUser = cachedUser?.is_admin || false
         }
       } catch {
-        console.log('[Relatorios] Falha ao buscar cache')
+        logInfo('[Relatorios] Falha ao buscar cache')
       }
     }
 
@@ -503,11 +504,11 @@ export default function RelatoriosPage() {
         setReincRows(reincData.rows)
         setAssigneeStats(reincData.byAssignee)
       } catch (analyticsErr) {
-        console.warn('[Relatorios] Erro ao buscar analytics (tabelas podem nao existir ainda):', analyticsErr)
+        logWarn('[Relatorios] Erro ao buscar analytics (tabelas podem nao existir ainda)', { error: analyticsErr instanceof Error ? analyticsErr.message : String(analyticsErr) })
       }
 
     } catch (error) {
-      console.error('[Relatorios] Erro ao buscar dados:', error)
+      logError('[Relatorios] Erro ao buscar dados', { error: error instanceof Error ? error.message : String(error) })
       setIsOffline(true)
     }
 
@@ -694,7 +695,7 @@ export default function RelatoriosPage() {
         else await exportReincidenciasToExcel(data, `${filename}.xlsx`)
       }
     } catch (err) {
-      console.error('[Relatorios] Erro ao exportar:', err)
+      logError('[Relatorios] Erro ao exportar', { error: err instanceof Error ? err.message : String(err) })
     } finally {
       setExporting(false)
     }
@@ -715,7 +716,7 @@ export default function RelatoriosPage() {
         await exportReincidenciasToPDF({ summary: reincSummary, rows: reincRows, assigneeStats })
       }
     } catch (err) {
-      console.error('[Relatorios] Erro ao exportar PDF:', err)
+      logError('[Relatorios] Erro ao exportar PDF', { error: err instanceof Error ? err.message : String(err) })
     } finally {
       setExportingPdf(false)
     }
@@ -811,7 +812,7 @@ export default function RelatoriosPage() {
         createdAt: c.created_at, completedAt: c.completed_at,
       }, fields)
     } catch (err) {
-      console.error('[Relatorios] Erro ao exportar checklist PDF:', err)
+      logError('[Relatorios] Erro ao exportar checklist PDF', { error: err instanceof Error ? err.message : String(err) })
     } finally {
       setExportingChecklistId(null)
     }
@@ -829,7 +830,7 @@ export default function RelatoriosPage() {
         .order('created_at', { ascending: false })
       setLogsModal(prev => ({ ...prev, logs: data || [] }))
     } catch (err) {
-      console.error('[Relatorios] Erro ao buscar logs:', err)
+      logError('[Relatorios] Erro ao buscar logs', { error: err instanceof Error ? err.message : String(err) })
     } finally {
       setLogsLoading(false)
     }

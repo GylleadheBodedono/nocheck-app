@@ -33,6 +33,7 @@ import {
 } from 'react-icons/fi'
 import type { ActionPlanStatus, Severity } from '@/types/database'
 import { createNotification } from '@/lib/notificationService'
+import { logInfo, logWarn, logError } from '@/lib/clientLogger'
 
 // ============================================
 // TYPES
@@ -210,7 +211,7 @@ export default function ActionPlanDetailPage() {
       .single()
 
     if (fetchError) {
-      console.error('[ActionPlan] Erro ao buscar plano:', fetchError.message, fetchError.code, fetchError.details)
+      logError('[ActionPlan] Erro ao buscar plano', { error: `${fetchError.message} ${fetchError.code} ${fetchError.details}` })
       setError(fetchError.code === 'PGRST116'
         ? 'Plano de ação não encontrado.'
         : `Erro ao carregar plano: ${fetchError.message}`)
@@ -218,7 +219,7 @@ export default function ActionPlanDetailPage() {
     }
 
     // Debug: verificar se response foi carregada
-    console.log('[ActionPlan] response_id:', data.response_id, 'response:', data.response)
+    logInfo('[ActionPlan] response_id', { value: String(data.response_id) })
 
     // Buscar dados de usuarios separadamente (assigned_to e assigned_by referenciam auth.users)
     const plan = data as PlanDetail
@@ -257,7 +258,7 @@ export default function ActionPlanDetailPage() {
       .order('created_at', { ascending: false })
 
     if (fetchError) {
-      console.error('[ActionPlan] Erro ao buscar atualizacoes:', fetchError)
+      logError('[ActionPlan] Erro ao buscar atualizacoes', { error: fetchError instanceof Error ? fetchError.message : String(fetchError) })
       return []
     }
 
@@ -421,7 +422,7 @@ export default function ActionPlanDetailPage() {
           message: `"${plan.title}" mudou de ${getStatusLabel(oldStatus)} para ${getStatusLabel(newStatus)}`,
           link: `/admin/planos-de-acao/${plan.id}`,
           metadata: { plan_id: plan.id, old_status: oldStatus, new_status: newStatus },
-        }).catch(err => console.warn('[ActionPlan] Erro ao notificar mudanca de status:', err))
+        }).catch(err => logWarn('[ActionPlan] Erro ao notificar mudanca de status', { error: err instanceof Error ? err.message : String(err) }))
       }
 
       // Refresh data
@@ -429,7 +430,7 @@ export default function ActionPlanDetailPage() {
       if (planData) setPlan(planData)
       if (updatesData) setUpdates(updatesData)
     } catch (err) {
-      console.error('[ActionPlan] Erro ao alterar status:', err)
+      logError('[ActionPlan] Erro ao alterar status', { error: err instanceof Error ? err.message : String(err) })
       setError('Erro ao alterar status do plano.')
     } finally {
       setStatusChanging(false)
@@ -575,7 +576,7 @@ export default function ActionPlanDetailPage() {
           message: `"${plan.title}" foi concluido`,
           link: `/admin/planos-de-acao/${plan.id}`,
           metadata: { plan_id: plan.id, old_status: oldStatus, new_status: 'concluido' },
-        }).catch(err => console.warn('[ActionPlan] Erro ao notificar conclusao:', err))
+        }).catch(err => logWarn('[ActionPlan] Erro ao notificar conclusao', { error: err instanceof Error ? err.message : String(err) }))
       }
 
       // 7. Refresh
@@ -584,7 +585,7 @@ export default function ActionPlanDetailPage() {
       if (planData) setPlan(planData)
       if (updatesData) setUpdates(updatesData)
     } catch (err) {
-      console.error('[ActionPlan] Erro ao concluir plano:', err)
+      logError('[ActionPlan] Erro ao concluir plano', { error: err instanceof Error ? err.message : String(err) })
       const msg = err instanceof Error ? err.message : 'Erro desconhecido'
       setCompletionError(msg.includes('muito grande') || msg.includes('máx') || msg.includes('upload')
         ? msg
@@ -626,14 +627,14 @@ export default function ActionPlanDetailPage() {
           message: `"${plan.title}": ${comment.trim().substring(0, 100)}`,
           link: `/admin/planos-de-acao/${plan.id}`,
           metadata: { plan_id: plan.id },
-        }).catch(err => console.warn('[ActionPlan] Erro ao notificar comentario:', err))
+        }).catch(err => logWarn('[ActionPlan] Erro ao notificar comentario', { error: err instanceof Error ? err.message : String(err) }))
       }
 
       setComment('')
       const updatesData = await fetchUpdates()
       if (updatesData) setUpdates(updatesData)
     } catch (err) {
-      console.error('[ActionPlan] Erro ao adicionar comentario:', err)
+      logError('[ActionPlan] Erro ao adicionar comentario', { error: err instanceof Error ? err.message : String(err) })
       setError('Erro ao adicionar comentário.')
     } finally {
       setSubmittingComment(false)
@@ -717,7 +718,7 @@ export default function ActionPlanDetailPage() {
       const updatesData = await fetchUpdates()
       if (updatesData) setUpdates(updatesData)
     } catch (err) {
-      console.error('[ActionPlan] Erro ao enviar evidencia:', err)
+      logError('[ActionPlan] Erro ao enviar evidencia', { error: err instanceof Error ? err.message : String(err) })
       setError('Erro ao enviar evidência.')
     } finally {
       setUploadingEvidence(false)
@@ -754,7 +755,7 @@ export default function ActionPlanDetailPage() {
 
       router.push(APP_CONFIG.routes.adminActionPlans)
     } catch (err) {
-      console.error('[ActionPlan] Erro ao excluir plano:', err)
+      logError('[ActionPlan] Erro ao excluir plano', { error: err instanceof Error ? err.message : String(err) })
       setError(err instanceof Error ? err.message : 'Erro ao excluir plano.')
     }
   }

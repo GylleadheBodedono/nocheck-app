@@ -4,7 +4,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { verifyApiAuth } from '@/lib/api-auth'
 import { getSupabaseAdmin } from '@/lib/stripe'
 import { escapeHtml } from '@/lib/validation'
-import { createRequestLogger } from '@/lib/serverLogger'
+import { createRequestLogger, serverLogger } from '@/lib/serverLogger'
 import type {
   CreateUserRequestDTO,
   CreateUserResponseDTO,
@@ -328,7 +328,7 @@ async function sendConfirmationEmail(email: string, fullName: string, confirmUrl
   const fromEmail = process.env.RESEND_FROM_EMAIL || 'onboarding@resend.dev'
 
   if (!resendApiKey) {
-    console.warn('[API Users] RESEND_API_KEY nao configurada, email nao enviado')
+    serverLogger.warn('[API Users] RESEND_API_KEY nao configurada, email nao enviado')
     return
   }
 
@@ -351,13 +351,13 @@ async function sendConfirmationEmail(email: string, fullName: string, confirmUrl
 
   if (emailRes.ok) {
     const result = await emailRes.json()
-    console.log('[API Users] Email de confirmacao enviado para:', email, 'from:', fromEmail, 'id:', (result as { id?: string }).id)
+    serverLogger.info('[API Users] Email de confirmacao enviado', { detail: `to:${email} from:${fromEmail} id:${(result as { id?: string }).id}` })
     return
   }
 
   // Fallback: try default sender if custom domain failed
   if (fromEmail !== FALLBACK_FROM) {
-    console.warn(`[API Users] Falha com ${fromEmail}, tentando fallback ${FALLBACK_FROM}...`)
+    serverLogger.warn(`[API Users] Falha com ${fromEmail}, tentando fallback ${FALLBACK_FROM}...`)
     const fallbackRes = await fetch('https://api.resend.com/emails', {
       method: 'POST',
       headers: {
@@ -374,14 +374,14 @@ async function sendConfirmationEmail(email: string, fullName: string, confirmUrl
 
     if (fallbackRes.ok) {
       const result = await fallbackRes.json()
-      console.log('[API Users] Email enviado via fallback para:', email, 'id:', (result as { id?: string }).id)
+      serverLogger.info('[API Users] Email enviado via fallback', { detail: `to:${email} id:${(result as { id?: string }).id}` })
     } else {
       const errData = await fallbackRes.json().catch(() => ({}))
-      console.warn('[API Users] Fallback tambem falhou:', errData)
+      serverLogger.warn('[API Users] Fallback tambem falhou', { detail: errData })
     }
   } else {
     const errData = await emailRes.json().catch(() => ({}))
-    console.warn('[API Users] Falha ao enviar email via Resend:', errData)
+    serverLogger.warn('[API Users] Falha ao enviar email via Resend', { detail: errData })
   }
 }
 

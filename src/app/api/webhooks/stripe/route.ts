@@ -16,6 +16,7 @@ export const runtime = 'edge'
 import { NextRequest, NextResponse } from 'next/server'
 import Stripe from 'stripe'
 import { getStripe, getSupabaseAdmin, getPlanFromPriceId, updateOrgPlan } from '@/lib/stripe'
+import { serverLogger } from '@/lib/serverLogger'
 
 export async function POST(req: NextRequest) {
   const body = await req.text()
@@ -28,7 +29,7 @@ export async function POST(req: NextRequest) {
   const stripe = getStripe()
 
   if (!webhookSecret) {
-    console.error('[Stripe Webhook] STRIPE_WEBHOOK_SECRET nao configurado — rejeitando request')
+    serverLogger.error('[Stripe Webhook] STRIPE_WEBHOOK_SECRET nao configurado — rejeitando request')
     return NextResponse.json({ error: 'Webhook secret nao configurado' }, { status: 500 })
   }
 
@@ -39,13 +40,13 @@ export async function POST(req: NextRequest) {
   try {
     event = stripe.webhooks.constructEvent(body, sig, webhookSecret)
   } catch (err) {
-    console.error('[Stripe Webhook] Signature invalida:', err)
+    serverLogger.error('[Stripe Webhook] Signature invalida', { error: err instanceof Error ? err.message : String(err) })
     return NextResponse.json({ error: 'Signature invalida' }, { status: 400 })
   }
 
   const supabase = getSupabaseAdmin()
 
-  console.log('[Stripe Webhook] Evento:', event.type, event.id)
+  serverLogger.info('[Stripe Webhook] Evento', { detail: `${event.type} ${event.id}` })
 
   // Idempotencia: verificar se ja processamos este evento
   const { data: existing } = await supabase
@@ -55,7 +56,7 @@ export async function POST(req: NextRequest) {
     .maybeSingle()
 
   if (existing) {
-    console.log('[Stripe Webhook] Evento ja processado, ignorando:', event.id)
+    serverLogger.info('[Stripe Webhook] Evento ja processado, ignorando', { detail: event.id })
     return NextResponse.json({ received: true, duplicate: true })
   }
 
@@ -70,7 +71,7 @@ export async function POST(req: NextRequest) {
         const subscriptionId = typeof session.subscription === 'string' ? session.subscription : session.subscription?.toString()
         const customerId = typeof session.customer === 'string' ? session.customer : session.customer?.toString()
 
-        if (!orgId) { console.error('[Stripe] checkout sem org_id'); break }
+        if (!orgId) { serverLogger.error('[Stripe] checkout sem org_id'); break }
 
         // Buscar subscription para pegar o price_id
         let plan = 'starter'
@@ -87,11 +88,11 @@ export async function POST(req: NextRequest) {
             trial_ends_at: null, // Nao e mais trial
           })
         } catch (updateErr) {
-          console.error('[Stripe Webhook] DB update failed (checkout.session.completed):', updateErr)
+          serverLogger.error('[Stripe Webhook] DB update failed (checkout.session.completed)', { error: updateErr instanceof Error ? updateErr.message : String(updateErr) })
           hasErrors = true
         }
 
-        console.log(`[Stripe] Org ${orgId} → plano ${plan}`)
+        serverLogger.info(`[Stripe] Org ${orgId} → plano ${plan}`)
         break
       }
 
@@ -114,7 +115,7 @@ export async function POST(req: NextRequest) {
               current_period_end: new Date(sub.current_period_end * 1000).toISOString(),
               cancel_at_period_end: true,
             }).eq('id', orgId)
-            console.log(`[Stripe] Subscription cancel scheduled: org ${orgId} → trial em ${new Date(sub.current_period_end * 1000).toLocaleDateString()}`)
+            serverLogger.info(`[Stripe] Subscription cancel scheduled: org ${orgId} → trial em ${new Date(sub.current_period_end * 1000).toLocaleDateString()}`)
           } else {
             // Mudanca imediata ou restauracao
             await updateOrgPlan(orgId, plan, {
@@ -122,10 +123,10 @@ export async function POST(req: NextRequest) {
               current_period_end: new Date(sub.current_period_end * 1000).toISOString(),
               cancel_at_period_end: false,
             })
-            console.log(`[Stripe] Subscription updated: org ${orgId} → ${plan}`)
+            serverLogger.info(`[Stripe] Subscription updated: org ${orgId} → ${plan}`)
           }
         } catch (updateErr) {
-          console.error('[Stripe Webhook] DB update failed (customer.subscription.updated):', updateErr)
+          serverLogger.error('[Stripe Webhook] DB update failed (customer.subscription.updated)', { error: updateErr instanceof Error ? updateErr.message : String(updateErr) })
           hasErrors = true
         }
 
@@ -147,11 +148,11 @@ export async function POST(req: NextRequest) {
             cancel_at_period_end: false,
           })
         } catch (updateErr) {
-          console.error('[Stripe Webhook] DB update failed (customer.subscription.deleted):', updateErr)
+          serverLogger.error('[Stripe Webhook] DB update failed (customer.subscription.deleted)', { error: updateErr instanceof Error ? updateErr.message : String(updateErr) })
           hasErrors = true
         }
 
-        console.log(`[Stripe] Subscription deleted: org ${orgId} → trial`)
+        serverLogger.info(`[Stripe] Subscription deleted: org ${orgId} → trial`)
         break
       }
 
@@ -159,7 +160,7 @@ export async function POST(req: NextRequest) {
       case 'invoice.payment_failed': {
         const invoice = event.data.object as Stripe.Invoice
         const customerId = typeof invoice.customer === 'string' ? invoice.customer : ''
-        console.log(`[Stripe] Payment failed for customer ${customerId}`)
+        serverLogger.info(`[Stripe] Payment failed for customer ${customerId}`)
 
         if (customerId) {
           // Buscar org pelo stripe_customer_id
@@ -188,10 +189,10 @@ export async function POST(req: NextRequest) {
 
               const { error: notifErr } = await supabase.from('notifications').insert(notifications)
               if (notifErr) {
-                console.error('[Stripe Webhook] DB insert notifications failed:', notifErr)
+                serverLogger.error('[Stripe Webhook] DB insert notifications failed', { error: notifErr instanceof Error ? notifErr.message : String(notifErr) })
                 hasErrors = true
               } else {
-                console.log(`[Stripe] Notificou ${admins.length} admin(s) da org ${failedOrg.id}`)
+                serverLogger.info(`[Stripe] Notificou ${admins.length} admin(s) da org ${failedOrg.id}`)
               }
             }
           }
@@ -200,11 +201,11 @@ export async function POST(req: NextRequest) {
       }
 
       default:
-        console.log(`[Stripe Webhook] Evento nao processado: ${event.type}`)
+        serverLogger.info(`[Stripe Webhook] Evento nao processado: ${event.type}`)
     }
 
     if (hasErrors) {
-      console.error('[Stripe Webhook] Evento processado com erros:', event.type)
+      serverLogger.error('[Stripe Webhook] Evento processado com erros', { detail: event.type })
     }
 
     // Marcar evento como processado (idempotencia)
@@ -212,7 +213,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ received: true })
   } catch (err) {
-    console.error('[Stripe Webhook] Erro ao processar:', err)
+    serverLogger.error('[Stripe Webhook] Erro ao processar', { error: err instanceof Error ? err.message : String(err) })
     try { await supabase.from('stripe_webhook_events').insert({ event_id: event.id, event_type: event.type }) } catch { /* ignore */ }
     return NextResponse.json({ received: true })
   }

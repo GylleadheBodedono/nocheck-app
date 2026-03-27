@@ -7,6 +7,7 @@ import { APP_CONFIG } from '@/lib/config'
 import { LoadingPage, PageContainer } from '@/components/ui'
 import { getAuthCache, getUserCache } from '@/lib/offlineCache'
 import { useRealtimeRefresh } from '@/hooks/useRealtimeRefresh'
+import { logError } from '@/lib/clientLogger'
 import {
   FiImage,
   FiSearch,
@@ -246,7 +247,7 @@ export default function GaleriaPage() {
         // Small delay between downloads to not overwhelm browser
         if (selected.length > 1) await new Promise(r => setTimeout(r, 300))
       } catch {
-        console.error(`[Galeria] Erro ao baixar: ${file.name}`)
+        logError(`[Galeria] Erro ao baixar: ${file.name}`)
       }
     }
     setOperationLoading(false)

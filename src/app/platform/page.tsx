@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase'
 import { FiUsers, FiClipboard, FiTrendingUp, FiArrowRight, FiAward, FiClock, FiAlertTriangle, FiWifi, FiWifiOff } from 'react-icons/fi'
 import Link from 'next/link'
 import { PLAN_CONFIGS } from '@/types/tenant'
+import { logError } from '@/lib/clientLogger'
 import { ClientDetailModal } from '@/components/platform/ClientDetailModal'
 
 type Stats = { totalOrgs: number; activeOrgs: number; trialOrgs: number; totalUsers: number; totalStores: number; totalChecklists: number; mrr: number }
@@ -104,7 +105,7 @@ export default function PlatformDashboard() {
           org_id: id, org_name: (orgMap.get(id) as string) || id, value: `${count} acoes`
         })))
 
-      } catch (e) { console.error(e) }
+      } catch (e) { logError(e instanceof Error ? e.message : String(e)) }
       setLoading(false)
     }
     load()

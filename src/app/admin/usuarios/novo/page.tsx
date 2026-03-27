@@ -7,6 +7,7 @@ import { FiSave, FiCheckCircle, FiMail } from 'react-icons/fi'
 import type { Store, Sector, FunctionRow } from '@/types/database'
 import { APP_CONFIG } from '@/lib/config'
 import { Select, PageContainer } from '@/components/ui'
+import { logError } from '@/lib/clientLogger'
 
 /**
  * Página de criação de novo usuário (`/admin/usuarios/novo`).
@@ -129,7 +130,7 @@ export default function NovoUsuarioPage() {
       setSuccess(true)
       setLoading(false)
     } catch (err) {
-      console.error('Error creating user:', err)
+      logError('Error creating user', { error: err instanceof Error ? err.message : String(err) })
       setError(err instanceof Error ? err.message : 'Erro ao criar usuario')
       setLoading(false)
     }

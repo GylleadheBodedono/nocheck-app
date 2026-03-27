@@ -28,6 +28,7 @@ import { saveOfflineChecklist, updateChecklistStatus, getPendingChecklists, upda
 import { getTemplatesCache, getStoresCache, getTemplateFieldsCache, getAuthCache, getTemplateSectionsCache } from '@/lib/offlineCache'
 import { useDebouncedCallback } from 'use-debounce'
 import { isWithinTimeRange } from '@/lib/timeUtils'
+import { logError, logWarn, logInfo } from '@/lib/clientLogger'
 
 type FieldWithSection = TemplateField & { section_id: number | null }
 
@@ -47,15 +48,15 @@ type SectionProgress = {
 async function uploadPhoto(base64Image: string, fileName: string, folder?: string): Promise<string | null> {
   // PROTECAO: se ja e URL, retornar direto — NUNCA enviar URL ao upload API
   if (base64Image.startsWith('http')) {
-    console.log(`[Upload] SKIP (ja e URL): ${fileName} → ${base64Image.substring(0, 80)}...`)
+    logInfo(`[Upload] SKIP (ja e URL): ${fileName} → ${base64Image.substring(0, 80)}...`)
     return base64Image
   }
   if (!base64Image.startsWith('data:')) {
-    console.error(`[Upload] SKIP (formato invalido): ${fileName} (${base64Image.substring(0, 30)}...)`)
+    logError(`[Upload] SKIP (formato invalido): ${fileName} (${base64Image.substring(0, 30)}...)`)
     return null
   }
   const sizeKB = Math.round(base64Image.length / 1024)
-  console.log(`[Upload] Iniciando: ${fileName} (base64, ${sizeKB}KB)`)
+  logInfo(`[Upload] Iniciando: ${fileName} (base64, ${sizeKB}KB)`)
   try {
     const response = await fetch('/api/upload', {
       method: 'POST',
@@ -64,17 +65,17 @@ async function uploadPhoto(base64Image: string, fileName: string, folder?: strin
     })
     const result = await response.json()
     if (!response.ok) {
-      console.error(`[Upload] FALHA HTTP ${response.status}: ${fileName}`, result)
+      logError(`[Upload] FALHA HTTP ${response.status}: ${fileName}`, { detail: JSON.stringify(result) })
       return null
     }
     if (result.success && result.url) {
-      console.log(`[Upload] OK: ${fileName} → ${result.url.substring(0, 80)}...`)
+      logInfo(`[Upload] OK: ${fileName} → ${result.url.substring(0, 80)}...`)
       return result.url
     }
-    console.error(`[Upload] FALHA (sem URL): ${fileName}`, result)
+    logError(`[Upload] FALHA (sem URL): ${fileName}`, { detail: JSON.stringify(result) })
     return null
   } catch (err) {
-    console.error(`[Upload] ERRO: ${fileName}`, err)
+    logError(`[Upload] ERRO: ${fileName}`, { error: err instanceof Error ? err.message : String(err) })
     return null
   }
 }
@@ -312,7 +313,7 @@ function ChecklistForm() {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const rawTemplate = templateData as any
         if (rawTemplate.allowed_start_time && rawTemplate.allowed_end_time) {
-          console.log(`[Checklist] Verificando horario — template: ${rawTemplate.name}, start: ${rawTemplate.allowed_start_time}, end: ${rawTemplate.allowed_end_time}`)
+          logInfo(`[Checklist] Verificando horario — template: ${rawTemplate.name}, start: ${rawTemplate.allowed_start_time}, end: ${rawTemplate.allowed_end_time}`)
           // Check if admin has disabled time restrictions (global or per-store)
           let ignoreTime = false
           try {
@@ -339,12 +340,12 @@ function ChecklistForm() {
             }
           } catch { /* ignore */ }
 
-          console.log(`[Checklist] Bypass de horario: ${ignoreTime ? 'ATIVO' : 'INATIVO'} (loja: ${storeId})`)
+          logInfo(`[Checklist] Bypass de horario: ${ignoreTime ? 'ATIVO' : 'INATIVO'} (loja: ${storeId})`)
           if (!ignoreTime) {
             const startTime = rawTemplate.allowed_start_time as string
             const endTime = rawTemplate.allowed_end_time as string
             if (!isWithinTimeRange(startTime, endTime)) {
-              console.log(`[Checklist] BLOQUEADO por horario — ${startTime} a ${endTime}`)
+              logInfo(`[Checklist] BLOQUEADO por horario — ${startTime} a ${endTime}`)
               setTimeBlocked(true)
               setTimeBlockedMessage(`Este checklist só pode ser respondido entre ${startTime.substring(0, 5)} e ${endTime.substring(0, 5)}`)
             }
@@ -399,7 +400,7 @@ function ChecklistForm() {
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           const ct = cachedTemplate as any
           if (ct.allowed_start_time && ct.allowed_end_time) {
-            console.log(`[Checklist/Offline] Verificando horario — start: ${ct.allowed_start_time}, end: ${ct.allowed_end_time}`)
+            logInfo(`[Checklist/Offline] Verificando horario — start: ${ct.allowed_start_time}, end: ${ct.allowed_end_time}`)
             // Tentar verificar bypass mesmo offline (fetch pode funcionar se houver conexao parcial)
             let ignoreTime = false
             try {
@@ -424,12 +425,12 @@ function ChecklistForm() {
               }
             } catch { /* offline — bypass nao disponivel */ }
 
-            console.log(`[Checklist/Offline] Bypass de horario: ${ignoreTime ? 'ATIVO' : 'INATIVO'} (loja: ${storeId})`)
+            logInfo(`[Checklist/Offline] Bypass de horario: ${ignoreTime ? 'ATIVO' : 'INATIVO'} (loja: ${storeId})`)
             if (!ignoreTime) {
               const startTime = ct.allowed_start_time as string
               const endTime = ct.allowed_end_time as string
               if (!isWithinTimeRange(startTime, endTime)) {
-                console.log(`[Checklist/Offline] BLOQUEADO por horario — ${startTime} a ${endTime}`)
+                logInfo(`[Checklist/Offline] BLOQUEADO por horario — ${startTime} a ${endTime}`)
                 setTimeBlocked(true)
                 setTimeBlockedMessage(`Este checklist só pode ser respondido entre ${startTime.substring(0, 5)} e ${endTime.substring(0, 5)}`)
               }
@@ -441,7 +442,7 @@ function ChecklistForm() {
         if (cachedStore) setStore(cachedStore as Store)
         setLoading(false)
       } catch (error) {
-        console.error('[Checklist] Erro ao carregar cache:', error)
+        logError('[Checklist] Erro ao carregar cache', { error: error instanceof Error ? error.message : String(error) })
         setLoading(false)
       }
     }
@@ -578,7 +579,7 @@ function ChecklistForm() {
         const restoredResponses = restoreOfflineResponses(offlineDraftSec)
         if (Object.keys(restoredResponses).length > 0) setResponses(prev => ({ ...prev, ...restoredResponses }))
         await deleteOfflineChecklist(offlineDraftSec.id)
-        console.log('[Checklist] Draft offline sectioned migrado para online:', offlineDraftSec.id)
+        logInfo('[Checklist] Draft offline sectioned migrado para online', { value: String(offlineDraftSec.id) })
       }
 
       const todayStart = new Date()
@@ -637,7 +638,7 @@ function ChecklistForm() {
         if (createErr) {
           // Handle unique constraint violation (duplicate em_andamento for today)
           if (createErr.code === '23505') {
-            console.warn('[Checklist] Duplicate detected, loading existing checklist')
+            logWarn('[Checklist] Duplicate detected, loading existing checklist')
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const { data: existingRetry } = await (supabase as any)
               .from('checklists')
@@ -654,7 +655,7 @@ function ChecklistForm() {
               return
             }
           }
-          console.error('[Checklist] Erro ao criar checklist:', createErr)
+          logError('[Checklist] Erro ao criar checklist', { error: createErr instanceof Error ? createErr.message : String(createErr) })
           return
         }
 
@@ -938,7 +939,7 @@ function ChecklistForm() {
         const restoredResponses = restoreOfflineResponses(offlineDraftNS)
         if (Object.keys(restoredResponses).length > 0) setResponses(prev => ({ ...prev, ...restoredResponses }))
         await deleteOfflineChecklist(offlineDraftNS.id)
-        console.log('[Checklist] Draft offline migrado para online:', offlineDraftNS.id)
+        logInfo('[Checklist] Draft offline migrado para online', { value: String(offlineDraftNS.id) })
       }
 
       // If resuming a specific checklist (from dashboard "Continuar" link)
@@ -1001,7 +1002,7 @@ function ChecklistForm() {
         if (createErr) {
           // Handle unique constraint violation (duplicate em_andamento for today)
           if (createErr.code === '23505') {
-            console.warn('[Checklist] Duplicate detected, loading existing checklist')
+            logWarn('[Checklist] Duplicate detected, loading existing checklist')
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const { data: existingRetry } = await (supabase as any)
               .from('checklists')
@@ -1018,7 +1019,7 @@ function ChecklistForm() {
               return
             }
           }
-          console.error('[Checklist] Erro ao criar checklist:', createErr)
+          logError('[Checklist] Erro ao criar checklist', { error: createErr instanceof Error ? createErr.message : String(createErr) })
           return
         }
         setChecklistId(newChecklist.id)
@@ -1087,10 +1088,10 @@ function ChecklistForm() {
           }
           return prev
         })
-        console.log(`[AutoSave] Background upload OK: field ${fieldId}`)
+        logInfo(`[AutoSave] Background upload OK: field ${fieldId}`)
       }
     } catch (err) {
-      console.error(`[AutoSave] Background upload error:`, err)
+      logError('[AutoSave] Background upload error', { error: err instanceof Error ? err.message : String(err) })
     }
     uploadingRef.current = false
     // Processar proximo da fila
@@ -1219,7 +1220,7 @@ function ChecklistForm() {
           }, { onConflict: 'checklist_id,field_id' })
         if (upsertErr) {
           addLog('upsert_fail', row.fieldId, upsertErr.message || String(upsertErr))
-          console.warn('[AutoSave] Upsert falhou (dados seguros no IndexedDB):', upsertErr.message || upsertErr)
+          logWarn('[AutoSave] Upsert falhou (dados seguros no IndexedDB)', { error: upsertErr.message || String(upsertErr) })
           // NAO mostrar 'error' — dados estao salvos no IndexedDB e React state
           setSavingWithTimeout('saved')
           return
@@ -1256,7 +1257,7 @@ function ChecklistForm() {
               value_json: row.valueJson,
             }, { onConflict: 'checklist_id,field_id' })
           if (retryErr) {
-            console.warn('[AutoSave] Retry upsert falhou (dados seguros no IndexedDB):', retryErr.message || retryErr)
+            logWarn('[AutoSave] Retry upsert falhou (dados seguros no IndexedDB)', { error: retryErr.message || String(retryErr) })
             setSavingWithTimeout('saved')
             return
           }
@@ -1269,7 +1270,7 @@ function ChecklistForm() {
             valueJson: row.valueJson,
           })
         } else {
-          console.warn('[AutoSave] IDs nao disponiveis ainda, resposta mantida em memoria')
+          logWarn('[AutoSave] IDs nao disponiveis ainda, resposta mantida em memoria')
           setSavingWithTimeout('idle')
           return
         }
@@ -1290,7 +1291,7 @@ function ChecklistForm() {
       }
     } catch (err) {
       addLog('autosave_error', undefined, err instanceof Error ? err.message : String(err))
-      console.warn('[AutoSave] Erro geral (dados seguros no IndexedDB):', err)
+      logWarn('[AutoSave] Erro geral (dados seguros no IndexedDB)', { error: err instanceof Error ? err.message : String(err) })
       setSavingWithTimeout('saved')
     }
   }, 1500)
@@ -1308,7 +1309,7 @@ function ChecklistForm() {
         valueJson: row.valueJson,
       })
     } catch (err) {
-      console.error('[AutoSave] Offline backup error:', err)
+      logError('[AutoSave] Offline backup error', { error: err instanceof Error ? err.message : String(err) })
     }
   }, [buildSingleResponseRow, template])
 
@@ -1411,11 +1412,11 @@ function ChecklistForm() {
           const uploadedUrls: string[] = []
           for (let i = 0; i < photos.length; i++) {
             if (photos[i].startsWith('http')) {
-              console.log(`[buildResponseRows] photo field_${fieldId}[${i}]: ja e URL, mantendo`)
+              logInfo(`[buildResponseRows] photo field_${fieldId}[${i}]: ja e URL, mantendo`)
               uploadedUrls.push(photos[i])
             } else {
               const url = await uploadPhoto(photos[i], `checklist_${Date.now()}_foto_${i + 1}.jpg`)
-              console.log(`[buildResponseRows] photo field_${fieldId}[${i}]: upload ${url ? 'OK' : 'FALHA'}`)
+              logInfo(`[buildResponseRows] photo field_${fieldId}[${i}]: upload ${url ? 'OK' : 'FALHA'}`)
               uploadedUrls.push(url || photos[i])
             }
           }
@@ -1433,11 +1434,11 @@ function ChecklistForm() {
             const uploadedUrls: string[] = []
             for (let i = 0; i < yesNoObj.photos.length; i++) {
               if (yesNoObj.photos[i].startsWith('http')) {
-                console.log(`[buildResponseRows] yes_no.photos field_${fieldId}[${i}]: ja e URL, mantendo`)
+                logInfo(`[buildResponseRows] yes_no.photos field_${fieldId}[${i}]: ja e URL, mantendo`)
                 uploadedUrls.push(yesNoObj.photos[i])
               } else {
                 const url = await uploadPhoto(yesNoObj.photos[i], `checklist_${Date.now()}_yesno_foto_${i + 1}.jpg`, 'anexos')
-                console.log(`[buildResponseRows] yes_no.photos field_${fieldId}[${i}]: upload ${url ? 'OK' : 'FALHA'}`)
+                logInfo(`[buildResponseRows] yes_no.photos field_${fieldId}[${i}]: upload ${url ? 'OK' : 'FALHA'}`)
                 uploadedUrls.push(url || yesNoObj.photos[i])
               }
             }
@@ -1450,11 +1451,11 @@ function ChecklistForm() {
             const uploadedUrls: string[] = []
             for (let i = 0; i < yesNoObj.conditionalPhotos.length; i++) {
               if (yesNoObj.conditionalPhotos[i].startsWith('http')) {
-                console.log(`[buildResponseRows] yes_no.condPhotos field_${fieldId}[${i}]: ja e URL, mantendo`)
+                logInfo(`[buildResponseRows] yes_no.condPhotos field_${fieldId}[${i}]: ja e URL, mantendo`)
                 uploadedUrls.push(yesNoObj.conditionalPhotos[i])
               } else {
                 const url = await uploadPhoto(yesNoObj.conditionalPhotos[i], `checklist_${Date.now()}_yesno_cond_foto_${i + 1}.jpg`, 'anexos')
-                console.log(`[buildResponseRows] yes_no.condPhotos field_${fieldId}[${i}]: upload ${url ? 'OK' : 'FALHA'}`)
+                logInfo(`[buildResponseRows] yes_no.condPhotos field_${fieldId}[${i}]: upload ${url ? 'OK' : 'FALHA'}`)
                 uploadedUrls.push(url || yesNoObj.conditionalPhotos[i])
               }
             }
@@ -1599,7 +1600,7 @@ function ChecklistForm() {
           }
           window.location.href = `${APP_CONFIG.routes.dashboard}?finished=true`
         } catch (err) {
-          console.error('[Checklist] Erro ao finalizar sem justificativas:', err)
+          logError('[Checklist] Erro ao finalizar sem justificativas', { error: err instanceof Error ? err.message : String(err) })
           setSubmitting(false)
         }
         return
@@ -1710,7 +1711,7 @@ function ChecklistForm() {
         }
       }
     } catch (err) {
-      console.error('[Checklist] Erro no bulk save da secao:', err)
+      logError('[Checklist] Erro no bulk save da secao', { error: err instanceof Error ? err.message : String(err) })
     }
 
     // Check if all required fields and required sub-fields are filled
@@ -1810,7 +1811,7 @@ function ChecklistForm() {
             : sp
         ))
       } catch (err) {
-        console.error('[Checklist] Erro ao marcar secao como concluida:', err)
+        logError('[Checklist] Erro ao marcar secao como concluida', { error: err instanceof Error ? err.message : String(err) })
       }
     }
 
@@ -1898,7 +1899,7 @@ function ChecklistForm() {
           }
         }
       } catch (err) {
-        console.error('[SwitchSection] Erro ao salvar secao:', err)
+        logError('[SwitchSection] Erro ao salvar secao', { error: err instanceof Error ? err.message : String(err) })
       }
 
       // Verificar se secao que estamos saindo foi concluida (marca check verde)
@@ -2001,7 +2002,7 @@ function ChecklistForm() {
       // Mark offline checklist as ready for sync when connectivity returns
       if (offlineChecklistIdRef.current) {
         try { await updateChecklistStatus(offlineChecklistIdRef.current, 'pending') }
-        catch (e) { console.error('[Checklist] Error marking offline as pending:', e) }
+        catch (e) { logError('[Checklist] Error marking offline as pending', { error: e instanceof Error ? e.message : String(e) }) }
       }
       setShowOfflineModal(true)
       return
@@ -2038,7 +2039,7 @@ function ChecklistForm() {
 
         if (template) {
           const allFieldIds = template.fields.map(f => f.id)
-          console.log(`[Checklist] Finalizando: ${allFieldIds.length} campos, template=${template.name}`)
+          logInfo(`[Checklist] Finalizando: ${allFieldIds.length} campos, template=${template.name}`)
 
           // 1. Build response data SEM upload de fotos (auto-save ja fez upload)
           const allResponseData = await buildResponseRows(allFieldIds, false)
@@ -2086,12 +2087,12 @@ function ChecklistForm() {
             processarValidacaoCruzada(
               supabase, checklistId, Number(templateId), Number(storeId),
               userId, allResponseMapped, template.fields
-            ).catch(err => console.error('[BG] processarValidacaoCruzada:', err)),
+            ).catch(err => logError('[BG] processarValidacaoCruzada', { error: err instanceof Error ? err.message : String(err) })),
             processarNaoConformidades(
               supabase, checklistId, Number(templateId), Number(storeId), null, userId,
               allResponseMapped,
               template.fields.map(f => ({ id: f.id, name: f.name, field_type: f.field_type, options: f.options }))
-            ).catch(err => console.error('[BG] processarNaoConformidades:', err)),
+            ).catch(err => logError('[BG] processarNaoConformidades', { error: err instanceof Error ? err.message : String(err) })),
             sb.from('checklists').update({ debug_log: debugLogRef.current }).eq('id', checklistId).then(() => {}).catch(() => {}),
             sb.from('activity_log').insert({
               store_id: Number(storeId), user_id: userId, checklist_id: checklistId,
@@ -2122,7 +2123,7 @@ function ChecklistForm() {
       }
     } catch (err) {
       clearTimeout(finalizeTimeout)
-      console.error('[Checklist] Erro ao finalizar:', err)
+      logError('[Checklist] Erro ao finalizar', { error: err instanceof Error ? err.message : String(err) })
       setErrors({ 0: err instanceof Error ? err.message : 'Erro ao finalizar checklist' })
       setSubmitting(false)
     }
@@ -2224,12 +2225,12 @@ function ChecklistForm() {
           processarValidacaoCruzada(
             supabase, checklistId, Number(templateId), Number(storeId),
             userId, allResponseMapped, template.fields
-          ).catch(err => console.error('[BG] processarValidacaoCruzada:', err)),
+          ).catch(err => logError('[BG] processarValidacaoCruzada', { error: err instanceof Error ? err.message : String(err) })),
           processarNaoConformidades(
             supabase, checklistId, Number(templateId), Number(storeId), null, userId,
             allResponseMapped,
             template.fields.map(f => ({ id: f.id, name: f.name, field_type: f.field_type, options: f.options }))
-          ).catch(err => console.error('[BG] processarNaoConformidades:', err)),
+          ).catch(err => logError('[BG] processarNaoConformidades', { error: err instanceof Error ? err.message : String(err) })),
           sb.from('checklists').update({ debug_log: debugLogRef.current }).eq('id', checklistId).then(() => {}).catch(() => {}),
           sb.from('activity_log').insert({
             store_id: Number(storeId), user_id: userId, checklist_id: checklistId,
@@ -2259,7 +2260,7 @@ function ChecklistForm() {
       }
     } catch (err) {
       clearTimeout(finalizeTimeout)
-      console.error('[Checklist] Erro ao finalizar com justificativas:', err)
+      logError('[Checklist] Erro ao finalizar com justificativas', { error: err instanceof Error ? err.message : String(err) })
       setErrors({ 0: err instanceof Error ? err.message : 'Erro ao finalizar checklist' })
       setSubmitting(false)
     }
@@ -2351,7 +2352,7 @@ function ChecklistForm() {
       // Limpar modal
       resetAddFieldModal()
     } catch (err) {
-      console.error('[TechUser] Erro ao adicionar campo:', err)
+      logError('[TechUser] Erro ao adicionar campo', { error: err instanceof Error ? err.message : String(err) })
       alert('Erro ao adicionar campo. Tente novamente.')
     } finally {
       setAddingField(false)
@@ -3031,7 +3032,7 @@ function ChecklistForm() {
                       }
                     }
                   } catch (err) {
-                    console.error('[NavSave] Erro ao salvar secao:', err)
+                    logError('[NavSave] Erro ao salvar secao', { error: err instanceof Error ? err.message : String(err) })
                   }
 
                   // 3. Navegar

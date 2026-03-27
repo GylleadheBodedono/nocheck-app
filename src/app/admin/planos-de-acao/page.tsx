@@ -22,6 +22,7 @@ import Link from 'next/link'
 import { APP_CONFIG } from '@/lib/config'
 import { LoadingPage, Select, PageContainer } from '@/components/ui'
 import { getAuthCache, getUserCache, getActionPlansCache, getStoresCache, getAllUsersCache } from '@/lib/offlineCache'
+import { logInfo, logError } from '@/lib/clientLogger'
 
 type ActionPlan = {
   id: number
@@ -112,7 +113,7 @@ export default function PlanoDeAcaoPage() {
         userFunctionId = (profile as { function_id?: number } | null)?.function_id || null
       }
     } catch {
-      console.log('[PlanosDeAcao] Falha ao verificar online, tentando cache...')
+      logInfo('[PlanosDeAcao] Falha ao verificar online, tentando cache...')
     }
 
     // Fallback para cache se offline
@@ -125,7 +126,7 @@ export default function PlanoDeAcaoPage() {
           isAdminUser = cachedUser?.is_admin || false
         }
       } catch {
-        console.log('[PlanosDeAcao] Falha ao buscar cache')
+        logInfo('[PlanosDeAcao] Falha ao buscar cache')
       }
     }
 
@@ -170,7 +171,7 @@ export default function PlanoDeAcaoPage() {
       ])
 
       if (plansRes.error) {
-        console.error('[PlanosDeAcao] Erro na query de planos:', plansRes.error.message)
+        logError('[PlanosDeAcao] Erro na query de planos', { error: plansRes.error.message })
       }
 
       if (plansRes.data) {
@@ -201,7 +202,7 @@ export default function PlanoDeAcaoPage() {
         setUsers(usersRes.data)
       }
     } catch (error) {
-      console.error('[PlanosDeAcao] Erro ao buscar dados online:', error)
+      logError('[PlanosDeAcao] Erro ao buscar dados online', { error: error instanceof Error ? error.message : String(error) })
       // Fallback: carregar do cache offline
       try {
         const cachedPlans = await getActionPlansCache()
@@ -232,7 +233,7 @@ export default function PlanoDeAcaoPage() {
           setUsers(cachedUsers.map(u => ({ id: u.id, full_name: u.full_name })))
         }
       } catch (cacheErr) {
-        console.error('[PlanosDeAcao] Erro ao carregar cache:', cacheErr)
+        logError('[PlanosDeAcao] Erro ao carregar cache', { error: cacheErr instanceof Error ? cacheErr.message : String(cacheErr) })
       }
       setIsOffline(true)
     }
@@ -320,7 +321,7 @@ export default function PlanoDeAcaoPage() {
         const { error: e4 } = await sb.from('action_plans').delete().eq('id', planId)
         if (e4) throw e4
       } catch (err) {
-        console.error(`[PlanosDeAcao] Erro ao excluir plano #${planId}:`, err)
+        logError(`[PlanosDeAcao] Erro ao excluir plano #${planId}`, { error: err instanceof Error ? err.message : String(err) })
         errors++
       }
     }
@@ -350,7 +351,7 @@ export default function PlanoDeAcaoPage() {
       await sb.from('action_plan_evidence').delete().neq('id', 0)
       await sb.from('action_plans').delete().neq('id', 0)
     } catch (err) {
-      console.error('[PlanosDeAcao] Erro ao excluir todos:', err)
+      logError('[PlanosDeAcao] Erro ao excluir todos', { error: err instanceof Error ? err.message : String(err) })
       alert('Erro ao excluir planos. Verifique o console.')
     }
 

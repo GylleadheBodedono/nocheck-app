@@ -22,6 +22,7 @@ import {
 } from 'react-icons/fi'
 import Link from 'next/link'
 import { APP_CONFIG } from '@/lib/config'
+import { logError } from '@/lib/clientLogger'
 import { LoadingPage, Select, PageContainer } from '@/components/ui'
 import { getAuthCache, getUserCache } from '@/lib/offlineCache'
 import { useRealtimeRefresh } from '@/hooks/useRealtimeRefresh'
@@ -206,7 +207,7 @@ export default function PlanoDeAcaoReportPage() {
       setSummary(result.summary)
       setPage(1)
     } catch (err) {
-      console.error('[PlanosReport] Erro ao buscar dados:', err)
+      logError('[PlanosReport] Erro ao buscar dados', { error: err instanceof Error ? err.message : String(err) })
     } finally {
       setLoading(false)
     }
@@ -236,7 +237,7 @@ export default function PlanoDeAcaoReportPage() {
       else if (format === 'txt') exportActionPlanToTXT(items, `${filename}.txt`)
       else await exportActionPlanToExcel(items, `${filename}.xlsx`)
     } catch (err) {
-      console.error('[PlanosReport] Erro ao exportar:', err)
+      logError('[PlanosReport] Erro ao exportar', { error: err instanceof Error ? err.message : String(err) })
     } finally {
       setExporting(false)
     }
@@ -266,7 +267,7 @@ export default function PlanoDeAcaoReportPage() {
         assigneeName: assigneeFilter ? users.find(u => u.id === assigneeFilter)?.full_name : undefined,
       })
     } catch (err) {
-      console.error('[PlanosReport] Erro ao exportar PDF:', err)
+      logError('[PlanosReport] Erro ao exportar PDF', { error: err instanceof Error ? err.message : String(err) })
     } finally {
       setExportingPdf(false)
     }

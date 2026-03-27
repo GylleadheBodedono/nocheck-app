@@ -14,6 +14,7 @@ import { PLAN_CONFIGS, type Plan, type PlanConfig } from '@/types/tenant'
 import { fetchPlanConfigs } from '@/lib/plans'
 import { createPortalSession, getTrialDaysRemaining } from '@/services/billing.service'
 import { LoadingPage } from '@/components/ui'
+import { logError } from '@/lib/clientLogger'
 import { PaymentModal } from '@/components/billing/PaymentModal'
 import { DowngradeModal } from '@/components/billing/DowngradeModal'
 
@@ -93,7 +94,7 @@ export default function BillingPage() {
       const { url } = await createPortalSession({ orgId: org.id })
       if (url) window.location.href = url
     } catch (err) {
-      console.error('[Billing] Erro portal:', err)
+      logError('[Billing] Erro portal', { error: err instanceof Error ? err.message : String(err) })
       const msg = err instanceof Error ? err.message : 'Erro desconhecido'
       alert(`Não foi possível abrir o gerenciamento de assinatura: ${msg}`)
     }

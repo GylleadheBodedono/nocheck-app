@@ -12,6 +12,7 @@ import { getStripe, getSupabaseAdmin, updateOrgPlan, getPlanFromPriceId } from '
 import { verifyTenantAccess } from '@/lib/withTenantAuth'
 import { subscribeSchema, validateBody } from '@/lib/billingSchemas'
 import { billingLimiter, getRequestIdentifier } from '@/lib/rateLimit'
+import { serverLogger } from '@/lib/serverLogger'
 
 export async function POST(req: NextRequest) {
   try {
@@ -124,13 +125,13 @@ export async function POST(req: NextRequest) {
         })
       } catch (dbErr) {
         // DB falhou mas Stripe ja cobrou — webhook vai reconciliar
-        console.error('[Billing Subscribe] DB update falhou apos Stripe sucesso — webhook vai reconciliar:', dbErr)
+        serverLogger.error('[Billing Subscribe] DB update falhou apos Stripe sucesso — webhook vai reconciliar', { error: dbErr instanceof Error ? dbErr.message : String(dbErr) })
       }
     }
 
     return NextResponse.json({ success: true, subscriptionId: subscription.id })
   } catch (err) {
-    console.error('[Billing Subscribe] Erro:', err)
+    serverLogger.error('[Billing Subscribe] Erro', { error: err instanceof Error ? err.message : String(err) })
     return NextResponse.json(
       { error: err instanceof Error ? err.message : 'Erro ao criar assinatura' },
       { status: 500 }

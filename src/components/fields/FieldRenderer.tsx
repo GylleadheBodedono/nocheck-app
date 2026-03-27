@@ -8,6 +8,7 @@ import {
   FiX,
 } from 'react-icons/fi'
 import { Select } from '@/components/ui/Select'
+import { logError } from '@/lib/clientLogger'
 
 type AssignableFunction = {
   id: number
@@ -218,7 +219,7 @@ function PhotoField({ field, value, onChange }: { field: TemplateField; value: s
         const compressed = await compressImage(file, 1200, 0.7)
         newPhotos.push(compressed)
       } catch (err) {
-        console.error('Error compressing image:', err)
+        logError('Error compressing image', { error: err instanceof Error ? err.message : String(err) })
       }
     }
 
@@ -720,7 +721,7 @@ function YesNoField({ field, value, onChange }: { field: TemplateField; value: u
         const compressed = await compressImage(files[i], 1200, 0.7)
         newPhotos.push(compressed)
       } catch (err) {
-        console.error('Error compressing image:', err)
+        logError('Error compressing image', { error: err instanceof Error ? err.message : String(err) })
       }
     }
     handlePhotosChange([...photos, ...newPhotos])
@@ -903,7 +904,7 @@ function YesNoField({ field, value, onChange }: { field: TemplateField; value: u
                       const compressed = await compressImage(files[i], 1200, 0.7)
                       newPhotos.push(compressed)
                     } catch (err) {
-                      console.error('Error compressing image:', err)
+                      logError('Error compressing image', { error: err instanceof Error ? err.message : String(err) })
                     }
                   }
                   onChange(buildValue({ conditionalPhotos: [...conditionalPhotos, ...newPhotos] }))

@@ -16,6 +16,7 @@ import {
   FiStar,
 } from 'react-icons/fi'
 import { APP_CONFIG } from '@/lib/config'
+import { logError, logInfo } from '@/lib/clientLogger'
 import { LoadingPage, PageContainer } from '@/components/ui'
 import type { ChecklistTemplate, TemplateField, TemplateVisibility, Store } from '@/types/database'
 import { getAuthCache, getUserCache, getTemplatesCache, getStoresCache } from '@/lib/offlineCache'
@@ -71,7 +72,7 @@ export default function TemplatesPage() {
         isAdmin = profile && 'is_admin' in profile ? (profile as { is_admin: boolean }).is_admin : false
       }
     } catch {
-      console.log('[Templates] Falha ao verificar online, tentando cache...')
+      logInfo('[Templates] Falha ao verificar online, tentando cache...')
     }
 
     // Fallback para cache se offline
@@ -84,7 +85,7 @@ export default function TemplatesPage() {
           isAdmin = cachedUser?.is_admin || false
         }
       } catch {
-        console.log('[Templates] Falha ao buscar cache')
+        logInfo('[Templates] Falha ao buscar cache')
       }
     }
 
@@ -135,7 +136,7 @@ export default function TemplatesPage() {
       setTemplates(data as TemplateWithDetails[])
       setIsOffline(false)
     } catch (err) {
-      console.error('[Templates] Erro ao buscar online:', err)
+      logError('[Templates] Erro ao buscar online', { error: err instanceof Error ? err.message : String(err) })
 
       // Fallback para cache offline
       try {
@@ -161,9 +162,9 @@ export default function TemplatesPage() {
 
         setTemplates(templatesWithDetails)
         setIsOffline(true)
-        console.log('[Templates] Carregado do cache offline')
+        logInfo('[Templates] Carregado do cache offline')
       } catch (cacheErr) {
-        console.error('[Templates] Erro ao buscar cache:', cacheErr)
+        logError('[Templates] Erro ao buscar cache', { error: cacheErr instanceof Error ? cacheErr.message : String(cacheErr) })
       }
     }
 
@@ -178,7 +179,7 @@ export default function TemplatesPage() {
       .eq('id', templateId)
 
     if (error) {
-      console.error('Error updating template:', error)
+      logError('Error updating template', { error: error instanceof Error ? error.message : String(error) })
       return
     }
 
@@ -206,7 +207,7 @@ export default function TemplatesPage() {
       .single()
 
     if (templateError || !newTemplate) {
-      console.error('Error duplicating template:', templateError)
+      logError('Error duplicating template', { error: templateError instanceof Error ? templateError.message : String(templateError) })
       return
     }
 
@@ -296,7 +297,7 @@ export default function TemplatesPage() {
 
       fetchTemplates()
     } catch (error) {
-      console.error('Error deleting template:', error)
+      logError('Error deleting template', { error: error instanceof Error ? error.message : String(error) })
       alert('Erro ao excluir checklist')
     }
   }
