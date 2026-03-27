@@ -3,38 +3,18 @@ export const runtime = 'edge'
 import { NextRequest, NextResponse } from 'next/server'
 import { verifyApiAuth } from '@/lib/api-auth'
 import { createRequestLogger, serverLogger } from '@/lib/serverLogger'
+// Os tipos ValidationAlertDTO e ActionPlanAlertDTO substituem os
+// tipos locais ValidationData e ActionPlanData, centralizando
+// a definição de contrato no diretório /dtos.
+import type {
+  NotifyRequestDTO,
+  NotifyResponseDTO,
+  ValidationAlertDTO,
+  ActionPlanAlertDTO,
+  TeamsNotifyResultDTO,
+} from '@/dtos'
 
 const TEAMS_WEBHOOK_URL = process.env.TEAMS_WEBHOOK_URL || ''
-
-type ValidationData = {
-  id: number
-  numeroNota: string
-  numeroNotaVinculada?: string
-  loja: string
-  valorEstoquista: number | null
-  valorAprendiz: number | null
-  diferenca: number | null
-  status: 'pendente' | 'sucesso' | 'falhou' | 'notas_diferentes' | 'expirado'
-  dataHora: string
-  matchReason?: string
-  setor?: string
-}
-
-type ActionPlanData = {
-  title: string
-  fieldName: string
-  storeName: string
-  severity: string
-  deadline: string
-  assigneeName: string
-  nonConformityValue: string | null
-  isReincidencia: boolean
-  reincidenciaCount: number
-  respondentName?: string
-  respondentEmail?: string
-  assigneeEmail?: string
-  webhookUrl?: string | null
-}
 
 /**
  * POST /api/integrations/notify
@@ -46,25 +26,30 @@ export async function POST(request: NextRequest) {
   if (auth.error) return auth.error
 
   try {
-    const body = await request.json()
-    const { action, data } = body as { action: string; data: ValidationData | ActionPlanData }
+    // Extrai e tipifica o body com o DTO de notificação de integração
+    const body = await request.json() as NotifyRequestDTO
+    const { action, data } = body
 
-    // Plano de acao
+    // Plano de acao — envia Adaptive Card específico para planos
     if (action === 'action_plan') {
-      const result = await enviarPlanoAcaoParaTeams(data as ActionPlanData)
+      const result = await enviarPlanoAcaoParaTeams(data as ActionPlanAlertDTO)
       log.info('Teams action_plan dispatched', { teamsSuccess: result.success })
-      return NextResponse.json({ success: true, teams: result })
+      const response: NotifyResponseDTO = { success: true, teams: result }
+      return NextResponse.json(response)
     }
 
-    // Validacao cruzada (comportamento original)
-    const validationData = data as ValidationData
+    // Validacao cruzada — envia alerta apenas para status problemáticos
+    const validationData = data as ValidationAlertDTO
     if (validationData.status === 'falhou' || validationData.status === 'notas_diferentes' || validationData.status === 'expirado') {
       const result = await enviarParaTeams(validationData)
       log.info('Teams validation alert dispatched', { teamsSuccess: result.success, status: validationData.status })
-      return NextResponse.json({ success: true, teams: result })
+      const response: NotifyResponseDTO = { success: true, teams: result }
+      return NextResponse.json(response)
     }
 
-    return NextResponse.json({ success: true, message: 'Sem divergência, alerta não enviado' })
+    // Status ok — não requer alerta
+    const noAlertResponse: NotifyResponseDTO = { success: true, message: 'Sem divergência, alerta não enviado' }
+    return NextResponse.json(noAlertResponse)
   } catch (error) {
     log.error('Erro inesperado em POST /api/integrations/notify', {}, error)
     return NextResponse.json(
@@ -74,7 +59,7 @@ export async function POST(request: NextRequest) {
   }
 }
 
-async function enviarParaTeams(data: ValidationData): Promise<{ success: boolean; error?: string }> {
+async function enviarParaTeams(data: ValidationAlertDTO): Promise<TeamsNotifyResultDTO> {
   if (!TEAMS_WEBHOOK_URL) {
     serverLogger.warn('Webhook URL não configurado', { route: '/api/integrations/notify' })
     return { success: false, error: 'TEAMS_WEBHOOK_URL não configurado' }
@@ -185,7 +170,7 @@ async function enviarParaTeams(data: ValidationData): Promise<{ success: boolean
             {
               type: 'Action.OpenUrl',
               title: 'Abrir Validações',
-              url: `${process.env.NEXT_PUBLIC_APP_URL || 'https://nocheck-app.vercel.app'}/admin/validacoes`,
+              url: `${process.env.NEXT_PUBLIC_APP_URL || 'https://operecheck.vercel.app'}/admin/validacoes`,
             },
           ],
         },
@@ -217,7 +202,7 @@ async function enviarParaTeams(data: ValidationData): Promise<{ success: boolean
   }
 }
 
-async function enviarPlanoAcaoParaTeams(data: ActionPlanData): Promise<{ success: boolean; error?: string }> {
+async function enviarPlanoAcaoParaTeams(data: ActionPlanAlertDTO): Promise<TeamsNotifyResultDTO> {
   const webhookUrl = data.webhookUrl || TEAMS_WEBHOOK_URL
   if (!webhookUrl) {
     serverLogger.warn('Webhook URL nao configurado para plano de acao (nem por funcao nem global)', { route: '/api/integrations/notify' })
@@ -300,7 +285,7 @@ async function enviarPlanoAcaoParaTeams(data: ActionPlanData): Promise<{ success
             {
               type: 'Action.OpenUrl',
               title: 'Ver Planos de Ação',
-              url: `${process.env.NEXT_PUBLIC_APP_URL || 'https://nocheck-app.vercel.app'}/admin/planos-de-acao`,
+              url: `${process.env.NEXT_PUBLIC_APP_URL || 'https://operecheck.vercel.app'}/admin/planos-de-acao`,
             },
           ],
           ...(entities.length > 0 ? { msteams: { entities } } : {}),

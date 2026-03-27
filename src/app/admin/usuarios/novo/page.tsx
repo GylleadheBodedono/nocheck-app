@@ -294,7 +294,7 @@ export default function NovoUsuarioPage() {
               <div className="card p-6">
                 <h2 className="text-lg font-semibold text-main mb-4">Atribuicao</h2>
                 <p className="text-sm text-muted mb-4">
-                  Selecione as lojas, setores e funcao do usuario.
+                  Selecione as lojas, setores e função do usuário.
                 </p>
 
                 <div className="space-y-4">
@@ -364,7 +364,7 @@ export default function NovoUsuarioPage() {
                   {/* Function */}
                   <div>
                     <label className="block text-sm font-medium text-secondary mb-2">
-                      Funcao
+                      Função
                     </label>
                     <Select
                       value={String(functionId ?? '')}

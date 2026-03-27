@@ -394,7 +394,7 @@ export default function AdminPage() {
   const statusLabels: Record<string, string> = {
     rascunho: 'Rascunho',
     em_andamento: 'Andamento',
-    concluido: 'Concluido',
+    concluido: 'Concluído',
     validado: 'Validado',
     incompleto: 'Incompleto',
     pendente: 'Pendente',
@@ -412,8 +412,8 @@ export default function AdminPage() {
     previewKey?: keyof PreviewData
   }[] = [
     {
-      title: 'Usuarios',
-      description: 'Gerenciar usuarios e permissoes',
+      title: 'Usuários',
+      description: 'Gerenciar usuários e permissões',
       icon: FiUsers,
       href: APP_CONFIG.routes.adminUsers,
       stat: stats.totalUsers,
@@ -440,7 +440,7 @@ export default function AdminPage() {
     },
     {
       title: 'Setores',
-      description: 'Cozinha, Estoque, Salao, etc.',
+      description: 'Cozinha, Estoque, Salão, etc.',
       icon: FiGrid,
       href: APP_CONFIG.routes.adminSectors,
       stat: stats.totalSectors,
@@ -448,8 +448,8 @@ export default function AdminPage() {
       previewKey: 'recentSectors',
     },
     {
-      title: 'Funcoes',
-      description: 'Cozinheiro, Zelador, Garcom, etc.',
+      title: 'Funções',
+      description: 'Cozinheiro, Zelador, Garçom, etc.',
       icon: FiClipboard,
       href: APP_CONFIG.routes.adminFunctions,
       stat: stats.totalFunctions,
@@ -457,7 +457,7 @@ export default function AdminPage() {
       previewKey: 'recentFunctions',
     },
     {
-      title: 'Validacoes',
+      title: 'Validações',
       description: 'Estoquista vs Aprendiz',
       icon: FiSliders,
       href: APP_CONFIG.routes.adminValidations,
@@ -483,23 +483,23 @@ export default function AdminPage() {
       badgeLabel: 'Files',
     },
     {
-      title: 'Planos de Acao',
-      description: 'Nao conformidades e acoes',
+      title: 'Planos de Ação',
+      description: 'Não conformidades e ações',
       icon: FiAlertTriangle,
       href: APP_CONFIG.routes.adminActionPlans,
       stat: 0,
       badgeLabel: 'Planos',
     },
     {
-      title: 'Relatorios',
-      description: 'Estatisticas e analises',
+      title: 'Relatórios',
+      description: 'Estatísticas e análises',
       icon: FiBarChart2,
       href: APP_CONFIG.routes.adminReports,
       stat: stats.totalChecklists,
       badgeLabel: 'Analytics',
     },
     {
-      title: 'Configuracoes',
+      title: 'Configurações',
       description: 'Email templates e ajustes',
       icon: FiSettings,
       href: APP_CONFIG.routes.adminSettings,
@@ -510,7 +510,7 @@ export default function AdminPage() {
 
   const quickActions = [
     {
-      title: 'Novo Usuario',
+      title: 'Novo Usuário',
       description: 'Invite team member',
       icon: FiUserPlus,
       href: APP_CONFIG.routes.adminUsersNew,
@@ -522,7 +522,7 @@ export default function AdminPage() {
       href: APP_CONFIG.routes.adminTemplatesNew,
     },
     {
-      title: 'Ver Relatorios',
+      title: 'Ver Relatórios',
       description: 'Check analytics',
       icon: FiBarChart2,
       href: APP_CONFIG.routes.adminReports,
@@ -548,7 +548,7 @@ export default function AdminPage() {
               </div>
               <div>
                 <p className="font-medium text-main text-sm">Receba avisos no celular</p>
-                <p className="text-xs text-muted">Planos de acao, vencimentos e alertas como notificacao do sistema.</p>
+                <p className="text-xs text-muted">Planos de ação, vencimentos e alertas como notificação do sistema.</p>
               </div>
             </div>
             <button
@@ -560,7 +560,7 @@ export default function AdminPage() {
               }}
               className="btn-primary text-sm shrink-0 self-start sm:self-center"
             >
-              Ativar notificacoes
+              Ativar notificações
             </button>
           </div>
         </div>
@@ -578,8 +578,8 @@ export default function AdminPage() {
                   <div className="flex items-center gap-3 min-w-0">
                     <FiSettings className="w-4 h-4 text-muted shrink-0" />
                     <div className="min-w-0">
-                      <p className="text-sm font-medium text-main leading-tight">Ignorar horarios</p>
-                      <p className="text-xs text-muted leading-tight">Desativa restricoes de horario</p>
+                      <p className="text-sm font-medium text-main leading-tight">Ignorar horários</p>
+                      <p className="text-xs text-muted leading-tight">Desativa restrições de horário</p>
                     </div>
                   </div>
                   <button
@@ -620,7 +620,7 @@ export default function AdminPage() {
                             : 'bg-surface-hover text-muted hover:text-main'
                         }`}
                       >
-                        Lojas especificas
+                        Lojas específicas
                       </button>
                     </div>
                     {bypassStoreIds !== 'all' && (
@@ -653,10 +653,10 @@ export default function AdminPage() {
                           ? 'text-muted' : 'text-warning'
                       }`}>
                         {bypassStoreIds === 'all'
-                          ? 'Restricoes de horario desativadas para todas as lojas'
+                          ? 'Restrições de horário desativadas para todas as lojas'
                           : Array.isArray(bypassStoreIds) && bypassStoreIds.length === 0
                             ? 'Nenhuma loja selecionada'
-                            : `Restricoes desativadas para ${(bypassStoreIds as number[]).length} loja(s)`}
+                            : `Restrições desativadas para ${(bypassStoreIds as number[]).length} loja(s)`}
                       </p>
                     </div>
                   </div>
@@ -787,7 +787,7 @@ export default function AdminPage() {
             <div className="card p-5">
               <h3 className="flex items-center gap-2 text-base font-bold text-main mb-4">
                 <FiZap className="w-5 h-5 text-warning" />
-                Acoes Rapidas
+                Ações Rápidas
               </h3>
               <div className="space-y-1">
                 {quickActions.map((action) => {
@@ -819,8 +819,8 @@ export default function AdminPage() {
               </h3>
               <label className="flex items-center justify-between gap-3 cursor-pointer">
                 <div className="min-w-0">
-                  <p className="text-sm font-medium text-main leading-tight">Ignorar horarios</p>
-                  <p className="text-xs text-muted leading-tight mt-0.5">Desativa restricoes de horario dos templates</p>
+                  <p className="text-sm font-medium text-main leading-tight">Ignorar horários</p>
+                  <p className="text-xs text-muted leading-tight mt-0.5">Desativa restrições de horário dos templates</p>
                 </div>
                 <button
                   type="button"
@@ -860,7 +860,7 @@ export default function AdminPage() {
                           : 'bg-surface-hover text-muted hover:text-main'
                       }`}
                     >
-                      Lojas especificas
+                      Lojas específicas
                     </button>
                   </div>
                   {bypassStoreIds !== 'all' && (
@@ -893,10 +893,10 @@ export default function AdminPage() {
                         ? 'text-muted' : 'text-warning'
                     }`}>
                       {bypassStoreIds === 'all'
-                        ? 'Restricoes de horario desativadas para todas as lojas'
+                        ? 'Restrições de horário desativadas para todas as lojas'
                         : Array.isArray(bypassStoreIds) && bypassStoreIds.length === 0
                           ? 'Nenhuma loja selecionada'
-                          : `Restricoes desativadas para ${(bypassStoreIds as number[]).length} loja(s)`}
+                          : `Restrições desativadas para ${(bypassStoreIds as number[]).length} loja(s)`}
                     </p>
                   </div>
                 </div>

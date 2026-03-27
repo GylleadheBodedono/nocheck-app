@@ -3,7 +3,10 @@
 import { useState, useEffect, useCallback } from 'react'
 import { usePathname } from 'next/navigation'
 import Link from 'next/link'
-import { APP_CONFIG } from '@/lib/config'
+import { APP_CONFIG, getTenantAppName, getTenantLogoUrl } from '@/lib/config'
+import { useTenant } from '@/hooks/useTenant'
+import { useFeature } from '@/hooks/useFeature'
+import type { Feature } from '@/types/tenant'
 import {
   FiX,
   FiUsers,
@@ -31,6 +34,7 @@ import type { IconType } from 'react-icons'
 type SidebarChild = {
   label: string
   href: string
+  requiredFeature?: Feature
 }
 
 type SidebarItem = {
@@ -38,6 +42,7 @@ type SidebarItem = {
   href: string
   icon: IconType
   children?: SidebarChild[]
+  requiredFeature?: Feature
 }
 
 // ------------------------------------
@@ -50,7 +55,7 @@ const SIDEBAR_ITEMS: SidebarItem[] = [
   { label: 'Dashboard', href: routes.dashboard, icon: FiHome },
   { label: 'Painel Admin', href: routes.admin, icon: FiGrid },
   {
-    label: 'Usuarios',
+    label: 'Usuários',
     href: routes.adminUsers,
     icon: FiUsers,
   },
@@ -65,37 +70,40 @@ const SIDEBAR_ITEMS: SidebarItem[] = [
   },
   { label: 'Lojas', href: routes.adminStores, icon: FiHome },
   { label: 'Setores', href: routes.adminSectors, icon: FiBookmark },
-  { label: 'Funcoes', href: routes.adminFunctions, icon: FiSliders },
-  { label: 'Validacoes', href: routes.adminValidations, icon: FiCheckCircle },
+  { label: 'Funções', href: routes.adminFunctions, icon: FiSliders },
+  { label: 'Validações', href: routes.adminValidations, icon: FiCheckCircle },
   {
-    label: 'Planos de Acao',
+    label: 'Planos de Ação',
     href: routes.adminActionPlans,
     icon: FiFileText,
+    requiredFeature: 'cancellations',
     children: [
       { label: 'Todos os Planos', href: routes.adminActionPlans },
       { label: 'Modelos de Plano', href: routes.adminActionPlanPresets },
     ],
   },
   {
-    label: 'Relatorios',
+    label: 'Relatórios',
     href: routes.adminReports,
     icon: FiBarChart2,
+    requiredFeature: 'basic_reports',
     children: [
-      { label: 'Visao Geral', href: routes.adminReports },
+      { label: 'Visão Geral', href: routes.adminReports },
       { label: 'Fotos NC', href: routes.adminNCPhotoReport },
-      { label: 'Planos de Acao', href: routes.adminActionPlanReport },
+      { label: 'Planos de Ação', href: routes.adminActionPlanReport },
     ],
   },
   { label: 'Galeria', href: routes.adminGallery, icon: FiImage },
-  { label: 'Logs', href: routes.adminLogs, icon: FiTerminal },
+  { label: 'Logs', href: routes.adminLogs, icon: FiTerminal, requiredFeature: 'audit_logs' },
   {
-    label: 'Configuracoes',
+    label: 'Configurações',
     href: routes.adminSettings,
     icon: FiSettings,
     children: [
       { label: 'Email / Geral', href: routes.adminSettings },
       { label: 'Equipe', href: routes.adminSettings + '/equipe' },
       { label: 'Billing', href: routes.adminSettings + '/billing' },
+      { label: 'Branding', href: routes.adminSettings + '/branding', requiredFeature: 'white_label' },
     ],
   },
 ]
@@ -122,7 +130,13 @@ type Props = {
 export function PermanentSidebar({ collapsed, onToggleCollapse, mobileOpen, onMobileClose, variant }: Props) {
   const pathname = usePathname()
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
-  const items = SIDEBAR_ITEMS
+  const { organization } = useTenant()
+  const { hasFeature } = useFeature()
+  const tenantAppName = getTenantAppName(organization)
+  const tenantLogoUrl = getTenantLogoUrl(organization)
+
+  // Filtrar itens por feature flag do plano
+  const items = SIDEBAR_ITEMS.filter(item => !item.requiredFeature || hasFeature(item.requiredFeature))
 
   // Auto-expand section that matches current path
   useEffect(() => {
@@ -229,8 +243,8 @@ export function PermanentSidebar({ collapsed, onToggleCollapse, mobileOpen, onMo
             {/* Children */}
             {hasChildren && isExpanded && showText && (
               <div className="ml-7 mt-0.5 space-y-0.5 border-l-2 border-subtle pl-3">
-                {item.children!.map((child) => {
-                  const childActive = pathname === child.href || pathname.startsWith(child.href + '/')
+                {item.children!.filter(child => !child.requiredFeature || hasFeature(child.requiredFeature)).map((child) => {
+                  const childActive = pathname === child.href
                   return (
                     <Link
                       key={child.href}
@@ -263,16 +277,20 @@ export function PermanentSidebar({ collapsed, onToggleCollapse, mobileOpen, onMo
       className="hidden lg:flex flex-col h-full bg-surface border-r border-subtle transition-all duration-200 shrink-0"
       style={{ width: collapsed ? 68 : 230 }}
     >
-      {/* Brand */}
+      {/* Brand — usa logo/nome do tenant se disponivel */}
       <div className="flex items-center gap-3 px-4 py-4 border-b border-subtle shrink-0" style={{ minHeight: 56 }}>
         <Link href={routes.admin} className="flex items-center gap-3 min-w-0">
-          <div className="w-9 h-9 rounded-xl bg-primary flex items-center justify-center shrink-0">
-            <FiGrid className="w-5 h-5 text-primary-foreground" />
-          </div>
+          {tenantLogoUrl ? (
+            <img src={tenantLogoUrl} alt={tenantAppName} className="h-9 w-9 rounded-xl object-contain shrink-0" />
+          ) : (
+            <div className="w-9 h-9 rounded-xl bg-primary flex items-center justify-center shrink-0">
+              <FiGrid className="w-5 h-5 text-primary-foreground" />
+            </div>
+          )}
           {!collapsed && (
             <div className="min-w-0">
-              <p className="text-sm font-bold text-main leading-tight truncate">{APP_CONFIG.name}</p>
-              <p className="text-[10px] text-muted leading-tight">Administracao</p>
+              <p className="text-sm font-bold text-main leading-tight truncate">{tenantAppName}</p>
+              <p className="text-[10px] text-muted leading-tight">Administração</p>
             </div>
           )}
         </Link>
@@ -333,12 +351,16 @@ export function PermanentSidebar({ collapsed, onToggleCollapse, mobileOpen, onMo
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-subtle">
           <Link href={routes.admin} onClick={onMobileClose} className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-primary flex items-center justify-center">
-              <FiGrid className="w-5 h-5 text-primary-foreground" />
-            </div>
+            {tenantLogoUrl ? (
+              <img src={tenantLogoUrl} alt={tenantAppName} className="h-9 w-9 rounded-xl object-contain" />
+            ) : (
+              <div className="w-9 h-9 rounded-xl bg-primary flex items-center justify-center">
+                <FiGrid className="w-5 h-5 text-primary-foreground" />
+              </div>
+            )}
             <div>
-              <p className="text-sm font-bold text-main leading-tight">{APP_CONFIG.name}</p>
-              <p className="text-[10px] text-muted leading-tight">Administracao</p>
+              <p className="text-sm font-bold text-main leading-tight">{tenantAppName}</p>
+              <p className="text-[10px] text-muted leading-tight">Administração</p>
             </div>
           </Link>
           <button

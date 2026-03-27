@@ -3,20 +3,25 @@ export const runtime = 'edge'
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { verifyApiAuth } from '@/lib/api-auth'
+import { isAllowedImageType, isValidBase64, estimateBase64Size, MAX_FILE_SIZE, ALLOWED_IMAGE_TYPES } from '@/lib/validation'
 import { createRequestLogger } from '@/lib/serverLogger'
+import type { UploadImageRequestDTO, UploadImageSuccessDTO, UploadImageErrorDTO } from '@/dtos'
 
 export const dynamic = 'force-dynamic'
+
+// ── Supabase Config ──
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
 
-const MAX_FILE_SIZE = 5 * 1024 * 1024 // 5MB
+// ── Route Handler ──
 
 /**
  * POST /api/upload
- * Faz upload de imagem (base64) para o Supabase Storage no bucket `checklist-photos`.
- * Limite: 5 MB por arquivo. Requer autenticação.
- * Retorna `{ url }` com a URL pública do arquivo salvo.
+ * Faz upload de imagem (base64) para o Supabase Storage no bucket `checklist-images`.
+ * Valida tipo MIME, formato base64 e tamanho (máx 5 MB) antes do upload.
+ * Retorna `{ success, url, path }` com a URL pública do arquivo salvo.
+ * Requer autenticação via `verifyApiAuth`.
  */
 export async function POST(request: NextRequest) {
   const log = createRequestLogger(request)
@@ -24,81 +29,92 @@ export async function POST(request: NextRequest) {
   if (auth.error) return auth.error
 
   try {
-    const body = await request.json()
-    const { image, fileName, folder } = body as {
-      image: string // base64 image
-      fileName: string
-      folder?: string // pasta no bucket (default: 'uploads')
-    }
+    // Extrai e tipifica o body com o DTO de upload de imagem
+    const body = await request.json() as UploadImageRequestDTO
+    const { image, fileName, folder } = body
 
-    if (!image) {
+    if (!image || typeof image !== 'string') {
       return NextResponse.json(
-        { success: false, error: 'Imagem não fornecida' },
+        { success: false, error: 'Imagem nao fornecida' },
         { status: 400 }
       )
     }
 
-    // Remove data URL prefix if present
+    // ── Image Type Validation ──
+
+    if (!isAllowedImageType(image)) {
+      return NextResponse.json(
+        { success: false, error: `Tipo de arquivo nao permitido. Use ${ALLOWED_IMAGE_TYPES.join(', ')}.` },
+        { status: 400 }
+      )
+    }
+
+    // ── Base64 Validation ──
+
     const base64Data = image.replace(/^data:image\/\w+;base64,/, '')
 
-    // Check file size (base64 is ~33% larger than binary)
-    const estimatedSize = (base64Data.length * 3) / 4
+    if (!isValidBase64(image)) {
+      return NextResponse.json(
+        { success: false, error: 'Dados de imagem invalidos' },
+        { status: 400 }
+      )
+    }
+
+    const estimatedSize = estimateBase64Size(base64Data)
     log.debug('Tamanho estimado do upload', { sizeKB: Math.round(estimatedSize / 1024) })
 
     if (estimatedSize > MAX_FILE_SIZE) {
       return NextResponse.json(
-        { success: false, error: `Imagem muito grande (máx ${MAX_FILE_SIZE / 1024 / 1024}MB)` },
+        { success: false, error: `Imagem muito grande (max ${MAX_FILE_SIZE / 1024 / 1024}MB)` },
         { status: 400 }
       )
     }
 
-    // Convert base64 to buffer
-    const buffer = Buffer.from(base64Data, 'base64')
+    // ── Upload to Storage ──
 
-    // Create Supabase client with service role
+    const buffer = Buffer.from(base64Data, 'base64')
     const supabase = createClient(supabaseUrl, supabaseServiceKey)
 
-    // Generate unique filename
     const timestamp = Date.now()
     const uniqueFileName = fileName || `checklist_${timestamp}.jpg`
     const filePath = `${folder || 'uploads'}/${uniqueFileName}`
 
-    // Upload to Supabase Storage
     log.debug('Iniciando upload para bucket checklist-images', { filePath })
     const { data, error } = await supabase.storage
       .from('checklist-images')
       .upload(filePath, buffer, {
         contentType: 'image/jpeg',
-        upsert: true, // Permite sobrescrever se já existir
+        upsert: true,
       })
 
     if (error) {
-      // Tenta verificar se o bucket existe para melhor diagnóstico
       const { data: buckets } = await supabase.storage.listBuckets()
       log.error('Erro no Supabase Storage', { filePath, availableBuckets: buckets?.map(b => b.name) }, error)
       throw new Error(error.message)
     }
 
-    // Get public URL
+    // ── Build Public URL ──
+
     const { data: urlData } = supabase.storage
       .from('checklist-images')
       .getPublicUrl(filePath)
 
     log.info('Upload concluido com sucesso', { filePath, publicUrl: urlData.publicUrl })
 
-    return NextResponse.json({
+    // Resposta tipada via DTO de sucesso no upload
+    const successResponse: UploadImageSuccessDTO = {
       success: true,
       url: urlData.publicUrl,
       path: data.path,
-    })
+    }
+    return NextResponse.json(successResponse)
   } catch (error) {
     log.error('Erro inesperado em POST /api/upload', {}, error)
-    return NextResponse.json(
-      {
-        success: false,
-        error: error instanceof Error ? error.message : 'Erro desconhecido',
-      },
-      { status: 500 }
-    )
+    // Resposta tipada via DTO de erro no upload
+    const errorResponse: UploadImageErrorDTO = {
+      success: false,
+      error: error instanceof Error ? error.message : 'Erro desconhecido',
+    }
+    return NextResponse.json(errorResponse, { status: 500 })
   }
 }

@@ -60,11 +60,11 @@ export default function OfflinePage() {
           </div>
 
           <h1 className="text-2xl font-bold text-main mb-2">
-            Conexao restaurada!
+            Conexão restaurada!
           </h1>
 
           <p className="text-muted mb-6">
-            Recarregando a pagina...
+            Recarregando a página...
           </p>
         </div>
       </div>
@@ -79,13 +79,13 @@ export default function OfflinePage() {
         </div>
 
         <h1 className="text-2xl font-bold text-main mb-2">
-          Voce esta offline
+          Você está offline
         </h1>
 
         {hasCached ? (
           <>
             <p className="text-muted mb-6">
-              Sem conexao com a internet, mas voce pode continuar usando o app com os dados salvos no seu dispositivo.
+              Sem conexão com a internet, mas você pode continuar usando o app com os dados salvos no seu dispositivo.
             </p>
 
             <div className="flex flex-col gap-3">
@@ -102,21 +102,21 @@ export default function OfflinePage() {
                 className="btn-secondary flex items-center justify-center gap-2 px-6 py-3"
               >
                 <FiRefreshCw className="w-5 h-5" />
-                Verificar conexao
+                Verificar conexão
               </button>
             </div>
 
             <div className="mt-8 p-4 bg-success/10 rounded-xl border border-success/20">
               <p className="text-sm text-success">
                 <FiCheckCircle className="inline w-4 h-4 mr-1" />
-                Dados salvos! Voce pode preencher checklists offline.
+                Dados salvos! Você pode preencher checklists offline.
               </p>
             </div>
           </>
         ) : (
           <>
             <p className="text-muted mb-6">
-              Voce precisa de conexao com a internet para fazer login pela primeira vez. Apos isso, podera usar o app offline.
+              Você precisa de conexão com a internet para fazer login pela primeira vez. Após isso, poderá usar o app offline.
             </p>
 
             <button
@@ -130,7 +130,7 @@ export default function OfflinePage() {
         )}
 
         <p className="text-xs text-muted mt-8">
-          Checklists preenchidos offline serao sincronizados automaticamente quando a conexao for restaurada.
+          Checklists preenchidos offline serão sincronizados automaticamente quando a conexão for restaurada.
         </p>
       </div>
     </div>

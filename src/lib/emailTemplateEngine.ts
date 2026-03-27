@@ -56,7 +56,7 @@ export const TEMPLATE_VARIABLES: TemplateVariableMeta[] = [
   { key: 'deadline', label: 'Prazo', description: 'Data limite formatada', example: '01/03/2026' },
   { key: 'non_conformity_value', label: 'Valor Nao Conforme', description: 'Resposta que gerou a nao conformidade', example: 'Nao' },
   { key: 'description', label: 'Descricao', description: 'Descricao da condicao/plano', example: 'Funcionario nao higienizou as maos ao iniciar turno' },
-  { key: 'plan_url', label: 'URL do Plano', description: 'Link completo para acessar o plano', example: 'https://app.nocheck.com/admin/planos-de-acao/42' },
+  { key: 'plan_url', label: 'URL do Plano', description: 'Link completo para acessar o plano', example: 'https://app.operecheck.com/admin/planos-de-acao/42' },
   { key: 'plan_id', label: 'ID do Plano', description: 'Numero identificador do plano', example: '42' },
   { key: 'is_reincidencia', label: 'Reincidencia?', description: '"Sim" ou "Nao"', example: 'Sim' },
   { key: 'reincidencia_count', label: 'Qtd Reincidencias', description: 'Numero de ocorrencias anteriores', example: '3' },
@@ -172,8 +172,8 @@ function escapeHtml(str: string): string {
     .replace(/"/g, '&quot;')
 }
 
-/** Variáveis que contêm HTML/URLs e NÃO devem ser escapadas (usadas em atributos style/href). */
-const RAW_VARIABLES = new Set<string>(['severity_color', 'plan_url', 'reincidencia_prefix'])
+/** Apenas variaveis com hex color ou URL — todo o resto e escapado contra XSS. */
+const RAW_VARIABLES = new Set<string>(['severity_color', 'plan_url'])
 
 /**
  * Substitui todos os placeholders `{{variavel}}` no template pelos valores fornecidos.

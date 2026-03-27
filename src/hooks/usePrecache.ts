@@ -21,10 +21,11 @@ type PrecacheStatus = {
  * @returns `{ isReady, isCaching, progress, error, precacheApp, clearCache }`
  */
 export function usePrecache() {
+  const isDev = process.env.NODE_ENV === 'development'
   const [status, setStatus] = useState<PrecacheStatus>({
-    isReady: false,
+    isReady: isDev, // Em dev, ja esta "pronto" (sem SW)
     isCaching: false,
-    progress: 0,
+    progress: isDev ? 100 : 0,
     error: null,
   })
 
@@ -44,6 +45,12 @@ export function usePrecache() {
 
   // Faz precache de todas as paginas essenciais
   const precacheApp = useCallback(async () => {
+    // Em dev, pular precache (sem SW)
+    if (isDev) {
+      setStatus({ isReady: true, isCaching: false, progress: 100, error: null })
+      return
+    }
+
     const registration = await checkServiceWorker()
     if (!registration?.active) {
       return
@@ -137,6 +144,9 @@ export function usePrecache() {
  * Silencia erros para não bloquear o fluxo de login se o SW não estiver disponível.
  */
 export async function triggerPrecache(): Promise<void> {
+  // Em dev, pular (sem SW registrado)
+  if (process.env.NODE_ENV === 'development') return
+
   if (!('serviceWorker' in navigator)) {
     return
   }

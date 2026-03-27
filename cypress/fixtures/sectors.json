@@ -1,0 +1,6 @@
+[
+  { "id": 1, "name": "Administração", "is_active": true, "created_at": "2024-01-01T00:00:00Z" },
+  { "id": 2, "name": "Operações", "is_active": true, "created_at": "2024-01-01T00:00:00Z" },
+  { "id": 3, "name": "Logística", "is_active": true, "created_at": "2024-01-02T00:00:00Z" },
+  { "id": 4, "name": "Frios", "is_active": false, "created_at": "2024-01-03T00:00:00Z" }
+]

@@ -21,7 +21,7 @@ export default function EmailConfirmedPage() {
         </h1>
 
         <p className="text-muted mb-8">
-          Seu email foi verificado com sucesso. Agora voce pode fazer login com sua senha.
+          Seu email foi verificado com sucesso. Agora você pode fazer login com sua senha.
         </p>
 
         <Link

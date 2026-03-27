@@ -5,103 +5,24 @@ import Link from 'next/link'
 import Image from 'next/image'
 import { motion, useInView, useMotionValue, useTransform, animate, useScroll, useSpring } from 'framer-motion'
 import Lenis from 'lenis'
+import { PricingSection } from '@/components/landing/PricingSection'
+import { FAQSection } from '@/components/landing/FAQSection'
+import { AnimatedTitle, TitleWord } from '@/components/landing/AnimatedTitle'
+import { easeOut, fadeInUp, fadeIn, scaleIn, stagger } from '@/components/landing/animations'
+import { TRIAL_DAYS } from '@/lib/plans'
+import {
+  HiClipboardDocumentCheck,
+  HiSparkles,
+  HiWrenchScrewdriver,
+  HiShieldCheck,
+  HiClipboardDocumentList,
+  HiClock as HiClock3d,
+} from 'react-icons/hi2'
 
 // ─── WhatsApp config ───
 const WHATSAPP_NUMBER = '5511999999999'
-const WHATSAPP_MESSAGE = encodeURIComponent('Ola! Tenho interesse no NoCheck. Gostaria de saber mais.')
+const WHATSAPP_MESSAGE = encodeURIComponent('Olá! Tenho interesse no OpereCheck. Gostaria de saber mais.')
 const WHATSAPP_URL = `https://wa.me/${WHATSAPP_NUMBER}?text=${WHATSAPP_MESSAGE}`
-
-// ─── Animation Variants ───
-const easeOut: [number, number, number, number] = [0.22, 1, 0.36, 1]
-
-const fadeInUp = {
-  hidden: { opacity: 0, y: 40 },
-  visible: { opacity: 1, y: 0, transition: { duration: 0.7, ease: easeOut } },
-}
-
-const fadeIn = {
-  hidden: { opacity: 0 },
-  visible: { opacity: 1, transition: { duration: 0.8 } },
-}
-
-const scaleIn = {
-  hidden: { opacity: 0, scale: 0.9 },
-  visible: { opacity: 1, scale: 1, transition: { duration: 0.6, ease: easeOut } },
-}
-
-const stagger = {
-  hidden: {},
-  visible: { transition: { staggerChildren: 0.12 } },
-}
-
-
-// ─── Animated Section Title ───
-function AnimatedTitle({ label, children, className = '' }: { label: string; children: React.ReactNode; className?: string }) {
-  const ref = useRef(null)
-  const isInView = useInView(ref, { once: true, margin: '-80px' })
-
-  return (
-    <div ref={ref} className={`text-center ${className}`}>
-      {/* Label with line drawing in */}
-      <motion.div
-        className="inline-flex items-center gap-3 mb-4"
-        initial={{ opacity: 0 }}
-        animate={isInView ? { opacity: 1 } : {}}
-        transition={{ duration: 0.5 }}
-      >
-        <motion.div
-          className="h-px bg-gradient-to-r from-transparent to-[#D4A853]/60"
-          initial={{ width: 0 }}
-          animate={isInView ? { width: 40 } : {}}
-          transition={{ duration: 0.8, delay: 0.2, ease: easeOut }}
-        />
-        <motion.span
-          className="text-sm font-medium text-[#D4A853] tracking-widest uppercase"
-          initial={{ opacity: 0, y: 10 }}
-          animate={isInView ? { opacity: 1, y: 0 } : {}}
-          transition={{ duration: 0.5, delay: 0.3 }}
-        >
-          {label}
-        </motion.span>
-        <motion.div
-          className="h-px bg-gradient-to-l from-transparent to-[#D4A853]/60"
-          initial={{ width: 0 }}
-          animate={isInView ? { width: 40 } : {}}
-          transition={{ duration: 0.8, delay: 0.2, ease: easeOut }}
-        />
-      </motion.div>
-
-      {/* Title with word-by-word reveal */}
-      <div className="text-3xl sm:text-4xl lg:text-5xl font-bold tracking-tight overflow-hidden">
-        {children}
-      </div>
-
-    </div>
-  )
-}
-
-function TitleWord({ word, delay, gradient = false }: { word: string; delay: number; gradient?: boolean }) {
-  const ref = useRef(null)
-  const isInView = useInView(ref, { once: true, margin: '-80px' })
-
-  return (
-    <motion.span
-      ref={ref}
-      className="inline-block mr-[0.3em]"
-      style={{
-        perspective: '600px',
-        ...(gradient
-          ? { background: 'linear-gradient(135deg, #D4A853, #C47A4A)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }
-          : undefined),
-      }}
-      initial={{ opacity: 0, x: -30, rotateY: -35, filter: 'blur(4px)' }}
-      animate={isInView ? { opacity: 1, x: 0, rotateY: 0, filter: 'blur(0px)' } : {}}
-      transition={{ duration: 0.7, delay, ease: easeOut }}
-    >
-      {word}
-    </motion.span>
-  )
-}
 
 // ─── Feature Bento Card ───
 function FeatureBentoCard({ feature, index, large = false }: { feature: typeof features[0]; index: number; large?: boolean }) {
@@ -114,42 +35,42 @@ function FeatureBentoCard({ feature, index, large = false }: { feature: typeof f
       initial={{ opacity: 0, y: 40 }}
       animate={isInView ? { opacity: 1, y: 0 } : {}}
       transition={{ duration: 0.7, delay: index * 0.12, ease: easeOut }}
-      className={`group relative rounded-[1.5rem] border border-white/[0.06] overflow-hidden transition-all duration-500 hover:border-[#D4A853]/20 ${large ? 'lg:col-span-7 min-h-[320px]' : 'lg:col-span-5 min-h-[320px]'}`}
+      className={`group relative rounded-[1.5rem] border border-white/[0.06] overflow-hidden transition-all duration-500 hover:border-[#0D9488]/20 ${large ? 'lg:col-span-7 min-h-[320px]' : 'lg:col-span-5 min-h-[320px]'}`}
       style={{
-        background: 'linear-gradient(160deg, rgba(24,24,27,0.9) 0%, rgba(19,19,21,0.95) 100%)',
+        background: 'linear-gradient(150deg, rgba(10,16,24,0.68) 0%, rgba(6,12,20,0.82) 100%)',
+        boxShadow: '0 18px 50px rgba(0, 0, 0, 0.35)',
+        backdropFilter: 'blur(16px)',
+        borderColor: 'rgba(255,255,255,0.06)',
       }}
     >
-      {/* Hover glow — appears on hover */}
+      {/* Hover glow */}
       <div
         className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none"
-        style={{ background: 'radial-gradient(ellipse at 30% 20%, rgba(212, 168, 83, 0.06) 0%, transparent 60%)' }}
+        style={{ background: 'radial-gradient(ellipse at 30% 20%, rgba(13, 148, 136, 0.06) 0%, transparent 60%)' }}
       />
 
       {/* Content */}
       <div className="relative z-10 flex flex-col h-full p-8 sm:p-10">
-        {/* Top: tags + icon */}
+        {/* Tags + icon */}
         <div className="flex items-start justify-between mb-8">
-          {/* Tags */}
           <div className="flex flex-wrap gap-2">
             {feature.tags.map((tag, t) => (
               <span
                 key={t}
-                className="px-3 py-1 rounded-full text-[11px] font-medium tracking-wide border border-[#D4A853]/15 text-[#D4A853]/80 bg-[#D4A853]/[0.05]"
+                className="px-3 py-1 rounded-full text-[11px] font-medium tracking-wide border border-[#0D9488]/15 text-[#0D9488]/80 bg-[#0D9488]/[0.05]"
               >
                 {tag}
               </span>
             ))}
           </div>
-
-          {/* Icon */}
-          <div className="flex-shrink-0 w-12 h-12 rounded-xl bg-[#D4A853]/[0.08] border border-[#D4A853]/[0.12] flex items-center justify-center text-[#D4A853] transition-all duration-500 group-hover:bg-[#D4A853]/[0.12] group-hover:scale-110">
+          <div className="flex-shrink-0 w-12 h-12 rounded-xl bg-[#0D9488]/[0.08] border border-[#0D9488]/[0.12] flex items-center justify-center text-[#0D9488] transition-all duration-500 group-hover:bg-[#0D9488]/[0.12] group-hover:scale-110">
             {feature.icon}
           </div>
         </div>
 
-        {/* Bottom: text */}
+        {/* Text */}
         <div className="mt-auto">
-          <h3 className="text-2xl sm:text-[1.75rem] font-bold leading-tight mb-3 text-[#fafafa] transition-colors duration-300 group-hover:text-[#D4A853]">
+          <h3 className="text-2xl sm:text-[1.75rem] font-bold leading-tight mb-3 text-[#fafafa] transition-colors duration-300 group-hover:text-[#0D9488]">
             {feature.title}
           </h3>
           <p className="text-[15px] text-[#71717a] leading-relaxed max-w-md group-hover:text-[#a1a1aa] transition-colors duration-300">
@@ -158,10 +79,9 @@ function FeatureBentoCard({ feature, index, large = false }: { feature: typeof f
         </div>
       </div>
 
-      {/* Bottom-right decorative line */}
       <div
         className="absolute bottom-0 right-0 w-24 h-24 pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity duration-700"
-        style={{ background: 'radial-gradient(circle at 100% 100%, rgba(212, 168, 83, 0.08) 0%, transparent 70%)' }}
+        style={{ background: 'radial-gradient(circle at 100% 100%, rgba(13, 148, 136, 0.08) 0%, transparent 70%)' }}
       />
     </motion.div>
   )
@@ -197,7 +117,6 @@ function AnimatedCounter({ value, suffix = '', prefix = '' }: { value: number; s
   )
 }
 
-
 // ─── Features data ───
 const features = [
   {
@@ -207,8 +126,8 @@ const features = [
       </svg>
     ),
     title: 'Checklists Personalizados',
-    description: 'Crie templates sob medida para cada processo da sua operacao, com campos customizaveis e regras de validacao.',
-    tags: ['Templates', 'Campos', 'Validacao'],
+    description: 'Crie templates sob medida para cada processo da sua operação, com campos customizáveis e regras de validação.',
+    tags: ['Templates', 'Campos', 'Validação'],
   },
   {
     icon: (
@@ -216,9 +135,9 @@ const features = [
         <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 13.5l10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75z" />
       </svg>
     ),
-    title: 'Planos de Acao Automaticos',
-    description: 'Nao-conformidades detectadas geram planos de acao instantaneamente com responsavel e prazo definidos.',
-    tags: ['Automatico', 'Prazos', 'Responsaveis'],
+    title: 'Planos de Ação Automáticos',
+    description: 'Não-conformidades detectadas geram planos de ação instantaneamente com responsável e prazo definidos.',
+    tags: ['Automático', 'Prazos', 'Responsáveis'],
   },
   {
     icon: (
@@ -227,7 +146,7 @@ const features = [
       </svg>
     ),
     title: 'Funciona Offline',
-    description: 'Continue trabalhando sem internet. Dados sincronizam automaticamente quando a conexao voltar.',
+    description: 'Continue trabalhando sem internet. Dados sincronizam automaticamente quando a conexão voltar.',
     tags: ['PWA', 'Sync', 'Sem Internet'],
   },
   {
@@ -236,9 +155,9 @@ const features = [
         <path strokeLinecap="round" strokeLinejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z" />
       </svg>
     ),
-    title: 'Relatorios em Tempo Real',
-    description: 'Dashboards e metricas atualizados instantaneamente para decisoes rapidas e baseadas em dados.',
-    tags: ['Dashboard', 'Metricas', 'Exportar'],
+    title: 'Relatórios em Tempo Real',
+    description: 'Dashboards e métricas atualizados instantaneamente para decisões rápidas e baseadas em dados.',
+    tags: ['Dashboard', 'Métricas', 'Exportar'],
   },
 ]
 
@@ -247,17 +166,17 @@ const steps = [
   {
     number: '01',
     title: 'Configure',
-    description: 'Crie seus templates de checklist, defina campos, regras de validacao e condicoes de nao-conformidade.',
+    description: 'Crie seus templates de checklist, defina campos, regras de validação e condições de não-conformidade.',
   },
   {
     number: '02',
     title: 'Execute',
-    description: 'Sua equipe preenche os checklists pelo celular ou tablet — funciona ate sem internet.',
+    description: 'Sua equipe preenche os checklists pelo celular ou tablet — funciona até sem internet.',
   },
   {
     number: '03',
     title: 'Acompanhe',
-    description: 'Veja resultados em tempo real, receba alertas de nao-conformidade e gerencie planos de acao.',
+    description: 'Veja resultados em tempo real, receba alertas de não-conformidade e gerencie planos de ação.',
   },
 ]
 
@@ -265,24 +184,23 @@ const steps = [
 const stats = [
   { value: 99.9, suffix: '%', label: 'Uptime garantido' },
   { value: 100, suffix: '%', label: 'Funcional offline' },
-  { value: 500, prefix: '+', label: 'Checklists por mes' },
+  { value: 500, prefix: '+', label: 'Checklists por mês' },
   { value: 0, suffix: 's', label: 'Tempo de resposta', displayOverride: 'Tempo real' },
 ]
 
 // ─── Glowing Smoke Background ───
 const smokeBlobs = [
-  { color: '#D4A853', size: 'w-[350px] h-[300px]', pos: 'top-[5%] left-[-8%]', blur: 180, drift: 'animate-smoke-drift-1', py: [-180, 60] },
-  { color: '#C47A4A', size: 'w-[300px] h-[250px]', pos: 'top-[18%] right-[-10%]', blur: 200, drift: 'animate-smoke-drift-2', py: [120, -80] },
-  { color: '#D4A853', size: 'w-[320px] h-[280px]', pos: 'top-[42%] left-[5%]', blur: 190, drift: 'animate-smoke-drift-3', py: [-250, 50] },
-  { color: '#C47A4A', size: 'w-[280px] h-[240px]', pos: 'top-[58%] right-[0%]', blur: 200, drift: 'animate-smoke-drift-1', py: [160, -40] },
-  { color: '#D4A853', size: 'w-[260px] h-[220px]', pos: 'top-[76%] left-[-5%]', blur: 170, drift: 'animate-smoke-drift-2', py: [-100, 70] },
-  { color: '#C47A4A', size: 'w-[300px] h-[260px]', pos: 'top-[88%] right-[-8%]', blur: 190, drift: 'animate-smoke-drift-3', py: [200, -60] },
+  { color: '#0D9488', size: 'w-[350px] h-[300px]', pos: 'top-[5%] left-[-8%]', blur: 180, drift: 'animate-smoke-drift-1', py: [-180, 60] },
+  { color: '#14B8A6', size: 'w-[300px] h-[250px]', pos: 'top-[18%] right-[-10%]', blur: 200, drift: 'animate-smoke-drift-2', py: [120, -80] },
+  { color: '#0D9488', size: 'w-[320px] h-[280px]', pos: 'top-[42%] left-[5%]', blur: 190, drift: 'animate-smoke-drift-3', py: [-250, 50] },
+  { color: '#14B8A6', size: 'w-[280px] h-[240px]', pos: 'top-[58%] right-[0%]', blur: 200, drift: 'animate-smoke-drift-1', py: [160, -40] },
+  { color: '#0D9488', size: 'w-[260px] h-[220px]', pos: 'top-[76%] left-[-5%]', blur: 170, drift: 'animate-smoke-drift-2', py: [-100, 70] },
+  { color: '#14B8A6', size: 'w-[300px] h-[260px]', pos: 'top-[88%] right-[-8%]', blur: 190, drift: 'animate-smoke-drift-3', py: [200, -60] },
 ]
 
 function SmokeBackground() {
   const { scrollYProgress } = useScroll()
 
-  // Parallax Y for each blob
   const parallax = [
     { y: useTransform(scrollYProgress, [0, 1], [0, smokeBlobs[0].py[0]]), x: useTransform(scrollYProgress, [0, 1], [0, smokeBlobs[0].py[1]]) },
     { y: useTransform(scrollYProgress, [0, 1], [0, smokeBlobs[1].py[0]]), x: useTransform(scrollYProgress, [0, 1], [0, smokeBlobs[1].py[1]]) },
@@ -295,13 +213,11 @@ function SmokeBackground() {
   return (
     <div className="fixed inset-0 z-0 pointer-events-none" aria-hidden="true">
       {smokeBlobs.map((blob, i) => (
-        // Outer: framer-motion parallax (y + x from scroll)
         <motion.div
           key={i}
           className={`absolute ${blob.pos}`}
           style={{ y: parallax[i].y, x: parallax[i].x }}
         >
-          {/* Inner: CSS drift animation + opacity pulse (no conflict) */}
           <div
             className={`rounded-full ${blob.size} ${blob.drift} animate-smoke-pulse`}
             style={{ background: blob.color, filter: `blur(${blob.blur}px)` }}
@@ -312,7 +228,137 @@ function SmokeBackground() {
   )
 }
 
-// ─── Process Graph (interactive node visualization) ───
+// ─── Aurora Gradient + Sparkles ───
+function AuroraBackground() {
+  return (
+    <motion.div
+      className="fixed inset-0 z-0 pointer-events-none mix-blend-screen"
+      initial={{ backgroundPosition: '0% 50%' }}
+      animate={{ backgroundPosition: ['0% 50%', '100% 50%', '0% 50%'] }}
+      transition={{ duration: 30, repeat: Infinity, ease: 'easeInOut' }}
+      style={{
+        backgroundImage: [
+          'radial-gradient(120% 120% at 15% 18%, rgba(34, 195, 182, 0.16), transparent 45%)',
+          'radial-gradient(140% 140% at 78% 8%, rgba(56, 189, 248, 0.12), transparent 40%)',
+          'radial-gradient(120% 120% at 60% 78%, rgba(94, 234, 212, 0.10), transparent 48%)',
+          'linear-gradient(150deg, #05080f 0%, #04070d 40%, #03060b 100%)',
+        ].join(','),
+        backgroundSize: '170% 170%',
+        opacity: 0.35,
+      }}
+    />
+  )
+}
+
+function SparkleField() {
+  return (
+    <motion.div
+      className="fixed inset-0 z-0 pointer-events-none"
+      style={{
+        backgroundImage: [
+          'radial-gradient(1px 1px at 20px 30px, rgba(255,255,255,0.28), transparent 60%)',
+          'radial-gradient(1px 1px at 120px 90px, rgba(94,234,212,0.35), transparent 60%)',
+          'radial-gradient(1px 1px at 220px 140px, rgba(56,189,248,0.28), transparent 60%)',
+        ].join(','),
+        backgroundSize: '180px 180px, 220px 220px, 260px 260px',
+        opacity: 0.4,
+        mixBlendMode: 'screen',
+      }}
+      animate={{
+        backgroundPosition: [
+          '0px 0px, 0px 0px, 0px 0px',
+          '40px 30px, -30px 20px, 20px -20px',
+          '0px 0px, 0px 0px, 0px 0px',
+        ],
+      }}
+      transition={{ duration: 40, repeat: Infinity, ease: 'linear' }}
+    />
+  )
+}
+
+function CornerOrbs() {
+  const orbs = [
+    { className: 'top-[-12%] left-[-8%]', color: 'rgba(13,148,136,0.14)', blur: 210, size: '520px' },
+    { className: 'top-[-16%] right-[-10%]', color: 'rgba(56,189,248,0.12)', blur: 230, size: '540px' },
+    { className: 'bottom-[-18%] left-[-10%]', color: 'rgba(34,195,182,0.12)', blur: 220, size: '520px' },
+    { className: 'bottom-[-12%] right-[-12%]', color: 'rgba(14,165,233,0.14)', blur: 230, size: '540px' },
+  ]
+  return (
+    <div className="fixed inset-0 z-0 pointer-events-none overflow-hidden" aria-hidden="true">
+      {orbs.map((orb, i) => (
+        <div
+          key={i}
+          className={`absolute rounded-full ${orb.className}`}
+          style={{
+            width: orb.size,
+            height: orb.size,
+            background: orb.color,
+            filter: `blur(${orb.blur}px)`,
+          }}
+        />
+      ))}
+    </div>
+  )
+}
+
+// ─── 3D-ish Icon Floaters (baixo da UI) ───
+const iconItems = [
+  { Icon: HiClipboardDocumentCheck, size: 64, left: '6%', top: '20%', drift: 26, rotate: 10, delay: 0 },
+  { Icon: HiClipboardDocumentList, size: 70, left: '82%', top: '24%', drift: 28, rotate: -12, delay: 0.5 },
+  { Icon: HiSparkles, size: 62, left: '18%', top: '48%', drift: 24, rotate: 8, delay: 1.0 },
+  { Icon: HiWrenchScrewdriver, size: 68, left: '72%', top: '50%', drift: 27, rotate: -14, delay: 1.6 },
+  { Icon: HiShieldCheck, size: 64, left: '12%', top: '74%', drift: 25, rotate: 9, delay: 2.2 },
+  { Icon: HiClock3d, size: 62, left: '88%', top: '70%', drift: 23, rotate: -9, delay: 2.8 },
+]
+
+function IconFloatLayer() {
+  return (
+    <div className="fixed inset-0 z-0 pointer-events-none" aria-hidden="true">
+      {iconItems.map((item, i) => (
+        <motion.div
+          key={i}
+          className="absolute"
+          style={{
+            left: item.left,
+            top: item.top,
+            filter: 'drop-shadow(0 14px 28px rgba(0,0,0,0.35))',
+          }}
+          animate={{
+            y: [0, -18, 14, -10, 0],
+            x: [0, 10, -8, 12, 0],
+            rotate: [0, item.rotate, -item.rotate / 2, item.rotate, 0],
+          }}
+          transition={{
+            duration: item.drift,
+            repeat: Infinity,
+            ease: 'easeInOut',
+            delay: item.delay,
+          }}
+        >
+          <div
+            className="rounded-full p-4"
+            style={{
+              background: 'radial-gradient(circle at 30% 30%, rgba(255,255,255,0.08), rgba(0,0,0,0.32))',
+              boxShadow: '0 10px 30px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.08)',
+              backdropFilter: 'blur(8px)',
+            }}
+          >
+            <item.Icon
+              style={{
+                width: item.size,
+                height: item.size,
+                color: 'rgba(45, 226, 200, 0.85)',
+                filter: 'drop-shadow(0 8px 14px rgba(0,0,0,0.35))',
+              }}
+            />
+          </div>
+        </motion.div>
+      ))}
+    </div>
+  )
+}
+
+// ─── Process Graph ───
 function ProcessGraph() {
   const ref = useRef(null)
   const isInView = useInView(ref, { once: true, margin: '-80px' })
@@ -322,7 +368,7 @@ function ProcessGraph() {
       <div className="absolute inset-0 overflow-hidden">
         <div
           className="absolute top-0 left-1/2 -translate-x-1/2 w-[800px] h-[400px] rounded-full opacity-[0.04]"
-          style={{ background: 'radial-gradient(ellipse, #D4A853 0%, transparent 70%)' }}
+          style={{ background: 'radial-gradient(ellipse, #0D9488 0%, transparent 70%)' }}
         />
       </div>
 
@@ -333,19 +379,18 @@ function ProcessGraph() {
         </AnimatedTitle>
 
         <div ref={ref} className="relative">
-          {/* ── Desktop: horizontal connection line ── */}
+          {/* Desktop: horizontal line */}
           <div className="hidden lg:block absolute top-10 left-[16.67%] right-[16.67%] z-0">
             <motion.div
               className="h-px w-full origin-left"
-              style={{ background: 'linear-gradient(90deg, rgba(212,168,83,0.3), rgba(196,122,74,0.15), rgba(212,168,83,0.3))' }}
+              style={{ background: 'linear-gradient(90deg, rgba(13,148,136,0.3), rgba(20,184,166,0.15), rgba(13,148,136,0.3))' }}
               initial={{ scaleX: 0 }}
               animate={isInView ? { scaleX: 1 } : {}}
               transition={{ duration: 1.5, delay: 0.4, ease: easeOut }}
             />
-            {/* Traveling dot */}
             <motion.div
-              className="absolute top-0 -translate-y-1/2 w-2 h-2 rounded-full bg-[#D4A853]"
-              style={{ boxShadow: '0 0 10px rgba(212,168,83,0.8), 0 0 20px rgba(212,168,83,0.3)' }}
+              className="absolute top-0 -translate-y-1/2 w-2 h-2 rounded-full bg-[#0D9488]"
+              style={{ boxShadow: '0 0 10px rgba(13,148,136,0.8), 0 0 20px rgba(13,148,136,0.3)' }}
               initial={{ left: '0%', opacity: 0 }}
               animate={isInView ? {
                 left: ['0%', '100%', '0%'],
@@ -355,18 +400,18 @@ function ProcessGraph() {
             />
           </div>
 
-          {/* ── Mobile: vertical connection lines ── */}
+          {/* Mobile: vertical line */}
           <div className="lg:hidden absolute top-0 left-1/2 -translate-x-1/2 w-px h-full z-0">
             <motion.div
               className="w-px h-full origin-top"
-              style={{ background: 'linear-gradient(180deg, transparent 0%, rgba(212,168,83,0.2) 15%, rgba(212,168,83,0.2) 85%, transparent 100%)' }}
+              style={{ background: 'linear-gradient(180deg, transparent 0%, rgba(13,148,136,0.2) 15%, rgba(13,148,136,0.2) 85%, transparent 100%)' }}
               initial={{ scaleY: 0 }}
               animate={isInView ? { scaleY: 1 } : {}}
               transition={{ duration: 1.5, delay: 0.4, ease: easeOut }}
             />
           </div>
 
-          {/* ── Nodes ── */}
+          {/* Nodes */}
           <div className="relative z-10 grid grid-cols-1 lg:grid-cols-3 gap-16 lg:gap-8">
             {steps.map((step, i) => (
               <motion.div
@@ -376,27 +421,24 @@ function ProcessGraph() {
                 animate={isInView ? { opacity: 1, y: 0, scale: 1 } : {}}
                 transition={{ duration: 0.6, delay: 0.2 + i * 0.25, ease: easeOut }}
               >
-                {/* Node circle with pulse ring */}
                 <div className="relative mb-6">
-                  {/* Outer pulse ring */}
                   <motion.div
-                    className="absolute -inset-4 rounded-full border border-[#D4A853]/15"
+                    className="absolute -inset-4 rounded-full border border-[#0D9488]/15"
                     animate={{ scale: [1, 1.5, 1], opacity: [0.3, 0, 0.3] }}
                     transition={{ duration: 3, repeat: Infinity, delay: i * 0.8, ease: 'easeInOut' }}
                   />
-                  {/* Inner glow pulse */}
                   <motion.div
                     className="absolute -inset-2 rounded-full"
-                    style={{ background: 'radial-gradient(circle, rgba(212,168,83,0.1) 0%, transparent 70%)' }}
+                    style={{ background: 'radial-gradient(circle, rgba(13,148,136,0.1) 0%, transparent 70%)' }}
                     animate={{ scale: [1, 1.2, 1], opacity: [0.5, 0.8, 0.5] }}
                     transition={{ duration: 2.5, repeat: Infinity, delay: i * 0.5 + 0.3, ease: 'easeInOut' }}
                   />
-                  <div className="w-20 h-20 rounded-full border-2 border-[#D4A853]/25 bg-[#09090b] flex items-center justify-center relative overflow-hidden">
+                  <div className="w-20 h-20 rounded-full border-2 border-[#0D9488]/25 bg-gradient-to-br from-[#0B1F28] to-[#04131A] flex items-center justify-center relative overflow-hidden shadow-lg shadow-[#0D9488]/20">
                     <div
                       className="absolute inset-0"
-                      style={{ background: 'radial-gradient(circle, rgba(212,168,83,0.06) 0%, transparent 70%)' }}
+                      style={{ background: 'radial-gradient(circle, rgba(13,148,136,0.06) 0%, transparent 70%)' }}
                     />
-                    <span className="text-2xl font-bold bg-gradient-to-br from-[#D4A853] to-[#C47A4A] bg-clip-text text-transparent relative">
+                    <span className="text-2xl font-bold bg-gradient-to-br from-[#0D9488] to-[#14B8A6] bg-clip-text text-transparent relative">
                       {step.number}
                     </span>
                   </div>
@@ -415,18 +457,18 @@ function ProcessGraph() {
   )
 }
 
-// ─── Floating Particles (ambient motion) ───
+// ─── Floating Particles ───
 const particles = [
-  { size: 3, x: '7%', y: '14%', dx: [0, 45, -20, 35, 0], dy: [0, -35, 50, -20, 0], dur: 20, color: '#D4A853', op: 0.25 },
-  { size: 2, x: '88%', y: '22%', dx: [0, -35, 25, -15, 0], dy: [0, 40, -25, 35, 0], dur: 24, color: '#C47A4A', op: 0.2 },
-  { size: 4, x: '14%', y: '48%', dx: [0, 30, -40, 20, 0], dy: [0, -20, 35, -45, 0], dur: 18, color: '#D4A853', op: 0.18 },
-  { size: 2, x: '80%', y: '56%', dx: [0, -25, 40, -30, 0], dy: [0, 30, -20, 40, 0], dur: 22, color: '#D4A853', op: 0.22 },
-  { size: 3, x: '45%', y: '72%', dx: [0, 35, -30, 25, 0], dy: [0, -40, 20, -30, 0], dur: 26, color: '#C47A4A', op: 0.2 },
-  { size: 2, x: '25%', y: '85%', dx: [0, -20, 35, -25, 0], dy: [0, 25, -35, 20, 0], dur: 19, color: '#D4A853', op: 0.18 },
-  { size: 3, x: '65%', y: '35%', dx: [0, 40, -25, 30, 0], dy: [0, -30, 40, -20, 0], dur: 21, color: '#C47A4A', op: 0.15 },
-  { size: 2, x: '52%', y: '8%', dx: [0, -30, 20, -35, 0], dy: [0, 35, -25, 30, 0], dur: 23, color: '#D4A853', op: 0.2 },
-  { size: 3, x: '92%', y: '68%', dx: [0, -40, 30, -20, 0], dy: [0, -25, 35, -30, 0], dur: 17, color: '#C47A4A', op: 0.22 },
-  { size: 2, x: '35%', y: '92%', dx: [0, 25, -35, 40, 0], dy: [0, -35, 20, -25, 0], dur: 25, color: '#D4A853', op: 0.15 },
+  { size: 3, x: '7%', y: '14%', dx: [0, 45, -20, 35, 0], dy: [0, -35, 50, -20, 0], dur: 20, color: '#0D9488', op: 0.25 },
+  { size: 2, x: '88%', y: '22%', dx: [0, -35, 25, -15, 0], dy: [0, 40, -25, 35, 0], dur: 24, color: '#14B8A6', op: 0.2 },
+  { size: 4, x: '14%', y: '48%', dx: [0, 30, -40, 20, 0], dy: [0, -20, 35, -45, 0], dur: 18, color: '#0D9488', op: 0.18 },
+  { size: 2, x: '80%', y: '56%', dx: [0, -25, 40, -30, 0], dy: [0, 30, -20, 40, 0], dur: 22, color: '#0D9488', op: 0.22 },
+  { size: 3, x: '45%', y: '72%', dx: [0, 35, -30, 25, 0], dy: [0, -40, 20, -30, 0], dur: 26, color: '#14B8A6', op: 0.2 },
+  { size: 2, x: '25%', y: '85%', dx: [0, -20, 35, -25, 0], dy: [0, 25, -35, 20, 0], dur: 19, color: '#0D9488', op: 0.18 },
+  { size: 3, x: '65%', y: '35%', dx: [0, 40, -25, 30, 0], dy: [0, -30, 40, -20, 0], dur: 21, color: '#14B8A6', op: 0.15 },
+  { size: 2, x: '52%', y: '8%', dx: [0, -30, 20, -35, 0], dy: [0, 35, -25, 30, 0], dur: 23, color: '#0D9488', op: 0.2 },
+  { size: 3, x: '92%', y: '68%', dx: [0, -40, 30, -20, 0], dy: [0, -25, 35, -30, 0], dur: 17, color: '#14B8A6', op: 0.22 },
+  { size: 2, x: '35%', y: '92%', dx: [0, 25, -35, 40, 0], dy: [0, -35, 20, -25, 0], dur: 25, color: '#0D9488', op: 0.15 },
 ]
 
 function FloatingParticles() {
@@ -456,7 +498,7 @@ function FloatingParticles() {
  * Redireciona usuários já autenticados para `/dashboard` ou `/admin`.
  */
 export default function LandingPage() {
-  const [scrolled, setScrolled] = useState(false)
+  const [, setScrolled] = useState(false)
   const { scrollYProgress } = useScroll()
   const lenisRef = useRef<InstanceType<typeof Lenis> | null>(null)
   const tabletRef = useRef(null)
@@ -480,7 +522,7 @@ export default function LandingPage() {
     }
   }, [])
 
-  // Lenis smooth scroll — buttery momentum
+  // Lenis smooth scroll
   useEffect(() => {
     const lenis = new Lenis({
       duration: 1.4,
@@ -512,60 +554,44 @@ export default function LandingPage() {
   }, [])
 
   return (
-    <div className="min-h-screen bg-[#09090b] text-[#fafafa] overflow-x-hidden" style={{ fontFamily: 'var(--font-inter), system-ui, sans-serif' }}>
+    <div
+      className="min-h-screen text-[#e9f9f6] overflow-x-hidden"
+      style={{
+        fontFamily: 'var(--font-sans), system-ui, monospace',
+        background: [
+          'radial-gradient(circle at 30% 12%, rgba(10,20,28,0.85) 0%, rgba(5,10,16,0.92) 32%, transparent 60%)',
+          'radial-gradient(circle at 75% 8%, rgba(8,18,27,0.8) 0%, rgba(5,10,16,0.9) 28%, transparent 55%)',
+          'linear-gradient(180deg, #04070c 0%, #04060b 55%, #020409 100%)',
+        ].join(','),
+      }}
+    >
       {/* ═══════════════════ PROGRESS BAR ═══════════════════ */}
       <motion.div
         className="fixed top-0 left-0 right-0 h-[2px] z-[60] origin-left"
         style={{
           scaleX: scrollYProgress,
-          background: 'linear-gradient(90deg, #D4A853, #C47A4A)',
+          background: 'linear-gradient(90deg, #38BDF8, #22C3B6, #67E8F9)',
         }}
       />
 
-      {/* ═══════════════════ GLOWING SMOKE BACKGROUND ═══════════════════ */}
+      {/* ═══════════════════ BACKGROUNDS ═══════════════════ */}
+      <AuroraBackground />
+      <SparkleField />
+      <CornerOrbs />
+      <IconFloatLayer />
       <SmokeBackground />
       <FloatingParticles />
 
-      {/* ═══════════════════ CORNER GLOW BLURS (glass effect) ═══════════════════ */}
-      <div className="fixed inset-0 z-0 pointer-events-none overflow-hidden" aria-hidden="true">
-        {/* Top-left */}
-        <div
-          className="absolute -top-32 -left-32 w-[400px] h-[400px] rounded-full"
-          style={{ background: '#D4A853', opacity: 0.06, filter: 'blur(180px)' }}
-        />
-        {/* Top-right */}
-        <div
-          className="absolute -top-40 -right-40 w-[350px] h-[350px] rounded-full"
-          style={{ background: '#C47A4A', opacity: 0.05, filter: 'blur(180px)' }}
-        />
-        {/* Bottom-left */}
-        <div
-          className="absolute -bottom-32 -left-32 w-[380px] h-[380px] rounded-full"
-          style={{ background: '#C47A4A', opacity: 0.05, filter: 'blur(180px)' }}
-        />
-        {/* Bottom-right */}
-        <div
-          className="absolute -bottom-28 -right-28 w-[420px] h-[420px] rounded-full"
-          style={{ background: '#D4A853', opacity: 0.07, filter: 'blur(200px)' }}
-        />
-      </div>
-
-      {/* ═══════════════════ NAV (floating pill) ═══════════════════ */}
+      {/* ═══════════════════ NAV ═══════════════════ */}
       <div className="fixed top-5 inset-x-0 z-50 flex justify-center pointer-events-none">
-        <motion.nav
-          initial={{ y: -80, opacity: 0 }}
-          animate={{ y: scrolled ? 0 : -80, opacity: scrolled ? 1 : 0 }}
-          transition={{ duration: 0.4, ease: easeOut }}
-          className="pointer-events-auto rounded-full border border-white/[0.08] px-2 py-1.5"
-          style={{
-            background: 'rgba(9, 9, 11, 0.6)',
+
+           <div  style={{
+            background: 'linear-gradient(120deg, rgba(34, 195, 182, 0.18), rgba(5, 17, 26, 0.85))',
             backdropFilter: 'blur(24px)',
             WebkitBackdropFilter: 'blur(24px)',
-            boxShadow: '0 8px 32px rgba(0,0,0,0.4), inset 0 0.5px 0 rgba(255,255,255,0.06)',
-          }}
-        >
-          <div className="flex items-center gap-1 sm:gap-2 px-2 sm:px-3">
-            <Image src="/Logo.png" alt="NoCheck" width={100} height={28} className="opacity-90" />
+            boxShadow: '0 12px 40px rgba(4, 12, 18, 0.45), inset 0 0.5px 0 rgba(255,255,255,0.08)',
+          }} className="flex items-center gap-1 sm:gap-2 px-2 sm:px-3 pointer-events-auto rounded-full border border-white/[0.12] px-2 py-1.5 shadow-theme-md">
+            <h1>OpereCheck</h1>
             <div className="w-px h-5 bg-white/[0.08] mx-1" />
             <a
               href="#recursos"
@@ -575,18 +601,18 @@ export default function LandingPage() {
               Recursos
             </a>
             <a
+              href="#precos"
+              onClick={(e) => scrollToSection(e, 'precos')}
+              className="text-sm text-[#a1a1aa] hover:text-[#fafafa] transition-colors duration-300 px-3 py-1.5 rounded-full hover:bg-white/[0.06] whitespace-nowrap hidden sm:inline-block"
+            >
+              Preços
+            </a>
+            <a
               href="#processo"
               onClick={(e) => scrollToSection(e, 'processo')}
               className="text-sm text-[#a1a1aa] hover:text-[#fafafa] transition-colors duration-300 px-3 py-1.5 rounded-full hover:bg-white/[0.06] whitespace-nowrap hidden sm:inline-block"
             >
               Processo
-            </a>
-            <a
-              href="#contato"
-              onClick={(e) => scrollToSection(e, 'contato')}
-              className="text-sm text-[#a1a1aa] hover:text-[#fafafa] transition-colors duration-300 px-3 py-1.5 rounded-full hover:bg-white/[0.06] whitespace-nowrap hidden sm:inline-block"
-            >
-              Contato
             </a>
             <div className="w-px h-5 bg-white/[0.08] mx-1" />
             <Link
@@ -596,24 +622,21 @@ export default function LandingPage() {
               Entrar
             </Link>
           </div>
-        </motion.nav>
       </div>
 
       {/* ═══════════════════ HERO ═══════════════════ */}
       <section className="relative min-h-screen flex flex-col items-center justify-center px-6 overflow-hidden pt-24 pb-12">
         {/* Background effects */}
         <div className="absolute inset-0">
-          {/* Radial gradient */}
           <div
             className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[900px] h-[600px] rounded-full opacity-20"
             style={{
-              background: 'radial-gradient(ellipse, rgba(212, 168, 83, 0.3) 0%, rgba(196, 122, 74, 0.1) 40%, transparent 70%)',
+              background: 'radial-gradient(ellipse, rgba(13, 148, 136, 0.3) 0%, rgba(20, 184, 166, 0.1) 40%, transparent 70%)',
             }}
           />
-          {/* Floating orbs */}
-          <div className="absolute top-[20%] left-[15%] w-72 h-72 rounded-full bg-[#D4A853]/[0.06] blur-[100px] animate-[float-slow_8s_ease-in-out_infinite]" />
-          <div className="absolute bottom-[20%] right-[10%] w-96 h-96 rounded-full bg-[#C47A4A]/[0.05] blur-[120px] animate-[float-delayed_10s_ease-in-out_infinite_2s]" />
-          <div className="absolute top-[60%] left-[60%] w-48 h-48 rounded-full bg-[#D4A853]/[0.04] blur-[80px] animate-[float-slow-reverse_12s_ease-in-out_infinite_4s]" />
+          <div className="absolute top-[20%] left-[15%] w-72 h-72 rounded-full bg-[#0D9488]/[0.06] blur-[100px] animate-[float-slow_8s_ease-in-out_infinite]" />
+          <div className="absolute bottom-[20%] right-[10%] w-96 h-96 rounded-full bg-[#14B8A6]/[0.05] blur-[120px] animate-[float-delayed_10s_ease-in-out_infinite_2s]" />
+          <div className="absolute top-[60%] left-[60%] w-48 h-48 rounded-full bg-[#0D9488]/[0.04] blur-[80px] animate-[float-slow-reverse_12s_ease-in-out_infinite_4s]" />
         </div>
 
         {/* Hero content */}
@@ -623,10 +646,11 @@ export default function LandingPage() {
             initial={{ opacity: 0, y: 20, scale: 0.95 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             transition={{ duration: 0.6, delay: 0.2, ease: easeOut }}
-            className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full border border-[#D4A853]/20 bg-[#D4A853]/[0.08] mb-8"
+            className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full border border-[#0D9488]/20 bg-[#0D9488]/[0.08] mb-8"
           >
-            <span className="w-1.5 h-1.5 rounded-full bg-[#D4A853] animate-pulse" />
-            <span className="text-sm text-[#D4A853] font-medium tracking-wide">Sistema de Gestao Operacional</span>
+            <span className="w-1.5 h-1.5 rounded-full bg-[#0D9488] animate-pulse" />
+            <span className="text-sm text-[#0D9488] font-medium tracking-wide">Plataforma SaaS de Checklists Inteligentes</span>
+
           </motion.div>
 
           {/* Headline */}
@@ -636,14 +660,29 @@ export default function LandingPage() {
             variants={stagger}
             className="text-5xl sm:text-6xl lg:text-7xl font-bold leading-[1.1] tracking-tight mb-6"
           >
-            {['Checklists', 'inteligentes', 'para sua', 'operacao'].map((word, i) => (
+            {['Controle', 'total', 'da', 'qualidade'].map((word, i) => (
               <motion.span
                 key={i}
                 variants={fadeInUp}
                 className="inline-block mr-[0.3em]"
                 style={
-                  word === 'inteligentes'
-                    ? { background: 'linear-gradient(135deg, #D4A853, #C47A4A)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }
+                  word === 'qualidade'
+                    ? { background: 'linear-gradient(135deg, #0D9488, #14B8A6)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }
+                    : undefined
+                }
+              >
+                {word}
+              </motion.span>
+            ))}
+            <br />
+            {['da', 'sua', 'operação'].map((word, i) => (
+              <motion.span
+                key={`l2-${i}`}
+                variants={fadeInUp}
+                className="inline-block mr-[0.3em]"
+                style={
+                  word === 'operação'
+                    ? { background: 'linear-gradient(135deg, #0D9488, #14B8A6)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }
                     : undefined
                 }
               >
@@ -659,8 +698,8 @@ export default function LandingPage() {
             transition={{ duration: 0.7, delay: 0.7, ease: easeOut }}
             className="text-lg sm:text-xl text-[#a1a1aa] max-w-2xl mx-auto mb-10 leading-relaxed"
           >
-            Automatize processos, detecte nao-conformidades instantaneamente e tome decisoes
-            com dados em tempo real. Tudo em um so lugar.
+            Checklists digitais, detecção automática de não-conformidades e planos de ação em tempo real.
+            Tudo na nuvem, com dados isolados e seguros para sua empresa.
           </motion.p>
 
           {/* CTA Buttons */}
@@ -670,32 +709,37 @@ export default function LandingPage() {
             transition={{ duration: 0.7, delay: 0.9, ease: easeOut }}
             className="flex flex-col sm:flex-row items-center justify-center gap-4"
           >
-            <a
-              href={WHATSAPP_URL}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="group relative inline-flex items-center gap-3 px-8 py-4 rounded-2xl font-semibold text-[#09090b] transition-all duration-300 hover:scale-[1.03] hover:shadow-[0_0_40px_rgba(212,168,83,0.3)]"
-              style={{ background: 'linear-gradient(135deg, #D4A853, #C47A4A)' }}
+            <Link
+              href="/cadastro"
+              className="group relative inline-flex items-center gap-3 px-8 py-4 rounded-2xl font-semibold text-[#09090b] transition-all duration-300 hover:scale-[1.03] hover:shadow-[0_0_40px_rgba(13,148,136,0.3)]"
+              style={{ background: 'linear-gradient(135deg, #0D9488, #14B8A6)' }}
             >
-              <svg viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5">
-                <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z" />
-              </svg>
-              Entrar em Contato
+              Teste grátis por {TRIAL_DAYS} dias
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-4 h-4 transition-transform group-hover:translate-x-1">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
               </svg>
-            </a>
+            </Link>
 
             <Link
               href="/login"
               className="inline-flex items-center gap-2 px-8 py-4 rounded-2xl font-medium text-[#a1a1aa] border border-white/[0.08] hover:border-white/[0.16] hover:text-[#fafafa] hover:bg-white/[0.04] transition-all duration-300"
             >
-              Ja sou cliente
+              Já sou cliente
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-4 h-4">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
               </svg>
             </Link>
           </motion.div>
+
+          {/* Trial info */}
+          <motion.p
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 0.7, delay: 1.1 }}
+            className="text-sm text-[#71717a] mt-4"
+          >
+            Sem cartão de crédito. Planos a partir de R$97/mês.
+          </motion.p>
         </div>
 
         {/* ═══════════════════ TABLET MOCKUP 3D ═══════════════════ */}
@@ -713,26 +757,22 @@ export default function LandingPage() {
             }}
             className="relative mx-auto w-full max-w-[1100px]"
           >
-            {/* Glow behind tablet */}
             <div
               className="absolute -inset-12 rounded-[2rem] opacity-50 blur-[80px] -z-10"
               style={{
-                background: 'radial-gradient(ellipse at 50% 60%, rgba(212, 168, 83, 0.35) 0%, rgba(196, 122, 74, 0.15) 40%, transparent 70%)',
+                background: 'radial-gradient(ellipse at 50% 60%, rgba(13, 148, 136, 0.35) 0%, rgba(20, 184, 166, 0.15) 40%, transparent 70%)',
               }}
             />
-            {/* Tablet frame */}
             <div className="relative rounded-2xl sm:rounded-3xl border-[4px] sm:border-[6px] border-[#27272a] bg-[#18181b] p-2 sm:p-4 shadow-[0_30px_100px_rgba(0,0,0,0.7)]">
-              {/* Screen */}
               <div className="relative rounded-xl sm:rounded-2xl overflow-hidden">
                 <Image
                   src="/screen1.png"
-                  alt="Painel administrativo NoCheck"
+                  alt="Painel administrativo OpereCheck"
                   width={1200}
                   height={750}
                   className="w-full h-auto"
                   priority
                 />
-                {/* Subtle screen glare */}
                 <div
                   className="absolute inset-0 pointer-events-none"
                   style={{
@@ -756,7 +796,7 @@ export default function LandingPage() {
             transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
             className="w-6 h-10 rounded-full border-2 border-white/[0.15] flex items-start justify-center pt-2 mx-auto"
           >
-            <div className="w-1 h-2 rounded-full bg-[#D4A853]/60" />
+            <div className="w-1 h-2 rounded-full bg-[#0D9488]/60" />
           </motion.div>
         </motion.div>
       </section>
@@ -770,12 +810,11 @@ export default function LandingPage() {
               <TitleWord word="que" delay={0.18} />
               <TitleWord word="escolher" delay={0.26} />
               <TitleWord word="o" delay={0.34} />
-              <TitleWord word="NoCheck" delay={0.42} gradient />
+              <TitleWord word="OpereCheck" delay={0.42} gradient />
               <TitleWord word="?" delay={0.50} />
             </AnimatedTitle>
           </div>
 
-          {/* Bento Grid: row1 = large+small, row2 = small+large */}
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
             <FeatureBentoCard feature={features[0]} index={0} large />
             <FeatureBentoCard feature={features[1]} index={1} />
@@ -785,14 +824,15 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* ═══════════════════ HOW IT WORKS — Graph ═══════════════════ */}
+      {/* ═══════════════════ HOW IT WORKS ═══════════════════ */}
       <ProcessGraph />
 
       {/* ═══════════════════ STATS ═══════════════════ */}
       <section className="py-24 px-6 relative">
-        <div className="absolute inset-0 bg-gradient-to-b from-transparent via-[#D4A853]/[0.02] to-transparent" />
+        <div className="absolute inset-0 bg-white/4 backdrop-blur-2xl  rounded-2xl shadow-lg
+  shadow-black/10 " />
 
-        <div className="max-w-5xl mx-auto relative">
+        <div className="max-w-5xl mx-auto  relative">
           <motion.div
             initial="hidden"
             whileInView="visible"
@@ -806,7 +846,7 @@ export default function LandingPage() {
                 variants={scaleIn}
                 className="text-center p-6"
               >
-                <div className="text-4xl sm:text-5xl font-bold mb-2 bg-gradient-to-br from-[#D4A853] to-[#C47A4A] bg-clip-text text-transparent">
+                <div className="text-4xl sm:text-5xl font-bold mb-2 bg-gradient-to-br from-[#0D9488] to-[#14B8A6] bg-clip-text text-transparent">
                   {stat.displayOverride ? (
                     stat.displayOverride
                   ) : (
@@ -820,7 +860,10 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* ═══════════════════ TESTIMONIAL / TRUST ═══════════════════ */}
+      {/* ═══════════════════ PRICING ═══════════════════ */}
+      <PricingSection />
+
+      {/* ═══════════════════ TESTIMONIAL ═══════════════════ */}
       <section className="py-28 px-6">
         <div className="max-w-4xl mx-auto">
           <motion.div
@@ -830,33 +873,31 @@ export default function LandingPage() {
             variants={fadeIn}
             className="relative p-10 sm:p-14 rounded-3xl border border-white/[0.06] bg-[#18181b]/40 text-center overflow-hidden"
           >
-            {/* Background glow */}
             <div className="absolute inset-0 pointer-events-none">
               <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[500px] h-[300px] rounded-full opacity-[0.06]"
-                style={{ background: 'radial-gradient(ellipse, #D4A853 0%, transparent 70%)' }}
+                style={{ background: 'radial-gradient(ellipse, #0D9488 0%, transparent 70%)' }}
               />
             </div>
 
             <div className="relative">
-              {/* Quote icon */}
-              <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-[#D4A853]/[0.1] border border-[#D4A853]/[0.15] mb-6">
-                <svg viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5 text-[#D4A853]">
+              <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-[#0D9488]/[0.1] border border-[#0D9488]/[0.15] mb-6">
+                <svg viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5 text-[#0D9488]">
                   <path d="M14.017 21v-7.391c0-5.704 3.731-9.57 8.983-10.609l.995 2.151c-2.432.917-3.995 3.638-3.995 5.849h4v10H14.017zM0 21v-7.391c0-5.704 3.748-9.57 9-10.609l.996 2.151C7.563 6.068 6 8.789 6 11h4v10H0z" />
                 </svg>
               </div>
 
               <p className="text-xl sm:text-2xl leading-relaxed text-[#a1a1aa] mb-8 font-light">
-                &ldquo;O NoCheck transformou a forma como gerenciamos a qualidade na nossa operacao.
+                &ldquo;O OpereCheck transformou a forma como gerenciamos a qualidade na nossa operação.
                 Antes era tudo no papel, agora temos controle total em tempo real.&rdquo;
               </p>
 
               <div className="flex items-center justify-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[#D4A853] to-[#C47A4A] flex items-center justify-center text-sm font-bold text-[#09090b]">
-                  GN
+                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[#0D9488] to-[#14B8A6] flex items-center justify-center text-sm font-bold text-[#09090b]">
+                  OC
                 </div>
                 <div className="text-left">
-                  <div className="text-sm font-semibold text-[#fafafa]">Grupo Do No</div>
-                  <div className="text-xs text-[#71717a]">Gestao de Qualidade</div>
+                  <div className="text-sm font-semibold text-[#fafafa]">OpereCheck</div>
+                  <div className="text-xs text-[#71717a]">Gestão de Qualidade</div>
                 </div>
               </div>
             </div>
@@ -864,24 +905,26 @@ export default function LandingPage() {
         </div>
       </section>
 
+      {/* ═══════════════════ FAQ ═══════════════════ */}
+      <FAQSection />
+
       {/* ═══════════════════ CTA FINAL ═══════════════════ */}
-      <section id="contato" className="py-28 px-6 relative scroll-mt-20">
-        {/* Background glow */}
-        <div className="absolute inset-0 overflow-hidden">
+      <section id="contato" className="py-28 px-6 flex w-full bg-white/4 backdrop-blur-2xl rounded-2xl shadow-lg
+  shadow-black/10  scroll-mt-20">
+        <div className=" inset-0 overflow-hidden">
           <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-[1000px] h-[500px] rounded-full opacity-[0.08]"
-            style={{ background: 'radial-gradient(ellipse, #D4A853 0%, transparent 60%)' }}
+            style={{ background: 'radial-gradient(ellipse, #0D9488 0%, transparent 60%)' }}
           />
         </div>
 
-        <div className="max-w-3xl mx-auto text-center relative">
+        <div className=" flex flex-col w-full text-center relative">
           <div className="mb-6">
-            <div className="text-3xl sm:text-4xl lg:text-5xl font-bold tracking-tight">
-              <TitleWord word="Pronto" delay={0.1} />
-              <TitleWord word="para" delay={0.18} />
-              <TitleWord word="transformar" delay={0.26} />
-              <TitleWord word="sua" delay={0.34} gradient />
-              <TitleWord word="operacao" delay={0.42} gradient />
-              <TitleWord word="?" delay={0.50} />
+            <div className="text-3xl sm:text-4xl lg:text-5xl font-bold tracking-tight ">
+              <TitleWord word="Experimente" delay={0.1} />
+              <TitleWord word="o" delay={0.18} />
+              <TitleWord word="OpereCheck" delay={0.26} gradient />
+              <TitleWord word="sem" delay={0.34} />
+              <TitleWord word="compromisso" delay={0.42} />
             </div>
           </div>
 
@@ -892,7 +935,8 @@ export default function LandingPage() {
             transition={{ duration: 0.7, delay: 0.5, ease: easeOut }}
             className="text-lg text-[#a1a1aa] mb-10 max-w-xl mx-auto"
           >
-            Fale com a gente e descubra como o NoCheck pode ajudar sua empresa a ter mais controle, eficiencia e conformidade.
+            {TRIAL_DAYS} dias grátis no plano Professional. Sem cartão de crédito.
+            Cancele quando quiser.
           </motion.p>
 
           <motion.div
@@ -900,19 +944,27 @@ export default function LandingPage() {
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true, margin: '-60px' }}
             transition={{ duration: 0.7, delay: 0.6, ease: easeOut }}
+            className="flex flex-col sm:flex-row items-center justify-center gap-4"
           >
+            <Link
+              href="/cadastro"
+              className="group relative inline-flex items-center gap-3 px-10 py-5 rounded-2xl font-semibold text-lg text-[#09090b] transition-all duration-300 hover:scale-[1.03] hover:shadow-[0_0_60px_rgba(13,148,136,0.35)]"
+              style={{ background: 'linear-gradient(135deg, #0D9488, #14B8A6)' }}
+            >
+              Teste grátis por {TRIAL_DAYS} dias
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} className="w-5 h-5 transition-transform group-hover:translate-x-1">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
+              </svg>
+            </Link>
+
             <a
               href={WHATSAPP_URL}
               target="_blank"
               rel="noopener noreferrer"
-              className="group relative inline-flex items-center gap-3 px-10 py-5 rounded-2xl font-semibold text-lg text-[#09090b] transition-all duration-300 hover:scale-[1.03] hover:shadow-[0_0_60px_rgba(212,168,83,0.35)]"
-              style={{ background: 'linear-gradient(135deg, #D4A853, #C47A4A)' }}
+              className="inline-flex items-center gap-2 px-8 py-4 rounded-2xl font-medium text-[#a1a1aa] border border-white/[0.08] hover:border-white/[0.16] hover:text-[#fafafa] hover:bg-white/[0.04] transition-all duration-300"
             >
-              <svg viewBox="0 0 24 24" fill="currentColor" className="w-6 h-6">
-                <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z" />
-              </svg>
-              Entrar em Contato
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} className="w-5 h-5 transition-transform group-hover:translate-x-1">
+              Falar com um consultor
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-4 h-4">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
               </svg>
             </a>
@@ -924,17 +976,34 @@ export default function LandingPage() {
       <footer className="border-t border-white/[0.06] py-8 px-6">
         <div className="max-w-6xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
           <div className="flex items-center gap-3">
-            <Image src="/Logo.png" alt="NoCheck" width={90} height={24} className="opacity-60" />
+            <span className="text-lg font-bold tracking-tight opacity-60">
+              <span className="text-gray-400">Opere</span><span className="text-[#0D9488]">Check</span>
+            </span>
             <span className="text-sm text-[#71717a]">
-              &copy; {new Date().getFullYear()} Grupo Do No
+              &copy; {new Date().getFullYear()} OpereCheck
             </span>
           </div>
-          <Link
-            href="/login"
-            className="text-sm text-[#71717a] hover:text-[#a1a1aa] transition-colors duration-300"
-          >
-            Area do Cliente
-          </Link>
+          <div className="flex items-center gap-6">
+            <a
+              href="#precos"
+              onClick={(e) => scrollToSection(e, 'precos')}
+              className="text-sm text-[#71717a] hover:text-[#a1a1aa] transition-colors duration-300"
+            >
+              Preços
+            </a>
+            <Link
+              href="/login"
+              className="text-sm text-[#71717a] hover:text-[#a1a1aa] transition-colors duration-300"
+            >
+              Entrar
+            </Link>
+            <Link
+              href="/cadastro"
+              className="text-sm text-[#0D9488] hover:text-[#0D9488]/80 transition-colors duration-300 font-medium"
+            >
+              Criar conta
+            </Link>
+          </div>
         </div>
       </footer>
     </div>

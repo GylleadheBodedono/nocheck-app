@@ -10,8 +10,43 @@
 
 /** Alias genérico para qualquer cliente Supabase (server ou browser). */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-type SupabaseClient = any
+type SupabaseClient = { from: (...args: any[]) => any; rpc: (...args: any[]) => any }
 
+/** Registro de um action plan vindo do Supabase com joins */
+interface ActionPlanRow {
+  id: number
+  field_id: number
+  store_id: number
+  template_id: number
+  status: string
+  severity: string
+  is_reincidencia: boolean
+  reincidencia_count: number
+  deadline: string
+  created_at: string
+  completed_at: string | null
+  assigned_to: string
+  field: { name: string } | null
+  store: { name: string } | null
+  template: { name: string } | null
+}
+
+/** Registro simplificado de action plan para stats de responsavel */
+interface ActionPlanBasicRow {
+  id: number
+  assigned_to: string
+  status: string
+  created_at: string
+  completed_at: string | null
+  deadline: string
+}
+
+/** Action plan enriquecido com dados do responsavel */
+interface ActionPlanWithAssignee extends ActionPlanBasicRow {
+  assignee: { full_name: string } | null
+}
+
+/** Resumo geral de conformidade no periodo */
 export type ComplianceSummary = {
   totalNonConformities: number
   complianceRate: number
@@ -20,6 +55,7 @@ export type ComplianceSummary = {
   plansOverdue: number
 }
 
+/** Linha de conformidade agrupada por campo de template */
 export type FieldComplianceRow = {
   fieldId: number
   fieldName: string
@@ -29,6 +65,7 @@ export type FieldComplianceRow = {
   complianceRate: number
 }
 
+/** Linha de conformidade agrupada por loja */
 export type StoreComplianceRow = {
   storeId: number
   storeName: string
@@ -38,6 +75,7 @@ export type StoreComplianceRow = {
   rate: number
 }
 
+/** Resumo de reincidencias no periodo */
 export type ReincidenciaSummary = {
   totalReincidencias: number
   avgReincidenciaRate: number
@@ -45,6 +83,7 @@ export type ReincidenciaSummary = {
   worstStore: string | null
 }
 
+/** Linha de reincidencia agrupada por campo + loja */
 export type ReincidenciaRow = {
   fieldId: number
   fieldName: string
@@ -54,6 +93,7 @@ export type ReincidenciaRow = {
   lastOccurrence: string
 }
 
+/** Celula do heatmap loja x campo */
 export type HeatmapCell = {
   storeId: number
   storeName: string
@@ -61,6 +101,7 @@ export type HeatmapCell = {
   count: number
 }
 
+/** Estatisticas de planos de acao por responsavel */
 export type AssigneeStats = {
   userId: string
   userName: string
@@ -92,8 +133,7 @@ export async function fetchComplianceData(
   const cutoffISO = cutoff.toISOString()
 
   // Buscar todos action_plans no periodo
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: plans } = await (supabase as any)
+  const { data: plans } = await supabase
     .from('action_plans')
     .select(`
       id, field_id, store_id, template_id, status, severity,
@@ -105,7 +145,9 @@ export async function fetchComplianceData(
     .gte('created_at', cutoffISO)
     .order('created_at', { ascending: false })
 
-  if (!plans || plans.length === 0) {
+  const typedPlans = (plans || []) as unknown as ActionPlanRow[]
+
+  if (typedPlans.length === 0) {
     return {
       summary: { totalNonConformities: 0, complianceRate: 100, plansCreated: 0, plansResolved: 0, plansOverdue: 0 },
       byField: [],
@@ -114,30 +156,29 @@ export async function fetchComplianceData(
   }
 
   // Summary
-  const resolved = plans.filter((p: { status: string }) => p.status === 'concluido')
-  const overdue = plans.filter((p: { status: string }) => p.status === 'vencido')
+  const resolved = typedPlans.filter((p) => p.status === 'concluido')
+  const overdue = typedPlans.filter((p) => p.status === 'vencido')
 
   // Buscar total de checklists no periodo para calcular taxa
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { count: totalChecklists } = await (supabase as any)
+  const { count: totalChecklists } = await supabase
     .from('checklists')
     .select('id', { count: 'exact', head: true })
     .gte('created_at', cutoffISO)
 
   const total = totalChecklists || 1
-  const complianceRate = Math.round(((total - plans.length) / total) * 100 * 10) / 10
+  const complianceRate = Math.round(((total - typedPlans.length) / total) * 100 * 10) / 10
 
   const summary: ComplianceSummary = {
-    totalNonConformities: plans.length,
+    totalNonConformities: typedPlans.length,
     complianceRate: Math.max(0, complianceRate),
-    plansCreated: plans.length,
+    plansCreated: typedPlans.length,
     plansResolved: resolved.length,
     plansOverdue: overdue.length,
   }
 
-  // By field
+  // Agrupar por campo
   const fieldMap = new Map<number, { fieldName: string; templateName: string; total: number; resolved: number }>()
-  for (const p of plans) {
+  for (const p of typedPlans) {
     const key = p.field_id || 0
     const existing = fieldMap.get(key)
     if (existing) {
@@ -164,9 +205,9 @@ export async function fetchComplianceData(
     }))
     .sort((a, b) => b.totalPlans - a.totalPlans)
 
-  // By store
+  // Agrupar por loja
   const storeMap = new Map<number, { storeName: string; total: number; resolved: number; overdue: number }>()
-  for (const p of plans) {
+  for (const p of typedPlans) {
     const key = p.store_id
     const existing = storeMap.get(key)
     if (existing) {
@@ -219,8 +260,7 @@ export async function fetchReincidenciaData(
   const cutoffISO = cutoff.toISOString()
 
   // Buscar planos com reincidencia (sem FK-disambiguated join que falha com 400)
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: reincPlansRaw } = await (supabase as any)
+  const { data: reincPlansRaw } = await supabase
     .from('action_plans')
     .select(`
       id, field_id, store_id, template_id, reincidencia_count,
@@ -234,47 +274,48 @@ export async function fetchReincidenciaData(
     .order('reincidencia_count', { ascending: false })
 
   // Buscar todos planos para stats de assignee
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: allPlansRaw } = await (supabase as any)
+  const { data: allPlansRaw } = await supabase
     .from('action_plans')
     .select(`
       id, assigned_to, status, created_at, completed_at, deadline
     `)
     .gte('created_at', cutoffISO)
 
+  const typedReincRaw = (reincPlansRaw || []) as unknown as ActionPlanRow[]
+  const typedAllRaw = (allPlansRaw || []) as unknown as ActionPlanBasicRow[]
+
   // Buscar nomes dos responsaveis separadamente (evita FK-disambiguated join)
   const allAssigneeIds = [...new Set([
-    ...(reincPlansRaw || []).map((p: { assigned_to: string }) => p.assigned_to),
-    ...(allPlansRaw || []).map((p: { assigned_to: string }) => p.assigned_to),
+    ...typedReincRaw.map((p) => p.assigned_to),
+    ...typedAllRaw.map((p) => p.assigned_to),
   ].filter(Boolean))]
 
   let assigneeNamesMap = new Map<string, string>()
   if (allAssigneeIds.length > 0) {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: assigneeUsers } = await (supabase as any)
+    const { data: assigneeUsers } = await supabase
       .from('users')
       .select('id, full_name')
       .in('id', allAssigneeIds)
-    if (assigneeUsers) {
-      assigneeNamesMap = new Map(assigneeUsers.map((u: { id: string; full_name: string }) => [u.id, u.full_name]))
+
+    const typedUsers = (assigneeUsers || []) as unknown as Array<{ id: string; full_name: string }>
+    if (typedUsers.length > 0) {
+      assigneeNamesMap = new Map(typedUsers.map((u) => [u.id, u.full_name]))
     }
   }
 
   // Enriquecer planos com dados do assignee
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const reincPlans = (reincPlansRaw || []).map((p: any) => ({
+  const reincPlans = typedReincRaw.map((p) => ({
     ...p,
-    assignee: assigneeNamesMap.get(p.assigned_to) ? { full_name: assigneeNamesMap.get(p.assigned_to) } : null,
+    assignee: assigneeNamesMap.get(p.assigned_to) ? { full_name: assigneeNamesMap.get(p.assigned_to)! } : null,
   }))
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const allPlans = (allPlansRaw || []).map((p: any) => ({
+  const allPlans: ActionPlanWithAssignee[] = typedAllRaw.map((p) => ({
     ...p,
-    assignee: assigneeNamesMap.get(p.assigned_to) ? { full_name: assigneeNamesMap.get(p.assigned_to) } : null,
+    assignee: assigneeNamesMap.get(p.assigned_to) ? { full_name: assigneeNamesMap.get(p.assigned_to)! } : null,
   }))
 
   if (reincPlans.length === 0) {
-    // Build assignee stats even without reincidencias
-    const byAssignee = buildAssigneeStats(allPlans || [])
+    // Gerar stats de responsavel mesmo sem reincidencias
+    const byAssignee = buildAssigneeStats(allPlans)
     return {
       summary: { totalReincidencias: 0, avgReincidenciaRate: 0, worstField: null, worstStore: null },
       rows: [],
@@ -282,7 +323,7 @@ export async function fetchReincidenciaData(
     }
   }
 
-  // Group reincidencias by field+store
+  // Agrupar reincidencias por campo+loja
   const groupKey = (p: { field_id: number; store_id: number }) => `${p.field_id}-${p.store_id}`
   const groupMap = new Map<string, ReincidenciaRow>()
 
@@ -308,7 +349,7 @@ export async function fetchReincidenciaData(
 
   const rows = Array.from(groupMap.values()).sort((a, b) => b.occurrences - a.occurrences)
 
-  // Find worst field and store
+  // Encontrar campo e loja com mais reincidencias
   const fieldCounts = new Map<string, number>()
   const storeCounts = new Map<string, number>()
   for (const p of reincPlans) {
@@ -339,7 +380,7 @@ export async function fetchReincidenciaData(
     worstStore,
   }
 
-  const byAssignee = buildAssigneeStats(allPlans || [])
+  const byAssignee = buildAssigneeStats(allPlans)
 
   return { summary, rows, byAssignee }
 }
@@ -361,6 +402,7 @@ function buildAssigneeStats(plans: Array<{
   deadline: string
   assignee: { full_name: string } | null
 }>): AssigneeStats[] {
+  const MS_PER_DAY = 1000 * 60 * 60 * 24
   const map = new Map<string, {
     userName: string
     total: number
@@ -371,13 +413,13 @@ function buildAssigneeStats(plans: Array<{
 
   for (const p of plans) {
     const key = p.assigned_to
-    const existing = map.get(key)
     const isCompleted = p.status === 'concluido'
     const isOverdue = p.status === 'vencido'
     const resDays = isCompleted && p.completed_at && p.created_at
-      ? Math.round((new Date(p.completed_at).getTime() - new Date(p.created_at).getTime()) / (1000 * 60 * 60 * 24))
+      ? Math.round((new Date(p.completed_at).getTime() - new Date(p.created_at).getTime()) / MS_PER_DAY)
       : null
 
+    const existing = map.get(key)
     if (existing) {
       existing.total++
       if (isCompleted) existing.completed++
@@ -424,8 +466,7 @@ export async function fetchStoreHeatmap(
   const cutoff = new Date()
   cutoff.setDate(cutoff.getDate() - days)
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: plans } = await (supabase as any)
+  const { data: plans } = await supabase
     .from('action_plans')
     .select(`
       store_id, field_id,
@@ -434,7 +475,14 @@ export async function fetchStoreHeatmap(
     `)
     .gte('created_at', cutoff.toISOString())
 
-  if (!plans || plans.length === 0) {
+  const typedPlans = (plans || []) as unknown as Array<{
+    store_id: number
+    field_id: number
+    store: { name: string } | null
+    field: { name: string } | null
+  }>
+
+  if (typedPlans.length === 0) {
     return { cells: [], stores: [], fields: [] }
   }
 
@@ -442,7 +490,7 @@ export async function fetchStoreHeatmap(
   const storeSet = new Set<string>()
   const fieldSet = new Set<string>()
 
-  for (const p of plans) {
+  for (const p of typedPlans) {
     const storeName = p.store?.name || `Loja #${p.store_id}`
     const fieldName = p.field?.name || `Campo #${p.field_id}`
     storeSet.add(storeName)
@@ -461,5 +509,156 @@ export async function fetchStoreHeatmap(
     cells: Array.from(cellMap.values()),
     stores: Array.from(storeSet).sort(),
     fields: Array.from(fieldSet).sort(),
+  }
+}
+
+// ============================================
+// QUERIES USANDO MATERIALIZED VIEWS
+// Alternativas performaticas para dashboards
+// ============================================
+
+/** KPI diario retornado pela materialized view */
+export type DailyKpi = {
+  tenant_id: string
+  store_id: number
+  report_date: string
+  total_checklists: number
+  completed: number
+  in_progress: number
+  plans_created: number
+  plans_resolved: number
+}
+
+/** Conformidade semanal retornada pela materialized view */
+export type WeeklyCompliance = {
+  tenant_id: string
+  store_id: number
+  template_id: number
+  week: string
+  total_responses: number
+  non_conformities: number
+  compliance_rate: number
+}
+
+/**
+ * Busca KPIs diarios da materialized view via funcao RPC com filtro de tenant.
+ * Retorna null se a view nao existir (tenant novo / view ainda nao criada).
+ *
+ * @param supabase - Cliente Supabase autenticado
+ * @param tenantId - ID da organizacao (tenant)
+ * @param from - Data de inicio do periodo
+ * @param to - Data de fim do periodo
+ * @returns Array de KPIs diarios ou null se a view nao existir
+ */
+export async function fetchDailyKpis(
+  supabase: SupabaseClient,
+  tenantId: string,
+  from: Date,
+  to: Date
+): Promise<DailyKpi[] | null> {
+  try {
+    const { data, error } = await supabase.rpc('get_daily_kpis', {
+      p_tenant_id: tenantId,
+      p_from: from.toISOString().split('T')[0],
+      p_to: to.toISOString().split('T')[0],
+    })
+
+    if (error) {
+      console.warn('[Analytics] get_daily_kpis error (view may not exist yet):', error.message)
+      return null
+    }
+
+    return (data || []) as DailyKpi[]
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Busca conformidade semanal da materialized view via funcao RPC.
+ * Retorna null se a view nao existir (tenant novo / view ainda nao criada).
+ *
+ * @param supabase - Cliente Supabase autenticado
+ * @param tenantId - ID da organizacao (tenant)
+ * @param from - Data de inicio do periodo
+ * @param to - Data de fim do periodo
+ * @returns Array de conformidade semanal ou null se a view nao existir
+ */
+export async function fetchWeeklyCompliance(
+  supabase: SupabaseClient,
+  tenantId: string,
+  from: Date,
+  to: Date
+): Promise<WeeklyCompliance[] | null> {
+  try {
+    const { data, error } = await supabase.rpc('get_compliance_summary', {
+      p_tenant_id: tenantId,
+      p_from: from.toISOString().split('T')[0],
+      p_to: to.toISOString().split('T')[0],
+    })
+
+    if (error) {
+      console.warn('[Analytics] get_compliance_summary error:', error.message)
+      return null
+    }
+
+    return (data || []) as WeeklyCompliance[]
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Agrega KPIs diarios em um resumo consolidado para o dashboard.
+ * Soma todos os KPIs por dia e gera estatisticas diarias para graficos.
+ *
+ * @param kpis - Array de KPIs diarios (retornados por {@link fetchDailyKpis})
+ * @returns Totais agregados e array de stats diarias para graficos
+ */
+export function aggregateDailyKpis(kpis: DailyKpi[]): {
+  totalChecklists: number
+  totalCompleted: number
+  totalInProgress: number
+  totalPlansCreated: number
+  totalPlansResolved: number
+  dailyStats: { date: string; count: number; completed: number }[]
+} {
+  const dailyMap = new Map<string, { count: number; completed: number }>()
+  let totalChecklists = 0
+  let totalCompleted = 0
+  let totalInProgress = 0
+  let totalPlansCreated = 0
+  let totalPlansResolved = 0
+
+  for (const kpi of kpis) {
+    totalChecklists += kpi.total_checklists
+    totalCompleted += kpi.completed
+    totalInProgress += kpi.in_progress
+    totalPlansCreated += kpi.plans_created
+    totalPlansResolved += kpi.plans_resolved
+
+    const existing = dailyMap.get(kpi.report_date)
+    if (existing) {
+      existing.count += kpi.total_checklists
+      existing.completed += kpi.completed
+    } else {
+      dailyMap.set(kpi.report_date, {
+        count: kpi.total_checklists,
+        completed: kpi.completed,
+      })
+    }
+  }
+
+  const dailyStats = Array.from(dailyMap.entries())
+    .map(([date, stats]) => ({ date, ...stats }))
+    .sort((a, b) => a.date.localeCompare(b.date))
+
+  return {
+    totalChecklists,
+    totalCompleted,
+    totalInProgress,
+    totalPlansCreated,
+    totalPlansResolved,
+    dailyStats,
   }
 }

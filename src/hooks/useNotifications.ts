@@ -116,7 +116,7 @@ export function useNotifications() {
             const n = new Notification(title, {
               body,
               icon: '/web-app-manifest-192x192.png',
-              tag: 'nocheck-' + id,
+              tag: 'operecheck-' + id,
               data: { url: link.startsWith('http') ? link : window.location.origin + (link.startsWith('/') ? link : '/' + link) },
             })
             n.onclick = () => {

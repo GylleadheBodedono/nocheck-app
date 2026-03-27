@@ -84,7 +84,7 @@ export async function middleware(request: NextRequest) {
   const isPublicRoute = publicRoutes.includes(pathname) || pathname.startsWith('/auth')
 
   // Rotas que funcionam offline ou precisam de auth
-  const protectedRoutes = ['/dashboard', '/checklist', '/admin', '/relatorios']
+  const protectedRoutes = ['/dashboard', '/checklist', '/admin', '/relatorios', '/onboarding', '/platform']
   const isProtectedRoute = protectedRoutes.some(route => pathname.startsWith(route))
 
   // IMPORTANTE: Sempre chama getUser() para refresh da sessão
@@ -99,9 +99,10 @@ export async function middleware(request: NextRequest) {
       return NextResponse.redirect(url)
     }
 
-    // Se está autenticado e tenta acessar login/cadastro/esqueci-senha, redireciona para dashboard
+    // Se está autenticado e tenta acessar login/esqueci-senha, redireciona para dashboard
+    // /cadastro não redireciona pois o fluxo pós-signup (escolha de plano) roda na mesma página
     // (exceto /auth/reset-password que precisa de sessao ativa para funcionar)
-    if (user && (pathname === '/login' || pathname === '/cadastro' || pathname === '/esqueci-senha')) {
+    if (user && (pathname === '/login' || pathname === '/esqueci-senha')) {
       const url = request.nextUrl.clone()
       url.pathname = '/dashboard'
       return NextResponse.redirect(url)

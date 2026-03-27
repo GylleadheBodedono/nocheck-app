@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { verifyApiAuth } from '@/lib/api-auth'
 import { createRequestLogger } from '@/lib/serverLogger'
+import type { SendEmailRequestDTO, SendEmailSuccessDTO, SendEmailErrorDTO } from '@/dtos'
 
 const RESEND_API_KEY = process.env.RESEND_API_KEY
 const FROM_EMAIL = process.env.RESEND_FROM_EMAIL || 'onboarding@resend.dev'
@@ -24,7 +25,8 @@ export async function POST(request: NextRequest) {
   if (auth.error) return auth.error
 
   try {
-    const { to: directTo, assigneeId, subject, htmlBody } = await request.json()
+    // Extrai e tipifica o body com o DTO de envio de e-mail
+    const { to: directTo, assigneeId, subject, htmlBody } = await request.json() as SendEmailRequestDTO
 
     if (!subject || !htmlBody) {
       return NextResponse.json(
@@ -104,7 +106,13 @@ export async function POST(request: NextRequest) {
     if (response.ok) {
       const result = await response.json()
       log.info('Email enviado via Resend', { to, from: FROM_EMAIL, emailId: (result as { id?: string }).id })
-      return NextResponse.json({ success: true, emailId: (result as { id?: string }).id, assigneeName })
+      // Resposta tipada via DTO de sucesso no envio de e-mail
+      const successResponse: SendEmailSuccessDTO = {
+        success: true,
+        emailId: (result as { id?: string }).id,
+        assigneeName,
+      }
+      return NextResponse.json(successResponse)
     }
 
     // Fallback: se dominio customizado falhou, tenta com onboarding@resend.dev
@@ -131,7 +139,14 @@ export async function POST(request: NextRequest) {
       if (fallbackRes.ok) {
         const fallbackResult = await fallbackRes.json()
         log.info('Email enviado via fallback Resend', { to, emailId: (fallbackResult as { id?: string }).id })
-        return NextResponse.json({ success: true, emailId: (fallbackResult as { id?: string }).id, fallback: true, assigneeName })
+        // Resposta tipada via DTO indicando uso do sender de fallback
+        const fallbackSuccessResponse: SendEmailSuccessDTO = {
+          success: true,
+          emailId: (fallbackResult as { id?: string }).id,
+          fallback: true,
+          assigneeName,
+        }
+        return NextResponse.json(fallbackSuccessResponse)
       }
 
       const fallbackError = await fallbackRes.json().catch(() => ({}))
@@ -139,15 +154,18 @@ export async function POST(request: NextRequest) {
     }
 
     log.error('Resend erro no envio de email', { to, statusCode: response.status, resendError: JSON.stringify(errorData) })
-    return NextResponse.json(
-      { success: false, error: (errorData as { message?: string }).message || `Resend erro ${response.status}` },
-      { status: 502 }
-    )
+    // Resposta tipada via DTO de erro no envio de e-mail
+    const errorResponse: SendEmailErrorDTO = {
+      success: false,
+      error: (errorData as { message?: string }).message || `Resend erro ${response.status}`,
+    }
+    return NextResponse.json(errorResponse, { status: 502 })
   } catch (error) {
     log.error('Erro inesperado em POST /api/notifications/email', {}, error)
-    return NextResponse.json(
-      { success: false, error: error instanceof Error ? error.message : 'Erro desconhecido' },
-      { status: 500 }
-    )
+    const catchErrorResponse: SendEmailErrorDTO = {
+      success: false,
+      error: error instanceof Error ? error.message : 'Erro desconhecido',
+    }
+    return NextResponse.json(catchErrorResponse, { status: 500 })
   }
 }

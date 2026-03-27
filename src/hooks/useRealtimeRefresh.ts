@@ -31,29 +31,23 @@ export function useRealtimeRefresh(tables: string[]) {
     if (tables.length === 0) return
 
     const supabase = createClient()
-
-    // Criar um canal por tabela
     const channels = tables.map(table => {
       const channel = supabase
         .channel(`realtime-${table}-${Math.random().toString(36).slice(2, 8)}`)
         .on(
           'postgres_changes' as 'system',
           { event: '*', schema: 'public', table },
-          () => {
-            setRefreshKey(prev => prev + 1)
-          }
+          () => { setRefreshKey(prev => prev + 1) }
         )
         .subscribe()
       return channel
     })
 
     channelsRef.current = channels
-
     return () => {
       channels.forEach(ch => supabase.removeChannel(ch))
       channelsRef.current = []
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tables.join(',')])
 
   return { refreshKey }

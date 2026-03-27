@@ -346,7 +346,7 @@ function ChecklistForm() {
             if (!isWithinTimeRange(startTime, endTime)) {
               console.log(`[Checklist] BLOQUEADO por horario — ${startTime} a ${endTime}`)
               setTimeBlocked(true)
-              setTimeBlockedMessage(`Este checklist so pode ser respondido entre ${startTime.substring(0, 5)} e ${endTime.substring(0, 5)}`)
+              setTimeBlockedMessage(`Este checklist só pode ser respondido entre ${startTime.substring(0, 5)} e ${endTime.substring(0, 5)}`)
             }
           }
         }
@@ -431,7 +431,7 @@ function ChecklistForm() {
               if (!isWithinTimeRange(startTime, endTime)) {
                 console.log(`[Checklist/Offline] BLOQUEADO por horario — ${startTime} a ${endTime}`)
                 setTimeBlocked(true)
-                setTimeBlockedMessage(`Este checklist so pode ser respondido entre ${startTime.substring(0, 5)} e ${endTime.substring(0, 5)}`)
+                setTimeBlockedMessage(`Este checklist só pode ser respondido entre ${startTime.substring(0, 5)} e ${endTime.substring(0, 5)}`)
               }
             }
           }
@@ -1496,7 +1496,7 @@ function ChecklistForm() {
         if (value === undefined || value === null || value === '' || (Array.isArray(value) && value.length === 0)) {
           return true
         }
-        // Texto obrigatorio: minimo 3 caracteres reais
+        // Texto obrigatório: minimo 3 caracteres reais
         if (field.field_type === 'text' && typeof value === 'string' && value.trim().length < 3) {
           return true
         }
@@ -1723,7 +1723,7 @@ function ChecklistForm() {
         // Campo is_required sem valor
         if (field.is_required) {
           if (v === undefined || v === null || v === '' || (Array.isArray(v) && v.length === 0)) return false
-          // Texto obrigatorio: minimo 3 caracteres reais
+          // Texto obrigatório: minimo 3 caracteres reais
           if (field.field_type === 'text' && typeof v === 'string' && v.trim().length < 3) return false
         }
 
@@ -2019,7 +2019,7 @@ function ChecklistForm() {
       userId = cachedAuth?.userId || null
     }
     if (!userId) {
-      setErrors({ 0: 'Usuario nao autenticado.' })
+      setErrors({ 0: 'Usuário não autenticado.' })
       setSubmitting(false)
       return
     }
@@ -2151,7 +2151,7 @@ function ChecklistForm() {
       userId = cachedAuth?.userId || null
     }
     if (!userId) {
-      setErrors({ 0: 'Usuario nao autenticado.' })
+      setErrors({ 0: 'Usuário não autenticado.' })
       setSubmitting(false)
       return
     }
@@ -2370,9 +2370,9 @@ function ChecklistForm() {
           <div className="w-16 h-16 rounded-full bg-warning/20 flex items-center justify-center mx-auto mb-4">
             <FiCloudOff className="w-8 h-8 text-warning" />
           </div>
-          <h2 className="text-lg font-bold text-main mb-2">Sem conexao</h2>
+          <h2 className="text-lg font-bold text-main mb-2">Sem conexão</h2>
           <p className="text-sm text-secondary mb-6">
-            Suas respostas estao salvas e serao sincronizadas automaticamente quando voce estiver online.
+            Suas respostas estão salvas e serão sincronizadas automaticamente quando você estiver online.
           </p>
           <div className="space-y-3">
             <button
@@ -2400,7 +2400,7 @@ function ChecklistForm() {
       <div className="min-h-screen flex items-center justify-center bg-page">
         <div className="text-center max-w-md mx-auto px-4">
           <FiAlertCircle className="w-16 h-16 text-warning mx-auto mb-4" />
-          <h2 className="text-xl font-bold text-main mb-2">Fora do horario permitido</h2>
+          <h2 className="text-xl font-bold text-main mb-2">Fora do horário permitido</h2>
           <p className="text-secondary mb-6">{timeBlockedMessage}</p>
           <Link href={APP_CONFIG.routes.dashboard} className="btn-primary inline-block px-6 py-3">
             Voltar ao Dashboard
@@ -2415,7 +2415,7 @@ function ChecklistForm() {
       <div className="min-h-screen flex items-center justify-center bg-page">
         <div className="text-center">
           <FiAlertCircle className="w-12 h-12 text-red-400 mx-auto mb-4" />
-          <p className="text-main">Checklist nao encontrado</p>
+          <p className="text-main">Checklist não encontrado</p>
           <Link href={APP_CONFIG.routes.dashboard} className="text-primary mt-4 inline-block hover:underline">
             Voltar ao Dashboard
           </Link>
@@ -2433,10 +2433,10 @@ function ChecklistForm() {
             {savedOffline ? <FiCloudOff className="w-10 h-10 text-warning" /> : <FiCheckCircle className="w-10 h-10 text-primary" />}
           </div>
           <h2 className="text-2xl font-bold text-main mb-2">
-            {savedOffline ? 'Salvo Offline' : allDone ? APP_CONFIG.messages.checklistSent : 'Secao Salva'}
+            {savedOffline ? 'Salvo Offline' : allDone ? APP_CONFIG.messages.checklistSent : 'Seção Salva'}
           </h2>
           <p className="text-muted">
-            {savedOffline ? 'O checklist sera enviado quando voce estiver online.' : APP_CONFIG.messages.redirecting}
+            {savedOffline ? 'O checklist será enviado quando você estiver online.' : APP_CONFIG.messages.redirecting}
           </p>
         </div>
       </div>
@@ -2451,8 +2451,8 @@ function ChecklistForm() {
         <main className="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           <div className="card p-4 sm:p-6 mb-6 border-l-4 border-warning">
             <p className="text-sm text-secondary">
-              Preencha uma justificativa para cada campo obrigatorio nao respondido.
-              Todos os campos abaixo precisam de uma explicacao.
+              Preencha uma justificativa para cada campo obrigatório não respondido.
+              Todos os campos abaixo precisam de uma explicação.
             </p>
           </div>
           <div className="space-y-4">
@@ -2472,16 +2472,16 @@ function ChecklistForm() {
                   </div>
                   <label className="font-medium text-main block mb-2">{field.name}</label>
                   {field.help_text && <p className="text-sm text-muted mb-2">{field.help_text}</p>}
-                  <p className="text-xs text-warning mb-3">Campo obrigatorio nao preenchido</p>
+                  <p className="text-xs text-warning mb-3">Campo obrigatório não preenchido</p>
                   <textarea
                     value={justifications[field.id] || ''}
                     onChange={(e) => setJustifications(prev => ({ ...prev, [field.id]: e.target.value }))}
-                    placeholder="Explique o motivo pelo qual este campo nao foi preenchido..."
+                    placeholder="Explique o motivo pelo qual este campo não foi preenchido..."
                     className="input w-full px-4 py-3 rounded-xl min-h-[100px]"
                     rows={3}
                   />
                   {!justifications[field.id]?.trim() && (
-                    <p className="text-xs text-error mt-1">Justificativa obrigatoria</p>
+                    <p className="text-xs text-error mt-1">Justificativa obrigatória</p>
                   )}
                 </div>
               )
@@ -2521,8 +2521,8 @@ function ChecklistForm() {
           <div className="w-20 h-20 rounded-full bg-primary/20 flex items-center justify-center mx-auto mb-4">
             <FiMapPin className="w-10 h-10 text-primary animate-pulse" />
           </div>
-          <h2 className="text-xl font-bold text-main mb-2">Obtendo localizacao...</h2>
-          <p className="text-muted text-sm">Permita o acesso a localizacao para continuar</p>
+          <h2 className="text-xl font-bold text-main mb-2">Obtendo localização...</h2>
+          <p className="text-muted text-sm">Permita o acesso à localização para continuar</p>
         </div>
       </div>
     )
@@ -2535,8 +2535,8 @@ function ChecklistForm() {
           <div className="w-20 h-20 rounded-full bg-error/20 flex items-center justify-center mx-auto mb-4">
             <FiMapPin className="w-10 h-10 text-error" />
           </div>
-          <h2 className="text-xl font-bold text-main mb-2">Localizacao necessaria</h2>
-          <p className="text-muted text-sm mb-6">Ative a permissao de GPS nas configuracoes do navegador.</p>
+          <h2 className="text-xl font-bold text-main mb-2">Localização necessária</h2>
+          <p className="text-muted text-sm mb-6">Ative a permissão de GPS nas configurações do navegador.</p>
           <Link href={APP_CONFIG.routes.dashboard} className="btn-primary inline-flex items-center gap-2 px-6 py-3">
             <FiArrowLeft className="w-4 h-4" /> Voltar ao Dashboard
           </Link>
@@ -2552,9 +2552,9 @@ function ChecklistForm() {
           <div className="w-20 h-20 rounded-full bg-warning/20 flex items-center justify-center mx-auto mb-4">
             <FiMapPin className="w-10 h-10 text-warning" />
           </div>
-          <h2 className="text-xl font-bold text-main mb-2">Voce esta longe da loja</h2>
-          <p className="text-muted text-sm mb-2">Voce precisa estar proximo da loja para preencher o checklist.</p>
-          <p className="text-muted text-xs mb-6">Distancia atual: {distanceToStore}m (maximo: 100m)</p>
+          <h2 className="text-xl font-bold text-main mb-2">Você está longe da loja</h2>
+          <p className="text-muted text-sm mb-2">Você precisa estar próximo da loja para preencher o checklist.</p>
+          <p className="text-muted text-xs mb-6">Distância atual: {distanceToStore}m (máximo: 100m)</p>
           <Link href={APP_CONFIG.routes.dashboard} className="btn-primary inline-flex items-center gap-2 px-6 py-3">
             <FiArrowLeft className="w-4 h-4" /> Voltar ao Dashboard
           </Link>
@@ -2837,10 +2837,10 @@ function ChecklistForm() {
                 </div>
                 <h2 className="text-xl font-bold text-main mb-2">Checklist Incompleto</h2>
                 <p className="text-secondary mb-2">
-                  Voce realmente deseja finalizar o checklist <strong>INCOMPLETO</strong>?
+                  Você realmente deseja finalizar o checklist <strong>INCOMPLETO</strong>?
                 </p>
                 <p className="text-sm text-muted mb-4">
-                  {emptyRequiredFields.length} campo{emptyRequiredFields.length !== 1 ? 's' : ''} obrigatorio{emptyRequiredFields.length !== 1 ? 's' : ''} nao preenchido{emptyRequiredFields.length !== 1 ? 's' : ''}.
+                  {emptyRequiredFields.length} campo{emptyRequiredFields.length !== 1 ? 's' : ''} obrigatório{emptyRequiredFields.length !== 1 ? 's' : ''} não preenchido{emptyRequiredFields.length !== 1 ? 's' : ''}.
                 </p>
                 {justificationExpired && (
                   <div className="p-3 bg-error/10 border border-error/30 rounded-xl mb-4">
@@ -2867,7 +2867,7 @@ function ChecklistForm() {
                     onClick={() => setShowIncompleteModal(false)}
                     className="btn-secondary w-full py-3"
                   >
-                    Nao, continuar preenchendo
+                    Não, continuar preenchendo
                   </button>
                   <button
                     onClick={handleBackToDashboard}
@@ -3136,7 +3136,7 @@ function ChecklistForm() {
                   }}
                   className="w-full px-3 py-2 bg-surface border border-subtle rounded-xl text-main text-sm focus:outline-none focus:ring-2 focus:ring-primary"
                 >
-                  <option value="yes_no">Sim / Nao / N/A</option>
+                  <option value="yes_no">Sim / Não / N/A</option>
                   <option value="text">Texto</option>
                   <option value="number">Numero</option>
                   <option value="photo">Foto</option>
@@ -3147,11 +3147,11 @@ function ChecklistForm() {
                 </select>
               </div>
 
-              {/* Campo obrigatorio */}
+              {/* Campo obrigatório */}
               <label className="flex items-center gap-2 text-sm text-secondary cursor-pointer">
                 <input type="checkbox" checked={newFieldRequired} onChange={e => setNewFieldRequired(e.target.checked)}
                   className="w-4 h-4 rounded border-subtle text-primary focus:ring-primary" />
-                Campo obrigatorio
+                Campo obrigatório
               </label>
 
               {/* Condicoes para yes_no */}
@@ -3174,7 +3174,7 @@ function ChecklistForm() {
                       <label className="flex items-center gap-2 text-sm text-secondary cursor-pointer ml-6">
                         <input type="checkbox" checked={newFieldOnNo.textFieldRequired} onChange={e => setNewFieldOnNo(prev => ({ ...prev, textFieldRequired: e.target.checked }))}
                           className="w-4 h-4 rounded border-subtle text-primary focus:ring-primary" />
-                        Texto obrigatorio
+                        Texto obrigatório
                       </label>
                     )}
                     <label className="flex items-center gap-2 text-sm text-secondary cursor-pointer">
@@ -3192,7 +3192,7 @@ function ChecklistForm() {
                     <label className="flex items-center gap-2 text-sm text-secondary cursor-pointer">
                       <input type="checkbox" checked={newFieldOnNo.allowUserActionPlan} onChange={e => setNewFieldOnNo(prev => ({ ...prev, allowUserActionPlan: e.target.checked }))}
                         className="w-4 h-4 rounded border-subtle text-primary focus:ring-primary" />
-                      Permitir preenchedor escolher responsavel
+                      Permitir preenchedor escolher responsável
                     </label>
                   </div>
                 </div>
@@ -3384,7 +3384,7 @@ function ChecklistForm() {
                 Voce realmente deseja finalizar o checklist <strong>INCOMPLETO</strong>?
               </p>
               <p className="text-sm text-muted mb-4">
-                {emptyRequiredFields.length} campo{emptyRequiredFields.length !== 1 ? 's' : ''} obrigatorio{emptyRequiredFields.length !== 1 ? 's' : ''} nao preenchido{emptyRequiredFields.length !== 1 ? 's' : ''}.
+                {emptyRequiredFields.length} campo{emptyRequiredFields.length !== 1 ? 's' : ''} obrigatório{emptyRequiredFields.length !== 1 ? 's' : ''} não preenchido{emptyRequiredFields.length !== 1 ? 's' : ''}.
               </p>
               {justificationExpired && (
                 <div className="p-3 bg-error/10 border border-error/30 rounded-xl mb-4">
@@ -3459,7 +3459,7 @@ function ChecklistForm() {
                 }}
                 className="w-full px-3 py-2 bg-surface border border-subtle rounded-xl text-main text-sm focus:outline-none focus:ring-2 focus:ring-primary"
               >
-                <option value="yes_no">Sim / Nao / N/A</option>
+                <option value="yes_no">Sim / Não / N/A</option>
                 <option value="text">Texto</option>
                 <option value="number">Numero</option>
                 <option value="photo">Foto</option>
@@ -3470,11 +3470,11 @@ function ChecklistForm() {
               </select>
             </div>
 
-            {/* Campo obrigatorio */}
+            {/* Campo obrigatório */}
             <label className="flex items-center gap-2 text-sm text-secondary cursor-pointer">
               <input type="checkbox" checked={newFieldRequired} onChange={e => setNewFieldRequired(e.target.checked)}
                 className="w-4 h-4 rounded border-subtle text-primary focus:ring-primary" />
-              Campo obrigatorio
+              Campo obrigatório
             </label>
 
             {/* Condicoes para yes_no */}
@@ -3497,7 +3497,7 @@ function ChecklistForm() {
                     <label className="flex items-center gap-2 text-sm text-secondary cursor-pointer ml-6">
                       <input type="checkbox" checked={newFieldOnNo.textFieldRequired} onChange={e => setNewFieldOnNo(prev => ({ ...prev, textFieldRequired: e.target.checked }))}
                         className="w-4 h-4 rounded border-subtle text-primary focus:ring-primary" />
-                      Texto obrigatorio
+                      Texto obrigatório
                     </label>
                   )}
                   <label className="flex items-center gap-2 text-sm text-secondary cursor-pointer">
@@ -3515,7 +3515,7 @@ function ChecklistForm() {
                   <label className="flex items-center gap-2 text-sm text-secondary cursor-pointer">
                     <input type="checkbox" checked={newFieldOnNo.allowUserActionPlan} onChange={e => setNewFieldOnNo(prev => ({ ...prev, allowUserActionPlan: e.target.checked }))}
                       className="w-4 h-4 rounded border-subtle text-primary focus:ring-primary" />
-                    Permitir preenchedor escolher responsavel
+                    Permitir preenchedor escolher responsável
                   </label>
                 </div>
               </div>

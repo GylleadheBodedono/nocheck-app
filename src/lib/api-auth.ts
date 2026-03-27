@@ -38,12 +38,16 @@ type AuthResult = AuthSuccess | AuthFailure
 type SupabaseUser = { id: string; email?: string }
 
 /**
- * Verifica autenticação em API routes via cookies do Supabase.
- * Usa o mesmo padrão do middleware.ts (createServerClient + cookies).
+ * Verifies authentication in API routes via Supabase cookies or Bearer token.
+ * Uses the same pattern as middleware.ts (createServerClient + cookies).
  *
- * @param request - NextRequest com os cookies do browser
- * @param requireAdmin - Se true, exige is_admin = true no public.users
- * @returns AuthResult com user/isAdmin ou error response (401/403)
+ * Authentication is attempted in order:
+ * 1. Bearer token in the Authorization header (preferred)
+ * 2. Supabase SSR cookies (fallback for browser requests)
+ *
+ * @param request - NextRequest with browser cookies
+ * @param requireAdmin - If true, requires `is_admin = true` in `public.users`
+ * @returns AuthResult with user/isAdmin or an error response (401/403)
  */
 export async function verifyApiAuth(
   request: NextRequest,
@@ -58,20 +62,19 @@ export async function verifyApiAuth(
       user: null,
       isAdmin: false,
       error: NextResponse.json(
-        { error: 'Configuração do servidor incompleta' },
+        { error: 'Configuracao do servidor incompleta' },
         { status: 500 }
       ),
     }
   }
 
-  // Tentar autenticacao via Bearer token (mais confiavel que cookies)
+  // Try Bearer token authentication first (more reliable than cookies)
   const authHeader = request.headers.get('Authorization')
   const bearerToken = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : null
 
   let user: SupabaseUser | null = null
 
   if (bearerToken) {
-    // Usar service client para validar o JWT token
     const serviceClient = createClient(supabaseUrl, supabaseServiceKey, {
       auth: { autoRefreshToken: false, persistSession: false },
     })
@@ -81,7 +84,7 @@ export async function verifyApiAuth(
     }
   }
 
-  // Fallback: cookies da request (padrao SSR)
+  // Fallback: SSR cookies from the request
   if (!user) {
     const supabase = createServerClient(supabaseUrl, supabaseAnonKey, {
       cookies: {
@@ -112,7 +115,6 @@ export async function verifyApiAuth(
     }
   }
 
-  // Se não precisa de admin, retorna sucesso
   if (!requireAdmin) {
     return {
       user: { id: user.id, email: user.email || '' },
@@ -121,7 +123,7 @@ export async function verifyApiAuth(
     }
   }
 
-  // Verificar is_admin no public.users usando service role
+  // Verify admin status in public.users using service role
   const adminCheckClient = createClient(supabaseUrl, supabaseServiceKey, {
     auth: { autoRefreshToken: false, persistSession: false },
   })

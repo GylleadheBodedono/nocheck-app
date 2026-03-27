@@ -69,7 +69,7 @@ export default function SetoresPage() {
     store_ids: [] as number[],
     name: '',
     description: '',
-    color: '#6366f1',
+    color: '#0D9488',
     is_active: true,
   })
   const [saving, setSaving] = useState(false)
@@ -262,7 +262,7 @@ export default function SetoresPage() {
         store_ids: storeId ? [storeId] : [],
         name: '',
         description: '',
-        color: '#6366f1',
+        color: '#0D9488',
         is_active: true,
       })
     }
@@ -348,7 +348,7 @@ export default function SetoresPage() {
 
     if (error) {
       console.error('Error deleting sector:', error)
-      alert('Erro ao excluir setor. Verifique se nao existem usuarios ou templates vinculados.')
+      alert('Erro ao excluir setor. Verifique se não existem usuários ou templates vinculados.')
       return
     }
 
@@ -391,7 +391,7 @@ export default function SetoresPage() {
 
     if (error) {
       console.error('Error adding user to sector:', error)
-      alert('Erro ao adicionar usuario ao setor')
+      alert('Erro ao adicionar usuário ao setor')
       return
     }
 
@@ -401,7 +401,7 @@ export default function SetoresPage() {
   }
 
   const removeUserFromSector = async (userId: string) => {
-    if (!confirm('Remover este usuario do setor?')) return
+    if (!confirm('Remover este usuário do setor?')) return
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { error } = await (supabase as any)
@@ -466,7 +466,7 @@ export default function SetoresPage() {
           <div className="bg-warning/10 border border-warning/30 rounded-xl p-4 mb-6 flex items-center gap-3">
             <FiWifiOff className="w-5 h-5 text-warning" />
             <p className="text-warning text-sm">
-              Voce esta offline. Os dados mostrados sao do cache local. Edicoes nao estao disponiveis.
+              Você está offline. Os dados mostrados são do cache local. Edições não estão disponíveis.
             </p>
           </div>
         )}
@@ -579,7 +579,7 @@ export default function SetoresPage() {
                               <button
                                 onClick={() => openUsersModal(sector)}
                                 className="p-2 text-primary hover:bg-primary/10 rounded-lg transition-colors"
-                                title="Gerenciar usuarios"
+                                title="Gerenciar usuários"
                               >
                                 <FiUsers className="w-4 h-4" />
                               </button>
@@ -701,21 +701,21 @@ export default function SetoresPage() {
                   value={sectorFormData.name}
                   onChange={(e) => setSectorFormData({ ...sectorFormData, name: e.target.value })}
                   className="input"
-                  placeholder="Ex: Cozinha, Estoque, Salao"
+                  placeholder="Ex: Cozinha, Estoque, Salão"
                   required
                 />
               </div>
 
               <div>
                 <label className="block text-sm font-medium text-secondary mb-1">
-                  Descricao
+                  Descrição
                 </label>
                 <input
                   type="text"
                   value={sectorFormData.description}
                   onChange={(e) => setSectorFormData({ ...sectorFormData, description: e.target.value })}
                   className="input"
-                  placeholder="Descricao opcional..."
+                  placeholder="Descrição opcional..."
                 />
               </div>
 
@@ -735,7 +735,7 @@ export default function SetoresPage() {
                     value={sectorFormData.color}
                     onChange={(e) => setSectorFormData({ ...sectorFormData, color: e.target.value })}
                     className="input flex-1"
-                    placeholder="#6366f1"
+                    placeholder="#0D9488"
                   />
                 </div>
               </div>
@@ -781,7 +781,7 @@ export default function SetoresPage() {
             <div className="flex items-center justify-between mb-6">
               <div>
                 <h2 className="text-xl font-bold text-main">
-                  Usuarios do Setor
+                  Usuários do Setor
                 </h2>
                 <p className="text-sm text-muted">
                   {managingSector.name} - {managingSector.store.name}
@@ -798,12 +798,12 @@ export default function SetoresPage() {
             {/* Current Users */}
             <div className="mb-6">
               <h3 className="text-sm font-medium text-secondary mb-3">
-                Usuarios no setor ({managingSector.users?.length || 0})
+                Usuários no setor ({managingSector.users?.length || 0})
               </h3>
 
               {managingSector.users?.length === 0 ? (
                 <p className="text-sm text-muted py-4 text-center">
-                  Nenhum usuario neste setor
+                  Nenhum usuário neste setor
                 </p>
               ) : (
                 <div className="space-y-2">
@@ -834,12 +834,12 @@ export default function SetoresPage() {
             {/* Add Users */}
             <div>
               <h3 className="text-sm font-medium text-secondary mb-3">
-                Adicionar usuario
+                Adicionar usuário
               </h3>
 
               {getUsersNotInSector().length === 0 ? (
                 <p className="text-sm text-muted py-4 text-center">
-                  Todos os usuarios ja estao neste setor
+                  Todos os usuários já estão neste setor
                 </p>
               ) : (
                 <div className="space-y-2 max-h-48 overflow-y-auto">

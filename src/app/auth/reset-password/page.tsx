@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { createClient } from '@/lib/supabase'
 import { APP_CONFIG } from '@/lib/config'
 import { ThemeToggle, LoadingInline } from '@/components/ui'
-import { FiLock, FiCheckCircle, FiAlertCircle } from 'react-icons/fi'
+import { FiLock, FiCheckCircle, FiAlertCircle, FiEye, FiEyeOff } from 'react-icons/fi'
 
 /**
  * Página de redefinição de senha (`/auth/reset-password`).
@@ -20,6 +20,8 @@ export default function ResetPasswordPage() {
   const [success, setSuccess] = useState(false)
   const [checking, setChecking] = useState(true)
   const [hasSession, setHasSession] = useState(false)
+  const [showPassword, setShowPassword] = useState(false)
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false)
 
   useEffect(() => {
     const checkSession = async () => {
@@ -36,12 +38,12 @@ export default function ResetPasswordPage() {
     setError(null)
 
     if (password.length < 6) {
-      setError('A senha deve ter no minimo 6 caracteres.')
+      setError('A senha deve ter no mínimo 6 caracteres.')
       return
     }
 
     if (password !== confirmPassword) {
-      setError('As senhas nao coincidem.')
+      setError('As senhas não coincidem.')
       return
     }
 
@@ -85,7 +87,7 @@ export default function ResetPasswordPage() {
             Link expirado
           </h1>
           <p className="text-muted mb-8">
-            Este link de recuperacao expirou ou ja foi utilizado. Solicite um novo link.
+            Este link de recuperação expirou ou já foi utilizado. Solicite um novo link.
           </p>
           <Link
             href={APP_CONFIG.routes.esqueciSenha}
@@ -114,7 +116,7 @@ export default function ResetPasswordPage() {
               Senha alterada!
             </h1>
             <p className="text-muted mb-8">
-              Sua senha foi redefinida com sucesso. Faca login com a nova senha.
+              Sua senha foi redefinida com sucesso. Faça login com a nova senha.
             </p>
             <Link
               href={APP_CONFIG.routes.login}
@@ -143,16 +145,25 @@ export default function ResetPasswordPage() {
                   <FiLock className="absolute left-4 top-1/2 -translate-y-1/2 w-[18px] h-[18px] text-muted pointer-events-none" />
                   <input
                     id="password"
-                    type="password"
+                    type={showPassword ? 'text' : 'password'}
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     required
                     minLength={6}
                     autoComplete="new-password"
                     className="input"
-                    style={{ paddingLeft: '2.75rem' }}
-                    placeholder="Minimo 6 caracteres"
+                    style={{ paddingLeft: '2.75rem', paddingRight: '2.75rem' }}
+                    placeholder="Mínimo 6 caracteres"
                   />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(prev => !prev)}
+                    className="absolute right-4 top-1/2 -translate-y-1/2 text-muted hover:text-main transition-colors"
+                    tabIndex={-1}
+                    aria-label={showPassword ? 'Ocultar senha' : 'Mostrar senha'}
+                  >
+                    {showPassword ? <FiEyeOff className="w-[18px] h-[18px]" /> : <FiEye className="w-[18px] h-[18px]" />}
+                  </button>
                 </div>
               </div>
 
@@ -164,16 +175,25 @@ export default function ResetPasswordPage() {
                   <FiLock className="absolute left-4 top-1/2 -translate-y-1/2 w-[18px] h-[18px] text-muted pointer-events-none" />
                   <input
                     id="confirmPassword"
-                    type="password"
+                    type={showConfirmPassword ? 'text' : 'password'}
                     value={confirmPassword}
                     onChange={(e) => setConfirmPassword(e.target.value)}
                     required
                     minLength={6}
                     autoComplete="new-password"
                     className="input"
-                    style={{ paddingLeft: '2.75rem' }}
+                    style={{ paddingLeft: '2.75rem', paddingRight: '2.75rem' }}
                     placeholder="Repita a nova senha"
                   />
+                  <button
+                    type="button"
+                    onClick={() => setShowConfirmPassword(prev => !prev)}
+                    className="absolute right-4 top-1/2 -translate-y-1/2 text-muted hover:text-main transition-colors"
+                    tabIndex={-1}
+                    aria-label={showConfirmPassword ? 'Ocultar senha' : 'Mostrar senha'}
+                  >
+                    {showConfirmPassword ? <FiEyeOff className="w-[18px] h-[18px]" /> : <FiEye className="w-[18px] h-[18px]" />}
+                  </button>
                 </div>
               </div>
 

@@ -44,22 +44,11 @@ export function LoadingPage() {
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-page">
       <div className="flex flex-col items-center gap-6 animate-fade-in px-8">
-        {/* Logo theme-aware */}
+        {/* Logo text */}
         <div className="mb-2">
-          <img
-            src="/Logo-dark.png"
-            alt="NoCheck"
-            width={280}
-            height={90}
-            className="logo-for-light"
-          />
-          <img
-            src="/Logo.png"
-            alt="NoCheck"
-            width={280}
-            height={90}
-            className="logo-for-dark"
-          />
+          <span className="text-4xl font-bold tracking-tight">
+            <span className="text-secondary">Opere</span><span className="text-primary">Check</span>
+          </span>
         </div>
 
         {/* Slogan */}

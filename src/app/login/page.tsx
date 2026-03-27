@@ -2,7 +2,6 @@
 
 import { useState, useEffect, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
-import Image from 'next/image'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase'
 import { APP_CONFIG } from '@/lib/config'
@@ -59,26 +58,33 @@ function LoginForm() {
         return
       }
 
-      setStatus('Verificando sessao...')
+      setStatus('Verificando sessão...')
       const { data: session } = await supabase.auth.getSession()
 
       if (session?.session) {
-        setStatus('Salvando dados para modo offline...')
-        try {
-          await cacheAllDataForOffline(session.session.user.id)
-        } catch (err) {
-          console.error('[Login] Erro ao cachear dados:', err)
-        }
+        // Em dev, pular cache offline e precache (sem SW)
+        if (process.env.NODE_ENV !== 'development') {
+          setStatus('Salvando dados para modo offline...')
+          try {
+            await cacheAllDataForOffline(session.session.user.id)
+          } catch (err) {
+            console.error('[Login] Erro ao cachear dados:', err)
+          }
 
-        setStatus('Preparando aplicacao offline...')
-        try {
-          await triggerPrecache()
-        } catch (err) {
-          console.error('[Login] Erro no precache:', err)
+          setStatus('Preparando aplicação offline...')
+          try {
+            await triggerPrecache()
+          } catch (err) {
+            console.error('[Login] Erro no precache:', err)
+          }
         }
 
         setStatus('Redirecionando...')
-        window.location.href = APP_CONFIG.routes.dashboard
+        // Redirecionar baseado no role: superadmin → /platform, outros → /dashboard
+        const user = session.session?.user
+        const isPlatformAdmin = user?.app_metadata?.is_platform_admin === true
+          || user?.user_metadata?.is_platform_admin === true
+        window.location.href = isPlatformAdmin ? APP_CONFIG.routes.platform : APP_CONFIG.routes.dashboard
       } else {
         window.location.href = APP_CONFIG.routes.dashboard
       }
@@ -93,79 +99,7 @@ function LoginForm() {
     <div className="h-screen w-screen p-4">
       <div className="h-full w-full flex  overflow-hidden">
 
-        {/* Left Side - Decorative Panel */}
-        <div className="hidden lg:flex lg:w-[55%] relative overflow-hidden rounded-[20px]">
-          {/* Animated gradient background */}
-          <div className="absolute inset-0 bg-gradient-to-br from-[#B8935A] via-[#8B6E3B] to-[#2C1810] animate-gradient" />
-
-          {/* Mesh overlay */}
-          <div className="absolute inset-0 opacity-30"
-            style={{
-              backgroundImage: `radial-gradient(at 20% 30%, rgba(255,255,255,0.15) 0%, transparent 50%),
-                                radial-gradient(at 80% 70%, rgba(196,122,74,0.3) 0%, transparent 50%),
-                                radial-gradient(at 50% 10%, rgba(255,255,255,0.1) 0%, transparent 40%)`
-            }}
-          />
-
-          {/* Floating glass orbs */}
-          <div className="absolute top-[15%] left-[10%] w-64 h-64 rounded-full bg-white/5 backdrop-blur-3xl border border-white/10 animate-float-slow" />
-          <div className="absolute bottom-[20%] right-[15%] w-48 h-48 rounded-full bg-white/5 backdrop-blur-3xl border border-white/10 animate-float-delayed" />
-          <div className="absolute top-[60%] left-[30%] w-32 h-32 rounded-full bg-white/8 backdrop-blur-3xl border border-white/5 animate-float-slow-reverse" />
-
-          {/* Grain texture overlay */}
-          <div className="absolute inset-0 opacity-[0.03]"
-            style={{
-              backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E")`,
-            }}
-          />
-
-          {/* Content */}
-          <div className="relative z-10 flex flex-col justify-between p-12 w-full">
-            {/* Top */}
-            <div>
-              <div className="flex items-center gap-3 mb-2">
-                <div className="w-10 h-10 rounded-xl bg-white/10 backdrop-blur-sm border border-white/20 flex items-center justify-center">
-                  <span className="text-white font-bold text-lg">N</span>
-                </div>
-                <span className="text-white/90 font-semibold text-lg tracking-tight">NoCheck</span>
-              </div>
-            </div>
-
-            {/* Center */}
-            <div className="max-w-md">
-              <h1 className="text-5xl xl:text-6xl font-bold text-white leading-[1.1] tracking-tight mb-6">
-                Gestao
-                <br />
-                inteligente
-                <br />
-                <span className="text-white/50">de checklists</span>
-              </h1>
-              <p className="text-white/60 text-lg leading-relaxed max-w-sm">
-                Controle completo das operacoes da sua empresa com checklists digitais, validacoes e planos de acao.
-              </p>
-            </div>
-
-            {/* Bottom stats */}
-            <div className="flex gap-8">
-              <div>
-                <p className="text-3xl font-bold text-white">100%</p>
-                <p className="text-sm text-white/40 mt-1">Digital</p>
-              </div>
-              <div className="w-px bg-white/10" />
-              <div>
-                <p className="text-3xl font-bold text-white">24/7</p>
-                <p className="text-sm text-white/40 mt-1">Offline</p>
-              </div>
-              <div className="w-px bg-white/10" />
-              <div>
-                <p className="text-3xl font-bold text-white">Real</p>
-                <p className="text-sm text-white/40 mt-1">Time Sync</p>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Right Side - Login Form */}
+          {/* Right Side - Login Form */}
         <div className="flex-1 flex flex-col relative bg-page rounded-[20px] ">
           {/* Theme toggle */}
           <div className="absolute top-5 right-5 z-10">
@@ -178,22 +112,9 @@ function LoginForm() {
               {/* Logo */}
               <div className="mb-10">
                 <div className="flex justify-center mb-6">
-                  <Image
-                    src="/Logo-dark.png"
-                    alt={APP_CONFIG.name}
-                    width={300}
-                    height={75}
-                    className="logo-for-light"
-                    priority
-                  />
-                  <Image
-                    src="/Logo.png"
-                    alt={APP_CONFIG.name}
-                    width={300}
-                    height={75}
-                    className="logo-for-dark"
-                    priority
-                  />
+                  <span className="text-3xl font-bold tracking-tight">
+                    <span className="text-secondary">Opere</span><span className="text-primary">Check</span>
+                  </span>
                 </div>
                 <p className="text-muted text-center mt-1.5 text-[15px]">
                   Entre com suas credenciais para acessar o painel
@@ -294,7 +215,7 @@ function LoginForm() {
 
               {/* Link para cadastro */}
               <p className="text-center text-sm text-muted mt-6">
-                Nao tem conta?{' '}
+                Não tem conta?{' '}
                 <Link href={APP_CONFIG.routes.cadastro} className="text-primary font-medium hover:underline">
                   Criar conta
                 </Link>
@@ -308,8 +229,82 @@ function LoginForm() {
           </div>
 
           {/* Mobile decorative bar */}
-          <div className="lg:hidden h-1.5 mx-6 mb-6 rounded-full bg-gradient-to-r from-[#B8935A] via-[#C47A4A] to-[#8B6E3B] opacity-60" />
+          <div className="lg:hidden h-1.5 mx-6 mb-6 rounded-full bg-gradient-to-r from-[#0D9488] via-[#14B8A6] to-[#115E59] opacity-60" />
         </div>
+
+        {/* Left Side - Decorative Panel */}
+        <div className="hidden lg:flex lg:w-[55%] relative overflow-hidden rounded-[20px]">
+          {/* Animated gradient background */}
+          <div className="absolute inset-0 bg-gradient-to-br from-[#0D9488] via-[#115E59] to-[#0F172A] animate-gradient" />
+
+          {/* Mesh overlay */}
+          <div className="absolute inset-0 opacity-30"
+            style={{
+              backgroundImage: `radial-gradient(at 20% 30%, rgba(255,255,255,0.15) 0%, transparent 50%),
+                                radial-gradient(at 80% 70%, rgba(13,148,136,0.3) 0%, transparent 50%),
+                                radial-gradient(at 50% 10%, rgba(255,255,255,0.1) 0%, transparent 40%)`
+            }}
+          />
+
+          {/* Floating glass orbs */}
+          <div className="absolute top-[15%] left-[10%] w-64 h-64 rounded-full bg-white/5 backdrop-blur-3xl border border-white/10 animate-float-slow" />
+          <div className="absolute bottom-[20%] right-[15%] w-48 h-48 rounded-full bg-white/5 backdrop-blur-3xl border border-white/10 animate-float-delayed" />
+          <div className="absolute top-[60%] left-[30%] w-32 h-32 rounded-full bg-white/8 backdrop-blur-3xl border border-white/5 animate-float-slow-reverse" />
+
+          {/* Grain texture overlay */}
+          <div className="absolute inset-0 opacity-[0.03]"
+            style={{
+              backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E")`,
+            }}
+          />
+
+          {/* Content */}
+          <div className="relative z-10 flex flex-col justify-between p-12 w-full">
+            {/* Top */}
+            <div>
+              <div className="flex items-center gap-3 mb-2">
+                <div className="w-10 h-10 rounded-xl bg-white/10 backdrop-blur-sm border border-white/20 flex items-center justify-center">
+                  <span className="text-white font-bold text-lg">O</span>
+                </div>
+                <span className="text-white/90 font-semibold text-lg tracking-tight">OpereCheck</span>
+              </div>
+            </div>
+
+            {/* Center */}
+            <div className="max-w-md">
+              <h1 className="text-5xl xl:text-6xl font-bold text-white leading-[1.1] tracking-tight mb-6">
+                Gestão
+                <br />
+                Operacional
+                <br />
+                <span className="text-white/50">e Checklists</span>
+              </h1>
+              <p className="text-white/60 text-lg leading-relaxed max-w-sm">
+                Controle completo das operações da sua empresa com checklists digitais, validações e planos de ação.
+              </p>
+            </div>
+
+            {/* Bottom stats */}
+            <div className="flex gap-8">
+              <div>
+                <p className="text-3xl font-bold text-white">100%</p>
+                <p className="text-sm text-white/40 mt-1">Digital</p>
+              </div>
+              <div className="w-px bg-white/10" />
+              <div>
+                <p className="text-3xl font-bold text-white">24/7</p>
+                <p className="text-sm text-white/40 mt-1">Offline</p>
+              </div>
+              <div className="w-px bg-white/10" />
+              <div>
+                <p className="text-3xl font-bold text-white">Real</p>
+                <p className="text-sm text-white/40 mt-1">Time Sync</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      
       </div>
     </div>
   )
@@ -325,7 +320,7 @@ export default function LoginPage() {
   return (
     <Suspense fallback={
       <div className="h-screen w-screen flex items-center justify-center bg-[#0a0a0a]">
-        <div className="w-8 h-8 border-2 border-[#B8935A] border-t-transparent rounded-full animate-spin" />
+        <div className="w-8 h-8 border-2 border-[#0D9488] border-t-transparent rounded-full animate-spin" />
       </div>
     }>
       <LoginForm />

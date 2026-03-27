@@ -12,7 +12,7 @@
  */
 
 // ============================================
-// CONFIGURACAO CENTRALIZADA DO APP
+// CONFIGURAÇÃO CENTRALIZADA DO APP
 // Altere aqui para mudar em todo o projeto
 // ============================================
 
@@ -49,6 +49,9 @@ export const APP_CONFIG = {
     adminActionPlanNew: '/admin/planos-de-acao/novo',
     adminActionPlanPresets: '/admin/planos-de-acao/modelos',
     adminSettings: '/admin/configuracoes',
+    platform: '/platform',
+    platformClientes: '/platform/clientes',
+    platformConfiguracoes: '/platform/configuracoes',
     adminLogs: '/admin/logs',
     userReports: '/relatorios',
     checklistNew: '/checklist/novo',
@@ -57,25 +60,25 @@ export const APP_CONFIG = {
     resetPassword: '/auth/reset-password',
   },
 
-  // Mensagens padrao
+  // Mensagens padrão
   messages: {
     loading: 'Carregando...',
     error: 'Ocorreu um erro. Tente novamente.',
-    noStores: 'Nenhuma loja atribuida',
+    noStores: 'Nenhuma loja atribuída',
     noStoresHint: 'Entre em contato com o administrador para ter acesso a uma loja.',
-    noChecklists: 'Nenhum checklist disponivel para seu cargo nesta loja.',
-    loginRequired: 'Voce precisa estar logado',
+    noChecklists: 'Nenhum checklist disponível para seu cargo nesta loja.',
+    loginRequired: 'Você precisa estar logado',
     checklistSent: 'Checklist Enviado!',
     redirecting: 'Redirecionando...',
     loginError: 'Email ou senha incorretos',
     loginErrorGeneric: 'Erro ao fazer login. Tente novamente.',
     signupSuccess: 'Conta criada! Verifique seu email para confirmar.',
-    passwordResetSent: 'Se existe uma conta com esse email, voce recebera um link para redefinir sua senha.',
-    passwordResetSuccess: 'Senha alterada com sucesso! Faca login com a nova senha.',
+    passwordResetSent: 'Se existe uma conta com esse email, você receberá um link para redefinir sua senha.',
+    passwordResetSuccess: 'Senha alterada com sucesso! Faça login com a nova senha.',
     passwordResetError: 'Erro ao redefinir senha. Tente novamente.',
   },
 
-  // Configuracoes de storage
+  // Configurações de storage
   storage: {
     themeKey: 'nocheck-theme',
   },
@@ -89,7 +92,7 @@ export const APP_CONFIG = {
     { value: 'outros', label: 'Outros' },
   ],
 
-  // Roles de usuarios
+  // Roles de usuários
   userRoles: [
     { value: 'estoquista', label: 'Estoquista' },
     { value: 'aprendiz', label: 'Aprendiz' },
@@ -99,3 +102,19 @@ export const APP_CONFIG = {
 
 /** Tipo inferido de `APP_CONFIG` — útil para funções que recebem partes da config. */
 export type AppConfig = typeof APP_CONFIG
+
+// Tenant helpers (white-label)
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function getTenantAppName(org?: any): string {
+  const themeAppName = org?.settings?.theme?.appName
+  if (themeAppName && themeAppName !== 'Sistema') return themeAppName
+  if (org?.name) return org.name
+  if (typeof window !== 'undefined') return document.title || APP_CONFIG.name
+  return APP_CONFIG.name
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function getTenantLogoUrl(org?: any): string | null {
+  if (org?.settings?.theme?.logoUrl) return org.settings.theme.logoUrl
+  return null
+}

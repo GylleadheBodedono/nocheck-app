@@ -884,8 +884,16 @@ function addPdfFooters(doc: any) {
  * @returns A posição Y após o cabeçalho, pronta para o início do conteúdo.
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function addPdfHeader(doc: any, title: string, meta: string[]): number {
+function addPdfHeader(doc: any, title: string, meta: string[], orgName?: string): number {
   let y = MARGIN
+  // Org name (if white-label)
+  if (orgName) {
+    doc.setFontSize(10)
+    doc.setFont('helvetica', 'normal')
+    doc.setTextColor('#666666')
+    doc.text(n(orgName), MARGIN, y)
+    y += 6
+  }
   doc.setFontSize(14)
   doc.setFont('helvetica', 'bold')
   doc.setTextColor('#000000')

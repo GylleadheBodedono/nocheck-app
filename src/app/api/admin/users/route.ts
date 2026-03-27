@@ -1,17 +1,27 @@
 export const runtime = 'edge'
 
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
 import { verifyApiAuth } from '@/lib/api-auth'
+import { getSupabaseAdmin } from '@/lib/stripe'
+import { escapeHtml } from '@/lib/validation'
 import { createRequestLogger } from '@/lib/serverLogger'
+import type {
+  CreateUserRequestDTO,
+  CreateUserResponseDTO,
+  ListUsersResponseDTO,
+} from '@/dtos'
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
+// ── Route Handlers ──
 
 /**
- * GET /api/admin/users
- * Sincroniza auth.users com public.users e retorna a lista completa
- * Usuarios que existem no auth mas nao no public sao inseridos automaticamente
+ * Syncs `auth.users` with `public.users` and returns the full user list.
+ *
+ * `GET /api/admin/users`
+ *
+ * Users that exist in auth but not in public are inserted automatically.
+ * Returns users with their store, function, sector, and multi-store assignments.
+ *
+ * @requires Admin authentication via `verifyApiAuth`
  */
 export async function GET(request: NextRequest) {
   const log = createRequestLogger(request)
@@ -19,11 +29,21 @@ export async function GET(request: NextRequest) {
   if (auth.error) return auth.error
 
   try {
-    const supabase = createClient(supabaseUrl, supabaseServiceKey, {
-      auth: { autoRefreshToken: false, persistSession: false }
-    })
+    const supabase = getSupabaseAdmin()
 
-    // 1. Busca todos usuarios do auth.users
+    // Obter tenant_id do admin logado para isolamento
+    const { data: adminProfile } = await supabase
+      .from('users')
+      .select('tenant_id')
+      .eq('id', auth.user.id)
+      .single()
+
+    const tenantId = adminProfile?.tenant_id
+    if (!tenantId) {
+      return NextResponse.json({ error: 'Usuario sem organizacao' }, { status: 403 })
+    }
+
+    // Fetch all auth users
     const { data: authList, error: authError } = await supabase.auth.admin.listUsers()
 
     if (authError) {
@@ -31,15 +51,19 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: authError.message }, { status: 500 })
     }
 
-    // 2. Busca todos usuarios do public.users
+    // Fetch existing public.users IDs (filtrado por tenant)
     const { data: publicUsers } = await supabase
       .from('users')
       .select('id')
+      .eq('tenant_id', tenantId)
 
     const publicIds = new Set((publicUsers || []).map(u => u.id))
 
-    // 3. Insere usuarios que existem no auth mas nao no public
-    const missing = authList.users.filter(u => !publicIds.has(u.id))
+    // Insert missing users (exist in auth but not in public — apenas os do mesmo tenant)
+    const tenantAuthIds = new Set(
+      (await supabase.from('organization_members').select('user_id').eq('organization_id', tenantId)).data?.map(m => m.user_id) || []
+    )
+    const missing = authList.users.filter(u => tenantAuthIds.has(u.id) && !publicIds.has(u.id))
 
     for (const authUser of missing) {
       const name = authUser.user_metadata?.full_name || authUser.email?.split('@')[0] || 'Usuario'
@@ -51,6 +75,7 @@ export async function GET(request: NextRequest) {
           full_name: name,
           is_active: true,
           is_admin: false,
+          tenant_id: tenantId,
         })
 
       if (insertError) {
@@ -60,7 +85,7 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // 4. Retorna lista completa de public.users com loja/funcao/setor + multi-lojas
+    // Return full list with relations (FILTRADO por tenant_id)
     const { data: users, error: usersError } = await supabase
       .from('users')
       .select(`
@@ -78,14 +103,17 @@ export async function GET(request: NextRequest) {
           sector:sectors(*)
         )
       `)
+      .eq('tenant_id', tenantId)
       .order('created_at', { ascending: false })
 
     if (usersError) {
       return NextResponse.json({ error: usersError.message }, { status: 500 })
     }
 
+    // Tipagem da resposta via DTO para garantir contrato com o cliente
+    const response: ListUsersResponseDTO = { users: users as ListUsersResponseDTO['users'], synced: missing.length }
     return NextResponse.json(
-      { users, synced: missing.length },
+      response,
       { headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate' } }
     )
   } catch (error) {
@@ -98,9 +126,19 @@ export async function GET(request: NextRequest) {
 }
 
 /**
- * POST /api/admin/users
- * Cria usuario no auth.users (trigger cria em public.users automaticamente)
- * Depois atualiza o perfil e insere os roles
+ * Creates a new user in `auth.users` and configures their profile.
+ *
+ * `POST /api/admin/users` with body containing user details.
+ *
+ * Flow:
+ * 1. Checks the organization's user limit
+ * 2. Creates the auth user (auto-confirmed or with email confirmation)
+ * 3. Updates the profile in `public.users`
+ * 4. Inserts store assignments in `user_stores`
+ *
+ * When `autoConfirm` is false, sends a confirmation email via Resend.
+ *
+ * @requires Admin authentication via `verifyApiAuth`
  */
 export async function POST(request: NextRequest) {
   const log = createRequestLogger(request)
@@ -108,21 +146,9 @@ export async function POST(request: NextRequest) {
   if (auth.error) return auth.error
 
   try {
-    const body = await request.json()
-    const { email, password, fullName, phone, isAdmin, isTech, autoConfirm, storeId, functionId, sectorId, storeAssignments, redirectTo } = body as {
-      email: string
-      password: string
-      fullName: string
-      phone?: string
-      isAdmin: boolean
-      isTech?: boolean
-      autoConfirm?: boolean
-      storeId?: number
-      functionId?: number
-      sectorId?: number
-      storeAssignments?: { store_id: number; sector_id: number | null; is_primary: boolean }[]
-      redirectTo?: string
-    }
+    // Extrai e tipifica o body da requisição com o DTO correspondente
+    const body = await request.json() as CreateUserRequestDTO
+    const { email, password, fullName, phone, isAdmin, isTech, autoConfirm, storeId, functionId, sectorId, storeAssignments, redirectTo } = body
 
     if (!email || !password || !fullName) {
       return NextResponse.json(
@@ -131,15 +157,46 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // 1. Criar usuario - auto-confirm usa admin API, senao usa signUp normal
+    // ── Plan User Limit Check ──
+
+    const adminClient = getSupabaseAdmin()
+
+    const { data: memberData } = await adminClient
+      .from('organization_members')
+      .select('organization_id')
+      .eq('user_id', auth.user.id)
+      .single()
+
+    if (memberData?.organization_id) {
+      const { data: org } = await adminClient
+        .from('organizations')
+        .select('plan, max_users')
+        .eq('id', memberData.organization_id)
+        .single()
+
+      if (org) {
+        const { count } = await adminClient
+          .from('users')
+          .select('id', { count: 'exact', head: true })
+          .eq('tenant_id', memberData.organization_id)
+
+        const currentUsers = count || 0
+        const maxUsers = org.max_users || 5
+
+        if (currentUsers >= maxUsers) {
+          return NextResponse.json(
+            { error: `Limite de usuarios atingido (${currentUsers}/${maxUsers}). Faca upgrade do plano para adicionar mais.` },
+            { status: 403 }
+          )
+        }
+      }
+    }
+
+    // ── Create Auth User ──
+
     let userId: string
 
     if (autoConfirm) {
-      // Auto-confirm: usa admin API para criar usuario ja confirmado
-      const adminClient = createClient(supabaseUrl, supabaseServiceKey, {
-        auth: { autoRefreshToken: false, persistSession: false }
-      })
-
       const { data: adminData, error: adminError } = await adminClient.auth.admin.createUser({
         email,
         password,
@@ -149,26 +206,16 @@ export async function POST(request: NextRequest) {
 
       if (adminError) {
         log.error('Erro no admin.createUser (auto-confirm)', { email }, adminError)
-        return NextResponse.json(
-          { error: adminError.message },
-          { status: 400 }
-        )
+        return NextResponse.json({ error: adminError.message }, { status: 400 })
       }
 
       if (!adminData.user) {
-        return NextResponse.json(
-          { error: 'Erro ao criar usuario' },
-          { status: 500 }
-        )
+        return NextResponse.json({ error: 'Erro ao criar usuario' }, { status: 500 })
       }
 
       userId = adminData.user.id
     } else {
-      // Sem auto-confirm: cria usuario com email NAO confirmado + envia email via Resend
-      const adminClient = createClient(supabaseUrl, supabaseServiceKey, {
-        auth: { autoRefreshToken: false, persistSession: false }
-      })
-
+      // Create user with unconfirmed email, then send confirmation via Resend
       const { data: userData, error: createError } = await adminClient.auth.admin.createUser({
         email,
         password,
@@ -178,22 +225,16 @@ export async function POST(request: NextRequest) {
 
       if (createError) {
         log.error('Erro no admin.createUser (sem confirm)', { email }, createError)
-        return NextResponse.json(
-          { error: createError.message },
-          { status: 400 }
-        )
+        return NextResponse.json({ error: createError.message }, { status: 400 })
       }
 
       if (!userData.user) {
-        return NextResponse.json(
-          { error: 'Erro ao criar usuario' },
-          { status: 500 }
-        )
+        return NextResponse.json({ error: 'Erro ao criar usuario' }, { status: 500 })
       }
 
       userId = userData.user.id
 
-      // Gerar link de confirmacao de email
+      // Send confirmation email
       try {
         const { data: linkData, error: linkError } = await adminClient.auth.admin.generateLink({
           type: 'signup',
@@ -205,74 +246,18 @@ export async function POST(request: NextRequest) {
         if (linkError) {
           log.warn('Erro ao gerar link de confirmacao', { email })
         } else if (linkData?.properties?.action_link) {
-          // Enviar email de confirmacao diretamente via Resend API
-          const confirmUrl = linkData.properties.action_link
-          const emailHtml = buildConfirmationEmailHtml(fullName, confirmUrl)
-          const resendApiKey = process.env.RESEND_API_KEY
-          const fromEmail = process.env.RESEND_FROM_EMAIL || 'onboarding@resend.dev'
-
-          if (resendApiKey) {
-            const FALLBACK_FROM = 'onboarding@resend.dev'
-            const emailRes = await fetch('https://api.resend.com/emails', {
-              method: 'POST',
-              headers: {
-                'Authorization': `Bearer ${resendApiKey}`,
-                'Content-Type': 'application/json',
-              },
-              body: JSON.stringify({
-                from: fromEmail,
-                to: [email],
-                subject: 'Confirme seu email - OpereCheck',
-                html: emailHtml,
-              }),
-            })
-
-            if (emailRes.ok) {
-              const result = await emailRes.json()
-              log.info('Email de confirmacao enviado', { email, from: fromEmail, emailId: (result as { id?: string }).id })
-            } else if (fromEmail !== FALLBACK_FROM) {
-              // Fallback: dominio customizado falhou, tenta com onboarding@resend.dev
-              log.warn('Falha com dominio customizado, tentando fallback', { email, from: fromEmail, fallback: FALLBACK_FROM })
-              const fallbackRes = await fetch('https://api.resend.com/emails', {
-                method: 'POST',
-                headers: {
-                  'Authorization': `Bearer ${resendApiKey}`,
-                  'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                  from: FALLBACK_FROM,
-                  to: [email],
-                  subject: 'Confirme seu email - OpereCheck',
-                  html: emailHtml,
-                }),
-              })
-
-              if (fallbackRes.ok) {
-                const result = await fallbackRes.json()
-                log.info('Email enviado via fallback', { email, emailId: (result as { id?: string }).id })
-              } else {
-                const errData = await fallbackRes.json().catch(() => ({}))
-                log.warn('Fallback tambem falhou ao enviar email', { email, error: JSON.stringify(errData) })
-              }
-            } else {
-              const errData = await emailRes.json().catch(() => ({}))
-              log.warn('Falha ao enviar email via Resend', { email, error: JSON.stringify(errData) })
-            }
-          } else {
-            log.warn('RESEND_API_KEY nao configurada, email de confirmacao nao enviado', { email })
-          }
+          await sendConfirmationEmail(email, fullName, linkData.properties.action_link)
         }
       } catch {
         log.warn('Erro no fluxo de email de confirmacao', { email })
       }
     }
 
-    // 2. Service role para atualizar perfil e roles
-    const supabase = createClient(supabaseUrl, supabaseServiceKey, {
-      auth: { autoRefreshToken: false, persistSession: false }
-    })
+    // ── Update Profile & Store Assignments ──
 
-    // Monta lista de lojas: novo formato (storeAssignments) ou legado (storeId/sectorId)
+    const supabase = getSupabaseAdmin()
+
+    // Build store assignments from new format or legacy fields
     let assignments: { store_id: number; sector_id: number | null; is_primary: boolean }[] = []
     if (storeAssignments && storeAssignments.length > 0) {
       assignments = storeAssignments
@@ -280,10 +265,8 @@ export async function POST(request: NextRequest) {
       assignments = [{ store_id: storeId, sector_id: sectorId || null, is_primary: true }]
     }
 
-    // Loja primária para manter users.store_id sincronizado
     const primary = assignments.find(a => a.is_primary) || assignments[0] || null
 
-    // Atualiza perfil em public.users (trigger ja criou o registro)
     const { error: profileError } = await supabase
       .from('users')
       .update({
@@ -301,7 +284,6 @@ export async function POST(request: NextRequest) {
       log.error('Erro ao atualizar perfil', { userId }, profileError)
     }
 
-    // Insere vínculos em user_stores
     if (assignments.length > 0 && !isAdmin) {
       const rows = assignments.map(a => ({
         user_id: userId,
@@ -319,14 +301,13 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    return NextResponse.json({
+    // Resposta tipada via DTO de criação de usuário
+    const response: CreateUserResponseDTO = {
       success: true,
       needsConfirmation: !autoConfirm,
-      user: {
-        id: userId,
-        email,
-      },
-    })
+      user: { id: userId, email },
+    }
+    return NextResponse.json(response)
   } catch (error) {
     log.error('Erro inesperado em POST /api/admin/users', {}, error)
     return NextResponse.json(
@@ -336,27 +317,98 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// ============================================
-// EMAIL HTML BUILDER
-// ============================================
+// ── Email Helpers ──
 
-function buildConfirmationEmailHtml(userName: string, confirmUrl: string): string {
+/**
+ * Sends a confirmation email to a newly created user via the Resend API.
+ * Falls back to `onboarding@resend.dev` if the configured sender domain fails.
+ */
+async function sendConfirmationEmail(email: string, fullName: string, confirmUrl: string): Promise<void> {
+  const resendApiKey = process.env.RESEND_API_KEY
+  const fromEmail = process.env.RESEND_FROM_EMAIL || 'onboarding@resend.dev'
+
+  if (!resendApiKey) {
+    console.warn('[API Users] RESEND_API_KEY nao configurada, email nao enviado')
+    return
+  }
+
+  const FALLBACK_FROM = 'onboarding@resend.dev'
+  const emailHtml = buildConfirmationEmailHtml(fullName, confirmUrl)
+
+  const emailRes = await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${resendApiKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      from: fromEmail,
+      to: [email],
+      subject: 'Confirme seu email - OpereCheck',
+      html: emailHtml,
+    }),
+  })
+
+  if (emailRes.ok) {
+    const result = await emailRes.json()
+    console.log('[API Users] Email de confirmacao enviado para:', email, 'from:', fromEmail, 'id:', (result as { id?: string }).id)
+    return
+  }
+
+  // Fallback: try default sender if custom domain failed
+  if (fromEmail !== FALLBACK_FROM) {
+    console.warn(`[API Users] Falha com ${fromEmail}, tentando fallback ${FALLBACK_FROM}...`)
+    const fallbackRes = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${resendApiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        from: FALLBACK_FROM,
+        to: [email],
+        subject: 'Confirme seu email',
+        html: emailHtml,
+      }),
+    })
+
+    if (fallbackRes.ok) {
+      const result = await fallbackRes.json()
+      console.log('[API Users] Email enviado via fallback para:', email, 'id:', (result as { id?: string }).id)
+    } else {
+      const errData = await fallbackRes.json().catch(() => ({}))
+      console.warn('[API Users] Fallback tambem falhou:', errData)
+    }
+  } else {
+    const errData = await emailRes.json().catch(() => ({}))
+    console.warn('[API Users] Falha ao enviar email via Resend:', errData)
+  }
+}
+
+/**
+ * Builds the HTML template for the email confirmation message.
+ * Uses `escapeHtml` to prevent XSS in user-supplied values.
+ */
+function buildConfirmationEmailHtml(userName: string, confirmUrl: string, appName = 'OpereCheck', primaryColor = '#0D9488'): string {
+  const safeName = escapeHtml(userName)
+  const safeAppName = escapeHtml(appName)
+  const safeUrl = encodeURI(confirmUrl)
   return `
 <!DOCTYPE html>
 <html>
 <head><meta charset="UTF-8"></head>
 <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f8fafc; padding: 20px;">
   <div style="max-width: 600px; margin: 0 auto; background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
-    <div style="background: #6366f1; padding: 24px; color: white; text-align: center;">
+    <div style="background: ${primaryColor}; padding: 24px; color: white; text-align: center;">
       <h1 style="margin: 0; font-size: 22px;">Confirme seu Email</h1>
-      <p style="margin: 8px 0 0; opacity: 0.9; font-size: 14px;">OpereCheck - Sistema de Checklists</p>
+      <p style="margin: 8px 0 0; opacity: 0.9; font-size: 14px;">${safeAppName} - Sistema de Checklists</p>
     </div>
     <div style="padding: 32px 24px; text-align: center;">
-      <p style="color: #1e293b; font-size: 16px; margin: 0 0 8px;">Ola, <strong>${userName}</strong>!</p>
+      <p style="color: #1e293b; font-size: 16px; margin: 0 0 8px;">Ola, <strong>${safeName}</strong>!</p>
       <p style="color: #475569; font-size: 14px; line-height: 1.6; margin: 0 0 24px;">
-        Sua conta foi criada no OpereCheck. Clique no botao abaixo para confirmar seu email e ativar sua conta.
+        Sua conta foi criada no ${safeAppName}. Clique no botao abaixo para confirmar seu email e ativar sua conta.
       </p>
-      <a href="${confirmUrl}" style="display: inline-block; background: #6366f1; color: white; padding: 14px 32px; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 15px;">
+      <a href="${safeUrl}" style="display: inline-block; background: ${primaryColor}; color: white; padding: 14px 32px; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 15px;">
         Confirmar Email
       </a>
       <p style="color: #94a3b8; font-size: 12px; margin: 24px 0 0; line-height: 1.5;">
@@ -364,7 +416,7 @@ function buildConfirmationEmailHtml(userName: string, confirmUrl: string): strin
       </p>
     </div>
     <div style="padding: 16px 24px; background: #f8fafc; border-top: 1px solid #e2e8f0; text-align: center;">
-      <p style="margin: 0; color: #94a3b8; font-size: 12px;">OpereCheck - Sistema de Checklists</p>
+      <p style="margin: 0; color: #94a3b8; font-size: 12px;">${safeAppName} - Sistema de Checklists</p>
     </div>
   </div>
 </body>

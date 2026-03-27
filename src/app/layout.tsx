@@ -1,16 +1,19 @@
 import type { Metadata, Viewport } from "next"
-import { Inter } from "next/font/google"
+import { Poppins } from "next/font/google"
 import "./globals.css"
 import { APP_CONFIG } from "@/lib/config"
 import { PWAInstall } from "@/components/PWAInstall"
 import { OfflineIndicator } from "@/components/OfflineIndicator"
 import { SyncIndicator } from "@/components/SyncIndicator"
 import { FluxChat } from "@/components/FluxChat"
+import { QueryProvider } from "@/components/providers/QueryProvider"
 import { ClientLoggerInit } from "@/components/ClientLoggerInit"
 
-const inter = Inter({
+const poppins = Poppins({
   subsets: ["latin"],
-  variable: "--font-inter",
+  variable: "--font-poppins",
+  weight: ["300", "400", "500", "600", "700"],
+  display: "swap",
 })
 
 export const metadata: Metadata = {
@@ -30,7 +33,7 @@ export const viewport: Viewport = {
   maximumScale: 1,
   userScalable: false,
   themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#FDFBF7" },
+    { media: "(prefers-color-scheme: light)", color: "#F8FAFC" },
     { media: "(prefers-color-scheme: dark)", color: "#09090b" },
   ],
 }
@@ -62,13 +65,15 @@ export default function RootLayout({
         <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
         <meta name="mobile-web-app-capable" content="yes" />
       </head>
-      <body className={`${inter.variable} font-sans antialiased`}>
-        <ClientLoggerInit />
-        <OfflineIndicator />
-        {children}
-        <SyncIndicator />
-        <PWAInstall />
-        <FluxChat />
+      <body className={`${poppins.variable} font-sans antialiased`}>
+        <QueryProvider>
+          <ClientLoggerInit />
+          <OfflineIndicator />
+          {children}
+          <SyncIndicator />
+          <PWAInstall />
+          <FluxChat />
+        </QueryProvider>
       </body>
     </html>
   )
